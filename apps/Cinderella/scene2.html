@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<body>
+<canvas id="myCanvas" width="800" height="600" style="border:1px solid #d3d3d3;">
+Your browser does not support the HTML canvas tag.
+</canvas>
+
+<script>
+    
+let canvas = document.getElementById('myCanvas');
+let ctx = canvas.getContext('2d');
+
+// Cinderella (Star)
+let cinderella = {
+    x: 0,
+    y: canvas.height / 2,
+    size: 50,
+    rotation: 0,
+    speed: 2,
+    amplitude: 50,
+    frequency: 0.01
+};
+
+// Stepmother (Square)
+let stepmother = {
+    x: canvas.width - 100,
+    y: 100,
+    size: 100,
+    rotation: 0,
+    rotateInterval: 2000, // Time in milliseconds between each rotation
+    lastRotateTime: 0
+};
+    
+// Prince (Equilateral Triangle)
+let prince = {
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    size: 70
+};
+
+// Cinderella (Star)
+cinderella.speed = 0.5;
+cinderella.target = {x: prince.x, y: prince.y};
+
+// Stepmother (Square)
+stepmother.speed = 5;
+stepmother.target = {x: prince.x, y: prince.y};
+
+// Function to draw a star
+function drawStar(x, y, spikes, outerRadius, innerRadius, rotation) {
+    let rot = Math.PI / 2 * 3;
+    let step = Math.PI / spikes;
+    
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    
+    ctx.beginPath();
+    ctx.moveTo(0, 0 - outerRadius);
+    for (let i = 0; i < spikes; i++) {
+        let curX = Math.cos(rot) * outerRadius;
+        let curY = Math.sin(rot) * outerRadius;
+        ctx.lineTo(curX, curY);
+        rot += step;
+
+        curX = Math.cos(rot) * innerRadius;
+        curY = Math.sin(rot) * innerRadius;
+        ctx.lineTo(curX, curY);
+        rot += step;
+    }
+    ctx.lineTo(0, 0 - outerRadius);
+    ctx.closePath();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'blue';
+    ctx.stroke();
+    ctx.fillStyle = 'skyblue';
+    ctx.fill();
+    
+    ctx.restore();
+}
+
+// Function to draw a square
+function drawSquare(x, y, size, rotation) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    
+    ctx.beginPath();
+    ctx.rect(-size / 2, -size / 2, size, size);
+    ctx.closePath();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'red';
+    ctx.stroke();
+    ctx.fillStyle = 'pink';
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// Function to draw an equilateral triangle
+function drawTriangle(x, y, size) {
+    const height = size * Math.sqrt(3) / 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - height / 2);
+    ctx.lineTo(x - size / 2, y + height / 2);
+    ctx.lineTo(x + size / 2, y + height / 2);
+    ctx.closePath();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'green';
+    ctx.stroke();
+    ctx.fillStyle = 'lightgreen';
+    ctx.fill();
+}
+
+// Initialize stepmotherIsClose to false
+let stepmotherIsClose = false;
+
+// Animation function
+function animate(time) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Calculate distance between Cinderella and the Prince
+    let dx = cinderella.target.x - cinderella.x;
+    let dy = cinderella.target.y - cinderella.y - cinderella.amplitude * Math.sin(cinderella.frequency * time);
+    let dist = Math.sqrt(dx*dx + dy*dy);
+
+    // Calculate distance between Cinderella and the Stepmother
+    let dx2 = stepmother.x - cinderella.x;
+    let dy2 = stepmother.y - cinderella.y;
+    let dist2 = Math.sqrt(dx2*dx2 + dy2*dy2);
+
+    // If Cinderella is close to the Prince, the stepmother moves between them
+    if (dist < 50 && !stepmotherIsClose) {
+        stepmother.x = (cinderella.x + prince.x) / 2; // Move between Cinderella and the Prince
+        stepmother.y = (cinderella.y + prince.y) / 2;
+        stepmother.rotation += 0.1; // Spin rapidly
+        stepmotherIsClose = true;
+    }
+
+    // If the Stepmother is close, Cinderella withdraws and slows down
+    if (dist2 < 50 && stepmotherIsClose) {
+        cinderella.speed = 2; // Slow down
+        cinderella.target = {x: 0, y: canvas.height / 2}; // Move away
+    } else {
+        // Cinderella speeds up again after moving away
+        cinderella.speed = 5;
+        cinderella.target = {x: prince.x, y: prince.y};
+        stepmotherIsClose = false;
+    }
+
+    // Move Cinderella towards the target in a graceful curve
+    if (dist > 5) {
+        cinderella.x += (dx/dist) * cinderella.speed;
+        cinderella.y += (dy/dist) * cinderella.speed;
+    }
+
+    // Adjust Cinderella's rotation speed when close to the Prince
+    if (dist < 50) {
+        cinderella.rotation += 0.01;
+    } else {
+        cinderella.rotation += 0.05;
+    }
+
+    drawStar(cinderella.x, cinderella.y, 5, cinderella.size, cinderella.size / 2, cinderella.rotation);
+    drawSquare(stepmother.x, stepmother.y, stepmother.size, stepmother.rotation);
+    drawTriangle(prince.x, prince.y, prince.size, 0);
+
+    requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+
+</script>
+
+</body>
+</html>
