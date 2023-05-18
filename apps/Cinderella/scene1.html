@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<body>
+<canvas id="myCanvas" width="800" height="600" style="border:1px solid #d3d3d3;">
+Your browser does not support the HTML canvas tag.
+</canvas>
+
+<script>
+let canvas = document.getElementById('myCanvas');
+let ctx = canvas.getContext('2d');
+
+// Cinderella (Star)
+let cinderella = {
+    x: 0,
+    y: canvas.height / 2,
+    size: 50,
+    rotation: 0,
+    speed: 2,
+    amplitude: 50,
+    frequency: 0.01
+};
+
+// Stepmother (Square)
+let stepmother = {
+    x: canvas.width - 100,
+    y: 100,
+    size: 100,
+    rotation: 0,
+    rotateInterval: 2000, // Time in milliseconds between each rotation
+    lastRotateTime: 0
+};
+
+// Function to draw a star
+function drawStar(cx, cy, spikes, outerRadius, innerRadius, rotation = 0) {
+    let rot = Math.PI / 2 * 3;
+    let x = cx;
+    let y = cy;
+    let step = Math.PI / spikes;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - outerRadius);
+
+    for (let i = 0; i < spikes; i++) {
+        x = cx + Math.cos(rot) * outerRadius;
+        y = cy + Math.sin(rot) * outerRadius;
+        ctx.lineTo(x, y);
+        rot += step;
+
+        x = cx + Math.cos(rot) * innerRadius;
+        y = cy + Math.sin(rot) * innerRadius;
+        ctx.lineTo(x, y);
+        rot += step;
+    }
+
+    ctx.lineTo(cx, cy - outerRadius);
+    ctx.closePath();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'blue';
+    ctx.stroke();
+    ctx.fillStyle = 'skyblue';
+    ctx.fill();
+}
+
+// Function to draw a square
+function drawSquare(x, y, size, rotation) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.translate(-x, -y);
+    ctx.beginPath();
+    ctx.rect(x - size / 2, y - size / 2, size, size);
+    ctx.fillStyle = 'red';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'darkred';
+    ctx.stroke();
+    ctx.restore();
+}
+
+// Animation function
+function animate(time) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Move Cinderella across the screen in a sweeping pattern
+    cinderella.x += cinderella.speed;
+    cinderella.y = canvas.height / 2 + cinderella.amplitude * Math.sin(cinderella.frequency * cinderella.x);
+    cinderella.rotation += 0.01;
+
+    // Reset position when she reaches the end
+    if (cinderella.x > canvas.width) {
+        cinderella.x = 0;
+    }
+
+    // Rotate stepmother abruptly towards Cinderella occasionally
+    if (time - stepmother.lastRotateTime > stepmother.rotateInterval) {
+        let dx = cinderella.x - stepmother.x;
+        let dy = cinderella.y - stepmother.y;
+        stepmother.rotation = Math.atan2(dy, dx);
+        stepmother.lastRotateTime = time;
+    }
+
+    drawStar(cinderella.x, cinderella.y, 5, cinderella.size, cinderella.size / 2, cinderella.rotation);
+    drawSquare(stepmother.x, stepmother.y, stepmother.size, stepmother.rotation);
+
+    requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+
+
+requestAnimationFrame(animate);
+
+</script>
+
+</body>
+</html>
