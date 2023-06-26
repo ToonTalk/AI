@@ -5,18 +5,25 @@ async function optimizeInput(model) {
     const learningRate = 0.01;  // Tune this as needed
     const optimizer = tf.train.adam(learningRate);
 
-    for(let i = 0; i < 1000; i++){  // Maximum iterations - tune as needed
+    const target = 5;
+    
+    for(let i = 0; i < 1001; i++){  // Maximum iterations - tune as needed
         let loss = optimizer.minimize(() => {
             let output = model.predict(input);
-            // Since we want to maximize the output, we minimize the negative output
-            return tf.neg(output);
+            output = tf.squeeze(output);  // Reduce dimensions
+            // We want to minimize the absolute difference between the output and the target
+            return tf.abs(output.sub(target));
         }, true /* return the loss, which is the negative of the output */);
 
-        console.log('Iteration ' + i + ': rating ' + (-loss.dataSync()));
+        // Apply the constraint (that inputs should be between 0 and 1)
+        // And add a bit of noise
+        // input.assign(tf.sigmoid(input).add(tf.randomUniform([1, 12], -0.01, 0.01)));
+
 
         if(i % 100 === 0){
             // Output the current input every 100 iterations
             console.log('Current input:', input.dataSync());
+            console.log('Iteration ' + i + ': rating ' + (-loss.dataSync()));
         }
     }
 
@@ -24,7 +31,7 @@ async function optimizeInput(model) {
 }
 
 (async () => {
-    const model = await tf.loadLayersModel('https://ecraft2learn.github.io/ai/noisy-polygons/rating%20predictor.json');
+    const model = await tf.loadLayersModel('https://ecraft2learn.github.io/ai/noisy-polygons/noisy polygons.json'); //rating%20predictor.json');
     model.summary();
     optimizeInput(model);
 })();
