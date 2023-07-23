@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Prime Pebble Proof</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #337ab7;
+            color: white;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .button:hover {
+            background-color: #286090;
+        }
+
+        #info {
+            max-width: 80%;
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        #pebbles {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 20px 0;
+            padding: 20px;
+            margin-bottom: 40px; /* Adds a 40px margin to the bottom of the controls. Adjust as needed. */
+ 
+        }
+        
+        .pebble {
+            border-radius: 50%;
+            background: #555;
+            margin: 1px;
+            display: inline-block;
+        }
+        
+        .row {
+            display: flex;
+            width: 100%;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .row-number {
+            width: 50px;
+            height: 50px;
+            background: #ccc;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+        }
+        
+        #infoButtonDiv {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="info"></div>
+    <input id="primesInput" type="text" value="2,3" />
+    <button id="rearrange">Rearrange pebbles</button>
+    <button id="proceed" style="display: none;">Proceed</button>
+    <div id="pebbles"></div>
+
+    <!-- Information Button at the top -->
+    <div id="infoButtonDiv">
+        <button id="infoButton">Information</button>
+    </div>
+    
+    <!-- Information Modal -->
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>About the App</h2>
+            <p>This app is designed to demonstrate the fundamental properties of prime numbers using a physical metaphor - the arranging of pebbles into rows. A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself. In terms of pebbles, a prime number of pebbles can only be arranged into one row or in a single column, not in a rectangular grid of two or more rows and columns.</p>
+            <p>The Euclid's theorem states that there are infinitely many primes. This app aims to illustrate this by continuously generating new prime numbers. You start by entering an initial list of prime numbers. These prime numbers are then used to generate a "product-plus-one" number, which is the product of the entered prime numbers plus one. This "product-plus-one" number of pebbles is then arranged in different ways, where the number of pebbles in a row corresponds to the next prime number.</p>
+            <p>If the pebbles can be arranged in a way such that each row contains the same number of pebbles, then the "product-plus-one" number is not a prime, and the process continues with a new "product-plus-one" number. If it is impossible to arrange the pebbles into equal rows (excluding a single row or column), then the "product-plus-one" number is a prime, and it is added to the list of prime numbers.</p>
+            <p>Through this process, the app illustrates the continuous existence of prime numbers, and how each new prime number can be used to generate another potential prime.</p>
+            <p>This app was constructed by ChatGPT 4 (July 20 2023 Version) by Ken Kahn (toontalk@gmail.com). The conversation where this app was created can be found <a href="https://chat.openai.com/share/24de6e87-8374-4450-b3c4-529a1ebf1dd1" target="_blank">here</a>.</p>
+        </div>
+    </div>
+
+    <script>
+        // This code represents a web-based application that explores prime numbers through a physical metaphor
+        // - arranging pebbles in rows.
+        // The application uses a product of selected prime numbers plus one
+        // as the number of pebbles and attempts to arrange these pebbles in rows of various sizes.
+        // If the pebbles can only be arranged in one row or if the number of pebbles
+        // in the last row equals the row size, it suggests that the row size 
+        // might be a prime number, and it's added to the list of primes.
+        
+        // Get initial list of primes from the input field, and store it in both 'userPrimes' and 'primes' arrays
+        let userPrimes = document.getElementById('primesInput').value.split(',').map(Number);
+        let primes = [...userPrimes];
+        // Get the maximum value from the initial primes list
+        let initialPrimesMax = Math.max(...userPrimes);
+        // Initialize the current index for the list of primes
+        let currentPrimeIndex = 0;
+        // Calculate the product of all primes in the initial list and add 1.
+        // This is the initial total number of pebbles
+        let productPlusOne = userPrimes.reduce((a, b) => a * b, 1) + 1;
+        // Initialize the number of rows and the size of the last row to zero
+        let rowCount = 0;
+        let lastRowSize = 0;
+        // Initialize the number of pebbles in a row
+        let rowSize = 0;
+
+        // Function to check if a number is prime
+        function isPrime(num) {
+            for (let i = 2, sqrt = Math.sqrt(num); i <= sqrt; i++) {
+                if (num % i === 0) {
+                    return false;
+                }
+            }
+            return num > 1;
+        }
+        
+        // Function to get the next prime number after a given number
+        function nextPrime(n) {
+            let primeCandidate = n + 1;
+            while (!isPrime(primeCandidate)) {
+                primeCandidate++;
+            }
+            return primeCandidate;
+        }
+
+        // Function to generate a representation of pebbles and arrange them in rows
+        function generatePebbles() {
+            let pebblesElement = document.getElementById('pebbles');
+            pebblesElement.innerHTML = '';
+
+                // Reset rowCount and lastRowSize
+            rowCount = 0;
+            lastRowSize = 0;
+            
+            rowSize = primes[currentPrimeIndex];
+            let pebbleSize = Math.max(1, Math.floor(500 / productPlusOne));
+            
+            let row = null;
+            for (let i = 0; i < productPlusOne; i++) {
+                if (i % rowSize === 0) {
+                    row = document.createElement('div');
+                    row.className = 'row';
+                    
+                    let rowNumber = document.createElement('div');
+                    rowNumber.textContent = (i / rowSize) + 1;
+                    rowNumber.className = 'row-number';
+
+                    row.appendChild(rowNumber);
+                    pebblesElement.appendChild(row);
+
+                    rowCount++;
+                    lastRowSize = 0;
+                }
+
+                let pebble = document.createElement('div');
+                pebble.className = 'pebble';
+                pebble.style.width = `${pebbleSize}px`;
+                pebble.style.height = `${pebbleSize}px`;
+                row.appendChild(pebble);
+                lastRowSize++;
+            }
+
+            let infoElement = document.getElementById('info');
+            infoElement.innerText = 
+                `Pebbles: ${productPlusOne}, Columns: ${rowSize}, Rows: ${rowCount}, Last row size: ${lastRowSize}`;
+            if (rowCount === 1) {
+                const primeToAdd = rowSize;
+                if (!userPrimes.includes(primeToAdd)) {
+                    userPrimes.push(primeToAdd);
+                    userPrimes.sort((a, b) => a - b);
+                    document.getElementById('primesInput').value = userPrimes.join(',');
+                    initialPrimesMax = Math.max(initialPrimesMax, primeToAdd);
+                }
+                productPlusOne = userPrimes.reduce((a, b) => a * b, 1) + 1;
+                currentPrimeIndex = 0;
+                infoElement.innerText += `\n${primeToAdd} is a prime number as it could not be arranged into neat rows of pebbles (except for 1 row). ${primeToAdd} is now added to the list of primes and a new number of pebbles has been generated. This represents the mathematical principle that a prime number has only one and itself as its divisors.`;
+                document.getElementById('proceed').style.display = 'inline';  // show the button
+            }
+            else if (lastRowSize === rowSize) {
+                if (rowSize > initialPrimesMax) {
+                    if (!userPrimes.includes(rowSize)) {
+                        userPrimes.push(rowSize);
+                        userPrimes.sort((a, b) => a - b);
+                        document.getElementById('primesInput').value = userPrimes.join(',');
+                        initialPrimesMax = Math.max(initialPrimesMax, rowSize);
+                        productPlusOne = userPrimes.reduce((a, b) => a * b, 1) + 1;
+                        currentPrimeIndex = 0;
+                    }
+                    infoElement.innerText += '\nThe number of columns is larger than the largest user prime. This indicates that we have discovered a new prime number. A new prime will be added to the list of primes.';
+                } else {
+                    productPlusOne = rowCount;
+                    currentPrimeIndex = 0;
+                    infoElement.innerText += '\nThe number of columns is not larger than the largest user prime. This implies that our total number of pebbles can be arranged in rows and columns without having to introduce a new prime. Hence, the number of pebbles will be changed to the number of rows for the next iteration.';
+                }
+                document.getElementById('proceed').style.display = 'inline';  // show the button
+            } else {
+                infoElement.style.color = '';
+            }
+        }
+        
+        // Function to proceed to the next step in the pebble arrangement
+        function proceed() {
+            document.getElementById('proceed').style.display = 'none';  // hide the button
+            document.getElementById('rearrange').style.display = 'inline';  // show the rearrange button
+            document.querySelectorAll('.pebble').forEach(pebble => pebble.style.background = '');  // reset the pebble color
+            generatePebbles();
+        }
+
+        // Function to generate the next prime number and update the pebbles
+        function generateNextPrime() {
+            if (!userPrimes.includes(productPlusOne)) {
+                userPrimes.push(productPlusOne);
+                userPrimes.sort((a, b) => a - b);
+                document.getElementById('primesInput').value = userPrimes.join(',');
+                initialPrimesMax = Math.max(initialPrimesMax, productPlusOne);
+            }
+            productPlusOne = userPrimes.reduce((a, b) => a * b, 1) + 1;
+            currentPrimeIndex = 0;  // reset to the first prime
+            document.getElementById('rearrange').style.display = 'none';  // hide the rearrange button
+            document.getElementById('proceed').style.display = 'inline';  // show the button
+        }
+
+        // Function to rearrange pebbles based on the next prime number
+        function rearrangePebbles() {
+            let currentPrime = nextPrime(primes[primes.length - 1]);
+            primes.push(currentPrime);
+            currentPrimeIndex++;
+            if (currentPrimeIndex >= primes.length) {
+                currentPrimeIndex = 0;
+                productPlusOne = userPrimes.reduce((a, b) => a * b, 1) + 1;
+            }
+            generatePebbles();
+            if (rowCount === 1 || lastRowSize === rowSize) {
+                document.querySelectorAll('.pebble').forEach(pebble => pebble.style.background = 'green');  // turn all pebbles green
+                document.getElementById('rearrange').style.display = 'none';  // hide the rearrange button
+                document.getElementById('proceed').style.display = 'inline';  // show the button
+            }
+            else {
+                document.getElementById('rearrange').style.display = 'inline';  // show the rearrange button
+                document.getElementById('proceed').style.display = 'none';  // hide the button
+                document.querySelectorAll('.pebble').forEach(pebble => pebble.style.background = '');  // reset the pebble color
+            }
+        }
+
+        // Add event listeners to the 'Rearrange' and 'Proceed' buttons to call the appropriate functions when clicked
+        document.getElementById('rearrange').addEventListener('click', rearrangePebbles);
+        document.getElementById('proceed').addEventListener('click', proceed);
+        
+        // Generate the initial arrangement of pebbles when the script is first run
+        generatePebbles();
+
+        // After the initialization of userPrimes
+        let userPrimesElement = document.getElementById('primesInput');
+        
+        // Event listener for changes in the input field
+        userPrimesElement.addEventListener('input', function () {
+            // Update the userPrimes array
+            userPrimes = userPrimesElement.value.split(',').map(Number);
+            primes = [...userPrimes];
+            initialPrimesMax = Math.max(...userPrimes);
+            productPlusOne = userPrimes.reduce((a, b) => a * b, 1) + 1;
+        
+            // Reset these values to start the app over
+            currentPrimeIndex = 0;
+            rowCount = 0;
+            lastRowSize = 0;
+            rowSize = 0;
+            
+            // Generate new pebbles with the new userPrimes
+            generatePebbles();
+        });
+
+        let modal = document.getElementById("infoModal");
+
+        // Get the button that opens the modal
+        let btn = document.getElementById("infoButton");
+        
+        // Get the <span> element that closes the modal
+        let span = document.getElementsByClassName("close")[0];
+        
+        // When the user clicks the button, open the modal 
+        btn.onclick = function() {
+            modal.style.display = "block";
+        }
+        
+        // When the user clicks on <span> (x), close the modal
+        span.onclick = function() {
+            modal.style.display = "none";
+        }
+        
+        // When the user clicks anywhere outside of the modal, close it
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+    </script>
+</body>
+</html>
