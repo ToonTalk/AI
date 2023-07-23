@@ -31,7 +31,7 @@ async function optimizeInput(model) {
 }
 
 (async () => {
-    const model = await tf.loadLayersModel('https://ecraft2learn.github.io/ai/noisy-polygons/noisy polygons.json'); //rating%20predictor.json');
+    const model = await tf.loadLayersModel('https://ecraft2learn.github.io/ai/noisy-polygons/noisy polygons v2.json'); //rating%20predictor.json');
     model.summary();
     optimizeInput(model);
 })();
