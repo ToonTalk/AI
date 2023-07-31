@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>My first three.js app</title>
+        <style>
+            body { margin: 0; }
+            canvas { display: block; }
+        </style>
+    </head>
+    <body>
+        <script src="https://threejs.org/build/three.js"></script>
+        <script>
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            document.body.appendChild( renderer.domElement );
+
+            // Add a basic ambient light
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            // Add a directional light
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+
+            // Create a large flat plane for the floor
+            const floorGeometry = new THREE.PlaneGeometry( 100, 100, 32, 32 );
+            const floorMaterial = new THREE.MeshStandardMaterial( { color: 0xaaaaaa, side: THREE.DoubleSide } ); //Changed to MeshStandardMaterial
+            const floor = new THREE.Mesh( floorGeometry, floorMaterial );
+            floor.rotation.x = Math.PI / 2; // Rotate the floor to make it horizontal
+            scene.add( floor );
+
+            // Create a geometry for the door
+            const doorGeometry = new THREE.BoxGeometry( 1, 2, 0.02 );
+            const doorMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+            const door = new THREE.Mesh( doorGeometry, doorMaterial );
+            door.position.z = -4;
+            door.position.y = 1; // The bottom of the door touches the floor
+            scene.add( door );
+
+            const tableMaterial = new THREE.MeshBasicMaterial( { color: 0x808080 } );
+            const tableTopShape = new THREE.Shape();
+            const ellipseCurve = new THREE.EllipseCurve(0, 0, 1, 2);
+            const points = ellipseCurve.getPoints(50);
+            tableTopShape.moveTo(points[0].x, points[0].y);
+            points.forEach((point) => tableTopShape.lineTo(point.x, point.y));
+            const tableTopGeometry = new THREE.ExtrudeGeometry(tableTopShape, {depth: 0.05, bevelEnabled: false});
+            const tableTop = new THREE.Mesh( tableTopGeometry, tableMaterial );
+            tableTop.rotation.x = Math.PI / 2; // Rotate the tabletop to make it parallel to the floor
+            tableTop.position.z = -6;
+            tableTop.position.y = 0.525; // The bottom of the table top touches the floor
+            scene.add( tableTop );
+
+            const legGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 32);
+            const legMaterial = new THREE.MeshBasicMaterial( { color: 0x808080 } );
+
+            for(let i = -1; i <= 1; i += 2) {
+                for(let j = -1; j <= 1; j += 2) {
+                    const leg = new THREE.Mesh( legGeometry, legMaterial );
+                    leg.position.x = i * 0.7;
+                    leg.position.z = tableTop.position.z;
+                    leg.position.y = 0.5; // The bottom of the legs touch the floor
+                    scene.add( leg );
+                }
+            }
+
+            // Adjust the camera position to better visualize the floor
+            camera.position.y = 5;
+            camera.position.z = 5;
+            camera.lookAt( new THREE.Vector3(0, 0, -5) );
+
+            const animate = function () {
+                requestAnimationFrame( animate );
+
+                camera.position.x = 7 * Math.sin(Date.now() / 2000);
+                camera.position.z = 7 * Math.cos(Date.now() / 2000);
+                camera.lookAt( new THREE.Vector3(0, 0, -5) );
+
+                renderer.render( scene, camera );
+            };
+
+            animate();
+        </script>
+    </body>
+</html>
