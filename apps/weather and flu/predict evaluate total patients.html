@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather-Influenza Prediction App</title>
+    <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Weather-Influenza Prediction App</h1>
+    <p>This application uses weather data to predict the incidence of influenza in a given area. The data is processed and used to train a predictive model. The model takes into account factors such as precipitation, snowfall, and temperature to make predictions.</p>
+    <p>Upload a CSV file that includes weekly data for precipitation, snowfall, average temperature, maximum temperature, minimum temperature, total patients, and the ratio of total patients to the average number of patients for that month.</p>
+    <input type="file" id="csvFile" accept=".csv" />
+    <button onClick="parseData()">Load and parse CSV data</button>
+    <br/>
+    <button onClick="saveModel()">Save Model</button>
+    <button onClick="loadModel()">Load Model</button>
+    <br/>
+    <a id="downloadLink" href="#" download="processed_data.csv" style="display: none;">Download preprocessed data</a>
+    <p id="trainingProgress">Training progress: 0%</p>
+    <canvas id="myChart"></canvas>
+    <div id="output"></div>
+
+    <script>
+        let dataset;
+        let model; // Declare model in the global scope
+        let modelLoaded = false; // Declare modelLoaded in the global scope
+        let columnStats = {}; // Declare columnStats in the global scope
+        let valXs; // Declare valXs in the global scope
+        let valTargets; // Declare valTargets in the global scope
+
+        function parseData() {
+            const fileInput = document.getElementById('csvFile');
+            Papa.parse(fileInput.files[0], {
+                download: true,
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    dataset = results.data;
+                    preprocessData();
+                    trainModel();
+                }
+            });
+        }
+        
+        function preprocessData() {
+            // Filter out rows with null or undefined values
+            dataset = dataset.filter(row => Object.values(row).every(value => value !== null && value !== undefined));
+        
+            // Standardize data (scale between 0 and 1)
+            const columns = ['PRCP', 'SNOW', 'TAVG', 'TMAX', 'TMIN', 'TOTAL PATIENTS'];
+            columns.forEach(column => {
+                const columnValues = dataset.map(row => row[column]);
+                const max = Math.max(...columnValues);
+                const min = Math.min(...columnValues);
+        
+                // Store the min and max for this column
+                columnStats[column] = {min, max};
+        
+                // Skip standardization if min and max are the same
+                if (min === max) {
+                    return;
+                }
+        
+                dataset = dataset.map(row => {
+                    row[column] = (row[column] - min) / (max - min);
+                    return row;
+                });
+            });
+        
+            // Create a Blob from the preprocessed data
+            const csvContent = Papa.unparse(dataset);
+            const blob = new Blob([csvContent], {type: 'text/csv'});
+        
+            // Create a URL for the Blob and set it as the href of the download link
+            const url = URL.createObjectURL(blob);
+            const downloadLink = document.getElementById('downloadLink');
+            downloadLink.href = url;
+            downloadLink.style.display = 'inline';  // make the download link visible
+        }
+
+        async function trainModel() {
+            // Define model if it's not already defined
+            if (!modelLoaded) {
+                model = tf.sequential();
+                model.add(tf.layers.lstm({units: 50, returnSequences: true, inputShape: [10, 5]})); // adjust input shape
+                model.add(tf.layers.dropout({rate: 0.2}));
+                model.add(tf.layers.lstm({units: 50}));
+                model.add(tf.layers.dropout({rate: 0.2}));
+                model.add(tf.layers.dense({units: 1}));
+        
+                // Compile model
+                model.compile({
+                    optimizer: tf.train.adam(0.001),
+                    loss: 'meanSquaredError'
+                });
+            }
+        
+            // Prepare training data
+            const sequences = [];
+            const targets = [];
+            for (let i = 10; i < dataset.length; i++) {
+                const sequence = dataset.slice(i - 10, i).map(row => [row.PRCP, row.SNOW, row.TAVG, row.TMAX, row.TMIN]); // only use relevant columns
+                sequences.push(sequence);
+                targets.push(dataset[i]['TOTAL PATIENTS']);
+            }
+            
+            // Split data into training and validation
+            const splitIdx = Math.floor(0.8 * sequences.length);  // 80% for training, 20% for validation
+            const trainSequences = sequences.slice(0, splitIdx);
+            const trainTargets = targets.slice(0, splitIdx);
+            valSequences = sequences.slice(splitIdx);
+            valTargets = targets.slice(splitIdx);
+            const xs = tf.tensor3d(trainSequences);
+            const ys = tf.tensor2d(trainTargets, [trainTargets.length, 1]);
+            valXs = tf.tensor3d(valSequences);
+            valYs = tf.tensor2d(valTargets, [valTargets.length, 1]);
+        
+            // Skip training if a model has been loaded
+            if (!modelLoaded) {
+                await model.fit(xs, ys, {
+                    epochs: 100,
+                    validationData: [valXs, valYs],
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            console.log(`Epoch ${epoch}: loss = ${logs.loss}, val_loss = ${logs.val_loss}`);
+                            document.getElementById('trainingProgress').innerText = `Training progress: ${((epoch + 1) / 100 * 100).toFixed(2)}% (loss: ${logs.loss.toFixed(2)}, val_loss: ${logs.val_loss.toFixed(2)})`;
+                        }
+                    }
+                });
+            }
+
+            makePredictions(); // Call makePredictions after the model is trained
+        }
+        
+        async function saveModel() {
+            await model.save('indexeddb://my-model');
+            alert('Model saved.');
+        }
+        
+        async function loadModel() {
+            model = await tf.loadLayersModel('indexeddb://my-model');
+            modelLoaded = true; // Set modelLoaded to true
+            alert('Model loaded.');
+        }
+
+        function makePredictions() {
+            // Make predictions on validation data
+            const preds = model.predict(valXs).dataSync();
+            
+            // Unstandardize the predictions
+            const predsUnstandardized = preds.map(pred => (pred * (columnStats['TOTAL PATIENTS'].max - columnStats['TOTAL PATIENTS'].min)) + columnStats['TOTAL PATIENTS'].min);
+            
+            // Unstandardize the actual values
+            const actualsUnstandardized = valTargets.map(val => (val * (columnStats['TOTAL PATIENTS'].max - columnStats['TOTAL PATIENTS'].min)) + columnStats['TOTAL PATIENTS'].min);
+            
+            // Create a new HTML table
+            let tableHtml = '<table><tr><th>Week</th><th>Predicted TOTAL PATIENTS</th><th>Actual TOTAL PATIENTS</th><th>Ratio (Predicted / Actual)</th></tr>';
+            
+            // Populate the table with the predicted and actual values
+            for (let i = 0; i < valSequences.length; i++) {
+                const pred = Math.round(predsUnstandardized[i]);
+                const actual = Math.round(actualsUnstandardized[i]);
+                const ratio = (pred / actual).toFixed(2);
+                tableHtml += `<tr><td>${i + 1}</td><td>${pred}</td><td>${actual}</td><td>${ratio}</td></tr>`;
+            }
+            
+            tableHtml += '</table>';
+            
+            // Add the table to the page
+            document.getElementById('output').innerHTML = tableHtml;
+
+            // Create a new Chart.js chart
+            const ctx = document.getElementById('myChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: valSequences.length}, (_, i) => i + 1), // Weeks
+                    datasets: [{
+                        label: 'Predicted TOTAL PATIENTS',
+                        data: predsUnstandardized,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1,
+                        fill: false
+                    }, {
+                        label: 'Actual TOTAL PATIENTS',
+                        data: actualsUnstandardized,
+                        borderColor: 'rgb(255, 99, 132)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Week'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Total Patients'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

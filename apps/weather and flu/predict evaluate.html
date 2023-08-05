@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather-Influenza Prediction App</title>
+    <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Weather-Influenza Prediction App</h1>
+    <p>This application uses weather data to predict the incidence of influenza in a given area. The data is processed and used to train a predictive model. The model takes into account factors such as precipitation, snowfall, and temperature to make predictions.</p>
+    <p>Upload a CSV file that includes weekly data for precipitation, snowfall, average temperature, maximum temperature, minimum temperature, total patients, and the ratio of total patients to the average number of patients for that month.</p>
+    <input type="file" id="csvFile" accept=".csv" />
+    <button onClick="parseData()">Load and parse CSV data</button>
+    <br/>
+    <button onClick="saveModel()">Save Model</button>
+    <button onClick="loadModel()">Load Model</button>
+    <br/>
+    <label for="sequenceLength">Sequence Length:</label>
+    <input type="number" id="sequenceLength" name="sequenceLength" value="6">
+    <br>
+    <label for="tolerance">Tolerance:</label>
+    <input type="number" id="tolerance" name="tolerance" value="0.1" step="0.01">
+    <br>
+    <button onclick="trainModel()">Train Model</button>
+    <a id="downloadLink" href="#" download="processed_data.csv" style="display: none;">Download preprocessed data</a>
+    <p id="trainingProgress">Training progress: 0%</p>
+    <canvas id="lossChart"></canvas>
+    <canvas id="myChart"></canvas>
+    <div id="output"></div>
+
+    <script>
+        let dataset;
+        let model; // Declare model in the global scope
+        let modelLoaded = false; // Declare modelLoaded in the global scope
+        let columnStats = {}; // Declare columnStats in the global scope
+        let valXs; // Declare valXs in the global scope
+        let valTargets; // Declare valTargets in the global scope
+
+        function parseData() {
+            const fileInput = document.getElementById('csvFile');
+            Papa.parse(fileInput.files[0], {
+                download: true,
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    dataset = results.data;
+                    preprocessData();
+                    trainModel();
+                }
+            });
+        }
+        
+        function preprocessData() {
+            // Filter out rows with null or undefined values
+            dataset = dataset.filter(row => Object.values(row).every(value => value !== null && value !== undefined));
+        
+            // Standardize data (scale between 0 and 1)
+            const columns = ['PRCP', 'SNOW', 'TAVG', 'TMAX', 'TMIN'];
+            columns.forEach(column => {
+                const columnValues = dataset.map(row => row[column]);
+                const max = Math.max(...columnValues);
+                const min = Math.min(...columnValues);
+        
+                // Store the min and max for this column
+                columnStats[column] = {min, max};
+        
+                // Skip standardization if min and max are the same
+                if (min === max) {
+                    return;
+                }
+        
+                dataset = dataset.map(row => {
+                    row[column] = (row[column] - min) / (max - min);
+                    return row;
+                });
+            });
+        
+            // Create a Blob from the preprocessed data
+            const csvContent = Papa.unparse(dataset);
+            const blob = new Blob([csvContent], {type: 'text/csv'});
+        
+            // Create a URL for the Blob and set it as the href of the download link
+            const url = URL.createObjectURL(blob);
+            const downloadLink = document.getElementById('downloadLink');
+            downloadLink.href = url;
+            downloadLink.style.display = 'inline';  // make the download link visible
+        }
+
+        async function trainModel() {
+            let losses = [];
+            const sequenceLength = parseInt(document.getElementById('sequenceLength').value);
+            // Define model if it's not already defined
+            if (!modelLoaded) {
+                // Define a more complex model
+                model = tf.sequential();
+                
+                model.add(tf.layers.lstm({
+                    units: 200,
+                    returnSequences: true,
+                    inputShape: [sequenceLength, 5]
+                }));
+                model.add(tf.layers.dropout({rate: 0.2}));
+                
+                model.add(tf.layers.lstm({
+                    units: 200,
+                    returnSequences: true
+                }));
+                model.add(tf.layers.dropout({rate: 0.2}));
+                
+                model.add(tf.layers.lstm({
+                    units: 200,
+                    returnSequences: true
+                }));
+                model.add(tf.layers.dropout({rate: 0.2}));
+
+                model.add(tf.layers.lstm({
+                    units: 200
+                }));
+                model.add(tf.layers.dropout({rate: 0.2}));
+                
+                model.add(tf.layers.dense({units: 50, activation: 'relu'}));  // New dense layer
+                model.add(tf.layers.dense({units: 1}));
+      
+                // Compile the model
+                model.compile({
+                    optimizer: tf.train.adam(0.001),
+                    loss: 'meanSquaredError'
+                });
+
+                // Compile model
+                model.compile({
+                    optimizer: tf.train.adam(0.001),
+                    loss: 'meanSquaredError'
+                });
+            }
+        
+            // Prepare training data
+            const sequences = [];
+            const targets = [];
+            for (let i = sequenceLength; i < dataset.length; i++) {
+                const sequence = dataset.slice(i - sequenceLength, i).map(row => [row.PRCP, row.SNOW, row.TAVG, row.TMAX, row.TMIN]);
+                sequences.push(sequence);
+                targets.push(dataset[i]['RATIO']);
+            }
+
+            shuffleArrays(sequences, targets);
+            
+            // Split data into training and validation
+            const splitIdx = Math.floor(0.8 * sequences.length);  // 80% for training, 20% for validation
+            const trainSequences = sequences.slice(0, splitIdx);
+            const trainTargets = targets.slice(0, splitIdx);
+            valSequences = sequences.slice(splitIdx);
+            valTargets = targets.slice(splitIdx);
+            const xs = tf.tensor3d(trainSequences);
+            const ys = tf.tensor2d(trainTargets, [trainTargets.length, 1]);
+            valXs = tf.tensor3d(valSequences);
+            valYs = tf.tensor2d(valTargets, [valTargets.length, 1]);
+        
+            // Skip training if a model has been loaded
+            if (!modelLoaded) {
+                await model.fit(xs, ys, {
+                    epochs: 100,
+                    validationData: [valXs, valYs],
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            console.log(`Epoch ${epoch}: loss = ${logs.loss}, val_loss = ${logs.val_loss}`);
+                            document.getElementById('trainingProgress').innerText = `Training progress: ${((epoch + 1) / 100 * 100).toFixed(2)}% (loss: ${logs.loss.toFixed(2)}, val_loss: ${logs.val_loss.toFixed(2)})`;
+                    
+                            // Store the losses
+                            losses.push({epoch: epoch, loss: logs.loss, val_loss: logs.val_loss});
+                        }
+                    }
+                });
+            }
+            // Create a new Chart.js chart
+            const ctx = document.getElementById('lossChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: losses.map(l => l.epoch),  // X-axis: epochs
+                    datasets: [{
+                        label: 'Training Loss',
+                        data: losses.map(l => l.loss),
+                        borderColor: 'rgb(75, 192, 192)',
+                        fill: false
+                    }, {
+                        label: 'Validation Loss',
+                        data: losses.map(l => l.val_loss),
+                        borderColor: 'rgb(255, 99, 132)',
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Epoch'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Loss'
+                            }
+                        }
+                    }
+                }
+            });
+            makePredictions(); // Call makePredictions after the model is trained
+        }
+
+        function shuffleArrays(array1, array2) {
+            let counter = array1.length;
+            while (counter > 0) {
+                const index = Math.floor(Math.random() * counter);
+                counter--;
+                [array1[counter], array1[index]] = [array1[index], array1[counter]];
+                [array2[counter], array2[index]] = [array2[index], array2[counter]];
+            }
+        }
+        
+        async function saveModel() {
+            await model.save('indexeddb://my-model');
+            alert('Model saved.');
+        }
+        
+        async function loadModel() {
+            model = await tf.loadLayersModel('indexeddb://my-model');
+            modelLoaded = true; // Set modelLoaded to true
+            alert('Model loaded.');
+        }
+        
+        function makePredictions() {
+            // Make predictions on validation data
+            const preds = model.predict(valXs).dataSync();
+         
+            // Create a new HTML table
+            let tableHtml = '<table><tr><th>Week</th><th>Predicted RATIO</th><th>Actual RATIO</th></tr>';
+        
+            // Variables to track the number of correct predictions
+            let numCorrect = 0;
+            
+            // Error tolerance
+            const tolerance = parseFloat(document.getElementById('tolerance').value);
+            
+            // Populate the table with the predicted and actual values
+            for (let i = 0; i < valSequences.length; i++) {
+                const pred = preds[i];
+                const actual = valTargets[i];
+            
+                // Determine the category of the actual value
+                let actualCategory;
+                if (actual < 0.9) {
+                    actualCategory = 'below';
+                } else if (actual < 1.1) {
+                    actualCategory = 'roughly';
+                } else {
+                    actualCategory = 'above';
+                }
+                
+                // Determine the category of the predicted value
+                let predCategory;
+                if (pred < 0.9) {
+                    predCategory = 'below';
+                } else if (pred < 1.1) {
+                    predCategory = 'roughly';
+                } else {
+                    predCategory = 'above';
+                }
+                
+                // Calculate the absolute difference between predicted and actual
+                const diff = Math.abs(pred - actual);
+                
+                // Define a threshold for a good prediction based on the user input
+                const goodPredictionThreshold = parseFloat(document.getElementById('tolerance').value);
+                
+                // If the categories match, or the absolute difference is less than the threshold, increment the correct prediction counter
+                if (actualCategory === predCategory || diff < goodPredictionThreshold) {
+                    numCorrect++;
+                }
+           
+                // Color-coding based on difference
+                let color;
+                if (diff < 0.1) {
+                    color = 'green';
+                } else if (diff < 0.2) {
+                    color = 'brown';
+                } else {
+                    color = 'red';
+                }
+            
+                // Color-coding for week number
+                let weekColor;
+                if ((pred < 1 && actual < 1) || (pred > 1 && actual > 1)) {
+                    weekColor = 'blue';
+                } else {
+                    weekColor = 'orange';
+                }
+            
+                // Add color-coded row to the table
+                tableHtml += `<tr><td style="color: ${weekColor}">${i + 1}</td><td style="color: ${color}">${pred.toFixed(2)}</td><td style="color: ${color}">${actual.toFixed(2)}</td></tr>`;
+            }
+    
+            console.log(`Correct predictions: ${numCorrect} out of ${valSequences.length}`);
+            
+            // Add the table to the page
+            document.getElementById('output').innerHTML = tableHtml;
+                    
+            // Calculate difference between predictions and actual values
+            const diffs = preds.map((pred, idx) => pred - valTargets[idx]);
+            
+            // Create a new Chart.js chart
+            const ctx = document.getElementById('myChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: valSequences.length}, (_, i) => i + 1), // Weeks
+                    datasets: [{
+                        label: 'Predicted RATIO',
+                        data: preds,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1,
+                        fill: false
+                    }, {
+                        label: 'Actual RATIO',
+                        data: valTargets,
+                        borderColor: 'rgb(255, 99, 132)',
+                        tension: 0.1,
+                        fill: false
+                    }, {
+                        label: 'Difference (Predicted - Actual)',
+                        data: diffs,
+                        borderColor: 'rgb(255, 165, 0)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Week'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'RATIO'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>
