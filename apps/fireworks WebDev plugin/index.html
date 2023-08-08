@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colorful Fireworks with Sound</title>
+    <style>
+      body,html {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        height: 100%
+      }
+
+      canvas {
+        display: block;
+        background-color: #000
+      }
+    </style>
+  </head>
+  <body>
+    <div id='poweredBy' style='position: fixed; right: 0; bottom: 0; background-color: #0078D7; color: white; padding: 10px; z-index: 1000; border-top-left-radius: 10px; font-family: Roboto, sans-serif;'>
+      <span class='info-icon' style='margin-right: 5px; font-size: 1.2em;'>&#x2139;</span>
+      Originally powered by 
+      <b>
+        <a href='https://converter.app' style='color: white;' target="_blank">Converter App</a>
+      </b>
+        <br/>
+      Created by <b><a href="https://chat.openai.com/share/c4169b93-f097-4488-afd8-fbaf0dc08c27"  style='color: white;' target="_blank">this ChatpGPT conversation</a></b>
+    </div>
+    <canvas id="fireworksCanvas"></canvas>
+    <audio id="fireworkSound" src="explode.wav"></audio>
+    <script>
+      const canvas = document.getElementById('fireworksCanvas');
+      const ctx = canvas.getContext('2d');
+      const fireworkSound = document.getElementById('fireworkSound');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      const particles = [];
+      function Particle(x, y, size, speedX, speedY, color) {
+        this.x = x;
+        this.y = y;
+        this.size = size;
+        this.speedX = speedX;
+        this.speedY = speedY;
+        this.color = color;
+        this.alpha = 1;
+      }
+      Particle.prototype.draw = function() {
+        ctx.globalAlpha = this.alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+      }
+      ;
+      Particle.prototype.update = function() {
+        this.y += this.speedY;
+        this.x += this.speedX;
+        if (this.alpha > 0.2)
+          this.alpha -= 0.01;
+      }
+      ;
+      function createParticle(e) {
+        fireworkSound.currentTime = 0;
+        fireworkSound.play();
+        const xPos = e.x;
+        const yPos = e.y;
+        const colors = ['#FF5734', '#34FF57', '#5734FF', '#FFFF34', '#FF34FF'];
+        for (let i = 0; i < 20; i++) {
+          const color = colors[Math.floor(Math.random() * colors.length)];
+          particles.push(new Particle(xPos,yPos,5,(Math.random() - 0.5) * 5,(Math.random() - 0.5) * 5,color));
+        }
+      }
+      canvas.addEventListener('click', createParticle);
+      function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < particles.length; i++) {
+          particles[i].update();
+          particles[i].draw();
+          for (let j = i; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < 60) {
+              ctx.beginPath();
+              ctx.strokeStyle = particles[i].color;
+              ctx.lineWidth = 0.2;
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.stroke();
+              ctx.closePath();
+            }
+          }
+          if (particles[i].size <= 0.2) {
+            particles.splice(i, 1);
+            i--;
+          }
+        }
+        requestAnimationFrame(animate);
+      }
+      animate();
+    </script>
+  </body>
+</html>
