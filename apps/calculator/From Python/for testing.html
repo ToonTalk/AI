@@ -1,0 +1,72 @@
+<body>
+  0.<span style="text-decoration: overline">3</span> &times; 10<sup>0</sup><br>
+3.<span style="text-decoration: overline"></span> &times; 10<sup>-1</sup><br>
+3.<span style="text-decoration: overline">3</span> &times; 10<sup>-1</sup><br>
+  3.<span style="text-decoration: overline">33</span> &times; 10<sup>1</sup><br>
+1.23456789 &times; 10<sup>-1</sup><br>
+1.<span style="text-decoration: overline">23456789</span> &times; 10<sup>-1</sup><br>
+1.23456789<span style="text-decoration: overline">123456789</span> &times; 10<sup>-1</sup>
+</body>
+  
+<script>
+function toScientificHTML(numerator, denominator) {
+  let whole = numerator / denominator;
+  let remainder = numerator % denominator;
+  let fraction = '';
+  let seen = new Map();
+  let repeating = '';
+  let exponent = 0;
+
+  // Step 1 & 2: Compute the fraction and identify repeating digits
+  while (remainder && !seen.has(remainder)) {
+    seen.set(remainder, fraction.length);
+    numerator = remainder * 10n;
+    const digit = numerator / denominator;
+    remainder = numerator % denominator;
+    fraction += digit.toString();
+  }
+
+  if (remainder) {
+    const start = seen.get(remainder);
+    repeating = fraction.slice(start);
+    fraction = fraction.slice(0, start);
+  }
+
+  // Step 3: Normalization
+  if (whole === 0n) {
+    for (let i = 0; i < fraction.length; i++) {
+      if (fraction[i] !== '0') {
+        whole = BigInt(fraction[i]);
+        fraction = fraction.slice(i + 1);
+        repeating = repeating.slice(i + 1);
+        exponent = -i - 1;
+        break;
+      }
+    }
+  } else {
+    while (whole >= 10n) {
+      whole /= 10n;
+      exponent++;
+    }
+  }
+
+  // Step 4 & 5: Construct HTML
+  let decimalPart = fraction;
+  if (repeating) {
+    decimalPart += `<span style="text-decoration: overline">${repeating}</span>`;
+  }
+
+  return `${whole}.${decimalPart} &times; 10<sup>${exponent}</sup>`;
+}
+
+// Test
+console.log(toScientificHTML(1n, 3n));  // "3.<span style=\"text-decoration: overline\">3</span> &times; 10<sup>-1</sup>"
+console.log(toScientificHTML(10n, 3n)); // "3.<span style=\"text-decoration: overline\">3</span> &times; 10<sup>0</sup>"
+console.log(toScientificHTML(100n, 3n)); // "3.<span style=\"text-decoration: overline\">3</span> &times; 10<sup>1</sup>"
+
+// Test cases
+console.log(toScientificHTML(BigInt(123456789), BigInt(1000000000)));  // Should output '1.23456789 × 10<sup>0</sup>'
+console.log(toScientificHTML(BigInt(123456789), BigInt(999999999)));  // Should output with repeating decimals
+
+
+</script>
