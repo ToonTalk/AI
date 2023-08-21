@@ -1,0 +1,130 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Scientific Notation Test</title>
+</head>
+<body>
+
+<h1>Scientific Notation Test</h1>
+
+<label for="numerator">Numerator:</label>
+<input type="number" id="numerator" name="numerator"><br><br>
+
+<label for="denominator">Denominator:</label>
+<input type="number" id="denominator" name="denominator"><br><br>
+
+<button onclick="calculate()">Calculate</button>
+
+<p>Result: <span id="result"></span></p>
+
+<script>
+
+function gcd(a, b) {
+    while (b !== 0) {
+        let temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+function toScientificHtmlExact(numerator, denominator) {
+    // Handle whole numbers
+    if (numerator % denominator === 0) {
+        let wholeNumber = Math.floor(numerator / denominator);
+        let exponent = 0;
+        let removedDigits = [];
+        while (wholeNumber >= 10) {
+            removedDigits.unshift(wholeNumber % 10);
+            wholeNumber = Math.floor(wholeNumber / 10);
+            exponent++;
+        }
+        let mantissa = removedDigits.length ? wholeNumber + '.' + removedDigits.join('') : wholeNumber.toString();
+        return mantissa + ' &times; 10<sup>' + exponent + '</sup>';
+    }
+
+    // Normalize the fraction
+    const divisor = gcd(numerator, denominator);
+    numerator /= divisor;
+    denominator /= divisor;
+
+    // Initialize variables
+    let repeatingDecimalStr = '';
+    let exponent = 0;
+
+    // Adjust numerator and denominator to ensure mantissa will be between 1 and 10
+    while (numerator < denominator) {
+        numerator *= 10;
+        exponent--;
+    }
+    while (numerator >= 10 * denominator) {
+        denominator *= 10;
+        exponent++;
+    }
+
+    // Calculate the repeating decimal expansion for the fractional part
+    let remainders = [];
+    let decimals = [];
+    let integralPart = Math.floor(numerator / denominator);
+    numerator %= denominator;
+    repeatingDecimalStr += integralPart.toString();
+
+    while (numerator > 0) {
+        let index = remainders.indexOf(numerator);
+        if (index !== -1) {
+            decimals.splice(index, 0, '(');
+            decimals.push(')');
+            break;
+        }
+        remainders.push(numerator);
+        numerator *= 10;
+        let decimalPart = Math.floor(numerator / denominator);
+        decimals.push(decimalPart.toString());
+        numerator %= denominator;
+    }
+
+    // Concatenate the repeating decimal expansion
+    repeatingDecimalStr += '.' + decimals.join('');
+
+    // Detect repeating part
+    let repeatingPart = null;
+    if (repeatingDecimalStr.includes('(')) {
+        repeatingPart = repeatingDecimalStr.split('(')[1].split(')')[0];
+        if (repeatingPart) {
+            repeatingDecimalStr = repeatingDecimalStr.replace('(' + repeatingPart + ')', '<span style="text-decoration:overline;">' + repeatingPart + '</span>');
+        }
+    }
+
+    // Construct the HTML for the scientific notation
+    return repeatingDecimalStr + ' &times; 10<sup>' + exponent + '</sup>';
+}
+
+// Test cases
+const testCases = [
+    [1, 3],
+    [1, 7],
+    [10, 11],
+    [2500, 1],
+    [100, 1],
+    [1000, 3]
+];
+
+for (let [numerator, denominator] of testCases) {
+    const htmlStr = toScientificHtmlExact(numerator, denominator);
+    console.log(numerator + '/' + denominator + ' = ' + htmlStr);
+}
+
+</script>
+
+<script>
+function calculate() {
+    const numerator = parseInt(document.getElementById('numerator').value);
+    const denominator = parseInt(document.getElementById('denominator').value);
+    const result = toScientificHtmlExact(numerator, denominator);
+    document.getElementById('result').innerHTML = result;
+}
+</script>
+
+</body>
+</html>
