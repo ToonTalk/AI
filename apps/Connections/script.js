@@ -37,12 +37,25 @@ function updateFoundCategories(category) {
 
 // Function to validate selected items
 function validateSelectedItems(selected) {
+    // Loop through each category and its corresponding items in the 'categories' object
     for (const [category, items] of Object.entries(categories)) {
-        if (new Set(selected).size === new Set(items).size &&
-            new Set([...selected, ...items]).size === new Set(items).size) {
+        // Check if the number of unique selected items is the same as the number of unique items in the current category
+        // This ensures that the user has selected exactly the number of items needed for a valid group
+        const uniqueSelectedSize = new Set(selected).size;
+        const uniqueCategorySize = new Set(items).size;
+        
+        // Check if adding the selected items to the items in the current category 
+        // results in a set with the same size as the original set of items in the category
+        // This ensures that all selected items are actually part of the current category
+        const combinedSetSize = new Set([...selected, ...items]).size;
+        
+        // If both conditions are met, the selected items form a valid group
+        if (uniqueSelectedSize === uniqueCategorySize && combinedSetSize === uniqueCategorySize) {
             return [true, category];
         }
     }
+    
+    // If no valid group is found, return false and null
     return [false, null];
 }
 
