@@ -37,12 +37,25 @@ function updateFoundCategories(category) {
 
 // Function to validate selected items
 function validateSelectedItems(selected) {
+    // Loop through each category and its corresponding items in the 'categories' object
     for (const [category, items] of Object.entries(categories)) {
-        if (new Set(selected).size === new Set(items).size &&
-            new Set([...selected, ...items]).size === new Set(items).size) {
+        // Check if the number of unique selected items is the same as the number of unique items in the current category
+        // This ensures that the user has selected exactly the number of items needed for a valid group
+        const uniqueSelectedSize = new Set(selected).size;
+        const uniqueCategorySize = new Set(items).size;
+        
+        // Check if adding the selected items to the items in the current category 
+        // results in a set with the same size as the original set of items in the category
+        // This ensures that all selected items are actually part of the current category
+        const combinedSetSize = new Set([...selected, ...items]).size;
+        
+        // If both conditions are met, the selected items form a valid group
+        if (uniqueSelectedSize === uniqueCategorySize && combinedSetSize === uniqueCategorySize) {
             return [true, category];
         }
     }
+    
+    // If no valid group is found, return false and null
     return [false, null];
 }
 
@@ -78,6 +91,10 @@ function handleSubmit() {
     } else {
         updateMistakeCounter();
         selectedItems = [];
+        // Add logic to update the UI
+        document.querySelectorAll('.grid-item.selected').forEach((item) => {
+            item.classList.remove('selected');
+        });
         return ['Invalid group', foundCategories, mistakes];
     }
 }
@@ -127,51 +144,6 @@ function initGame() {
         grid.appendChild(gridItem);
     });
 
-    const submitBtn = document.getElementById('submitBtn');
-    submitBtn.addEventListener('click', function() {
-        const [message, foundCats, mistakeCount] = handleSubmit();
-        document.getElementById('mistakeCounter').textContent = `Mistakes: ${mistakes}`;
-        // Check if the user has reached the maximum number of mistakes
-        if (mistakes >= 4) {
-            // Inform the user they've lost
-            const statusMessage = document.getElementById('statusMessage');
-            statusMessage.textContent = 'You have lost the game! ';
-            statusMessage.className = 'invalid-message';
-    
-            // Reveal the categories and words not yet found
-            let notFoundText = 'Categories not found: ';
-            for (const [category, words] of Object.entries(categories)) {
-                if (!foundCategories.includes(category)) {
-                    notFoundText += `\n${category}: ${words.join(', ')}`;
-                }
-            }
-            
-            // Append the notFoundText to the statusMessage
-            const notFoundElement = document.createElement('pre');
-            notFoundElement.textContent = notFoundText;
-            statusMessage.appendChild(notFoundElement);
-    
-            // Optionally, disable further gameplay or reset the game
-            return;
-        }
-        document.getElementById('foundCategories').textContent = `Found Categories: ${foundCats.join(', ')}`;
-        
-        const statusMessage = document.getElementById('statusMessage');
-        statusMessage.textContent = message;
-    
-        // Update the message area with appropriate styling
-        if (message === 'Valid group found') {
-            statusMessage.className = 'valid-message';
-        } else {
-            statusMessage.className = 'invalid-message';
-        }
-    });
-
-    // Add event listener for the Clear button
-    const clearBtn = document.getElementById('clearBtn');
-    clearBtn.addEventListener('click', function() {
-        clearSelection();
-    });
 }
 
 const apiKeyButton = document.getElementById('initializeGame');
@@ -268,4 +240,58 @@ window.onclick = function(event) {
     modal.style.display = "none";
   }
 }
+
+document.addEventListener('DOMContentLoaded', (event) => {
+    // Attach event listener to the Submit button
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.addEventListener('click', function() {
+        const [message, foundCats, mistakeCount] = handleSubmit();
+        document.getElementById('mistakeCounter').textContent = `Mistakes: ${mistakes}`;
+        // Check if the user has reached the maximum number of mistakes
+        if (mistakes >= 4) {
+            // Inform the user they've lost
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = 'You have lost the game! ';
+            statusMessage.className = 'invalid-message';
+    
+            // Reveal the categories and words not yet found
+            let notFoundText = 'Categories not found: ';
+            for (const [category, words] of Object.entries(categories)) {
+                if (!foundCategories.includes(category)) {
+                    notFoundText += `\n${category}: ${words.join(', ')}`;
+                }
+            }
+            
+            // Append the notFoundText to the statusMessage
+            const notFoundElement = document.createElement('pre');
+            notFoundElement.textContent = notFoundText;
+            statusMessage.appendChild(notFoundElement);
+    
+            // Optionally, disable further gameplay or reset the game
+            return;
+        }
+        
+        document.getElementById('foundCategories').textContent = `Found Categories: ${foundCats.join(', ')}`;
+        
+        const statusMessage = document.getElementById('statusMessage');
+        statusMessage.textContent = message;
+    
+        // Update the message area with appropriate styling
+        if (message === 'Valid group found') {
+            statusMessage.className = 'valid-message';
+        } else {
+            statusMessage.className = 'invalid-message';
+        }
+    });
+
+    // Add event listener for the Clear button
+    const clearBtn = document.getElementById('clearBtn');
+    clearBtn.addEventListener('click', function() {
+        clearSelection();
+    });
+    
+    // Initialize the game for the first time
+    initGame();
+});
+
 

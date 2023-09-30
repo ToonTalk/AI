@@ -1,0 +1,368 @@
+<!-- This document type declaration defines the document to be HTML5 -->
+<!DOCTYPE html>
+<!-- The root element of an HTML page -->
+<html>
+<!-- Container for meta data and links -->
+<head>
+  <title>Kelp, Sea Urchins, and Otters 2D Simulation</title>
+  <!-- Internal CSS styles -->
+<style>
+    #gridDisplay {
+      width: 100%;
+      text-align: center;
+      border: 2px solid #ccc;
+    }
+    .gridRow {
+      display: flex;
+    }
+    .gridCell {
+      flex: 1;
+      font-size: 24px;
+    }
+    #populationChart {
+      /* max-width: 600px; */
+      max-height: 200px;
+    }
+  </style> 
+  <!-- Importing the Chart.js library for the population chart -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Contains the visible page content -->
+<body>
+
+<!-- Button to open the About modal -->
+<button id="aboutButton">About</button>
+
+<!-- The About Modal -->
+<div id="aboutModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>About This App</h2>
+    <p>This app simulates the ecological relationship between kelp, sea urchins, and otters. In this ecological triangle, kelp provides food for sea urchins, which in turn are preyed upon by otters. Kelp benefits from the presence of otters because they keep the sea urchin population in check, preventing overgrazing of kelp. This delicate balance is crucial for the health and biodiversity of marine ecosystems.</p>
+    <p>It was created by <a href="mailto:toontalk@gmail.com" target='blank'>Ken Kahn</a> conversing with ChatGPT-4. For more details, you can <a href="https://chat.openai.com/share/65957538-1709-4c94-8ad7-dfe303d0da6f" target="_blank">view the conversation here</a>.</p>
+  </div>
+</div>
+
+<div id="aboutModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>About This App</h2>
+    <p>This app simulates the ecological relationship between kelp, sea urchins, and otters.</p>
+    <p>It was created by conversing with ChatGPT-4. For more details, you can <a href="conversation_link_here" target="_blank">view the conversation here</a>.</p>
+  </div>
+</div>
+
+<!-- Additional styles and script for the About modal -->
+<style>
+  /* Style for the modal */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    padding-top: 100px;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+  }
+  .modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 50%;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  }
+  .close {
+    color: #aaaaaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .close:hover,
+  .close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  input[type=range] {
+    width: 60%;
+  }
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    text-align: center;
+  }
+  div {
+    margin-bottom: 20px;
+  }
+  label, span {
+    font-size: 18px;
+  }
+  button {
+    padding: 10px 20px;
+    font-size: 18px;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #eee;
+  }  
+</style>
+
+<script>
+  // Script to handle the About modal
+  const aboutButton = document.getElementById("aboutButton");
+  const aboutModal = document.getElementById("aboutModal");
+  const closeBtn = document.getElementsByClassName("close")[0];
+
+  const dx = [-1, 1, 0, 0];
+  const dy = [0, 0, -1, 1];
+
+  aboutButton.onclick = function() {
+    aboutModal.style.display = "block";
+  }
+  closeBtn.onclick = function() {
+    aboutModal.style.display = "none";
+  }
+  window.onclick = function(event) {
+    if (event.target == aboutModal) {
+      aboutModal.style.display = "none";
+    }
+  }
+</script>
+<header>
+  <h1>Ecological Simulation</h1>
+</header>
+<section id="controls">
+<div>
+  <label for="kelpPop">Initial Kelp Population: </label>
+  <input type="range" id="kelpPop" min="0" max="100" step="1" value="50">
+  <span id="kelpPopValue"></span>
+</div>
+<div>
+  <label for="urchinPop">Initial Sea Urchin Population: </label>
+  <input type="range" id="urchinPop" min="0" max="100" step="1" value="20">
+  <span id="urchinPopValue"></span>
+</div>
+<div>
+  <label for="otterPop">Initial Otter Population: </label>
+  <input type="range" id="otterPop" min="0" max="100" step="1" value="5">
+  <span id="otterPopValue"></span>
+</div>
+<div>
+  <label for="kelpRate">Kelp Reproduction Rate: </label>
+  <input type="range" id="kelpRate" min="0" max="1" step="0.01" value="0.1">
+  <span id="kelpRateValue"></span>
+</div>
+<div>
+  <label for="urchinRate">Sea Urchin Reproduction Rate: </label>
+  <input type="range" id="urchinRate" min="0" max="1" step="0.01" value="0.2">
+  <span id="urchinRateValue"></span>
+</div>
+<div>
+  <label for="otterRate">Otter Reproduction Rate: </label>
+  <input type="range" id="otterRate" min="0" max="1" step="0.01" value="0.05">
+  <span id="otterRateValue"></span>
+</div>
+</section>
+<button id="startButton">Start Simulation</button>
+<section id="simulation">
+  <!-- Canvas element for rendering the population chart -->
+<canvas id="populationChart" width="400" height="200"></canvas>
+  <!-- Display area for the population counts -->
+<div id="populationCounts"></div>
+  <!-- Display area for the 2D grid simulation -->
+<div id="gridDisplay"></div>
+</section>
+</body>
+  <!-- JavaScript code for the simulation -->
+<script>
+    const gridSize = 10;
+    let kelpPositions = [];
+    let urchinPositions = [];
+    let otterPositions = [];
+
+    // Global variables to store population data for the chart
+    const kelpData = [];
+    const urchinData = [];
+    const otterData = [];
+    
+    // Initialize the line chart
+    const ctx = document.getElementById('populationChart').getContext('2d');
+    const populationChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Kelp',
+            data: kelpData,
+            borderColor: 'green',
+            fill: false
+          },
+          {
+            label: 'Sea Urchins',
+            data: urchinData,
+            borderColor: 'blue',
+            fill: false
+          },
+          {
+            label: 'Otters',
+            data: otterData,
+            borderColor: 'red',
+            fill: false
+          }
+        ]
+      }
+    });
+
+    function randomPosition() {
+      return {
+        x: Math.floor(Math.random() * gridSize),
+        y: Math.floor(Math.random() * gridSize)
+      };
+    }
+
+    function initEntities(num, entityArray) {
+      for (let i = 0; i < num; i++) {
+        entityArray.push(randomPosition());
+      }
+    }
+
+    function moveEntities(entityArray) {
+      const dx = [-1, 1, 0, 0];
+      const dy = [0, 0, -1, 1];
+      const newPositions = [];
+    
+      for (const entity of entityArray) {
+        const dir = Math.floor(Math.random() * 4);
+        const newX = (entity.x + dx[dir] + gridSize) % gridSize;
+        const newY = (entity.y + dy[dir] + gridSize) % gridSize;
+    
+        // Check if the new position is already occupied in the newPositions array
+        if (!newPositions.some(pos => pos.x === newX && pos.y === newY)) {
+          newPositions.push({ x: newX, y: newY });
+        } else {
+          // Keep the entity in its current position
+          newPositions.push({ x: entity.x, y: entity.y });
+        }
+      }
+    
+      // Update the original entity array with the new positions
+      for (let i = 0; i < entityArray.length; i++) {
+        entityArray[i] = newPositions[i];
+      }
+    }
+
+    function updateDisplay() {
+      let gridHTML = '';
+      let grid = Array.from({ length: gridSize }, () => Array(gridSize).fill('&#160;'));  // &#160; is a non-breaking space
+      for (const { x, y } of kelpPositions) grid[x][y] = '🌿';
+      for (const { x, y } of urchinPositions) grid[x][y] = '🦔';
+      for (const { x, y } of otterPositions) grid[x][y] = '🦦';
+
+      for (const row of grid) {
+        gridHTML += '<div class="gridRow">';
+        for (const cell of row) {
+          gridHTML += `<div class="gridCell">${cell}</div>`;
+        }
+        gridHTML += '</div>';
+      }
+
+      // Update counts
+      const kelpCount = kelpPositions.length;
+      const urchinCount = urchinPositions.length;
+      const otterCount = otterPositions.length;
+
+      const countDisplay = document.getElementById('populationCounts');
+      countDisplay.innerHTML = `🌿 Kelp: ${kelpCount}, 🦔 Sea Urchins: ${urchinCount}, 🦦 Otters: ${otterCount}`;
+
+      const display = document.getElementById('gridDisplay');
+      display.innerHTML = gridHTML;
+    }
+
+    function reproduceEntities(entityArray, reproductionRate) {
+      const newEntities = [];
+      for (let i = 0; i < entityArray.length; i++) {
+        const entity = entityArray[i];
+        if (Math.random() < reproductionRate) {
+          const dir = Math.floor(Math.random() * 4);
+          const newX = (entity.x + dx[dir] + gridSize) % gridSize;
+          const newY = (entity.y + dy[dir] + gridSize) % gridSize;
+          newEntities.push({ x: newX, y: newY });
+        }
+      }
+      return entityArray.concat(newEntities);
+    }
+
+    function runSimulation(initialKelpPop, initialUrchinPop, initialOtterPop, kelpReproRate, urchinReproRate, otterReproRate) {
+      initEntities(initialKelpPop, kelpPositions);
+      initEntities(initialUrchinPop, urchinPositions);
+      initEntities(initialOtterPop, otterPositions);
+    
+      setInterval(() => {
+        kelpPositions = reproduceEntities(kelpPositions, kelpReproRate);  
+        urchinPositions = reproduceEntities(urchinPositions, urchinReproRate);  
+        otterPositions = reproduceEntities(otterPositions, otterReproRate); 
+
+        moveEntities(kelpPositions);
+        moveEntities(urchinPositions);
+        moveEntities(otterPositions);
+        
+        // Remove duplicates based on the new positions
+        const uniqueKelp = Array.from(new Set(kelpPositions.map(JSON.stringify)), JSON.parse);
+        const uniqueUrchins = Array.from(new Set(urchinPositions.map(JSON.stringify)), JSON.parse);
+        const uniqueOtters = Array.from(new Set(otterPositions.map(JSON.stringify)), JSON.parse);
+        
+        kelpPositions = uniqueKelp;
+        urchinPositions = uniqueUrchins;
+        otterPositions = uniqueOtters;
+        
+        updateDisplay();
+
+        let timeStep = 0;
+
+        // Update chart data
+        kelpData.push(kelpPositions.length);
+        urchinData.push(urchinPositions.length);
+        otterData.push(otterPositions.length);
+        populationChart.data.labels.push(timeStep++);
+        populationChart.update();
+      }, 1000);
+    }
+    document.getElementById('startButton').addEventListener('click', function() {
+      const initialKelpPop = parseInt(document.getElementById('kelpPop').value);
+      const initialUrchinPop = parseInt(document.getElementById('urchinPop').value);
+      const initialOtterPop = parseInt(document.getElementById('otterPop').value);
+      const kelpReproRate = parseFloat(document.getElementById('kelpRate').value);
+      const urchinReproRate = parseFloat(document.getElementById('urchinRate').value);
+      const otterReproRate = parseFloat(document.getElementById('otterRate').value);
+    
+      // Initialize and start your simulation here using these variables.
+      // For example, you might call your runSimulation function with these variables as parameters.
+      
+      runSimulation(initialKelpPop, initialUrchinPop, initialOtterPop, kelpReproRate, urchinReproRate, otterReproRate);
+    });
+  
+  // Update the span elements to show the current slider values
+  document.querySelectorAll("input[type=range]").forEach(function(el) {
+    el.addEventListener('input', function() {
+      const valueSpan = document.getElementById(el.id + 'Value');
+      valueSpan.textContent = el.value;
+    });
+  });
+
+  // Initialize the span elements to show the initial slider values
+  document.addEventListener('DOMContentLoaded', (event) => {
+    document.querySelectorAll("input[type=range]").forEach(function(el) {
+      const valueSpan = document.getElementById(el.id + 'Value');
+      valueSpan.textContent = el.value;
+    });
+  });
+
+  </script>
+</head>
+</html>

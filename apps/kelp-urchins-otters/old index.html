@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Kelp, Sea Urchins, and Otters 2D Simulation</title>
+  <style>
+    #gridDisplay {
+      width: 100%;
+      text-align: center;
+    }
+    .gridRow {
+      display: flex;
+    }
+    .gridCell {
+      flex: 1;
+      font-size: 24px;
+    }
+    #populationChart {
+      /* max-width: 600px; */
+      max-height: 200px;
+    }
+  </style> 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <body>
+  <div id="populationCounts"></div>
+  <canvas id="populationChart" width="400" height="200"></canvas>
+  <div id="gridDisplay"></div>
+</body>
+  <script>
+    const gridSize = 10;
+    let kelpPositions = [];
+    let urchinPositions = [];
+    let otterPositions = [];
+
+    // Global variables to store population data for the chart
+const kelpData = [];
+const urchinData = [];
+const otterData = [];
+
+// Initialize the line chart
+const ctx = document.getElementById('populationChart').getContext('2d');
+const populationChart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Kelp',
+        data: kelpData,
+        borderColor: 'green',
+        fill: false
+      },
+      {
+        label: 'Sea Urchins',
+        data: urchinData,
+        borderColor: 'blue',
+        fill: false
+      },
+      {
+        label: 'Otters',
+        data: otterData,
+        borderColor: 'red',
+        fill: false
+      }
+    ]
+  }
+});
+
+    function randomPosition() {
+      return {
+        x: Math.floor(Math.random() * gridSize),
+        y: Math.floor(Math.random() * gridSize)
+      };
+    }
+
+    function initEntities(num, entityArray) {
+      for (let i = 0; i < num; i++) {
+        entityArray.push(randomPosition());
+      }
+    }
+
+    function moveEntities(entityArray) {
+      const dx = [-1, 1, 0, 0];
+      const dy = [0, 0, -1, 1];
+      const newPositions = [];
+    
+      for (const entity of entityArray) {
+        const dir = Math.floor(Math.random() * 4);
+        const newX = (entity.x + dx[dir] + gridSize) % gridSize;
+        const newY = (entity.y + dy[dir] + gridSize) % gridSize;
+    
+        // Check if the new position is already occupied in the newPositions array
+        if (!newPositions.some(pos => pos.x === newX && pos.y === newY)) {
+          newPositions.push({ x: newX, y: newY });
+        } else {
+          // Keep the entity in its current position
+          newPositions.push({ x: entity.x, y: entity.y });
+        }
+      }
+    
+      // Update the original entity array with the new positions
+      for (let i = 0; i < entityArray.length; i++) {
+        entityArray[i] = newPositions[i];
+      }
+    }
+
+    function updateDisplay() {
+      let gridHTML = '';
+      let grid = Array.from({ length: gridSize }, () => Array(gridSize).fill('&#160;'));  // &#160; is a non-breaking space
+      for (const { x, y } of kelpPositions) grid[x][y] = '🌿';
+      for (const { x, y } of urchinPositions) grid[x][y] = '🦔';
+      for (const { x, y } of otterPositions) grid[x][y] = '🦦';
+
+      for (const row of grid) {
+        gridHTML += '<div class="gridRow">';
+        for (const cell of row) {
+          gridHTML += `<div class="gridCell">${cell}</div>`;
+        }
+        gridHTML += '</div>';
+      }
+
+      // Update counts
+      const kelpCount = kelpPositions.length;
+      const urchinCount = urchinPositions.length;
+      const otterCount = otterPositions.length;
+
+      const countDisplay = document.getElementById('populationCounts');
+      countDisplay.innerHTML = `Kelp: ${kelpCount}, Sea Urchins: ${urchinCount}, Otters: ${otterCount}`;
+
+      const display = document.getElementById('gridDisplay');
+      display.innerHTML = gridHTML;
+    }
+
+    function runSimulation() {
+      initEntities(50, kelpPositions);
+      initEntities(20, urchinPositions);
+      initEntities(5, otterPositions);
+    
+      setInterval(() => {
+        moveEntities(kelpPositions);
+        moveEntities(urchinPositions);
+        moveEntities(otterPositions);
+        
+        // Remove duplicates based on the new positions
+        const uniqueKelp = Array.from(new Set(kelpPositions.map(JSON.stringify)), JSON.parse);
+        const uniqueUrchins = Array.from(new Set(urchinPositions.map(JSON.stringify)), JSON.parse);
+        const uniqueOtters = Array.from(new Set(otterPositions.map(JSON.stringify)), JSON.parse);
+        
+        kelpPositions = uniqueKelp;
+        urchinPositions = uniqueUrchins;
+        otterPositions = uniqueOtters;
+        
+        updateDisplay();
+
+        let timeStep = 0;
+
+        // Update chart data
+        kelpData.push(kelpPositions.length);
+        urchinData.push(urchinPositions.length);
+        otterData.push(otterPositions.length);
+        populationChart.data.labels.push(timeStep++);
+        populationChart.update();
+      }, 1000);
+    }
+
+    window.onload = runSimulation;
+  </script>
+</head>
+</html>
