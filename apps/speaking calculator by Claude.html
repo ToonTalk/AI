@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Speaking Calculator</title>
+</head>
+
+<body>
+
+  <h1>Speaking Calculator</h1>
+
+  <button id="start">Start</button>
+  <button id="stop">Stop</button>
+
+  <div id="question"></div>
+  <div id="result"></div>
+
+  <script>
+    const synth = window.speechSynthesis;
+    const recognition = new webkitSpeechRecognition();
+
+    const microphone = document.querySelector('#start');
+    const microphoneOff = document.querySelector('#stop');
+
+    const speak = (text) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      synth.speak(utterance);
+    }
+
+    const handleResult = (event) => {
+      const spoken = event.results[0][0].transcript;
+      
+      document.getElementById('question').innerHTML = spoken;
+
+      const words = spoken.split(' ');
+      
+      let operatorIndex = words.findIndex(w => w.includes('times'));
+      if (operatorIndex < 0) {
+        operatorIndex = words.findIndex(w => w.includes('x'));
+      }
+      
+      const num1 = getPreviousNumber(words, operatorIndex); 
+      const num2 = getNextNumber(words, operatorIndex);   
+      const result = num1 * num2;
+      
+      speak(result);
+      document.getElementById('result').innerHTML = result;
+    }
+
+    function getPreviousNumber(words, index) {
+      for(let i = index - 1; i >= 0; i--) {
+        if(!isNaN(words[i])) {
+          return parseInt(words[i]); 
+        }
+      }
+    }
+    
+    function getNextNumber(words, index) {
+      for(let i = index + 1; i < words.length; i++) {
+        if(!isNaN(words[i])) {
+          return parseInt(words[i]);
+        }
+      } 
+    }
+
+    microphone.addEventListener('click', () => {
+      recognition.start();
+      recognition.addEventListener('result', handleResult);
+    });
+
+    microphoneOff.addEventListener('click', () => {
+      recognition.stop();
+    });
+
+  </script>
+
+</body>
+</html>
