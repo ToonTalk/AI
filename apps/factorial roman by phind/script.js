@@ -1,5 +1,6 @@
 function calculateFactorial() {
-  var number = BigInt(document.getElementById('number').value);
+  var input = document.getElementById('number').value;
+  var number = isNaN(input) ? romanToDecimal(input.toUpperCase()) : BigInt(input);
   var factorial = BigInt(1);
   for (var i = BigInt(2); i <= number; i = i + BigInt(1)) {
     factorial *= i;
@@ -38,6 +39,25 @@ function toRoman(num) {
     }
   }
   return roman;
+}
+
+function romanToDecimal(roman) {
+  const romanNumerals = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+  let decimal = 0;
+
+  for (let i = 0; i < roman.length; i++) {
+    let currentNumeral = romanNumerals[roman[i]];
+    let nextNumeral = romanNumerals[roman[i + 1]];
+
+    if (nextNumeral && currentNumeral < nextNumeral) {
+      decimal += nextNumeral - currentNumeral;
+      i++; // Skip next numeral since it's part of this one
+    } else {
+      decimal += currentNumeral;
+    }
+  }
+
+  return decimal;
 }
 
 
