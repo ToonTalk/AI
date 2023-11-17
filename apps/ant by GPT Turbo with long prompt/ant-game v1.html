@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ant Foraging Game</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #gameArea {
+            width: 400px;
+            height: 400px;
+            border: 1px solid black;
+            position: relative;
+            margin: 0 auto;
+        }
+        .ant {
+            width: 40px; /* Increase the size as needed */
+            height: 40px; /* Increase the size as needed */
+            background-image: url('ant.png'); /* Ensure correct path */
+            background-size: contain; /* Adjusts the image to fit the size of the element */
+            background-repeat: no-repeat; /* Prevents the image from repeating */
+            background-color: transparent; /* Removes any default background color */
+            position: absolute;
+            transform-origin: center; /* Ensures the ant rotates around its center */
+            transition: transform 0.1s; /* Smooths the rotation transition */
+        }
+        .food {
+            width: 10px;
+            height: 10px;
+            position: absolute;
+            background-color: red;
+            border-radius: 50%;
+        }
+        .enemy {
+            width: 50px; /* Adjust size as needed */
+            height: 50px;
+            position: absolute;
+            background-image: url('enemy.png'); /* Replace with your enemy image */
+            background-size: cover;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        @keyframes flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        
+        .ant-fighting {
+            animation: shake 0.5s linear, flash 0.5s linear;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>Ant Foraging Game</h1>
+    <div id="gameArea">
+        <div class="ant" id="ant"></div>
+        <div class="enemy"></div>
+    </div>
+    <p>Food collected: <span id="score">0</span></p>
+
+    <script>
+        var ant = document.getElementById("ant");
+        var enemy = document.querySelector('.enemy');
+        var gameArea = document.getElementById("gameArea");
+        var score = 0;
+
+        // Function to move the ant
+        document.addEventListener('keydown', function(event) {
+            const ant = document.querySelector('.ant');
+            let left = ant.offsetLeft;
+            let top = ant.offsetTop;
+        
+            const stepSize = 5; // Change this to control how far the ant moves
+        
+            if (event.key === 'ArrowLeft') {
+                left -= stepSize;
+                ant.style.transform = 'rotate(270deg)';
+            } else if (event.key === 'ArrowRight') {
+                left += stepSize;
+                ant.style.transform = 'rotate(90deg)';
+            } else if (event.key === 'ArrowUp') {
+                top -= stepSize;
+                ant.style.transform = 'rotate(0deg)';
+            } else if (event.key === 'ArrowDown') {
+                top += stepSize;
+                ant.style.transform = 'rotate(180deg)';
+            }
+        
+            ant.style.left = left + 'px';
+            ant.style.top = top + 'px';
+        
+            // Call the checkForFood function after moving the ant
+            checkForFood();
+        });
+
+        // Function to check for collision with food
+        function checkForFood() {
+            var foods = document.querySelectorAll(".food");
+            foods.forEach(function(food) {
+                if (ant.offsetTop < food.offsetTop + food.offsetHeight &&
+                    ant.offsetTop + ant.offsetHeight > food.offsetTop &&
+                    ant.offsetLeft < food.offsetLeft + food.offsetWidth &&
+                    ant.offsetLeft + ant.offsetWidth > food.offsetLeft) {
+                        gameArea.removeChild(food);
+                        score++;
+                        document.getElementById("score").innerText = score;
+                        spawnFood();
+                }
+            });
+        }
+
+        // Function to add food to the game area
+        function spawnFood() {
+            var food = document.createElement("div");
+            food.className = "food";
+            food.style.left = Math.random() * (gameArea.offsetWidth - 10) + "px";
+            food.style.top = Math.random() * (gameArea.offsetHeight - 10) + "px";
+            gameArea.appendChild(food);
+        }
+
+        // Spawn initial food
+        spawnFood();
+        
+        // Initialize the enemy's position within the game area
+        var enemyX = gameArea.offsetWidth / 2;
+        var enemyY = gameArea.offsetHeight / 2;
+        var enemySpeed = 1; // Speed of the enemy
+    
+        enemy.style.left = enemyX + 'px';
+        enemy.style.top = enemyY + 'px';
+    
+        function moveEnemy() {
+            const ant = document.querySelector('.ant');
+        
+            // Calculate the direction towards the ant
+            var directionX = ant.offsetLeft - enemyX;
+            var directionY = ant.offsetTop - enemyY;
+        
+            // Normalize the direction
+            var magnitude = Math.sqrt(directionX * directionX + directionY * directionY);
+            if (magnitude != 0) {
+                directionX /= magnitude;
+                directionY /= magnitude;
+            }
+        
+            // Update the enemy's position
+            enemyX += directionX * enemySpeed;
+            enemyY += directionY * enemySpeed;
+    
+            // Keep the enemy within the bounds of the game area
+            enemyX = Math.max(0, Math.min(gameArea.offsetWidth - enemy.offsetWidth, enemyX));
+            enemyY = Math.max(0, Math.min(gameArea.offsetHeight - enemy.offsetHeight, enemyY));
+    
+            // Set the enemy's position
+            enemy.style.left = enemyX + 'px';
+            enemy.style.top = enemyY + 'px';
+        
+            // Rotate the enemy to face the ant
+            var angle = Math.atan2(directionY, directionX) * 180 / Math.PI;
+            enemy.style.transform = 'rotate(' + (angle + 90) + 'deg)'; // +90 to adjust rotation
+
+            // Check for collision and fight
+            checkCollisionAndFight();
+        }
+        
+        // Start moving the enemy
+        setInterval(moveEnemy, 20); // Adjust the interval for smoother or faster movement
+
+        function checkCollisionAndFight() {
+            const enemy = document.querySelector('.enemy');
+            const ant = document.querySelector('.ant');
+        
+            // Check if the enemy and the ant collide
+            if (enemy.offsetTop < ant.offsetTop + ant.offsetHeight &&
+                enemy.offsetTop + enemy.offsetHeight > ant.offsetTop &&
+                enemy.offsetLeft < ant.offsetLeft + ant.offsetWidth &&
+                enemy.offsetLeft + enemy.offsetWidth > ant.offsetLeft) {
+                
+                // Initiate fight
+                fight(ant, enemy);
+            }
+        }
+
+        function checkCollisionAndFight() {
+            const enemy = document.querySelector('.enemy');
+            const ant = document.querySelector('.ant');
+        
+            // Check if both elements exist
+            if (enemy && ant) {
+                // Check if the enemy and the ant collide
+                if (enemy.offsetTop < ant.offsetTop + ant.offsetHeight &&
+                    enemy.offsetTop + enemy.offsetHeight > ant.offsetTop &&
+                    enemy.offsetLeft < ant.offsetLeft + ant.offsetWidth &&
+                    enemy.offsetLeft + enemy.offsetWidth > ant.offsetLeft) {
+                    
+                    // Initiate fight
+                    fight(ant, enemy);
+                }
+            }
+        }
+        
+        function fight(ant1, ant2) {
+            ant1.classList.add('ant-fighting');
+            ant2.classList.add('ant-fighting');
+            
+
+            // Assuming you have a timeout or interval for the fight duration
+            setTimeout(() => {
+                ant1.classList.remove('ant-fighting');
+                ant2.classList.remove('ant-fighting');
+        
+                const size1 = ant1.offsetWidth * ant1.offsetHeight;
+                const size2 = ant2.offsetWidth * ant2.offsetHeight;
+            
+                let odds = 0.5;
+                if (size1 > size2) {
+                    odds += (size1 - size2) / (size1 + size2);
+                } else {
+                    odds -= (size2 - size1) / (size1 + size2);
+                }
+            
+                if (Math.random() < odds) {
+                    // ant1 wins, remove ant2
+                    if (ant2.parentNode) {
+                        ant2.parentNode.removeChild(ant2);
+                    }
+                } else {
+                    // ant2 wins, remove ant1 or end the game
+                    if (ant1.parentNode) {
+                        ant1.parentNode.removeChild(ant1);
+                        // End the game or respawn the ant
+                    }
+                }
+            }, 2000); // Adjust the duration as needed
+        }
+
+        // Call checkCollisionAndFight in your game loop or set an interval
+        setInterval(checkCollisionAndFight, 100); // Check for fights every 100ms
+
+    </script>
+</body>
+</html>

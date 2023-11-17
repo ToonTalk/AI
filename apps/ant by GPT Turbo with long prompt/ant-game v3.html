@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ant Foraging Game</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #gameArea {
+            width: 400px;
+            height: 400px;
+            border: 1px solid black;
+            position: relative;
+            margin: 0 auto;
+        }
+        .ant {
+            width: 40px; /* Increase the size as needed */
+            height: 40px; /* Increase the size as needed */
+            background-image: url('ant.png'); /* Ensure correct path */
+            background-size: contain; /* Adjusts the image to fit the size of the element */
+            background-repeat: no-repeat; /* Prevents the image from repeating */
+            background-color: transparent; /* Removes any default background color */
+            position: absolute;
+            transform-origin: center; /* Ensures the ant rotates around its center */
+            transition: transform 0.2s; /* Smooths the rotation transition */
+            z-index: 10;
+        }
+        .food-on-ant {
+            position: absolute;
+            width: 5px; /* Small dot size */
+            height: 5px;
+            background-color: red; /* Color to represent food */
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .food {
+            width: 30px; /* Adjust size as needed */
+            height: 30px; /* Adjust size as needed */
+            position: absolute;
+            background-image: url('food.png'); /* Ensure this path is correct */
+            background-size: contain; /* This will make sure the image fits within the element */
+            background-repeat: no-repeat; /* Prevents the image from tiling */
+            border-radius: 0; /* Remove if the food is not circular */
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        @keyframes flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        
+        .trail-dot {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background-color: black; /* Or any color you prefer */
+            border-radius: 50%;
+        }
+        .nest {
+            width: 50px;
+            height: 50px;
+            background-image: url('nest.png'); /* Replace with the actual path to your image */
+            background-size: cover; /* This will ensure the image covers the entire element */
+            position: absolute;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>Ant Foraging Game</h1>
+    <div id="gameArea">
+        <div id="ant" class="ant">
+            <span class="food-on-ant" style="display: none;"></span>
+        </div>
+        <div id="nest" class="nest"></div>
+    </div>
+    <p>Food collected: <span id="score">0</span></p>
+
+<script>
+    var gameArea = document.getElementById("gameArea");
+    var score = 0;
+    var hasFood = false;
+    var trail = []; // Trail array
+    var playerAnt; // This will hold the player-controlled ant
+
+    function createAnt(isPlayer = false) {
+        let newAnt = document.createElement("div");
+        newAnt.classList.add("ant");
+        newAnt.innerHTML = '<span class="food-on-ant" style="display: none;"></span>';
+        newAnt.hasFood = false; // Add this line to initialize the hasFood property
+        gameArea.appendChild(newAnt);
+    
+        if (isPlayer) {
+            playerAnt = newAnt; // Assign the player's ant
+        }
+
+        newAnt.trailTarget = trail.length - 1; // Start at the end of the trail
+    
+        return newAnt;
+    }
+  
+    // Create the initial player ant
+    playerAnt = createAnt(true);
+
+    let ants = [playerAnt]; // Array to hold all ants
+    
+    function updateAnts() {
+        ants.forEach(ant => {
+            moveAnt(ant);
+            checkForFood(ant);
+            checkForNest(ant);
+        });
+    }
+
+    // Function to move the ant
+    document.addEventListener('keydown', function(event) {
+        let left = playerAnt.offsetLeft;
+        let top = playerAnt.offsetTop;
+    
+        const stepSize = 5; // Step size for ant movement
+    
+        if (event.key === 'ArrowLeft') {
+            left -= stepSize;
+            playerAnt.style.transform = 'rotate(270deg)';
+        } else if (event.key === 'ArrowRight') {
+            left += stepSize;
+            playerAnt.style.transform = 'rotate(90deg)';
+        } else if (event.key === 'ArrowUp') {
+            top -= stepSize;
+            playerAnt.style.transform = 'rotate(0deg)';
+        } else if (event.key === 'ArrowDown') {
+            top += stepSize;
+            playerAnt.style.transform = 'rotate(180deg)';
+        }
+    
+        playerAnt.style.left = left + 'px';
+        playerAnt.style.top = top + 'px';
+
+        if (playerAnt.hasFood) {
+            // Add the current position to the trail when the ant has food
+            trail.push({ x: left, y: top });
+            drawTrail();
+        }
+    
+        checkForFood(playerAnt);
+        checkForNest(playerAnt); // Check if the ant has reached the nest
+    });
+
+    var isCheckingFood = false;
+
+    function checkForFood(ant) {
+        // Only proceed if the ant does not already have food
+        if (!isCheckingFood && !ant.hasFood) {
+            isCheckingFood = true;
+            
+            var foods = Array.from(document.querySelectorAll(".food"));
+            foods.some(function(food) {
+                if (ant.offsetTop < food.offsetTop + food.offsetHeight &&
+                    ant.offsetTop + ant.offsetHeight > food.offsetTop &&
+                    ant.offsetLeft < food.offsetLeft + food.offsetWidth &&
+                    ant.offsetLeft + ant.offsetWidth > food.offsetLeft) {
+                        gameArea.removeChild(food);
+                        score++;
+                        ant.hasFood = true; // Set the hasFood property of the ant
+                        ant.querySelector('.food-on-ant').style.display = 'block';
+                        document.getElementById("score").innerText = score;
+                        return true; // Exit the some() loop
+                }
+                return false;
+            });
+            isCheckingFood = false;
+        }
+    }
+
+    function checkForNest(ant) {
+        var nest = document.getElementById("nest");
+        if (ant.hasFood &&
+            ant.offsetTop < nest.offsetTop + nest.offsetHeight &&
+            ant.offsetTop + ant.offsetHeight > nest.offsetTop &&
+            ant.offsetLeft < nest.offsetLeft + nest.offsetWidth &&
+            ant.offsetLeft + ant.offsetWidth > nest.offsetLeft) {
+                ant.hasFood = false; // Reset the hasFood property of the ant
+                ant.querySelector('.food-on-ant').style.display = 'none';
+                score++;
+                document.getElementById("score").innerText = score;
+                if (ant === playerAnt) {
+                    spawnNewAnts(); // Spawn new ants only if the player ant returns food
+                }
+        }
+    }
+
+    function spawnNewAnts() {
+        for (let i = 0; i < 2; i++) {
+            // Delay spawning each ant slightly
+            setTimeout(function() {
+                let newAnt = createAnt();
+                // Position the ant at the nest
+                positionAntAtNest(newAnt);
+                ants.push(newAnt);
+                gameArea.appendChild(newAnt);
+            }, i * 100); // Delay by 100ms for each ant, adjust as needed
+        }
+    }
+
+    function positionAntAtNest(ant) {
+        // Assuming you have a way to determine the nest's position
+        ant.style.left = nest.offsetLeft + 'px';
+        ant.style.top = nest.offsetTop + 'px';
+    }
+  
+   // Function to add multiple food items to the game area at the start
+   function spawnInitialFood() {
+        // Base coordinates for the food cluster
+        var baseX = Math.random() * (gameArea.offsetWidth - 100) + 10; // Adjust the range as needed
+        var baseY = Math.random() * (gameArea.offsetHeight - 100) + 10; // Adjust the range as needed
+        var clusterRadius = 10; // Radius around the base coordinates for the food cluster
+    
+        for (let i = 0; i < 5; i++) { // Adjust the number to spawn more or less food
+            var food = document.createElement("div");
+            food.className = "food";
+    
+            // Random position within the cluster radius
+            food.style.left = (baseX + Math.random() * clusterRadius - clusterRadius / 2) + "px";
+            food.style.top = (baseY + Math.random() * clusterRadius - clusterRadius / 2) + "px";
+    
+            gameArea.appendChild(food);
+        }
+    }
+
+    // Function to draw the trail
+    function drawTrail() {
+        trail.forEach(function(point) {
+            var trailDot = document.createElement("div");
+            trailDot.className = "trail-dot";
+            trailDot.style.left = point.x + "px";
+            trailDot.style.top = point.y + "px";
+            gameArea.appendChild(trailDot);
+        });
+    }
+
+    const stepSize = 3;
+
+    function followTrail(ant) {
+        if (trail.length > 0 && ant.trailTarget >= 0) {
+            let targetPoint = trail[ant.trailTarget];
+    
+            moveToTarget(ant, targetPoint, stepSize);
+    
+            if (isAtTarget(ant, targetPoint, stepSize)) {
+                if (ant.trailTarget === 0) {
+                   searchForFoodRandomly(ant);
+                } else {
+                    // Move to the previous point in the trail
+                    ant.trailTarget--;
+                }
+            }
+        }
+    }
+
+    function moveAnt(ant) {    
+        // Skip the player ant
+        if (ant === playerAnt) return;
+
+        if (!ant.hasFood) {
+            // Call followTrail instead of direct movement
+            followTrail(ant);
+        } else {
+            // Existing logic for ants with food
+            moveToNest(ant, stepSize);
+        }
+    }
+    
+    function moveToNest(ant, stepSize) {
+        moveToTarget(ant, { x: nest.offsetLeft, y: nest.offsetTop }, stepSize);
+        if (isAtTarget(ant, { x: nest.offsetLeft, y: nest.offsetTop }, stepSize)) {
+            ant.hasFood = false; // Drop food at nest
+            ant.trailTarget = trail.length - 1; // Reset the trail target for next journey
+        }
+    }
+
+    function searchForFoodRandomly(ant) {
+        let searchRadius = 100;
+        let angle = Math.random() * 2 * Math.PI; // Random angle for direction
+        ant.style.left = (ant.offsetLeft + Math.cos(angle) * searchRadius) + 'px';
+        ant.style.top = (ant.offsetTop + Math.sin(angle) * searchRadius) + 'px';
+    }
+    
+    function moveToTarget(ant, target, stepSize) {
+
+      // Calculate direction
+      let directionX = target.x - ant.offsetLeft;
+      let directionY = target.y - ant.offsetTop;
+    
+      let length = Math.sqrt(directionX ** 2 + directionY ** 2);
+      if (length !== 0) {
+        directionX /= length;
+        directionY /= length; 
+      }
+    
+      // Calculate angle in radians
+      let angle = Math.atan2(directionY, directionX);
+      // Add 90 degrees (1.5708 radians)
+      let angleOffset = 1.5708;
+      
+      let rotatedAngle = angle + angleOffset;
+    
+      // Update position
+      ant.style.left = (ant.offsetLeft + directionX * stepSize) + 'px';
+      ant.style.top = (ant.offsetTop + directionY * stepSize) + 'px';
+    
+      // Rotate ant
+      ant.style.transform = `rotate(${rotatedAngle}rad)`;
+    
+    }
+
+    function isAtTarget(ant, targetPoint, stepSize) {
+        // Calculate distance from ant to target point
+        let distance = Math.sqrt(Math.pow(ant.offsetLeft - targetPoint.x, 2) + Math.pow(ant.offsetTop - targetPoint.y, 2));
+        return distance < stepSize;
+    }
+
+    // Spawn initial food items
+    spawnInitialFood();
+
+    function gameLoop() {
+        updateAnts(); // Update all ants
+    
+        // Other game updates can be added here
+    
+        requestAnimationFrame(gameLoop); // Request the next frame
+    }
+    
+    // Start the game loop when the game starts
+    gameLoop();
+
+</script>
+</body>
+</html>
