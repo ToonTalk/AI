@@ -93,22 +93,39 @@
         
                 if (recognition && !isRecognitionStarted) {
                     recognition.onresult = function(event) {
-                        isRecognitionStarted = false;
                         const spokenAnswer = event.results[0][0].transcript.trim().toLowerCase();
                         document.getElementById('spokenResponse').innerText = "You said: " + spokenAnswer;
-                        recognition.stop(); // Stop listening after receiving an answer
         
-                        // ... rest of the function ...
+                        handleAnswer(spokenAnswer, randomRiddle.answer);
+                        recognition.stop();
+                    };
+        
+                    recognition.onend = function() {
+                        isRecognitionStarted = false;
                     };
         
                     recognition.onerror = function(event) {
+                        // Error handling
                         isRecognitionStarted = false;
-                        // ... error handling ...
                     };
         
                     recognition.start();
                     isRecognitionStarted = true;
                 }
+            }
+        }
+        
+        function handleAnswer(spokenAnswer, correctAnswer) {
+            if (spokenAnswer === "give up") {
+                let giveUpResponse = "Okay, no problem! The correct answer was: " + correctAnswer + ".";
+                speak(giveUpResponse);
+                moveElementToRandomPosition('monster', 400, 400, 80); // Move the monster
+            } else if (spokenAnswer === correctAnswer) {
+                speak("Correct! You found a treasure!");
+                addNewTreasure();
+                moveElementToRandomPosition('monster', 400, 400, 80);
+            } else {
+                speak("Sorry, that's not right.");
             }
         }
 
