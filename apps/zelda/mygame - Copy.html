@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Adventure Game</title>
+    <style>
+#gameArea {
+    width: 400px; /* Adjust to your game area's size */
+    height: 400px; /* Adjust to your game area's size */
+    position: relative;
+    margin: auto;
+    background-color: green; /* Solid green background */
+}
+
+    </style>
+</head>
+<body>
+    <div id="gameArea">
+<div id="player" style="background-image: url('fairy.png'); width: 100px; height: 100px; background-size: contain; background-repeat: no-repeat; position: absolute;"></div>
+
+<div id="monster" style="background-image: url('cute_monster.png'); width: 80px; height: 80px; background-size: contain; background-repeat: no-repeat; position: absolute; top: 100px; left: 100px;"></div>
+
+<div id="treasure" style="background-image: url('treasure_chest.png'); width: 80px; height: 80px; background-size: contain; background-repeat: no-repeat; position: absolute; top: 200px; left: 200px; display: none;"></div>
+
+</div>
+        <!-- Game content will go here -->
+    </div>
+    <script>
+document.addEventListener('keydown', function(event) {
+    const player = document.getElementById('player');
+    let top = player.offsetTop;
+    let left = player.offsetLeft;
+
+    const step = 10; // How many pixels the player moves
+    const gameArea = document.getElementById('gameArea');
+    const maxTop = gameArea.offsetHeight - player.offsetHeight;
+    const maxLeft = gameArea.offsetWidth - player.offsetWidth;
+
+    if (event.key === 'ArrowUp' && top > 0) {
+        top -= step;
+    } else if (event.key === 'ArrowDown' && top < maxTop) {
+        top += step;
+    } else if (event.key === 'ArrowLeft' && left > 0) {
+        left -= step;
+    } else if (event.key === 'ArrowRight' && left < maxLeft) {
+        left += step;
+    }
+
+    // Update player's position
+    player.style.top = top + 'px';
+    player.style.left = left + 'px';
+
+    checkInteractionWithMonster();
+});
+
+const riddles = [
+    { question: "I am tall when I am young and short when I am old. What am I?", answer: "candle" },
+    { question: "What has keys but can't open locks?", answer: "piano" },
+    { question: "What can travel around the world while staying in a corner?", answer: "stamp" }
+    // Add as many riddles as you like
+];
+
+function checkInteractionWithMonster() {
+    const player = document.getElementById('player');
+    const monster = document.getElementById('monster');
+    const distance = 30; // distance in pixels to trigger interaction
+
+    if (Math.abs(player.offsetTop - monster.offsetTop) <= distance && Math.abs(player.offsetLeft - monster.offsetLeft) <= distance) {
+        const randomRiddle = riddles[Math.floor(Math.random() * riddles.length)];
+        speak(randomRiddle.question); // Speak the riddle
+        let answer = prompt(randomRiddle.question + "\n(Type 'give up' to skip)").trim().toLowerCase();
+
+        if (answer === randomRiddle.answer) {
+            let correctResponse = "Correct! You found a treasure!";
+            speak(correctResponse); // Speak the response
+            addNewTreasure(); // Add a new treasure to the game area
+            moveElementToRandomPosition('monster', 400, 400, 80); // Move the monster
+        } else if (answer === "give up") {
+            let giveUpResponse = "Okay, no problem! The correct answer was: " + randomRiddle.answer + ".";
+            speak(giveUpResponse); // Speak the response
+            moveElementToRandomPosition('monster', 400, 400, 80); // Move the monster
+        } else {
+            let wrongResponse = "Sorry, that's not right. The correct answer was: " + randomRiddle.answer + ".";
+            speak(wrongResponse); // Speak the response
+        }
+    }
+}
+
+function moveElementToRandomPosition(elementId, gameAreaWidth, gameAreaHeight, elementSize) {
+    const element = document.getElementById(elementId);
+    const maxX = gameAreaWidth - elementSize;
+    const maxY = gameAreaHeight - elementSize;
+    const randomX = Math.floor(Math.random() * maxX);
+    const randomY = Math.floor(Math.random() * maxY);
+
+    element.style.left = randomX + 'px';
+    element.style.top = randomY + 'px';
+}
+
+function addNewTreasure() {
+    const gameArea = document.getElementById('gameArea');
+    const newTreasure = document.createElement('div');
+    newTreasure.style.width = '50px';
+    newTreasure.style.height = '50px';
+    newTreasure.style.backgroundImage = "url('treasure_chest.png')";
+    newTreasure.style.backgroundSize = 'contain';
+    newTreasure.style.backgroundRepeat = 'no-repeat';
+    newTreasure.style.position = 'absolute';
+
+    // Random position within the game area
+    const maxX = gameArea.offsetWidth - 50; // 50 is the width of the treasure
+    const maxY = gameArea.offsetHeight - 50; // 50 is the height of the treasure
+    const randomX = Math.floor(Math.random() * maxX);
+    const randomY = Math.floor(Math.random() * maxY);
+    newTreasure.style.left = randomX + 'px';
+    newTreasure.style.top = randomY + 'px';
+
+    gameArea.appendChild(newTreasure);
+}
+
+function speak(text) {
+    const speech = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(speech);
+}
+       
+    </script>
+</body>
+</html>
