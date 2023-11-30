@@ -4,7 +4,7 @@ let currentColor = 'black'; // Default color
 
 async function setupWebcam() {
     try {
-        const constraints = { video: { width: 640, height: 480 } };
+        const constraints = { video: { width: 640, height: 480 }, audio: false };
         video.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
         return new Promise((resolve) => {
             video.onloadedmetadata = () => {
@@ -58,53 +58,9 @@ function draw(x, y, color) {
     ctx.moveTo(x, y);
 }
 
-function setupSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.error('Speech recognition not supported in this browser.');
-        return null;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    return recognition;
-}
-
-function extractColor(transcript) {
-    // Define a list of supported colors
-    const colors = ['red', 'green', 'blue', 'yellow', 'orange', 'purple', 'black', 'white'];
-
-    const words = transcript.toLowerCase().split(' ');
-    for (const word of words) {
-        if (colors.includes(word)) {
-            return word;
-        }
-    }
-
-    return null;
-}
 
 document.addEventListener('DOMContentLoaded', async () => {
     const model = await loadHandposeModel();
-    const recognition = setupSpeechRecognition();
-    if (recognition) {
-        recognition.onresult = (event) => {
-            const transcript = event.results[event.results.length - 1][0].transcript;
-            const extractedColor = extractColor(transcript);
-        
-            if (extractedColor) {
-                currentColor = extractedColor;
-            }
-        
-            // Update the content of the last spoken and current color elements
-            document.getElementById('last-spoken').textContent = `Last spoken: ${transcript}`;
-            document.getElementById('current-color').textContent = `Current color: ${currentColor}`;
-        };
-        recognition.start();
-    }
     await setupWebcam();
     mainLoop(model);
 });
@@ -142,12 +98,15 @@ function createBalloon() {
         y: 0, // Start at the top of the canvas
         radius: 20, // Fixed radius, can be randomized
         color: color, // Use the random color
-        speed: 2 // Speed of falling
+        speed: balloonSpeed // Use the variable Speed of falling
     };
     balloons.push(balloon);
 }
 
 setInterval(createBalloon, 2000); // Create a new balloon every 2000 milliseconds (2 seconds)
+
+// Load the missed balloon sound
+const missSound = new Audio('air-escape.mp3'); // Replace with the correct path to your sound file
 
 function updateAndDrawBalloons(ctx) {
     for (let i = 0; i < balloons.length; i++) {
@@ -155,30 +114,85 @@ function updateAndDrawBalloons(ctx) {
         balloon.y += balloon.speed; // Move the balloon down
         drawBalloon(ctx, balloon.x, balloon.y, balloon.radius, balloon.color); // Draw the balloon
 
-        // Remove balloon if it goes off the bottom of the canvas
+        // Check if the balloon is off the screen (missed)
         if (balloon.y - balloon.radius > canvas.height) {
             balloons.splice(i, 1);
+            balloonsMissed++; // Increment missed counter
+            updateCountsDisplay();
+
+            // Play the missed sound
+            missSound.play();
+
             i--; // Adjust the index since we removed an element
         }
     }
 }
+
+function updateCountsDisplay() {
+    document.getElementById('popped').textContent = 'Popped: ' + balloonsPopped;
+    document.getElementById('missed').textContent = 'Misses Left: ' + (MAX_MISSES - balloonsMissed);
+}
+
+let balloonsPopped = 0;
+let balloonsMissed = 0;
+
+// Load the pop sound
+const popSound = new Audio('pop.wav'); 
 
 function popBalloon(indexFingerX, indexFingerY) {
     for (let i = 0; i < balloons.length; i++) {
         let balloon = balloons[i];
         let dx = indexFingerX - balloon.x;
         let dy = indexFingerY - balloon.y;
-        // Check if the distance between the finger and the balloon is less than the radius; if so, it's a pop!
+
         if (Math.sqrt(dx * dx + dy * dy) < balloon.radius) {
-            // Balloon is popped, remove it from the array
             balloons.splice(i, 1);
-            // Here you can increase the score or play a sound
-            // For example: score++;
-            // Play sound: new Audio('pop_sound.mp3').play();
-            break; // Break the loop after popping to avoid skipping checks
+            balloonsPopped++;
+            updateCountsDisplay();
+
+            // Play the pop sound
+            popSound.play();
+
+            break;
         }
     }
 }
+
+const MAX_MISSES = 5; // Maximum allowed misses
+
+function checkGameOver() {
+    if (balloonsMissed >= MAX_MISSES) {
+        alert("Game Over! You missed too many balloons.");
+        resetGame();
+    }
+}
+
+function resetGame() {
+    balloonsPopped = 0;
+    balloonsMissed = 0;
+    balloons = []; // Clear the array of balloons
+
+    updateCountsDisplay(); // Update the display to show reset counts
+
+    // Optionally, restart the game loop or provide an option to start a new game
+    // For example, if you have a startGame function: startGame();
+}
+
+let spawnRate = 2000; // Initial spawn rate in milliseconds (2 seconds)
+let balloonSpeed = 2; // Initial speed of falling
+
+function increaseDifficulty() {
+    spawnRate *= 0.95; // Decrease spawn rate by 5%
+    balloonSpeed *= 1.05; // Increase speed by 5%
+
+    // Make sure the spawn rate doesn't get too fast
+    if (spawnRate < 500) spawnRate = 500;
+}
+
+// Adjust spawn rate in your game loop or a separate timer
+setInterval(createBalloon, spawnRate); // Use a variable spawn rate
+setInterval(increaseDifficulty, 10000); // Increase difficulty every 10 seconds
+
 
 async function mainLoop(model) { 
     // Clear the canvas
@@ -193,13 +207,10 @@ async function mainLoop(model) {
 
     updateAndDrawBalloons(ctx);
 
+    checkGameOver();
+
     requestAnimationFrame(() => mainLoop(model));
 }
-
-
-
-
-
 
 
 
