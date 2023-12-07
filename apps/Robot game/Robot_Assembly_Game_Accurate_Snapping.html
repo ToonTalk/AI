@@ -1,0 +1,111 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Robot Assembly Game</title>
+    <style>
+        #assemblyArea {
+            width: 600px;
+            height: 400px;
+            position: relative;
+            border: 1px solid black;
+            overflow: hidden;
+        }
+
+        .robot-part {
+            width: 50px;
+            height: 50px;
+            position: absolute;
+            background-color: blue;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="assemblyArea">
+        <!-- Placeholders for robot parts -->
+        <div class="robot-part" id="part1" draggable="true" style="top: 10px; left: 10px;"></div>
+        <div class="robot-part" id="part2" draggable="true" style="top: 10px; left: 70px;"></div>
+        <!-- More parts can be added as needed -->
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const assemblyArea = document.getElementById('assemblyArea');
+
+            document.querySelectorAll('.robot-part').forEach(part => {
+                part.addEventListener('dragstart', dragStartPart);
+            });
+
+            assemblyArea.addEventListener('dragover', (e) => e.preventDefault());
+            assemblyArea.addEventListener('drop', dropPart);
+
+            function dragStartPart(e) {
+                e.dataTransfer.setData('text/plain', e.target.id);
+            }
+
+            function dropPart(e) {
+                e.preventDefault();
+                const partId = e.dataTransfer.getData('text');
+                const part = document.getElementById(partId);
+
+                const assemblyRect = assemblyArea.getBoundingClientRect();
+                const newLeft = e.clientX - assemblyRect.left - part.offsetWidth / 2;
+                const newTop = e.clientY - assemblyRect.top - part.offsetHeight / 2;
+
+                let isTouchingOtherPart = false;
+                document.querySelectorAll('.robot-part').forEach(otherPart => {
+                    if (otherPart.id !== partId) {
+                        const otherRect = otherPart.getBoundingClientRect();
+                        if (rectsOverlap(newLeft, newTop, part.offsetWidth, part.offsetHeight, otherRect)) {
+                            isTouchingOtherPart = true;
+                            snapPartsTogether(part, otherPart);
+                        }
+                    }
+                });
+
+                if (!isTouchingOtherPart) {
+                    part.style.left = newLeft + 'px';
+                    part.style.top = newTop + 'px';
+                }
+            }
+
+            function rectsOverlap(x, y, width, height, otherRect) {
+                return (x < otherRect.right && x + width > otherRect.left &&
+                        y < otherRect.bottom && y + height > otherRect.top);
+            }
+
+            function snapPartsTogether(part, otherPart) {
+                const otherRect = otherPart.getBoundingClientRect();
+                const partRect = part.getBoundingClientRect();
+
+                const topDiff = Math.abs(partRect.top - otherRect.bottom);
+                const bottomDiff = Math.abs(partRect.bottom - otherRect.top);
+                const leftDiff = Math.abs(partRect.left - otherRect.right);
+                const rightDiff = Math.abs(partRect.right - otherRect.left);
+
+                const minDiff = Math.min(topDiff, bottomDiff, leftDiff, rightDiff);
+
+                switch (minDiff) {
+                    case topDiff:
+                        part.style.top = otherRect.bottom + 'px';
+                        part.style.left = otherRect.left + 'px';
+                        break;
+                    case bottomDiff:
+                        part.style.top = (otherRect.top - part.offsetHeight) + 'px';
+                        part.style.left = otherRect.left + 'px';
+                        break;
+                    case leftDiff:
+                        part.style.left = otherRect.right + 'px';
+                        part.style.top = otherRect.top + 'px';
+                        break;
+                    case rightDiff:
+                        part.style.left = (otherRect.left - part.offsetWidth) + 'px';
+                        part.style.top = otherRect.top + 'px';
+                        break;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

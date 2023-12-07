@@ -1,0 +1,102 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Robot Assembly Game</title>
+    <style>
+        #assemblyArea {
+            width: 600px;
+            height: 400px;
+            position: relative;
+            border: 1px solid black;
+            overflow: hidden;
+        }
+
+        #robotOutline {
+            width: 100px;
+            height: 200px;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px dashed grey;
+        }
+
+        .robot-part {
+            width: 50px;
+            height: 50px;
+            position: absolute;
+            background-color: blue;
+            border-radius: 10px;
+        }
+
+        @keyframes comeAlive {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .robot-assembled {
+            animation: comeAlive 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="assemblyArea">
+        <div id="robotOutline"></div> <!-- Placeholder for the robot outline -->
+        <!-- Placeholders for robot parts -->
+        <div class="robot-part" id="part1" draggable="true" style="top: 10px; left: 10px;"></div>
+        <div class="robot-part" id="part2" draggable="true" style="top: 10px; left: 70px;"></div>
+        <!-- More parts can be added as needed -->
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const assemblyArea = document.getElementById('assemblyArea');
+            const robotOutline = document.getElementById('robotOutline');
+            let partsAssembled = 0; // Counter for assembled parts
+            const totalParts = 2; // Total number of parts to be assembled
+
+            document.querySelectorAll('.robot-part').forEach(part => {
+                part.addEventListener('dragstart', dragStartPart);
+            });
+
+            assemblyArea.addEventListener('dragover', (e) => e.preventDefault());
+            assemblyArea.addEventListener('drop', dropPart);
+
+            robotOutline.addEventListener('dragstart', dragStartRobot);
+
+            function dragStartPart(e) {
+                e.dataTransfer.setData('text/plain', e.target.id);
+            }
+
+            function dropPart(e) {
+                e.preventDefault();
+                const partId = e.dataTransfer.getData('text');
+                const part = document.getElementById(partId);
+
+                // Simple logic to check if the part is placed near the outline
+                const outlineRect = robotOutline.getBoundingClientRect();
+                const dropRect = assemblyArea.getBoundingClientRect();
+                if (e.clientX > outlineRect.left + dropRect.left && 
+                    e.clientX < outlineRect.right + dropRect.left && 
+                    e.clientY > outlineRect.top + dropRect.top &&
+                    e.clientY < outlineRect.bottom + dropRect.top) {
+                    partsAssembled++;
+                    part.style.display = 'none'; // Hide part after it's placed
+                    if (partsAssembled === totalParts) {
+                        robotOutline.setAttribute('draggable', true);
+                        robotOutline.classList.add('robot-assembled');
+                    }
+                }
+            }
+
+            function dragStartRobot(e) {
+                if (partsAssembled === totalParts) {
+                    e.dataTransfer.setData('text/plain', robotOutline.id);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
