@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word Search Game</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+        td {
+            border: 1px solid black;
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            font-size: 20px;
+        }
+        body {
+            background-color: black;
+            color: white;
+        }
+        /* Styling for buttons */
+        button {
+            background-color: #007bff; /* Blue background */
+            color: white; /* White text */
+            padding: 10px 15px; /* Top and bottom padding of 10px, left and right padding of 15px */
+            border: none; /* No border */
+            border-radius: 5px; /* Rounded corners */
+            font-size: 16px; /* Font size */
+            font-weight: bold; /* Bold font */
+            cursor: pointer; /* Cursor changes to pointer on hover */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Slight shadow for depth */
+            transition: background-color 0.3s, box-shadow 0.3s; /* Smooth transition for background-color and box-shadow */
+        }
+        
+        /* Hover effect for buttons */
+        button:hover {
+            background-color: #0056b3; /* Slightly darker blue when hovered */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Increased shadow when hovered */
+        }
+        
+        /* Style for the 'Play Again' button, if you want it to look different */
+        #newGame {
+            background-color: #28a745; /* Green background */
+        }
+        
+        #newGame:hover {
+            background-color: #218838; /* Darker green when hovered */
+        }
+
+    </style>
+</head>
+<body>
+    <h1>Word Search Game</h1>
+    <table id="wordSearchTable"></table>
+    <p id='wordCount'></p>
+    <!-- <button id='newGame' style='display:none;'>New Game</button> -->
+    <button id='submit'>Submit</button>
+    <button id='newGame' style='display:none;' onclick='stopFireworks(); startNewGame(); this.style.display="none";'>Play Again</button>
+    <canvas id="canvas"></canvas>
+    <script>
+        console.log("Script started");
+        // Declare global variables
+        let gridSize = 5;
+        let grid = [];
+        let words = [];
+
+const wordPool = [
+    "apple", "banana", "cherry", "date", "elderberry", "fig", "grape", "honeydew",
+    "ice", "jelly", "kiwi", "lemon", "mango", "nectarine", "orange", "papaya", "quince",
+    "raspberry", "strawberry", "tangerine", "ugli", "vanilla", "watermelon",
+    "yam", "zucchini", "avocado", "blueberry", "cantaloupe", "dragonfruit", "eggplant",
+    "guava", "jackfruit", "kumquat", "lychee", "mulberry", "nectar", "olive", "peach",
+    "quinoa", "radish", "spinach", "tomato", "umbrella", "violet", "wheat", "xigua",
+    "yucca", "zest", "asparagus", "broccoli", "carrot", "dill", "endive", "fennel",
+    "garlic", "horseradish", "indigo", "juniper", "kale", "lettuce", "mustard", "nutmeg",
+    "oregano", "parsley", "rosemary", "sage", "thyme", "unicorn", "verbena", "wasabi",
+    "xanthan", "yarrow", "zatar", "acorn", "biscuit", "cupcake", "dumpling", "eclair",
+    "falafel", "gnocchi", "hazelnut", "icing", "jambalaya", "ketchup", "lasagna", "macaroon",
+    "nougat", "omelette", "pancake", "quesadilla", "ravioli", "souffle", "tiramisu",
+    "udon", "veal", "waffle", "xylitol", "yogurt", "zabaglione"
+];
+
+// Sort words by length in descending order for efficient placement
+words.sort((a, b) => b.length - a.length);
+
+// Function to render the grid
+function renderGrid() {
+    const table = document.getElementById('wordSearchTable');
+    table.innerHTML = ''; // Clear existing content
+
+    for (let i = 0; i < gridSize; i++) {
+        const rowElement = document.createElement('tr');
+        for (let j = 0; j < gridSize; j++) {
+            const cellElement = document.createElement('td');
+            cellElement.textContent = grid[i][j];
+            cellElement.id = `cell-${i}-${j}`; // Assign a unique ID to each cell
+            rowElement.appendChild(cellElement);
+        }
+        table.appendChild(rowElement);
+    }
+
+    addCellSelection(); // Add selection functionality to each cell
+}
+
+// Function to add selection functionality to each cell
+function addCellSelection() {
+    const cells = document.querySelectorAll('#wordSearchTable td');
+    cells.forEach(cell => {
+        cell.addEventListener('click', function() {
+            // Toggle 'selected' class on click for visual feedback
+            if (this.classList.contains('selected')) {
+                this.classList.remove('selected');
+                this.style.backgroundColor = ''; // Reset color
+            } else {
+                this.classList.add('selected');
+                this.style.backgroundColor = 'orange'; // Highlight selected cell
+            }
+        });
+    });
+}
+
+// Function to check if a word can be placed at a specific location
+function canPlaceWordAt(word, row, col, direction) {
+    // Check if the word fits within the grid boundaries
+    switch (direction) {
+        case 0: if (col + word.length > gridSize) return false; break; // Right
+        case 1: if (col - word.length < -1) return false; break; // Left
+        case 2: if (row + word.length > gridSize) return false; break; // Down
+        case 3: if (row - word.length < -1) return false; break; // Up
+        case 4: // Diagonal down-right
+            if (row + word.length > gridSize || col + word.length > gridSize) return false;
+            break;
+        case 5: if (row - word.length < -1 || col - word.length < -1) return false; break; // Diagonal up-left
+        case 6: // Diagonal down-left
+            if (row + word.length > gridSize || col - word.length < -1) return false;
+            break;
+        case 7: if (row - word.length < -1 || col + word.length > gridSize) return false; break; // Diagonal up-right
+    }
+
+    // Check if the cells are available
+    for (let i = 0; i < word.length; i++) {
+        let newRow = row, newCol = col;
+        switch (direction) {
+            case 0: newCol += i; break; // Right
+            case 1: newCol -= i; break; // Left
+            case 2: newRow += i; break; // Down
+            case 3: newRow -= i; break; // Up
+            case 4: newRow += i; newCol += i; break; // Diagonal down-right
+            case 5: newRow -= i; newCol -= i; break; // Diagonal up-left
+            case 6: newRow += i; newCol -= i; break; // Diagonal down-left
+            case 7: newRow -= i; newCol += i; break; // Diagonal up-right
+        }
+
+        // Check if the cell is already occupied by a different letter
+        if (grid[newRow][newCol] !== '-' && grid[newRow][newCol] !== word[i].toUpperCase()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Function to place a word at a specific location
+function placeWord(word, row, col, direction) {
+    console.log(`Placing word '${word}' at row ${row}, col ${col}, direction ${direction}`);
+    for (let i = 0; i < word.length; i++) {
+        let newRow = row, newCol = col;
+        switch (direction) {
+            case 0: newCol += i; break; // Right
+            case 1: newCol -= i; break; // Left
+            case 2: newRow += i; break; // Down
+            case 3: newRow -= i; break; // Up
+            case 4: newRow += i; newCol += i; break; // Diagonal down-right
+            case 5: newRow -= i; newCol -= i; break; // Diagonal up-left
+            case 6: newRow += i; newCol -= i; break; // Diagonal down-left
+            case 7: newRow -= i; newCol += i; break; // Diagonal up-right
+        }
+        grid[newRow][newCol] = word[i].toUpperCase();
+    }
+}
+
+// Function to attempt to place each word in the grid
+function placeWords() {
+    console.log("Placing words on the grid:", words);
+    for (let word of words) {
+        // console.log("Placing word:", word);
+        let placed = false;
+        let attemptCount = 0;
+        while (!placed && attemptCount < 100) {
+            let row = Math.floor(Math.random() * gridSize);
+            let col = Math.floor(Math.random() * gridSize);
+            let direction = Math.floor(Math.random() * 8);
+
+            // console.log(`Attempting to place '${word}' at row ${row}, col ${col}, direction ${direction}`);
+
+            if (canPlaceWordAt(word, row, col, direction)) {
+                placeWord(word, row, col, direction);
+                placed = true;
+                console.log(`Successfully placed '${word}'`);
+            } else {
+                // console.log(`Failed to place '${word}' on attempt ${attemptCount}`);
+            }
+            attemptCount++;
+        }
+
+        if (!placed) {
+            console.log(`Unable to place '${word}' after multiple attempts`);
+            return false; // Return false if any word cannot be placed
+        }
+    }
+    return true; // Return true if all words are placed successfully
+}
+
+    // Function to check if selected cells form a word
+    function checkSelectedCells() {
+        const selectedCells = document.querySelectorAll('.selected');
+        let selectedWord = '';
+        selectedCells.forEach(cell => {
+            selectedWord += cell.textContent;
+        });
+
+        // Check if selected word is in the words array
+        if (words.includes(selectedWord.toLowerCase())) {
+            // Change color and remove the word from the array
+            selectedCells.forEach(cell => {
+                cell.style.backgroundColor = 'green'; // or any color you prefer
+                cell.classList.remove('selected');
+            });
+
+            // Remove found word from words array
+            const wordIndex = words.indexOf(selectedWord.toLowerCase());
+            words.splice(wordIndex, 1);
+
+            // Update remaining words count
+            updateWordCount();
+        } else {
+            // Reset selection if word is not correct
+            selectedCells.forEach(cell => {
+                cell.classList.remove('selected');
+                cell.style.backgroundColor = ''; // Reset color
+            });
+        }
+    }
+
+    // Function to update the word count display
+function updateWordCount() {
+    const wordCountElement = document.getElementById('wordCount');
+    wordCountElement.textContent = 'Words remaining: ' + words.length;
+
+    if (words.length === 0) {
+        // Show the "Play Again" button
+        document.getElementById('newGame').style.display = 'block';
+
+        // Start the fireworks animation
+        startFireworks();
+    }
+}
+
+function getSelectedCellsCoordinates() {
+    const selectedCells = document.querySelectorAll('.selected');
+    return Array.from(selectedCells).map(cell => {
+        return { row: cell.parentNode.rowIndex, col: cell.cellIndex };
+    });
+}
+
+function checkWordInDirections(selectedCoordinates) {
+    let found = false;
+
+    if (selectedCoordinates.length === 0) return;
+
+    let word = selectedCoordinates.map(coord => grid[coord.row][coord.col]).join('');
+    let reversedWord = word.split('').reverse().join('');
+
+    if (words.includes(word.toLowerCase()) || words.includes(reversedWord.toLowerCase())) {
+        found = true;
+        changeColorAndRemoveWord(selectedCoordinates, word.toLowerCase());
+    }
+
+    if (!found) resetSelectedCells();
+}
+
+function changeColorAndRemoveWord(coordinates, word) {
+    for (let coord of coordinates) {
+        const cell = document.getElementById(`cell-${coord.row}-${coord.col}`);
+        cell.style.backgroundColor = 'green'; // or any color you prefer
+        cell.classList.remove('selected');
+    }
+
+    // Ensure both word and its reverse are removed from the array
+    let wordIndex = words.indexOf(word);
+    if (wordIndex !== -1) {
+        words.splice(wordIndex, 1);
+    }
+
+    let reversedWord = word.split('').reverse().join('');
+    wordIndex = words.indexOf(reversedWord);
+    if (wordIndex !== -1) {
+        words.splice(wordIndex, 1);
+    }
+
+    updateWordCount();
+}
+
+function resetSelectedCells() {
+    const selectedCells = document.querySelectorAll('.selected');
+    selectedCells.forEach(cell => {
+        cell.classList.remove('selected');
+        cell.style.backgroundColor = ''; // Reset color
+    });
+}
+
+document.getElementById('submit').addEventListener('click', function() {
+    const selectedCoordinates = getSelectedCellsCoordinates();
+    checkWordInDirections(selectedCoordinates);
+});
+
+function initializeGame() {
+    startNewGame(true); // True indicates initial game setup
+}
+
+function startNewGame(isInitialSetup = false) {
+    if (!isInitialSetup) {
+        gridSize++; // Increase the grid size only for new rounds, not for the initial setup
+    }
+
+    // Select words for the game
+    words = selectRandomWords(Math.min(gridSize, wordPool.length)); 
+
+    resetGrid();
+    let allWordsPlaced = placeWords();
+
+    if (allWordsPlaced) {
+        fillEmptyCells();
+        renderGrid();
+        updateWordCount();
+        document.getElementById('newGame').style.display = isInitialSetup ? 'none' : 'block';
+    } else {
+        console.log("Failed to place all words. Trying again.");
+        startNewGame(isInitialSetup); // Retry with the same setup condition
+    }
+}
+
+// Function to randomly select a specified number of unique words from the wordPool
+function selectRandomWords(wordCount) {
+    let selectedWords = [];
+    while (selectedWords.length < wordCount) {
+        let randomIndex = Math.floor(Math.random() * wordPool.length);
+        let word = wordPool[randomIndex];
+
+        // Check if word fits in the current grid size
+        if (!selectedWords.includes(word) && word.length <= gridSize-1) {
+            selectedWords.push(word);
+        }
+    }
+    return selectedWords;
+}
+
+function selectWordsForNewGame() {
+    let selectedWords = [];
+    let numberOfWords = Math.min(gridSize-4, wordPool.length); // Limit the number of words to the grid size or the length of the word pool
+
+    while (selectedWords.length < numberOfWords) {
+        let randomIndex = Math.floor(Math.random() * wordPool.length);
+        let word = wordPool[randomIndex];
+
+        // Ensure words are appropriate for the grid size and not already selected
+        if (word.length <= gridSize-4 && !selectedWords.includes(word)) {
+            selectedWords.push(word);
+        }
+    }
+
+    return selectedWords;
+}
+
+function resetGrid() {
+    grid = [];
+    for (let i = 0; i < gridSize; i++) {
+        grid[i] = new Array(gridSize).fill('-');
+    }
+}
+
+function fillEmptyCells() {
+    for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+            if (grid[i][j] === '-') {
+                grid[i][j] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+            }
+        }
+    }
+}
+
+initializeGame();
+
+
+</script>
+
+<script src="fireworks.js"></script>
+
+</body>
+</html>

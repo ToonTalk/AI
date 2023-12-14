@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word Search Game</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+        td {
+            border: 1px solid black;
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            font-size: 20px;
+        }
+    
+<style>
+.selected {
+    background-color: yellow;
+}
+</style>
+</style>
+</head>
+<body>
+    <h1>Word Search Game</h1>
+    <table id="wordSearchTable"></table>
+
+    <script>
+// Define the grid size
+let gridSize = 10; // Example size
+
+// Initialize the grid
+const grid = [];
+for (let i = 0; i < gridSize; i++) {
+    grid[i] = [];
+    for (let j = 0; j < gridSize; j++) {
+        grid[i][j] = '-'; // Using '-' as a placeholder for empty cells
+    }
+}
+
+// Define the words to hide in the word search
+const words = ["cat", "dog", "hat"];
+
+// Sort words by length in descending order for efficient placement
+words.sort((a, b) => b.length - a.length);
+
+// Function to check if a word can be placed at a specific location
+function canPlaceWordAt(word, row, col, direction) {
+    // Check if the word fits within the grid boundaries
+    switch (direction) {
+        case 0: if (col + word.length > gridSize) return false; break; // Right
+        case 1: if (col - word.length < -1) return false; break; // Left
+        case 2: if (row + word.length > gridSize) return false; break; // Down
+        case 3: if (row - word.length < -1) return false; break; // Up
+        // Diagonal directions removed for simplicity
+    }
+
+    // Check if the cells are available
+    for (let i = 0; i < word.length; i++) {
+        let newRow = row, newCol = col;
+        switch (direction) {
+            case 0: newCol += i; break; // Right
+            case 1: newCol -= i; break; // Left
+            case 2: newRow += i; break; // Down
+            case 3: newRow -= i; break; // Up
+        }
+
+        // Check if the cell is already occupied
+        if (grid[newRow][newCol] !== '-') {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Function to place a word at a specific location
+function placeWord(word, row, col, direction) {
+    for (let i = 0; i < word.length; i++) {
+        let newRow = row, newCol = col;
+        switch (direction) {
+            case 0: newCol += i; break; // Right
+            case 1: newCol -= i; break; // Left
+            case 2: newRow += i; break; // Down
+            case 3: newRow -= i; break; // Up
+        }
+        grid[newRow][newCol] = word[i].toUpperCase();
+    }
+}
+
+// Function to attempt to place each word in the grid
+function placeWords() {
+    for (let word of words) {
+        let placed = false;
+        while (!placed) {
+            let row = Math.floor(Math.random() * gridSize);
+            let col = Math.floor(Math.random() * gridSize);
+            let direction = Math.floor(Math.random() * 4); // 4 directions: Right, Left, Down, Up
+
+            if (canPlaceWordAt(word, row, col, direction)) {
+                placeWord(word, row, col, direction);
+                placed = true;
+            }
+        }
+    }
+}
+
+// Call the function to place words in the grid
+placeWords();
+
+// Fill remaining cells with random letters
+for (let i = 0; i < gridSize; i++) {
+    for (let j = 0; j < gridSize; j++) {
+        if (grid[i][j] === '-') {
+            grid[i][j] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        }
+    }
+}
+
+// Function to render the grid
+function renderGrid() {
+    const table = document.getElementById('wordSearchTable');
+    table.innerHTML = ''; // Clear existing content
+
+    for (let i = 0; i < gridSize; i++) {
+        const rowElement = document.createElement('tr');
+        for (let j = 0; j < gridSize; j++) {
+            const cellElement = document.createElement('td');
+            cellElement.textContent = grid[i][j];
+            rowElement.appendChild(cellElement);
+        }
+        table.appendChild(rowElement);
+    }
+}
+
+// Call the function to render the grid
+renderGrid();
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click event to each cell
+    const cells = document.querySelectorAll('#wordSearchTable td');
+    cells.forEach(cell => {
+        cell.addEventListener('click', function() {
+            // Toggle 'selected' class on click
+            if (this.classList.contains('selected')) {
+                this.classList.remove('selected');
+                this.style.backgroundColor = ''; // Restore original color
+            } else {
+                this.classList.add('selected');
+                this.style.backgroundColor = 'yellow'; // Change color to yellow
+            }
+        });
+    });
+
+    // Add click event to submit button
+    document.getElementById('submit').addEventListener('click', function() {
+        // Change color of selected cells
+        document.querySelectorAll('.selected').forEach(selectedCell => {
+            selectedCell.style.backgroundColor = 'green';
+            selectedCell.classList.remove('selected');
+        });
+    });
+});
+</script>
+<p id='wordCount'></p><button id='newGame' style='display:none;'>New Game</button>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Game initialized');
+    const words = ["CAT", "DOG", "HAT"];
+    let wordsFound = new Set();
+
+    // Function to update word count display
+    function updateWordCount() {
+        const wordCountElement = document.getElementById('wordCount');
+        wordCountElement.textContent = 'Words left: ' + (words.length - wordsFound.size);
+        console.log('Word count updated:', words.length - wordsFound.size);
+    }
+
+    // Initial word count update
+    updateWordCount();
+
+    // Function to check if any of the selected cells form a word
+    function checkSelectedCellsForWord() {
+        const selectedCells = Array.from(document.querySelectorAll('.selected')).map(cell => cell.textContent);
+        const selectedString = selectedCells.join('');
+        console.log('Selected cells:', selectedString);
+        for (let word of words) {
+            if (selectedString.includes(word) && !wordsFound.has(word)) {
+                wordsFound.add(word);
+                console.log('Word found:', word);
+                updateWordCount();
+                // Change color to green for cells forming the word
+                selectedCells.forEach((cell, index) => {
+                    if (word.includes(cell)) {
+                        document.querySelectorAll('.selected')[index].style.backgroundColor = 'green';
+                    }
+                });
+            }
+        }
+        // Deselect the cells
+        document.querySelectorAll('.selected').forEach(cell => {
+            cell.classList.remove('selected');
+        });
+    }
+
+    // Add click event to each cell for selection
+    const cells = document.querySelectorAll('#wordSearchTable td');
+    cells.forEach(cell => {
+        cell.addEventListener('click', function() {
+            console.log('Cell clicked:', this.textContent);
+            // Toggle 'selected' class on click
+            this.classList.toggle('selected');
+            this.style.backgroundColor = this.classList.contains('selected') ? 'yellow' : '';
+        });
+    });
+
+    // Add click event to submit button
+    document.getElementById('submit').addEventListener('click', function() {
+        console.log('Submit button clicked');
+        // Check if any of the selected cells form a word
+        checkSelectedCellsForWord();
+        // Check if all words are found
+        if (wordsFound.size === words.length) {
+            document.getElementById('newGame').style.display = 'block';
+            console.log('All words found, showing new game button');
+        }
+    });
+
+    // Add click event to new game button
+    document.getElementById('newGame').addEventListener('click', function() {
+        console.log('New Game button clicked');
+        // Reload the page to start a new game
+        window.location.reload();
+    });
+});
+</script>
+</body>
+</html><button id='submit'>Submit</button>

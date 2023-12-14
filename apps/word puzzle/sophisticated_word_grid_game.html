@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word Search Game</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+        td {
+            border: 1px solid black;
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Word Search Game</h1>
+    <table id="wordSearchTable"></table>
+
+    <script>
+        // Define the grid size
+        let gridSize = 10; // Example size
+        
+        // Initialize the grid
+        const grid = [];
+        for (let i = 0; i < gridSize; i++) {
+            grid[i] = [];
+            for (let j = 0; j < gridSize; j++) {
+                grid[i][j] = '-'; // Using '-' as a placeholder for empty cells
+            }
+        }
+        // Define the words to hide in the word search
+        const words = ["cat", "dog", "hat"];
+
+        // Sort words by length in descending order for efficient placement
+        words.sort((a, b) => b.length - a.length);
+
+        // Function to generate the word search grid
+        function generateWordSearch() {
+            const grid = [];
+            for (let i = 0; i < gridSize; i++) {
+                grid[i] = [];
+                for (let j = 0; j < gridSize; j++) {
+                    grid[i][j] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+                }
+            }
+
+            function findOpenAreas() {
+                let openAreas = [];
+                let maxOpenness = 0;
+            
+                for (let row = 0; row < gridSize; row++) {
+                    for (let col = 0; col < gridSize; col++) {
+                        // Only consider empty cells ('-')
+                        if (grid[row][col] === '-') {
+                            let openness = countAdjacentEmptyCells(row, col);
+            
+                            // Update maxOpenness and openAreas array if a more open area is found
+                            if (openness > maxOpenness) {
+                                maxOpenness = openness;
+                                openAreas = [[row, col]];
+                            } else if (openness === maxOpenness) {
+                                openAreas.push([row, col]);
+                            }
+                        }
+                    }
+                }
+            
+                return openAreas;
+            }
+            
+            // Helper function to count adjacent empty cells
+            function countAdjacentEmptyCells(row, col) {
+                let count = 0;
+                for (let dRow = -1; dRow <= 1; dRow++) {
+                    for (let dCol = -1; dCol <= 1; dCol++) {
+                        if (dRow === 0 && dCol === 0) continue; // Skip the cell itself
+            
+                        let newRow = row + dRow, newCol = col + dCol;
+                        if (newRow >= 0 && newRow < gridSize && newCol >= 0 && newCol < gridSize) {
+                            if (grid[newRow][newCol] === '-') {
+                                count++;
+                            }
+                        }
+                    }
+                }
+                return count;
+            }
+
+
+            let wordPlaced, attempts, totalRestarts = 0;
+            // Attempt to place each word
+            for (const word of words) {
+                let placed = false;
+                for (let attempts = 0; attempts < 100 && !placed; attempts++) {
+                    let row = Math.floor(Math.random() * gridSize);
+                    let col = Math.floor(Math.random() * gridSize);
+                    let direction = Math.floor(Math.random() * 8); // Example for 8 possible directions
+            
+                    if (canPlaceWord(row, col, direction, word)) {
+                        placeWord(row, col, direction, word);
+                        placed = true;
+                    }
+                }
+            
+                if (!placed) {
+                    console.error("Failed to place word:", word);
+                    // Handle the failure case, e.g., restart or expand the grid
+                }
+            }
+
+            return grid; // Successfully created grid
+        }
+
+        function canPlaceWord(row, col, direction, word) {
+            for (let i = 0; i < word.length; i++) {
+                let newRow = row, newCol = col;
+                switch (direction) {
+                    case 0: newCol += i; break; // Right
+                    case 1: newCol -= i; break; // Left
+                    case 2: newRow += i; break; // Down
+                    case 3: newRow -= i; break; // Up
+                    case 4: newRow += i; newCol += i; break; // Down-Right
+                    case 5: newRow -= i; newCol -= i; break; // Up-Left
+                    case 6: newRow -= i; newCol += i; break; // Up-Right
+                    case 7: newRow += i; newCol -= i; break; // Down-Left
+                }
+                if (newRow < 0 || newRow >= gridSize || newCol < 0 || newCol >= gridSize || grid[newRow][newCol] !== '-') {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        function placeWord(row, col, direction, word) {
+            for (let i = 0; i < word.length; i++) {
+                let newRow = row, newCol = col;
+                switch (direction) {
+                    case 0: newCol += i; break; // Right
+                    case 1: newCol -= i; break; // Left
+                    case 2: newRow += i; break; // Down
+                    case 3: newRow -= i; break; // Up
+                    case 4: newRow += i; newCol += i; break; // Down-Right
+                    case 5: newRow -= i; newCol -= i; break; // Up-Left
+                    case 6: newRow -= i; newCol += i; break; // Up-Right
+                    case 7: newRow += i; newCol -= i; break; // Down-Left
+                }
+                grid[newRow][newCol] = word[i];
+            }
+        }
+          
+            function renderGrid(grid) {
+                const table = document.getElementById('wordSearchTable');
+                table.innerHTML = ''; // Clear existing content
+            
+                // Iterate over each row and column of the grid
+                for (let i = 0; i < grid.length; i++) {
+                    const rowElement = document.createElement('tr'); // Create a table row
+            
+                    for (let j = 0; j < grid[i].length; j++) {
+                        const cellElement = document.createElement('td'); // Create a table cell
+                        cellElement.textContent = grid[i][j]; // Set the cell text to the grid value
+                        rowElement.appendChild(cellElement); // Add the cell to the row
+                    }
+            
+                    table.appendChild(rowElement); // Add the row to the table
+                }
+            }
+            
+            // Call generateWordSearch to create the word search grid
+            const generatedGrid = generateWordSearch();
+        
+            // Call renderGrid to render the generated grid on the page
+            renderGrid(generatedGrid);
+
+</script>
+</body>
+</html>

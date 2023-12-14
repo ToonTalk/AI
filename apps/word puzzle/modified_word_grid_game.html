@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word Search Game</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+        td {
+            border: 1px solid black;
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Word Search Game</h1>
+    <table id="wordSearchTable"></table>
+
+    <script>
+        // Define the grid size
+        let gridSize = 5;
+        let maxGridSize = 10; // Maximum grid size to avoid infinite expansion
+
+        // Define the words to hide in the word search
+        const words = ["cat", "dog", "hat"];
+
+        // Function to generate the word search grid
+        function generateWordSearch() {
+            const grid = [];
+            for (let i = 0; i < gridSize; i++) {
+                grid[i] = [];
+                for (let j = 0; j < gridSize; j++) {
+                    grid[i][j] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+                }
+            }
+
+            let wordPlaced, attempts, totalRestarts = 0;
+            for (const word of words) {
+                wordPlaced = false;
+                attempts = 0;
+                while (!wordPlaced && attempts < 100) { // Limit attempts to 100
+                    const row = Math.floor(Math.random() * gridSize);
+                    const col = Math.floor(Math.random() * gridSize);
+                    const direction = Math.floor(Math.random() * 8);
+
+                    let wordFits = true;
+                    for (let i = 0; i < word.length; i++) {
+                        let newRow = row, newCol = col;
+                        // Calculate new position based on direction
+                        if (direction === 0) { newRow -= i; }
+                        // Add other directions here...
+
+                        // Check if the word fits
+                        if (newRow < 0 || newRow >= gridSize || newCol < 0 || newCol >= gridSize || grid[newRow][newCol] !== word[i]) {
+                            wordFits = false;
+                            break;
+                        }
+                    }
+
+                    if (wordFits) {
+                        for (let i = 0; i < word.length; i++) {
+                            let newRow = row, newCol = col;
+                            // Place the word in the grid
+                            // Add code to update grid with word characters...
+                            grid[newRow][newCol] = word[i];
+                        }
+                        wordPlaced = true;
+                    }
+
+                    attempts++;
+                }
+
+                if (!wordPlaced) {
+                    totalRestarts++;
+                    if (totalRestarts > 5 && gridSize < maxGridSize) {
+                        gridSize++; // Increase grid size and start over
+                        return generateWordSearch();
+                    }
+                    return null; // Unable to place all words, return null
+                }
+            }
+
+            return grid; // Successfully created grid
+        }
+
+        // Generate and render the grid
+        const generatedGrid = generateWordSearch();
+        if (generatedGrid) {
+            const table = document.getElementById('wordSearchTable');
+            for (let i = 0; i < gridSize; i++) {
+                const row = document.createElement('tr');
+                for (let j = 0; j < gridSize; j++) {
+                    const cell = document.createElement('td');
+                    cell.textContent = generatedGrid[i][j];
+                    row.appendChild(cell);
+                }
+                table.appendChild(row);
+            }
+        } else {
+            console.error("Failed to generate word search grid.");
+        }
+</script>
+</body>
+</html>
