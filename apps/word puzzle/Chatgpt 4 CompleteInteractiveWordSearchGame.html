@@ -1,0 +1,162 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Interactive Word Search Game</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                text-align: center;
+            }
+            #grid {
+                margin: 0 auto;
+                display: grid;
+                grid-template-columns: repeat(10, 30px);
+                grid-gap: 5px;
+            }
+            .cell {
+                width: 30px;
+                height: 30px;
+                border: 1px solid #333;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                user-select: none;
+            }
+            .selected {
+                background-color: yellow;
+            }
+            .found {
+                background-color: lightgreen;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Interactive Word Search Game</h1>
+        <div id="grid"></div>
+        <script>
+            const allWords = ["APPLE", "BANANA", "CHERRY", "DATE", "FIG", "CARROT", "LETTUCE", "ONION", "PEPPER", "TOMATO", "COOKIE", "PUDDING", "BROWNIE", "CUPCAKE", "WAFFLE"];
+            let words = chooseRandomWords(allWords, 5); // Choose 5 random words
+            let grid = Array(100).fill('-'); // Example for a 10x10 grid
+
+            function chooseRandomWords(wordList, numberOfWords) {
+                let shuffled = wordList.sort(() => 0.5 - Math.random());
+                return shuffled.slice(0, numberOfWords);
+            }
+            
+            let selectedCells = [];
+
+            function canPlaceWord(word, start, direction) {
+                // Logic to check if a word can be placed at a specific position
+                // Ensuring word does not go out of bounds or overlap incorrectly
+                for (let i = 0; i < word.length; i++) {
+                    let index = start;
+                    if (direction === 0) index += i; // right
+                    else if (direction === 1) index += i * 10; // down
+                    else if (direction === 2) index += i * 11; // diagonal right
+                    else if (direction === 3) index += i * 9; // diagonal left
+            
+                    if (index < 0 || index >= 100 || grid[index] !== '-') return false;
+                    if ((direction === 0 || direction === 2) && index % 10 < i) return false;
+                    if ((direction === 3) && index % 10 + i >= 10) return false;
+                }
+                return true;
+            }
+
+            function placeWord(word) {
+                // Logic to place a word in the grid, considering direction and grid boundaries
+                // Randomly place words in different directions (horizontal, vertical, diagonal)
+                let placed = false;
+                while (!placed) {
+                    const direction = Math.floor(Math.random() * 4); // Random direction
+                    const start = Math.floor(Math.random() * 100);
+            
+                    if (canPlaceWord(word, start, direction)) {
+                        for (let i = 0; i < word.length; i++) {
+                            let index = start;
+                            if (direction === 0) index += i; // Horizontal
+                            else if (direction === 1) index += i * 10; // Vertical
+                            else if (direction === 2) index += i * 11; // Diagonal right
+                            else if (direction === 3) index += i * 9; // Diagonal left
+            
+                            grid[index] = word[i];
+                        }
+                        placed = true;
+                    }
+                }
+            }
+
+            function generateGrid() {
+                // Place the words
+                words.forEach(word => placeWord(word));
+
+                // Fill in the remaining cells with random letters
+                grid = grid.map(cell => cell === '-' ? String.fromCharCode(65 + Math.floor(Math.random() * 26)) : cell);
+
+                // Render grid
+                const gridElement = document.getElementById('grid');
+                grid.forEach((letter, index) => {
+                    const cellElement = document.createElement('div');
+                    cellElement.classList.add('cell');
+                    cellElement.textContent = letter;
+                    cellElement.onclick = () => selectCell(index);
+                    gridElement.appendChild(cellElement);
+                });
+                initializeWordsLeftDisplay();
+            }
+
+            function selectCell(index) {
+                const cellElement = document.querySelectorAll('.cell')[index];
+            
+                if (!cellElement.classList.contains('selected')) {
+                    selectedCells.push(index);
+                    cellElement.classList.add('selected');
+                } else {
+                    selectedCells = selectedCells.filter(i => i !== index);
+                    cellElement.classList.remove('selected');
+                }
+            
+                checkForWord();
+            }
+                    
+            function checkForWord() {
+                const selectedWord = selectedCells.map(index => grid[index]).join('');
+                if (words.includes(selectedWord) && !document.querySelector('.cell:nth-child(' + (selectedCells[0] + 1) + ')').classList.contains('found')) {
+                    selectedCells.forEach(index => {
+                        const cellElement = document.querySelector('.cell:nth-child(' + (index + 1) + ')');
+                        cellElement.classList.add('found');
+                    });
+                    wordsFound++; // Increment words found
+                    selectedCells = []; // Reset selection after finding a word
+                    updateWordsLeftDisplay();
+                }
+            }
+
+            // Add a counter for words found
+            let wordsFound = 0;
+            
+            // Function to update the display of words left
+            function updateWordsLeftDisplay() {
+                const wordsLeft = words.length - wordsFound;
+                document.getElementById('words-left').textContent = 'Words Left: ' + wordsLeft;
+                
+                if (wordsLeft === 0) {
+                    // Action when all words are found
+                    alert('Congratulations, you found all the words!');
+                }
+            }
+            
+            // Call this function in generateGrid to initialize the display
+            function initializeWordsLeftDisplay() {
+                const wordsLeftDisplay = document.createElement('div');
+                wordsLeftDisplay.id = 'words-left';
+                wordsLeftDisplay.textContent = 'Words Left: ' + words.length;
+                document.body.insertBefore(wordsLeftDisplay, document.getElementById('grid'));
+            }
+            
+            generateGrid();
+        </script>
+    </body>
+    </html>
+    
