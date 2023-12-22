@@ -1,0 +1,119 @@
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
+<script>
+// An array of riddles, hints, and answers
+var riddles = [
+  {
+    riddle: "What has a heart that doesn't beat?",
+    hints: ["It's not alive", "It's made of metal", "It's used in plumbing"],
+    answer: "A pipe"
+  },
+  {
+    riddle: "What can travel around the world while staying in one spot?",
+    hints: ["It's not a vehicle", "It's round", "It's attached to something"],
+    answer: "A stamp"
+  },
+  {
+    riddle: "What is black when it's clean and white when it's dirty?",
+    hints: ["It's not an animal", "It's used for writing", "It's found in a classroom"],
+    answer: "A chalkboard"
+  }
+];
+
+// A variable to store the current riddle index
+var currentRiddle = 0;
+
+// A variable to store the number of hints shown
+var hintsShown = 0;
+
+// A variable to store the similarity threshold
+var threshold = 0.8;
+
+// A function to display a random riddle
+function displayRiddle() {
+  // Generate a random index from 0 to the length of the riddles array
+  currentRiddle = Math.floor(Math.random() * riddles.length);
+
+  // Display the riddle in the riddle element
+  document.getElementById("riddle").innerHTML = riddles[currentRiddle].riddle;
+
+  // Clear the hint, answer, and input elements
+  document.getElementById("hint").innerHTML = "";
+  document.getElementById("answer").innerHTML = "";
+  document.getElementById("input").value = "";
+
+  // Reset the number of hints shown
+  hintsShown = 0;
+}
+
+// A function to display a hint for the current riddle
+function displayHint() {
+  // Check if there are more hints available
+  if (hintsShown < riddles[currentRiddle].hints.length) {
+    // Display the next hint in the hint element
+    document.getElementById("hint").innerHTML += riddles[currentRiddle].hints[hintsShown] + "<br>";
+
+    // Increment the number of hints shown
+    hintsShown++;
+  } else {
+    // Display a message that there are no more hints
+    document.getElementById("hint").innerHTML = "No more hints!";
+  }
+}
+
+// A function to display the answer for the current riddle
+function displayAnswer() {
+  // Display the answer in the answer element
+  document.getElementById("answer").innerHTML = riddles[currentRiddle].answer;
+}
+
+// A function to check the user's answer for the current riddle
+function checkAnswer() {
+  use.load().then(model => {
+    var userInput = document.getElementById("input").value.trim();
+    var correctAnswer = riddles[currentRiddle].answer.trim();
+
+    // Direct string comparison for exact matches
+    if (userInput.toLowerCase() === correctAnswer.toLowerCase()) {
+      document.getElementById("answer").innerHTML = "Correct!";
+      return;
+    }
+
+    model.embed([userInput, correctAnswer]).then(embeddings => {
+      var cosineDistance = tf.losses.cosineDistance(
+        embeddings.slice([0, 0], [1, 512]),
+        embeddings.slice([1, 0], [1, 512]),
+        0
+      );
+
+      var cosineSimilarity = 1 - cosineDistance.dataSync()[0];
+
+      // Debugging: Log values to console
+      console.log(`Cosine Similarity: ${cosineSimilarity}`);
+
+      if (cosineSimilarity >= threshold) {
+        document.getElementById("answer").innerHTML = "Correct!";
+      } else {
+        document.getElementById("answer").innerHTML = "Wrong!";
+      }
+    });
+  });
+}
+
+
+</script>
+</head>
+<body>
+<h1>Riddle Me This</h1>
+<p id="riddle"></p>
+<p id="hint"></p>
+<p id="answer"></p>
+<input id="input" type="text" placeholder="Enter your answer here">
+<button onclick="displayRiddle()">New Riddle</button>
+<button onclick="displayHint()">Show Hint</button>
+<button onclick="checkAnswer()">Check Answer</button>
+<button onclick="displayAnswer()">Show Answer</button>
+</body>
+</html>
