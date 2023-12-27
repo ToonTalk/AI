@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TRAPPIST-1 Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrolling on the entire page */
+        }
+        canvas { display: block; }
+        #infoPanel {
+            position: absolute;
+            top: 50px; /* Adjust the top position so it's below the About button */
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid #ddd;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            color: #333;
+            max-width: 200px;
+        }
+        #aboutBtn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 2; /* Higher z-index to ensure it's clickable */
+        }
+        /* The Modal (background) */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 2; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+        
+        /* Modal Content */
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+        }
+        
+        /* The Close Button */
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+    </style>
+</head>
+<body>
+    <button id="aboutBtn">About</button>
+
+    <div id="aboutModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>About the TRAPPIST-1 Simulation</h2>
+            <p>This simulation showcases the TRAPPIST-1 planetary system, featuring seven Earth-sized exoplanets in orbit around a ultra-cool dwarf star. The distances and sizes are scaled for visualization. Note: The orbits are simplified and not to scale.</p>
+        </div>
+    </div>
+
+    <div id="infoPanel" style="position: absolute; top: 10px; left: 10px; background-color: rgba(255,255,255,0.8); border: 1px solid #ccc; padding: 10px; display: none;">
+      Click on a planet to see information here.
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Set up the scene, camera, and renderer
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        var renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Add the star (our light source)
+        var starGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        var starMaterial = new THREE.MeshBasicMaterial({color: 0xffff00});
+        var star = new THREE.Mesh(starGeometry, starMaterial);
+        scene.add(star);
+
+        // Add light to represent the star's light
+        var light = new THREE.PointLight(0xffffff, 1, 100);
+        light.position.set(0, 0, 0);
+        scene.add(light);
+
+        // Set the camera back so we can view the objects
+        camera.position.z = 5;
+
+        // Function to calculate scaled orbital speed based on orbital period
+        function calculateOrbitalSpeed(orbitalPeriodDays) {
+            const fullCircle = 2 * Math.PI; // Full orbit in radians
+            return fullCircle / (orbitalPeriodDays * 24 * 60 * 60); // Convert days to seconds
+        }
+        
+        // Example scale factors
+        const AU_to_pixels = 100; // 1 AU is represented as 100 pixels on the screen
+        const R_earth_to_pixels = 0.1; // 1 Earth radius is represented as 0.1 pixels
+        
+        
+        // Scaled data for the TRAPPIST-1 planets
+        var planetData = [
+            // TRAPPIST-1b
+            {
+                size: 1.12 * R_earth_to_pixels,
+                distance: 0.0115 * AU_to_pixels,
+                orbitalSpeed: calculateOrbitalSpeed(1.51),
+                orbitalPeriod: 1.51
+            },
+            // TRAPPIST-1c
+            {
+                size: 1.10 * R_earth_to_pixels,
+                distance: 0.0158 * AU_to_pixels,
+                orbitalSpeed: calculateOrbitalSpeed(2.42),
+                orbitalPeriod: 2.42
+            },
+            // TRAPPIST-1d
+            {
+                size: 0.79 * R_earth_to_pixels,
+                distance: 0.0223 * AU_to_pixels,
+                orbitalSpeed: calculateOrbitalSpeed(4.05),
+                orbitalPeriod: 4.05
+            },
+            // TRAPPIST-1e
+            {
+                size: 0.92 * R_earth_to_pixels,
+                distance: 0.0293 * AU_to_pixels,
+                orbitalSpeed: calculateOrbitalSpeed(6.10),
+                orbitalPeriod: 6.10
+            },
+            // TRAPPIST-1f
+            {
+                size: 1.05 * R_earth_to_pixels,
+                distance: 0.0385 * AU_to_pixels,
+                orbitalSpeed: calculateOrbitalSpeed(9.21),
+                orbitalPeriod: 9.21
+            },
+            // TRAPPIST-1g
+            {
+                size: 1.13 * R_earth_to_pixels,
+                distance: 0.0469 * AU_to_pixels,
+                orbitalSpeed: calculateOrbitalSpeed(12.35),
+                orbitalPeriod: 12.35
+            },
+            // TRAPPIST-1h
+            {
+                size: 0.76 * R_earth_to_pixels,
+                distance: 0.0619 * AU_to_pixels,
+                orbitalSpeed: calculateOrbitalSpeed(18.77),
+                orbitalPeriod: 18.77
+            },
+            // ... add additional planets if necessary
+        ];
+
+        // Create planets and add them to the scene
+        var planets = [];
+        for (var i = 0; i < planetData.length; i++) {
+            var data = planetData[i];
+            var geometry = new THREE.SphereGeometry(data.size, 32, 32);
+            var material = new THREE.MeshLambertMaterial({color: 0x888888}); // Placeholder color
+            var planet = new THREE.Mesh(geometry, material);
+            planet.position.x = data.distance; // Position the planet at the correct distance
+            scene.add(planet);
+            planets.push(planet);
+        }
+
+        // Add light to represent the star's light
+        var light = new THREE.PointLight(0xffffff, 1, 100);
+        light.position.set(0, 0, 0);
+        scene.add(light);
+
+        // Set the camera back so we can view the objects
+        camera.position.z = 5;
+
+        // Create a render loop to animate the planets
+        var animate = function () {
+            requestAnimationFrame(animate);
+            
+            var now = Date.now() / 1000; // Get the current time in seconds
+            
+            for (var i = 0; i < planets.length; i++) {
+                var planet = planets[i];
+                var data = planetData[i];
+                var angle = now * data.orbitalSpeed * 10000;
+                planet.position.x = data.distance * Math.cos(angle);
+                planet.position.z = data.distance * Math.sin(angle);
+                // Optional: rotate the planet for added realism
+                planet.rotation.y += 0.005;
+            }
+        
+            renderer.render(scene, camera);
+        };
+        
+        // Record the start time of the simulation
+        var startTime = Date.now();
+
+        var mouse = new THREE.Vector2();
+        var raycaster = new THREE.Raycaster();
+        
+        function onMouseClick(event) {
+            event.preventDefault();
+        
+            mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+            mouse.y = - (event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+        
+            raycaster.setFromCamera(mouse, camera);
+        
+            var intersects = raycaster.intersectObjects(planets, true);
+        
+            if (intersects.length > 0) {
+                var intersectedPlanet = intersects[0].object;
+                var index = planets.indexOf(intersectedPlanet);
+                var data = planetData[index];
+                showInfo(data, index); // Call the showInfo function with the correct arguments
+            }
+        }
+        
+        function showInfo(data, index) {
+            var infoPanel = document.getElementById('infoPanel');
+            infoPanel.innerHTML = '<strong>Planet Details</strong><br>' +
+                                  'Name: TRAPPIST-1 ' + String.fromCharCode('b'.charCodeAt(0) + index) + '<br>' +
+                                  'Orbital Period: ' + data.orbitalPeriod.toFixed(2) + ' days<br>' +
+                                  'Distance from Star: ' + (data.distance / AU_to_pixels).toFixed(3) + ' AU<br>' +
+                                  'Radius: ' + (data.size / R_earth_to_pixels).toFixed(2) + ' Earth radii<br>';
+            infoPanel.style.display = 'block';
+        }
+        
+        window.addEventListener('click', onMouseClick, false);
+
+        
+        // Start the animation
+        animate();
+        
+        // Get the modal
+        var modal = document.getElementById("aboutModal");
+        
+        // Get the button that opens the modal
+        var btn = document.getElementById("aboutBtn");
+        
+        // Get the <span> element that closes the modal
+        var span = document.getElementsByClassName("close")[0];
+        
+        // When the user clicks the button, open the modal 
+        btn.onclick = function() {
+            modal.style.display = "block";
+        }
+        
+        // When the user clicks on <span> (x), close the modal
+        span.onclick = function() {
+            modal.style.display = "none";
+        }
+        
+        // When the user clicks anywhere outside of the modal, close it
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+    </script>
+</body>
+</html>
