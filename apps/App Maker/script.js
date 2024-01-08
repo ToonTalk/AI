@@ -1,29 +1,68 @@
 let htmlCode = '', cssCode = '', jsCode = '';
 
+function detectAndProcessCode(clipboardText) {
+    if (clipboardText.includes("```")) {
+        // Split text by lines
+        const lines = clipboardText.split("\n");
+        let currentType = null;
+        let currentCode = [];
+
+        lines.forEach(line => {
+            if (line.startsWith("```")) {
+                // Process the previous code block if any
+                if (currentType && currentCode.length > 0) {
+                    processCodeBlock(currentType, currentCode.join("\n"));
+                }
+
+                // Identify the new block type
+                currentType = line.substring(3).trim().toLowerCase();
+                currentCode = [];
+            } else if (currentType) {
+                // Add line to current code block
+                currentCode.push(line);
+            }
+        });
+
+        // Process the last code block if any
+        if (currentType && currentCode.length > 0) {
+            processCodeBlock(currentType, currentCode.join("\n"));
+        }
+    } else {
+        // Fallback to original detection method for text without triple back quotes
+        const codeType = detectCodeType(clipboardText);
+        processCodeBlock(codeType, clipboardText);
+    }
+}
+
+function processCodeBlock(type, code) {
+    switch (type) {
+        case 'html':
+            updateHTML(code);
+            break;
+        case 'css':
+            mergeCSS(code);
+            break;
+        case 'javascript':
+            mergeJavaScript(code);
+            break;
+        case 'bad_javascript':
+            displayMessage("Not sure what to do what was pasted. Here's what it was:\n" + code);
+            break;
+        default:
+            console.log("Unrecognized code type: " + type);
+            break;
+    }
+}
+
 document.getElementById('pasteBtn').addEventListener('click', async function() {
     try {
         const clipboardText = await navigator.clipboard.readText();
-        const codeType = detectCodeType(clipboardText);
-
-        switch (codeType) {
-            case 'html':
-                updateHTML(clipboardText);
-                break;
-            case 'css':
-                mergeCSS(clipboardText);
-                break;
-            case 'js':
-                mergeJavaScript(clipboardText);
-                break;
-                    default:
-                        alert("Could not detect the code type. Please try again.");
-                        break;
-                }
-            } catch (err) {
-                displayMessage('An error occurred: ' + err.message, true);
-                console.error('Failed to read clipboard contents: ', err);
-            }
-        });
+        detectAndProcessCode(clipboardText);
+    } catch (err) {
+        displayMessage('An error occurred: ' + err.message, true);
+        console.error('Failed to read clipboard contents: ', err);
+    }
+});
 
 document.getElementById('downloadBtn').addEventListener('click', function() {
     // Remove redundant <head> and <body> tags from htmlCode
@@ -51,8 +90,22 @@ function detectCodeType(text) {
         return 'css';
     }
 
+    // Check for JavaScript syntax errors
+    if (hasSyntaxError(text)) {
+        return 'bad_javascript';
+    }
+
     // Default to JavaScript
-    return 'js';
+    return 'javascript';
+}
+
+function hasSyntaxError(code) {
+    try {
+        new Function(code);
+        return false; // No syntax error
+    } catch (e) {
+        return true; // Syntax error detected
+    }
 }
 
 function download(filename, text) {
@@ -105,7 +158,7 @@ function updateHTML(newHTML) {
     checkForPlaceholder(); // Check after updating HTML
     // Call this function at the end of your script to set the initial state of the button
     updateDownloadButtonState();
-    displayMessage("HTML updated successfully.");
+    displayMessage("Yay! Your web page is updated!");
 }
 
 function displayMessage(message, isError = false) {
@@ -114,13 +167,13 @@ function displayMessage(message, isError = false) {
     if (isError) {
         messageArea.style.color = 'red';
     } else {
-        messageArea.style.color = 'black'; // or any default color
+        messageArea.style.color = '#0066cc'; // or any default color
     }
 }
 
 function mergeCSS(newCSS) {
-    console.log("Existing CSS before merge:", cssCode);
-    console.log("New CSS to merge:", newCSS);
+    // console.log("Existing CSS before merge:", cssCode);
+    // console.log("New CSS to merge:", newCSS);
 
     let existingStyles = cssCode.split('}').map(s => s.trim()).filter(Boolean);
     let newStyles = newCSS.split('}').map(s => s.trim()).filter(Boolean);
@@ -141,8 +194,8 @@ function mergeCSS(newCSS) {
     // Reconstruct CSS
     cssCode = existingStyles.join(' }') + (existingStyles.length > 0 ? ' }' : '');
 
-    console.log("Updated CSS after merge:", cssCode);
-    displayMessage("CSS merged successfully.");
+    // console.log("Updated CSS after merge:", cssCode);
+    displayMessage("Great! Your page's style just got cooler!");
 }
 
 function mergeJavaScript(newJS) {
@@ -167,9 +220,8 @@ function mergeJavaScript(newJS) {
     for (let varName in newVariables) {
         if (existingVariables.hasOwnProperty(varName)) {
             let startLine = existingVariables[varName].line;
-            let endLine = existingVariables[varName].endLine; // Ensure we use the endLine
-            console.log(`Removing lines for variable ${varName} from ${startLine} to ${endLine}`);
-            jsCode = removeLines(jsCode, startLine, endLine);
+            let endLine = findEndLine(jsCode, startLine); // Using findEndLine for variables too
+            linesToRemove.push({ start: startLine, end: endLine });
         }
     }
 
@@ -183,17 +235,32 @@ function mergeJavaScript(newJS) {
 
     // Append new JS
     jsCode += '\n' + newJS;
-    displayMessage("JavaScript merged successfully.");
+    displayMessage("Awesome! Your page can do new tricks now!");
     console.log("Updated JavaScript after merge:", jsCode);
+}
+
+function removeFunction(jsCode, functionInfo) {
+    let lines = jsCode.split('\n');
+    lines.splice(functionInfo.line, functionInfo.endLine - functionInfo.line + 1);
+    return lines.join('\n');
+}
+
+function removeVariable(jsCode, variableInfo) {
+    let lines = jsCode.split('\n');
+    lines.splice(variableInfo.line, variableInfo.endLine - variableInfo.line + 1);
+    return lines.join('\n');
 }
 
 // Helper function to find the end line of a function
 function findEndLine(jsCode, startLine) {
     let lines = jsCode.split('\n');
     let endLine = startLine;
-    while (endLine < lines.length && lines[endLine].trim() !== '}') {
+
+    // Increment endLine until an empty line or end of code is reached
+    while (endLine < lines.length && lines[endLine].trim() !== '') {
         endLine++;
     }
+
     return endLine;
 }
 
@@ -207,38 +274,33 @@ function removeLines(jsCode, startLine, endLine) {
 
 function extractGlobalVariables(jsCode) {
     let globalVars = {};
-    // Adjust the regex to match variables that start a declaration (potentially multi-line)
-    let varPattern = /^\s*(var|let|const)\s+([a-zA-Z0-9_]+)/;
-    let functionPattern = /function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*\{|{/;
-    let endDeclarationPattern = /[;}]/;
+    // Match variable declarations at the top level
+    let varPattern = /^(var|let|const)\s+([a-zA-Z0-9_]+)/;
+    let functionPattern = /function\s+[a-zA-Z0-9_]+\s*\(/;
     let lines = jsCode.split('\n');
 
-    let inFunction = 0;
-    let currentVarName = '';
-    let startLine = 0;
+    let inGlobalScope = true;
 
-    for (let i = 0; i < lines.length; i++) {
-        if (functionPattern.test(lines[i])) {
-            inFunction++;
-        } else if (endDeclarationPattern.test(lines[i]) && inFunction > 0) {
-            inFunction--;
-        } else if (inFunction === 0 && varPattern.test(lines[i])) {
-            let match = varPattern.exec(lines[i]);
+    lines.forEach((line, index) => {
+        // Check if we are entering a function
+        if (functionPattern.test(line.trim())) {
+            inGlobalScope = false;
+        }
+
+        // If we are in the global scope, check for variable declarations
+        if (inGlobalScope && varPattern.test(line.trim())) {
+            let match = varPattern.exec(line.trim());
             if (match) {
-                currentVarName = match[2];
-                startLine = i;
-
-                // Look ahead for the end of the declaration
-                let j = i;
-                while (j < lines.length && !endDeclarationPattern.test(lines[j])) {
-                    j++;
-                }
-
-                globalVars[currentVarName] = { line: startLine, endLine: j };
-                i = j; // Skip to the end of the declaration
+                let varName = match[2];
+                globalVars[varName] = { line: index };
             }
         }
-    }
+
+        // Check if we are exiting a function or block
+        if (line.trim() === '}' || line.trim() === '};') {
+            inGlobalScope = true;
+        }
+    });
 
     console.log("Extracted global variables with line numbers:", globalVars);
     return globalVars;
@@ -325,49 +387,117 @@ document.getElementById('uploadArea').addEventListener('drop', function(event) {
     handleFile(event.dataTransfer.files[0]);  // Handle file drop
 });
 
+document.addEventListener('dragover', function(event) {
+    event.preventDefault();  // Required for drop to work
+});
+
+document.addEventListener('drop', function(event) {
+    event.preventDefault(); // Prevent default behavior
+    const files = event.dataTransfer.files;
+    if (files && files.length > 0) {
+        handleFile(files[0]);  // Handle the first file in the drop
+    }
+});
+
+document.getElementById('uploadArea').addEventListener('drop', function(event) {
+    event.preventDefault();
+    handleFile(event.dataTransfer.files[0]);  // Handle file drop
+});
+
 document.getElementById('uploadArea').addEventListener('dragover', function(event) {
     event.preventDefault();  // Required for drop to work
 });
+
+function showPlaceholderSelectionUI(placeholders, fileType, file) {
+    const modal = document.getElementById('placeholderModal');
+    const optionsContainer = document.getElementById('placeholderOptions');
+
+    // Clear previous options
+    optionsContainer.innerHTML = '';
+
+    placeholders.forEach((placeholder, index) => {
+        const altTextMatch = placeholder.match(/alt="([^"]*)"/);
+        const altText = altTextMatch ? altTextMatch[1] : `Spot ${index + 1}`;
+        const option = document.createElement('button');
+        option.textContent = `Choose ${altText}`;
+        option.onclick = () => {
+            replacePlaceholder(file, placeholder, fileType);
+            modal.style.display = 'none';
+        };
+        optionsContainer.appendChild(option);
+    });
+
+    modal.style.display = 'block';
+}
+
+function checkForPlaceholder() {
+    let imagePlaceholderFound = /<img src="THIS WILL BE REPLACED BY A DATA URL"/.test(htmlCode);
+
+    // Updated regex to handle multiline and various attribute orders
+    let audioPlaceholderRegex = /<audio[^>]*src\s*=\s*"THIS WILL BE REPLACED BY A DATA URL"[^>]*>([\s\S]*?)<\/audio>/;
+    let audioPlaceholderFound = audioPlaceholderRegex.test(htmlCode);
+
+    document.getElementById('uploadArea').style.display = imagePlaceholderFound || audioPlaceholderFound ? 'block' : 'none';
+}
+
+let imageDictionary = {};
+
+function handleFile(file) {
+    const fileType = file.type.startsWith('image/') ? 'image' : 'audio';
+    const placeholders = findPlaceholders(fileType);
+
+    if (placeholders.length > 1) {
+        showPlaceholderSelectionUI(placeholders, fileType, file);
+    } else if (placeholders.length === 1) {
+        replacePlaceholder(file, placeholders[0], fileType);
+    } else {
+        displayMessage("No placeholders found for this type of file.");
+    }
+}
+
+function findPlaceholders(fileType) {
+    let placeholderRegex;
+    if (fileType === 'image') {
+        placeholderRegex = /<img src="THIS WILL BE REPLACED BY A DATA URL"/g;
+    } else { // fileType === 'audio'
+        placeholderRegex = /<audio[^>]*src\s*=\s*"THIS WILL BE REPLACED BY A DATA URL"/g;
+    }
+    return htmlCode.match(placeholderRegex) || [];
+}
+
+function replacePlaceholder(file, placeholder, fileType) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        replacePlaceholdersInHTML(fileType, dataUrl, placeholder);
+    };
+    reader.readAsDataURL(file);
+}
+
+function replacePlaceholdersInHTML(fileType, dataUrl, placeholderToReplace) {
+    if (fileType === 'image') {
+        // Simplified regex to match any img tag with the placeholder in the src attribute
+        let regex = /<img [^>]*src="THIS WILL BE REPLACED BY A DATA URL"[^>]*>/g;
+        
+        // Perform the replacement
+        htmlCode = htmlCode.replace(regex, function(match) {
+            return match.replace('THIS WILL BE REPLACED BY A DATA URL', dataUrl);
+        });
+    } else { // fileType === 'audio'
+        // Existing logic for audio files
+        htmlCode = htmlCode.replace(/(<audio [^>]*src=")THIS WILL BE REPLACED BY A DATA URL(" [^>]*>)/g, `$1${dataUrl}$2`);
+    }
+
+    displayMessage("Placeholder replaced successfully.");
+    checkForPlaceholder();
+}
+
 
 function handleFileUpload(event) {
     handleFile(event.target.files[0]);  // Handle file selection
 }
 
-function handleFile(file) {
-    if (file && (file.type.startsWith('image/') || file.type.startsWith('audio/'))) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const dataUrl = e.target.result;
-            replacePlaceholder(dataUrl);
-        };
-        reader.readAsDataURL(file);
-    } else {
-        displayMessage("Please upload an image or sound file.");
-    }
-}
-
-function replacePlaceholder(dataUrl) {
-    const placeholder = "THIS WILL BE REPLACED BY A DATA URL";
-    if (htmlCode.includes(placeholder)) {
-        htmlCode = htmlCode.replace(placeholder, dataUrl);
-        displayMessage("Placeholder in HTML replaced successfully.");
-    } else if (jsCode.includes(placeholder)) {
-        jsCode = jsCode.replace(placeholder, dataUrl);
-        displayMessage("Placeholder in JavaScript replaced successfully.");
-    } else {
-        displayMessage("No placeholder found for replacement.");
-    }
-}
-
-function checkForPlaceholder() {
-    const placeholder = "THIS WILL BE REPLACED BY A DATA URL";
-    if (htmlCode.includes(placeholder) || jsCode.includes(placeholder)) {
-        document.getElementById('uploadArea').style.display = 'block';
-    } else {
-        document.getElementById('uploadArea').style.display = 'none';
-    }
-}
-
-// Call this at the end of your JavaScript to set the initial state of the upload area
+// Call this function initially and whenever HTML code is updated
 checkForPlaceholder();
+
 updateDownloadButtonState();
