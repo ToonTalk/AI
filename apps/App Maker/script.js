@@ -90,6 +90,16 @@ function handlePasteEvent(event) {
     }
 }
 
+// document.getElementById('downloadBtn').addEventListener('click', function() {
+//     // Remove redundant <head> and <body> tags from htmlCode
+//     let cleanedHtmlCode = htmlCode.replace(/<\/?head>/g, '').replace(/<\/?body>/g, '').trim();
+
+//     // Construct the complete HTML code
+//     const completeCode = `<html><head><style>${cssCode}</style></head><body>${cleanedHtmlCode}<script>${jsCode}</script></body></html>`;
+
+//     download("my_project.html", completeCode);
+// });
+
 document.getElementById('downloadBtn').addEventListener('click', function() {
     // Remove redundant <head> and <body> tags from htmlCode
     let cleanedHtmlCode = htmlCode.replace(/<\/?head>/g, '').replace(/<\/?body>/g, '').trim();
@@ -97,7 +107,18 @@ document.getElementById('downloadBtn').addEventListener('click', function() {
     // Construct the complete HTML code
     const completeCode = `<html><head><style>${cssCode}</style></head><body>${cleanedHtmlCode}<script>${jsCode}</script></body></html>`;
 
-    download("my_project.html", completeCode);
+    // Convert the complete code to a data URL
+    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(completeCode);
+
+    // Create and display a link to the data URL
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.textContent = 'Open Generated Page';
+    link.target = '_blank'; // Open in a new tab
+    link.style.display = 'block'; // Ensure the link is visible
+
+    // Append the link to a specific element or to the document body
+    document.body.appendChild(link);
 });
 
 function detectCodeType(text) {
