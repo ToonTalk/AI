@@ -118,7 +118,8 @@ document.getElementById('downloadBtn').addEventListener('click', function() {
     link.style.display = 'block'; // Ensure the link is visible
 
     // Append the link to a specific element or to the document body
-    document.body.appendChild(link);
+    // document.body.appendChild(link);
+    link.click();
 });
 
 function detectCodeType(text) {
