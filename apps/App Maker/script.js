@@ -54,15 +54,32 @@ function processCodeBlock(type, code) {
     }
 }
 
-document.getElementById('pasteBtn').addEventListener('click', async function() {
-    try {
-        const clipboardText = await navigator.clipboard.readText();
-        detectAndProcessCode(clipboardText);
-    } catch (err) {
-        displayMessage('An error occurred: ' + err.message, true);
-        console.error('Failed to read clipboard contents: ', err);
+document.getElementById('pasteBtn').addEventListener('click', function() {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(clipboardText => {
+            detectAndProcessCode(clipboardText);
+        }).catch(err => {
+            displayMessage('An error occurred: ' + err.message, true);
+            console.error('Failed to read clipboard contents: ', err);
+        });
+    } else {
+        // Determine the user's operating system
+        const userAgent = window.navigator.userAgent;
+        const platform = window.navigator.platform;
+        const macosPlatforms = ['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'];
+        const windowsPlatforms = ['Win32', 'Win64', 'Windows', 'WinCE'];
+
+        let osMessage = 'Press Ctrl+V to paste.';
+        if (macosPlatforms.indexOf(platform) !== -1) {
+            osMessage = 'Press Cmd+V to paste.';
+        } else if (windowsPlatforms.indexOf(platform) !== -1) {
+            osMessage = 'Press Ctrl+V to paste.';
+        }
+
+        displayMessage(osMessage);
     }
 });
+
 
 document.addEventListener('paste', handlePasteEvent);
 
@@ -100,6 +117,28 @@ function handlePasteEvent(event) {
 //     download("my_project.html", completeCode);
 // });
 
+// document.getElementById('downloadBtn').addEventListener('click', function() {
+//     // Remove redundant <head> and <body> tags from htmlCode
+//     let cleanedHtmlCode = htmlCode.replace(/<\/?head>/g, '').replace(/<\/?body>/g, '').trim();
+
+//     // Construct the complete HTML code
+//     const completeCode = `<html><head><style>${cssCode}</style></head><body>${cleanedHtmlCode}<script>${jsCode}</script></body></html>`;
+
+//     // Convert the complete code to a data URL
+//     const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(completeCode);
+
+//     // Create and display a link to the data URL
+//     const link = document.createElement('a');
+//     link.href = dataUrl;
+//     link.textContent = 'Open Generated Page';
+//     link.target = '_blank'; // Open in a new tab
+//     link.style.display = 'block'; // Ensure the link is visible
+
+//     // Append the link to a specific element or to the document body
+//     // document.body.appendChild(link);
+//     link.click();
+// });
+
 document.getElementById('downloadBtn').addEventListener('click', function() {
     // Remove redundant <head> and <body> tags from htmlCode
     let cleanedHtmlCode = htmlCode.replace(/<\/?head>/g, '').replace(/<\/?body>/g, '').trim();
@@ -107,20 +146,16 @@ document.getElementById('downloadBtn').addEventListener('click', function() {
     // Construct the complete HTML code
     const completeCode = `<html><head><style>${cssCode}</style></head><body>${cleanedHtmlCode}<script>${jsCode}</script></body></html>`;
 
-    // Convert the complete code to a data URL
-    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(completeCode);
+    // Create a Blob from the HTML String
+    const blob = new Blob([completeCode], { type: 'text/html' });
 
-    // Create and display a link to the data URL
-    const link = document.createElement('a');
-    link.href = dataUrl;
-    link.textContent = 'Open Generated Page';
-    link.target = '_blank'; // Open in a new tab
-    link.style.display = 'block'; // Ensure the link is visible
+    // Create a URL for the Blob
+    const blobUrl = URL.createObjectURL(blob);
 
-    // Append the link to a specific element or to the document body
-    // document.body.appendChild(link);
-    link.click();
+    // Open the Blob URL in a new tab
+    window.open(blobUrl, '_blank');
 });
+
 
 function detectCodeType(text) {
     // Trim leading whitespace and check the first character
