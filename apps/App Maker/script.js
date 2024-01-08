@@ -64,6 +64,32 @@ document.getElementById('pasteBtn').addEventListener('click', async function() {
     }
 });
 
+document.addEventListener('paste', handlePasteEvent);
+
+function handlePasteEvent(event) {
+    try {
+        if (!event.clipboardData || !event.clipboardData.items) {
+            displayMessage('No data in the clipboard.');
+            return;
+        }
+
+        for (let item of event.clipboardData.items) {
+            if (item.type.indexOf('image') === 0) {
+                let file = item.getAsFile();
+                handleFile(file); // Handle the image file
+                break; // Stop after processing the first image
+            } else if (item.type === 'text/plain') {
+                let clipboardText = event.clipboardData.getData('text/plain');
+                detectAndProcessCode(clipboardText); // Process the text
+                break; // Stop after processing the first text item
+            }
+        }
+    } catch (err) {
+        displayMessage('An error occurred: ' + err.message, true);
+        console.error('Failed to process clipboard contents: ', err);
+    }
+}
+
 document.getElementById('downloadBtn').addEventListener('click', function() {
     // Remove redundant <head> and <body> tags from htmlCode
     let cleanedHtmlCode = htmlCode.replace(/<\/?head>/g, '').replace(/<\/?body>/g, '').trim();
@@ -491,7 +517,6 @@ function replacePlaceholdersInHTML(fileType, dataUrl, placeholderToReplace) {
     displayMessage("Placeholder replaced successfully.");
     checkForPlaceholder();
 }
-
 
 function handleFileUpload(event) {
     handleFile(event.target.files[0]);  // Handle file selection
