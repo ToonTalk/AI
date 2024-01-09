@@ -46,7 +46,7 @@ function processCodeBlock(type, code) {
             mergeJavaScript(code);
             break;
         case 'bad_javascript':
-            displayMessage("Not sure what to do what was pasted. Here's what it was:\n" + code);
+            displayMessage("Not sure what to do what was pasted. Make sure it is correct code. Paste it into the chatbot and ask it.");
             break;
         default:
             console.log("Unrecognized code type: " + type);
@@ -134,7 +134,6 @@ document.getElementById('runBtn').addEventListener('click', function() {
     window.open(blobUrl, '_blank');
 });
 
-
 function detectCodeType(text) {
     // Trim leading whitespace and check the first character
     const firstChar = text.trim().charAt(0);
@@ -145,8 +144,7 @@ function detectCodeType(text) {
     }
 
     // Check for CSS
-    // CSS typically has selectors followed by properties in curly braces
-    const cssPattern = /[#.]*[a-zA-Z0-9_-]+\s*\{[\s\S]*?\}/;
+    const cssPattern = /[#.][a-zA-Z0-9_-]+\s*\{[\s\S]+?\}/gm;
     if (cssPattern.test(text)) {
         return 'css';
     }
