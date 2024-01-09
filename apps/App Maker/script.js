@@ -208,33 +208,31 @@ function updateDownloadButtonState() {
 }
 
 function updateHTML(newHTML) {
-    // console.log("Original HTML:", newHTML);
-
-    // Extract and remove CSS
+    // Extract and keep CSS
     const cssRegex = /<style.*?>([\s\S]*?)<\/style>/gi;
     let extractedCSS = '';
     newHTML = newHTML.replace(cssRegex, function(match, css) {
         extractedCSS += css.trim() + '\n';
         return '';
     });
-    // console.log("Extracted CSS:", extractedCSS);
     mergeCSS(extractedCSS);
 
-    // Extract and remove JavaScript
-    const jsRegex = /<script.*?>([\s\S]*?)<\/script>/gi;
+    // Extract and keep JavaScript without src attribute
+    const jsRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
     let extractedJS = '';
     newHTML = newHTML.replace(jsRegex, function(match, js) {
-        extractedJS += js.trim() + '\n';
-        return '';
+        // Only extract if there's no 'src' attribute in the script tag
+        if (!/src\s*=\s*['"]/.test(match)) {
+            extractedJS += js.trim() + '\n';
+            return '';
+        }
+        return match; // Keep the script tag with 'src' attribute
     });
-    // console.log("Extracted JavaScript:", extractedJS);
     mergeJavaScript(extractedJS);
 
     // Update the HTML code
     htmlCode = newHTML.trim();
-    // console.log("Updated HTML:", htmlCode);
     checkForPlaceholder(); // Check after updating HTML
-    // Call this function at the end of your script to set the initial state of the button
     updateDownloadButtonState();
     displayMessage("Yay! Your web page is updated!");
 }
@@ -250,8 +248,8 @@ function displayMessage(message, isError = false) {
 }
 
 function mergeCSS(newCSS) {
-    console.log("Existing CSS before merge:", cssCode);
-    console.log("New CSS to merge:", newCSS);
+    // console.log("Existing CSS before merge:", cssCode);
+    // console.log("New CSS to merge:", newCSS);
 
     // Split existing and new CSS by empty lines
     let existingStyles = cssCode.trim().split(/\n\s*\n/).filter(Boolean);
@@ -274,7 +272,7 @@ function mergeCSS(newCSS) {
     // Convert the map back to a string
     cssCode = Array.from(existingStylesMap.values()).join('\n\n');
 
-    console.log("Updated CSS after merge:", cssCode);
+    // console.log("Updated CSS after merge:", cssCode);
     displayMessage("Your page's style is updated!");
 }
 
