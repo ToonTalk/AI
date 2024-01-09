@@ -54,75 +54,91 @@ function processCodeBlock(type, code) {
     }
 }
 
-document.getElementById('pasteBtn').addEventListener('click', function() {
-    if (navigator.clipboard && navigator.clipboard.readText) {
-        navigator.clipboard.readText().then(clipboardText => {
-            detectAndProcessCode(clipboardText);
-        }).catch(err => {
-            displayMessage('An error occurred: ' + err.message, true);
-            console.error('Failed to read clipboard contents: ', err);
-        });
-    } else {
-        // Determine the user's operating system
-        const userAgent = window.navigator.userAgent;
-        const platform = window.navigator.platform;
-        const macosPlatforms = ['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'];
-        const windowsPlatforms = ['Win32', 'Win64', 'Windows', 'WinCE'];
-
-        let osMessage = 'Press Ctrl+V to paste.';
-        if (macosPlatforms.indexOf(platform) !== -1) {
-            osMessage = 'Press Cmd+V to paste.';
-        } else if (windowsPlatforms.indexOf(platform) !== -1) {
-            osMessage = 'Press Ctrl+V to paste.';
-        }
-
-        displayMessage(osMessage);
-    }
-});
-
-
-document.addEventListener('paste', handlePasteEvent);
-
-function handlePasteEvent(event) {
+function handlePasteContent(clipboardContent) {
     try {
-        if (!event.clipboardData || !event.clipboardData.items) {
-            displayMessage('No data in the clipboard.');
-            return;
-        }
-
-        for (let item of event.clipboardData.items) {
-            if (item.type.indexOf('image') === 0) {
-                let file = item.getAsFile();
-                handleFile(file); // Handle the image file
-                break; // Stop after processing the first image
-            } else if (item.type === 'text/plain') {
-                let clipboardText = event.clipboardData.getData('text/plain');
-                detectAndProcessCode(clipboardText); // Process the text
-                break; // Stop after processing the first text item
-            }
+        if (typeof clipboardContent === 'string' || clipboardContent instanceof String) {
+            detectAndProcessCode(clipboardContent);
+        } else {
+            handleFile(clipboardContent); // Assuming handleFile is a function to handle files
         }
     } catch (err) {
-        displayMessage('An error occurred: ' + err.message, true);
-        console.error('Failed to process clipboard contents: ', err);
+        // If an error occurs, copy error information to the clipboard
+        copyTextToClipboard(`Error while pasting: ${err}\n\nPasted Content:\n${clipboardContent}`);
+        // Display user-friendly error message
+        alert("An error while pasting occurred and has been placed on the clipboard. Please go to your chatbot and paste the error so it can fix it. If you don't know how to paste then ask it.");
     }
 }
 
-document.getElementById('downloadBtn').addEventListener('click', function() {
-    // Remove redundant <head> and <body> tags from htmlCode
-    let cleanedHtmlCode = htmlCode.replace(/<\/?head>/g, '').replace(/<\/?body>/g, '').trim();
+function copyTextToClipboard(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+}
 
+document.getElementById('pasteBtn').addEventListener('click', async function() {
+    try {
+        const clipboardText = await navigator.clipboard.readText();
+        handlePasteContent(clipboardText);
+    } catch (err) {
+        copyTextToClipboard(`Error while accessing clipboard: ${err}`);
+        alert("An error occurred while accessing the clipboard. The error has been copied to the clipboard. Please paste it to your chatbot for assistance.");
+    }
+});
+
+// If you have a specific handler for Ctrl+V/Cmd+V, call handlePasteContent in it
+// For example:
+document.addEventListener('paste', function(event) {
+    let clipboardData = event.clipboardData || window.clipboardData;
+    if (clipboardData) {
+        const clipboardItems = clipboardData.items;
+        for (let item of clipboardItems) {
+            if (item.type.indexOf('image') === 0) {
+                let file = item.getAsFile();
+                handlePasteContent(file);
+                break;
+            } else if (item.type === 'text/plain') {
+                let text = clipboardData.getData('text/plain');
+                handlePasteContent(text);
+                break;
+            }
+        }
+    }
+});
+
+// Function to assemble the final HTML
+function assembleFinalHtml(htmlCode, cssCode, jsCode) {
+    let finalHtml = htmlCode;
+
+    // Append cssCode to existing <style> or add new <style> element
+    if (/<style[\s\S]*?>[\s\S]*?<\/style>/.test(htmlCode)) {
+        finalHtml = finalHtml.replace(/(<style[\s\S]*?>[\s\S]*?)(<\/style>)/, `$1${cssCode}$2`);
+    } else if (cssCode.trim() !== '') {
+        finalHtml = finalHtml.replace('</head>', `<style>${cssCode}</style></head>`);
+    }
+
+    // Append jsCode to existing <script> or add new <script> element
+    if (/<script[\s\S]*?>[\s\S]*?<\/script>/.test(htmlCode)) {
+        finalHtml = finalHtml.replace(/(<script[\s\S]*?>[\s\S]*?)(<\/script>)/, `$1${jsCode}$2`);
+    } else if (jsCode.trim() !== '') {
+        finalHtml = finalHtml.replace('</body>', `<script>${jsCode}</script></body>`);
+    }
+
+    return finalHtml;
+}
+
+document.getElementById('downloadBtn').addEventListener('click', function() {
     // Construct the complete HTML code
-    const completeCode = `<html><head><style>${cssCode}</style></head><body>${cleanedHtmlCode}<script>${jsCode}</script></body></html>`;
+    const completeCode = assembleFinalHtml(htmlCode, cssCode, jsCode);
 
     download("my_project.html", completeCode);
 });
 
 document.getElementById('runBtn').addEventListener('click', function() {
-    // Remove redundant <head> and <body> tags from htmlCode
-    let cleanedHtmlCode = htmlCode.replace(/<\/?head>/g, '').replace(/<\/?body>/g, '').trim();
-
     // Construct the complete HTML code
-    const completeCode = `<html><head><style>${cssCode}</style></head><body>${cleanedHtmlCode}<script>${jsCode}</script></body></html>`;
+    const completeCode = assembleFinalHtml(htmlCode, cssCode, jsCode);
 
     // Create a Blob from the HTML String
     const blob = new Blob([completeCode], { type: 'text/html' });
@@ -234,30 +250,54 @@ function displayMessage(message, isError = false) {
 }
 
 function mergeCSS(newCSS) {
-    // console.log("Existing CSS before merge:", cssCode);
-    // console.log("New CSS to merge:", newCSS);
+    console.log("Existing CSS before merge:", cssCode);
+    console.log("New CSS to merge:", newCSS);
 
-    let existingStyles = cssCode.split('}').map(s => s.trim()).filter(Boolean);
-    let newStyles = newCSS.split('}').map(s => s.trim()).filter(Boolean);
+    // Split existing and new CSS by empty lines
+    let existingStyles = cssCode.trim().split(/\n\s*\n/).filter(Boolean);
+    let newStyles = newCSS.trim().split(/\n\s*\n/).filter(Boolean);
 
-    newStyles.forEach(newStyle => {
-        let selector = newStyle.split('{')[0].trim();
-        let existingIndex = existingStyles.findIndex(style => style.startsWith(selector + " {"));
-
-        if (existingIndex !== -1) {
-            // Replace existing style
-            existingStyles[existingIndex] = newStyle;
-        } else {
-            // Add new style
-            existingStyles.push(newStyle);
-        }
+    // Convert existing styles to a map for easy lookup
+    let existingStylesMap = new Map();
+    existingStyles.forEach(style => {
+        let selector = style.split('{')[0].trim();
+        existingStylesMap.set(selector, style);
     });
 
-    // Reconstruct CSS
-    cssCode = existingStyles.join(' }') + (existingStyles.length > 0 ? ' }' : '');
+    // Process new styles
+    newStyles.forEach(newStyle => {
+        let selector = newStyle.split('{')[0].trim();
+        // Replace existing style or add new style
+        existingStylesMap.set(selector, newStyle);
+    });
 
-    // console.log("Updated CSS after merge:", cssCode);
-    displayMessage("Great! Your page's style just got cooler!");
+    // Convert the map back to a string
+    cssCode = Array.from(existingStylesMap.values()).join('\n\n');
+
+    console.log("Updated CSS after merge:", cssCode);
+    displayMessage("Your page's style is updated!");
+}
+
+// Parse CSS string into an object
+function parseCss(cssString) {
+    let stylesObject = {};
+    let rules = cssString.split('}').map(s => s.trim()).filter(Boolean);
+
+    rules.forEach(rule => {
+        let [selector, properties] = rule.split('{').map(s => s.trim());
+        stylesObject[selector] = properties;
+    });
+
+    return stylesObject;
+}
+
+// Construct CSS string from an object
+function constructCssFromObject(stylesObject) {
+    let cssString = '';
+    for (let selector in stylesObject) {
+        cssString += `${selector} { ${stylesObject[selector]} }\n`;
+    }
+    return cssString.trim();
 }
 
 function mergeJavaScript(newJS) {
@@ -298,7 +338,7 @@ function mergeJavaScript(newJS) {
     // Append new JS
     jsCode += '\n' + newJS;
     displayMessage("Awesome! Your page can do new tricks now!");
-    console.log("Updated JavaScript after merge:", jsCode);
+    // console.log("Updated JavaScript after merge:", jsCode);
 }
 
 function removeFunction(jsCode, functionInfo) {
@@ -330,7 +370,7 @@ function findEndLine(jsCode, startLine) {
 function removeLines(jsCode, startLine, endLine) {
     let lines = jsCode.split('\n');
     lines.splice(startLine, endLine - startLine + 1);
-    console.log("Removed lines:", startLine, endLine);
+    // console.log("Removed lines:", startLine, endLine);
     return lines.join('\n');
 }
 
@@ -364,7 +404,7 @@ function extractGlobalVariables(jsCode) {
         }
     });
 
-    console.log("Extracted global variables with line numbers:", globalVars);
+    // console.log("Extracted global variables with line numbers:", globalVars);
     return globalVars;
 }
 
@@ -436,7 +476,7 @@ function extractFunctions(jsCode) {
         functions[functionName] = { code: fullMatch, line: line - 1 };
     }
 
-    console.log("Extracted functions with line numbers:", functions);
+    // console.log("Extracted functions with line numbers:", functions);
     return functions;
 }
 
