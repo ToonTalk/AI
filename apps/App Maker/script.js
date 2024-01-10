@@ -1,5 +1,7 @@
 let htmlCode = '', cssCode = '', jsCode = '';
 
+let mediaDictionary = {};
+
 function detectAndProcessCode(clipboardText) {
     if (clipboardText.includes("```")) {
         // Split text by lines
@@ -29,8 +31,8 @@ function detectAndProcessCode(clipboardText) {
         }
     } else {
         // Fallback to original detection method for text without triple back quotes
-        const codeType = detectCodeType(clipboardText);
-        processCodeBlock(codeType, clipboardText);
+        const { type: codeType, text: modifiedText } = detectCodeType(clipboardText);
+        processCodeBlock(codeType, modifiedText);
     }
 }
 
@@ -65,7 +67,7 @@ function handlePasteContent(clipboardContent) {
         // If an error occurs, copy error information to the clipboard
         copyTextToClipboard(`Error while pasting: ${err}\n\nPasted Content:\n${clipboardContent}`);
         // Display user-friendly error message
-        alert("An error while pasting occurred and has been placed on the clipboard. Please go to your chatbot and paste the error so it can fix it. If you don't know how to paste then ask it.");
+        displayMessage("An error while pasting occurred and has been placed on the clipboard. Please go to your chatbot and paste the error so it can fix it. If you don't know how to paste then ask it.", true);
     }
 }
 
@@ -151,27 +153,42 @@ document.getElementById('runBtn').addEventListener('click', function() {
 });
 
 function detectCodeType(text) {
-    // Trim leading whitespace and check the first character
-    const firstChar = text.trim().charAt(0);
+    // Trim leading and trailing whitespace
+    let cleanedText = text.trim();
 
-    // Check for HTML
-    if (firstChar === '<') {
-        return 'html';
+    // Remove HTML comments
+    cleanedText = cleanedText.replace(/<!--[\s\S]*?-->/g, '').trim();
+
+    // Check for CSS wrapped in <style> tags
+    if (cleanedText.startsWith('<style>') && cleanedText.endsWith('</style>')) {
+        cleanedText = cleanedText.slice('<style>'.length, -'</style>'.length).trim();
+        return { type: 'css', text: cleanedText };
     }
 
-    // Check for CSS
+    // Check for JavaScript wrapped in <script> tags
+    if (cleanedText.startsWith('<script>') && cleanedText.endsWith('</script>')) {
+        cleanedText = cleanedText.slice('<script>'.length, -'</script>'.length).trim();
+        return { type: 'javascript', text: cleanedText };
+    }
+
+    // Check for HTML
+    if (cleanedText.charAt(0) === '<') {
+        return { type: 'html', text: cleanedText };
+    }
+
+    // Check for CSS pattern
     const cssPattern = /[#.][a-zA-Z0-9_-]+\s*\{[\s\S]+?\}/gm;
-    if (cssPattern.test(text)) {
-        return 'css';
+    if (cssPattern.test(cleanedText)) {
+        return { type: 'css', text: cleanedText };
     }
 
     // Check for JavaScript syntax errors
-    if (hasSyntaxError(text)) {
-        return 'bad_javascript';
+    if (hasSyntaxError(cleanedText)) {
+        return { type: 'bad_javascript', text: cleanedText };
     }
 
     // Default to JavaScript
-    return 'javascript';
+    return { type: 'javascript', text: cleanedText };
 }
 
 function hasSyntaxError(code) {
@@ -208,34 +225,82 @@ function updateDownloadButtonState() {
 }
 
 function updateHTML(newHTML) {
-    // Extract and keep CSS
-    const cssRegex = /<style.*?>([\s\S]*?)<\/style>/gi;
-    let extractedCSS = '';
-    newHTML = newHTML.replace(cssRegex, function(match, css) {
-        extractedCSS += css.trim() + '\n';
-        return '';
-    });
-    mergeCSS(extractedCSS);
+    // Check if the entire HTML is just a <style> or <script> element
+    const trimmedHTML = newHTML.trim();
+    const isOnlyStyle = /^<style.*?>[\s\S]*<\/style>$/i.test(trimmedHTML);
+    const isOnlyScript = /^<script\b[^>]*>[\s\S]*<\/script>$/i.test(trimmedHTML);
 
-    // Extract and keep JavaScript without src attribute
-    const jsRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
-    let extractedJS = '';
-    newHTML = newHTML.replace(jsRegex, function(match, js) {
-        // Only extract if there's no 'src' attribute in the script tag
-        if (!/src\s*=\s*['"]/.test(match)) {
-            extractedJS += js.trim() + '\n';
-            return '';
+    if (isOnlyStyle) {
+        let match = trimmedHTML.match(/^<style.*?>([\s\S]*?)<\/style>$/i);
+        if (match) {
+            mergeCSS(match[1].trim());
         }
-        return match; // Keep the script tag with 'src' attribute
-    });
-    mergeJavaScript(extractedJS);
+    } else if (isOnlyScript) {
+        let match = trimmedHTML.match(/^<script\b[^>]*>([\s\S]*?)<\/script>$/i);
+        if (match && !/src\s*=\s*['"]/.test(match[0])) {
+            mergeJavaScript(match[1].trim());
+        }
+    } else {
+        // Regular handling for HTML, CSS, and JavaScript
 
-    // Update the HTML code
-    htmlCode = newHTML.trim();
+        // Extract and keep CSS
+        const cssRegex = /<style.*?>([\s\S]*?)<\/style>/gi;
+        let extractedCSS = '';
+        newHTML = newHTML.replace(cssRegex, function(match, css) {
+            extractedCSS += css.trim() + '\n';
+            return '';
+        });
+        mergeCSS(extractedCSS); // Merge extracted CSS
+
+        // Extract and keep JavaScript without src attribute
+        const jsRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+        let extractedJS = '';
+        newHTML = newHTML.replace(jsRegex, function(match, js) {
+            if (!/src\s*=\s*['"]/.test(match)) {
+                extractedJS += js.trim() + '\n';
+                return '';
+            }
+            return match; // Keep the script tag with 'src' attribute
+        });
+        mergeJavaScript(extractedJS); // Merge extracted JavaScript
+
+        // Update the HTML code
+        htmlCode = newHTML.trim();
+    }
+
+    // Try to substitute previously loaded media files
+    replaceMediaPlaceholders();
+
     checkForPlaceholder(); // Check after updating HTML
     updateDownloadButtonState();
     displayMessage("Yay! Your web page is updated!");
 }
+
+function replacePlaceholdersInHTML(fileType, dataUrl, placeholderToReplace) {
+    if (fileType === 'image') {
+        // Find image placeholders and update the dictionary
+        htmlCode = htmlCode.replace(/<img ([^>]*)src="THIS WILL BE REPLACED BY A DATA URL" alt="([^"]+)"([^>]*)>/g, function(match, preId, altText, postId) {
+            if (altText === placeholderToReplace) {
+                mediaDictionary[altText] = dataUrl; // Update the dictionary
+                return `<img ${preId}src="${dataUrl}" alt="${altText}"${postId}>`;
+            }
+            return match;
+        });
+    } else if (fileType === 'audio') {
+        // Find audio placeholders and update the dictionary
+        htmlCode = htmlCode.replace(/<audio ([^>]*)src="THIS WILL BE REPLACED BY A DATA URL"([^>]*)alt="([^"]+)"([^>]*)>/g, function(match, preSrc, postSrc, altText, postAlt) {
+            if (altText === placeholderToReplace) {
+                mediaDictionary[altText] = dataUrl; // Update the dictionary
+                return `<audio ${preSrc}src="${dataUrl}"${postSrc}alt="${altText}"${postAlt}></audio>`;
+            }
+            return match;
+        });
+    }
+
+    displayMessage("Placeholder replaced successfully.");
+    checkForPlaceholder();
+}
+
 
 function displayMessage(message, isError = false) {
     const messageArea = document.getElementById('messageArea');
@@ -299,6 +364,8 @@ function constructCssFromObject(stylesObject) {
 }
 
 function mergeJavaScript(newJS) {
+    console.log("JavaScript before merge:", jsCode);
+    console.log("New JavaScript before merge:", newJS);
     let existingFunctions = extractFunctions(jsCode);
     let newFunctions = extractFunctions(newJS);
     let existingVariables = extractGlobalVariables(jsCode);
@@ -320,7 +387,7 @@ function mergeJavaScript(newJS) {
     for (let varName in newVariables) {
         if (existingVariables.hasOwnProperty(varName)) {
             let startLine = existingVariables[varName].line;
-            let endLine = findEndLine(jsCode, startLine); // Using findEndLine for variables too
+            let endLine = findEndOfVariableDeclaration(jsCode, startLine); // New function for finding the end of a variable declaration
             linesToRemove.push({ start: startLine, end: endLine });
         }
     }
@@ -336,29 +403,102 @@ function mergeJavaScript(newJS) {
     // Append new JS
     jsCode += '\n' + newJS;
     displayMessage("Awesome! Your page can do new tricks now!");
-    // console.log("Updated JavaScript after merge:", jsCode);
+    console.log("Updated JavaScript after merge:", jsCode);
 }
 
-function removeFunction(jsCode, functionInfo) {
-    let lines = jsCode.split('\n');
-    lines.splice(functionInfo.line, functionInfo.endLine - functionInfo.line + 1);
-    return lines.join('\n');
+function extractFunctions(jsCode) {
+    let functions = {};
+    let functionPattern = /function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*\{([\s\S]*?)\}/gm;
+    let match;
+
+    // Apply the regex to the entire JavaScript code
+    while ((match = functionPattern.exec(jsCode)) !== null) {
+        let functionName = match[1];
+        // Calculate the line number for the start of the match
+        let line = jsCode.substring(0, match.index).split('\n').length - 1; // Subtract 1 for zero-based indexing
+        let endLine = findEndLine(jsCode, line);
+        functions[functionName] = { line: line, endLine: endLine };
+    }
+
+    console.log("Extracted functions with line numbers:", functions);
+    return functions;
 }
 
-function removeVariable(jsCode, variableInfo) {
-    let lines = jsCode.split('\n');
-    lines.splice(variableInfo.line, variableInfo.endLine - variableInfo.line + 1);
-    return lines.join('\n');
+function extractGlobalVariables(jsCode) {
+    let globalVars = {};
+    let varPattern = /^(var|let|const)\s+([a-zA-Z0-9_]+)/;
+    let braceCount = 0; // Counter for curly braces
+
+    jsCode.split('\n').forEach((line, index) => {
+        // Update brace count
+        if (!line.trim().startsWith('//')) { // Ignore single line comments
+            let inString = false;
+            for (let char of line) {
+                if (char === '"' || char === "'") {
+                    inString = !inString; // Toggle inString status when a quote is encountered
+                }
+                if (!inString && char === '{') {
+                    braceCount++;
+                } else if (!inString && char === '}') {
+                    braceCount--;
+                }
+            }
+        }
+
+        // Check for variable declarations at the top level
+        if (braceCount === 0 && varPattern.test(line.trim())) {
+            let match = varPattern.exec(line.trim());
+            if (match) {
+                let varName = match[2];
+                globalVars[varName] = { line: index };
+            }
+        }
+    });
+
+    console.log("Extracted global variables with line numbers:", globalVars);
+    return globalVars;
 }
 
 // Helper function to find the end line of a function
 function findEndLine(jsCode, startLine) {
     let lines = jsCode.split('\n');
+    let braceCount = 0;
     let endLine = startLine;
 
-    // Increment endLine until an empty line or end of code is reached
-    while (endLine < lines.length && lines[endLine].trim() !== '') {
-        endLine++;
+    for (let i = startLine; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (!line.startsWith('//')) { // Ignore single line comments
+            let inString = false;
+            for (let char of line) {
+                if (char === '"' || char === "'") {
+                    inString = !inString; // Toggle inString status when a quote is encountered
+                }
+                if (!inString && char === '{') {
+                    braceCount++;
+                } else if (!inString && char === '}') {
+                    braceCount--;
+                }
+            }
+        }
+
+        if (braceCount === 0) {
+            endLine = i;
+            break;
+        }
+    }
+
+    return endLine;
+}
+
+function findEndOfVariableDeclaration(jsCode, startLine) {
+    let lines = jsCode.split('\n');
+    let endLine = startLine;
+
+    for (let i = startLine; i < lines.length; i++) {
+        if (lines[i].includes(';')) {
+            endLine = i;
+            break;
+        }
     }
 
     return endLine;
@@ -370,40 +510,6 @@ function removeLines(jsCode, startLine, endLine) {
     lines.splice(startLine, endLine - startLine + 1);
     // console.log("Removed lines:", startLine, endLine);
     return lines.join('\n');
-}
-
-function extractGlobalVariables(jsCode) {
-    let globalVars = {};
-    // Match variable declarations at the top level
-    let varPattern = /^(var|let|const)\s+([a-zA-Z0-9_]+)/;
-    let functionPattern = /function\s+[a-zA-Z0-9_]+\s*\(/;
-    let lines = jsCode.split('\n');
-
-    let inGlobalScope = true;
-
-    lines.forEach((line, index) => {
-        // Check if we are entering a function
-        if (functionPattern.test(line.trim())) {
-            inGlobalScope = false;
-        }
-
-        // If we are in the global scope, check for variable declarations
-        if (inGlobalScope && varPattern.test(line.trim())) {
-            let match = varPattern.exec(line.trim());
-            if (match) {
-                let varName = match[2];
-                globalVars[varName] = { line: index };
-            }
-        }
-
-        // Check if we are exiting a function or block
-        if (line.trim() === '}' || line.trim() === '};') {
-            inGlobalScope = true;
-        }
-    });
-
-    // console.log("Extracted global variables with line numbers:", globalVars);
-    return globalVars;
 }
 
 function combineAndDeduplicateCode(existingFunctions, existingVariables, newFunctions, newVariables) {
@@ -459,23 +565,6 @@ function removeCodeBlock(startIndex) {
     }
     jsLines.splice(startIndex, endIndex - startIndex + 1);
     jsCode = jsLines.join('\n');
-}
-
-function extractFunctions(jsCode) {
-    let functions = {};
-    let functionPattern = /function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*\{([\s\S]*?)\}/gm;
-    let match;
-
-    // Apply the regex to the entire JavaScript code
-    while ((match = functionPattern.exec(jsCode)) !== null) {
-        let [fullMatch, functionName] = match;
-        // Calculate the line number for the start of the match
-        let line = jsCode.substring(0, match.index).split('\n').length;
-        functions[functionName] = { code: fullMatch, line: line - 1 };
-    }
-
-    // console.log("Extracted functions with line numbers:", functions);
-    return functions;
 }
 
 document.getElementById('uploadArea').addEventListener('click', function() {
@@ -540,8 +629,6 @@ function checkForPlaceholder() {
     document.getElementById('uploadArea').style.display = imagePlaceholderFound || audioPlaceholderFound ? 'block' : 'none';
 }
 
-let imageDictionary = {};
-
 function handleFile(file) {
     const fileType = file.type.startsWith('image/') ? 'image' : 'audio';
     const placeholders = findPlaceholders(fileType);
@@ -557,12 +644,20 @@ function handleFile(file) {
 
 function findPlaceholders(fileType) {
     let placeholderRegex;
+    let placeholders = [];
+
     if (fileType === 'image') {
-        placeholderRegex = /<img src="THIS WILL BE REPLACED BY A DATA URL"/g;
+        placeholderRegex = /<img [^>]*src="THIS WILL BE REPLACED BY A DATA URL"[^>]*alt="([^"]+)"[^>]*>/g;
     } else { // fileType === 'audio'
-        placeholderRegex = /<audio[^>]*src\s*=\s*"THIS WILL BE REPLACED BY A DATA URL"/g;
+        placeholderRegex = /<audio [^>]*src="THIS WILL BE REPLACED BY A DATA URL"[^>]*alt="([^"]+)"[^>]*>/g;
     }
-    return htmlCode.match(placeholderRegex) || [];
+
+    let match;
+    while ((match = placeholderRegex.exec(htmlCode)) !== null) {
+        placeholders.push(match[1]); // match[1] contains the captured alt attribute
+    }
+
+    return placeholders;
 }
 
 function replacePlaceholder(file, placeholder, fileType) {
@@ -574,21 +669,24 @@ function replacePlaceholder(file, placeholder, fileType) {
     reader.readAsDataURL(file);
 }
 
-function replacePlaceholdersInHTML(fileType, dataUrl, placeholderToReplace) {
-    if (fileType === 'image') {
-        // Simplified regex to match any img tag with the placeholder in the src attribute
-        let regex = /<img [^>]*src="THIS WILL BE REPLACED BY A DATA URL"[^>]*>/g;
-        
-        // Perform the replacement
-        htmlCode = htmlCode.replace(regex, function(match) {
-            return match.replace('THIS WILL BE REPLACED BY A DATA URL', dataUrl);
-        });
-    } else { // fileType === 'audio'
-        // Existing logic for audio files
-        htmlCode = htmlCode.replace(/(<audio [^>]*src=")THIS WILL BE REPLACED BY A DATA URL(" [^>]*>)/g, `$1${dataUrl}$2`);
-    }
+function replaceMediaPlaceholders() {
+    // Replace image placeholders
+    htmlCode = htmlCode.replace(/<img [^>]*src="THIS WILL BE REPLACED BY A DATA URL" alt="([^"]+)"[^>]*>/g, function(match, altText) {
+        if (mediaDictionary[altText]) {
+            return `<img src="${mediaDictionary[altText]}" alt="${altText}">`;
+        }
+        return match;
+    });
 
-    displayMessage("Placeholder replaced successfully.");
+    // Replace audio placeholders
+    htmlCode = htmlCode.replace(/<audio[^>]*src="THIS WILL BE REPLACED BY A DATA URL" id="([^"]+)"[^>]*>([\s\S]*?)<\/audio>/g, function(match, id) {
+        if (mediaDictionary[id]) {
+            return `<audio src="${mediaDictionary[id]}" id="${id}">${match.match(/<audio[^>]*>([\s\S]*?)<\/audio>/)[1]}</audio>`;
+        }
+        return match;
+    });
+
+    // After replacing placeholders, update the display or other necessary elements
     checkForPlaceholder();
 }
 
