@@ -48,7 +48,7 @@ function processCodeBlock(type, code) {
             mergeJavaScript(code);
             break;
         case 'bad_javascript':
-            displayMessage("Not sure what to do what was pasted. Make sure it is correct code. Paste it into the chatbot and ask it.");
+            displayMessage("Not sure what to do what was pasted. Make sure it is correct code.\nPaste it into the chatbot and ask it.");
             break;
         default:
             console.log("Unrecognized code type: " + type);
@@ -67,7 +67,7 @@ function handlePasteContent(clipboardContent) {
         // If an error occurs, copy error information to the clipboard
         copyTextToClipboard(`Error while pasting: ${err}\n\nPasted Content:\n${clipboardContent}`);
         // Display user-friendly error message
-        displayMessage("An error while pasting occurred and has been placed on the clipboard. Please go to your chatbot and paste the error so it can fix it. If you don't know how to paste then ask it.", true);
+        displayMessage("An error while pasting occurred and has been placed on the clipboard.\nPlease go to your chatbot and paste the error so it can fix it.\nIf you don't know how to paste then ask it.", true);
     }
 }
 
@@ -86,7 +86,7 @@ document.getElementById('pasteBtn').addEventListener('click', async function() {
         handlePasteContent(clipboardText);
     } catch (err) {
         copyTextToClipboard(`Error while accessing clipboard: ${err}`);
-        alert("An error occurred while accessing the clipboard. The error has been copied to the clipboard. Please paste it to your chatbot for assistance.");
+        displayMessage("An error occurred while accessing the clipboard.\nThe error has been copied to the clipboard.\nPlease paste it to your chatbot for assistance.");
     }
 });
 
@@ -118,14 +118,14 @@ function assembleFinalHtml(htmlCode, cssCode, jsCode) {
     if (/<style[\s\S]*?>[\s\S]*?<\/style>/.test(htmlCode)) {
         finalHtml = finalHtml.replace(/(<style[\s\S]*?>[\s\S]*?)(<\/style>)/, `$1${cssCode}$2`);
     } else if (cssCode.trim() !== '') {
-        finalHtml = finalHtml.replace('</head>', `<style>${cssCode}</style></head>`);
+        finalHtml = finalHtml.replace('</head>', `<style>\n${cssCode}\n</style></head>`);
     }
 
     // Append jsCode to existing <script> or add new <script> element
     if (/<script[\s\S]*?>[\s\S]*?<\/script>/.test(htmlCode)) {
         finalHtml = finalHtml.replace(/(<script[\s\S]*?>[\s\S]*?)(<\/script>)/, `$1${jsCode}$2`);
     } else if (jsCode.trim() !== '') {
-        finalHtml = finalHtml.replace('</body>', `<script>${jsCode}</script></body>`);
+        finalHtml = finalHtml.replace('</body>', `<script>${jsCode}\n</script></body>`);
     }
 
     return finalHtml;
@@ -230,42 +230,11 @@ function updateHTML(newHTML) {
     const isOnlyStyle = /^<style.*?>[\s\S]*<\/style>$/i.test(trimmedHTML);
     const isOnlyScript = /^<script\b[^>]*>[\s\S]*<\/script>$/i.test(trimmedHTML);
 
-    if (isOnlyStyle) {
-        let match = trimmedHTML.match(/^<style.*?>([\s\S]*?)<\/style>$/i);
-        if (match) {
-            mergeCSS(match[1].trim());
-        }
-    } else if (isOnlyScript) {
-        let match = trimmedHTML.match(/^<script\b[^>]*>([\s\S]*?)<\/script>$/i);
-        if (match && !/src\s*=\s*['"]/.test(match[0])) {
-            mergeJavaScript(match[1].trim());
-        }
+    if (isOnlyStyle || isOnlyScript) {
+        handleSpecialElements(trimmedHTML, isOnlyStyle, isOnlyScript);
     } else {
         // Regular handling for HTML, CSS, and JavaScript
-
-        // Extract and keep CSS
-        const cssRegex = /<style.*?>([\s\S]*?)<\/style>/gi;
-        let extractedCSS = '';
-        newHTML = newHTML.replace(cssRegex, function(match, css) {
-            extractedCSS += css.trim() + '\n';
-            return '';
-        });
-        mergeCSS(extractedCSS); // Merge extracted CSS
-
-        // Extract and keep JavaScript without src attribute
-        const jsRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
-        let extractedJS = '';
-        newHTML = newHTML.replace(jsRegex, function(match, js) {
-            if (!/src\s*=\s*['"]/.test(match)) {
-                extractedJS += js.trim() + '\n';
-                return '';
-            }
-            return match; // Keep the script tag with 'src' attribute
-        });
-        mergeJavaScript(extractedJS); // Merge extracted JavaScript
-
-        // Update the HTML code
-        htmlCode = newHTML.trim();
+        handleRegularHtml(trimmedHTML);
     }
 
     // Try to substitute previously loaded media files
@@ -274,6 +243,58 @@ function updateHTML(newHTML) {
     checkForPlaceholder(); // Check after updating HTML
     updateDownloadButtonState();
     displayMessage("Yay! Your web page is updated!");
+}
+
+function handleSpecialElements(html, isOnlyStyle, isOnlyScript) {
+    if (isOnlyStyle) {
+        let cssContent = html.match(/^<style.*?>([\s\S]*?)<\/style>$/i)[1].trim();
+        mergeCSS(cssContent);
+    } else if (isOnlyScript) {
+        let scriptContent = html.match(/^<script\b[^>]*>([\s\S]*?)<\/script>$/i)[1].trim();
+        if (!/src\s*=\s*['"]/.test(html)) {
+            mergeJavaScript(scriptContent);
+        }
+    }
+}
+
+function handleRegularHtml(html) {
+    // Remove <link rel="stylesheet" href=...> elements
+    html = html.replace(/<link rel="stylesheet"[^>]*href="[^"]+"[^>]*>/gi, '');
+    // Extract and keep CSS
+    const cssRegex = /<style.*?>([\s\S]*?)<\/style>/gi;
+    let extractedCSS = '';
+    html = html.replace(cssRegex, function(match, css) {
+        extractedCSS += css.trim() + '\n';
+        return '';
+    });
+    mergeCSS(extractedCSS); // Merge extracted CSS
+
+    // Extract JavaScript only if src is an external URL
+    const jsRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+    let extractedJS = '';
+    html = html.replace(jsRegex, function(match, srcAttributes, js) {
+        const srcMatch = /src\s*=\s*['"]([^'"]+)['"]/.exec(srcAttributes);
+        const isExternalURL = srcMatch && /^https?:\/\//.test(srcMatch[1]);
+
+        if (isExternalURL) {
+            return match; // Keep the script tag if it's an external URL
+        } else {
+            extractedJS += js.trim() + '\n';
+            return ''; // Remove the script tag if it's not external
+        }
+    });
+    mergeJavaScript(extractedJS); // Merge extracted JavaScript
+
+    // Append remaining HTML to the body
+    appendToBody(html);
+}
+
+function appendToBody(snippet) {
+    if (/\<body[^\>]*\>([\s\S]*)\<\/body\>/.test(htmlCode)) {
+        htmlCode = htmlCode.replace(/\<\/body\>/, `${snippet}\n</body>`);
+    } else {
+        htmlCode += `\n${snippet}`;
+    }
 }
 
 function replacePlaceholdersInHTML(fileType, dataUrl, placeholderToReplace) {
@@ -364,8 +385,8 @@ function constructCssFromObject(stylesObject) {
 }
 
 function mergeJavaScript(newJS) {
-    console.log("JavaScript before merge:", jsCode);
-    console.log("New JavaScript before merge:", newJS);
+    // console.log("JavaScript before merge:", jsCode);
+    // console.log("New JavaScript before merge:", newJS);
     let existingFunctions = extractFunctions(jsCode);
     let newFunctions = extractFunctions(newJS);
     let existingVariables = extractGlobalVariables(jsCode);
@@ -387,7 +408,7 @@ function mergeJavaScript(newJS) {
     for (let varName in newVariables) {
         if (existingVariables.hasOwnProperty(varName)) {
             let startLine = existingVariables[varName].line;
-            let endLine = findEndOfVariableDeclaration(jsCode, startLine); // New function for finding the end of a variable declaration
+            let endLine = findEndOfVariableDeclaration(jsCode, startLine);
             linesToRemove.push({ start: startLine, end: endLine });
         }
     }
@@ -400,26 +421,106 @@ function mergeJavaScript(newJS) {
         jsCode = removeLines(jsCode, range.start, range.end);
     });
 
-    // Append new JS
-    jsCode += '\n' + newJS;
+    // Append new functions and variables at the appropriate positions
+    let mergedCode =  jsCode += '\n\n' + newJS;
+
+    jsCode = reorganizeJavaScriptCode(mergedCode);
     displayMessage("Awesome! Your page can do new tricks now!");
-    console.log("Updated JavaScript after merge:", jsCode);
+    // console.log("Updated JavaScript after merge:", jsCode);
+}
+
+function reorganizeJavaScriptCode(jsCode) {
+    const segments = extractSegments(jsCode);
+    return reorderSegments(segments);
+}
+
+function extractSegments(jsCode) {
+    const lines = jsCode.split('\n');
+    let braceCount = 0;
+    let isInMultilineVarOrFunc = false;
+    let currentSegment = [];
+    let segments = [];
+
+    lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
+
+        // Update brace count
+        braceCount += (trimmedLine.match(/{/g) || []).length;
+        braceCount -= (trimmedLine.match(/}/g) || []).length;
+
+        // console.log(`Line ${index}: '${line}'`);
+        // console.log(`  Brace count: ${braceCount}, isInMultilineVarOrFunc: ${isInMultilineVarOrFunc}`);
+
+        // Detect the start of a multiline declaration or function
+        if (!isInMultilineVarOrFunc && braceCount > 0 && 
+            (trimmedLine.startsWith('const ') || trimmedLine.startsWith('let ') || 
+             trimmedLine.startsWith('var ') || trimmedLine.startsWith('function'))) {
+            isInMultilineVarOrFunc = true;
+        }
+
+        // Detect the end of a multiline declaration or function
+        if (isInMultilineVarOrFunc && braceCount === 0) {
+            isInMultilineVarOrFunc = false;
+        }
+
+        // Add line to the current segment
+        currentSegment.push(line);
+
+        // Determine if the current segment has ended
+        if (!isInMultilineVarOrFunc && braceCount === 0 && 
+            (trimmedLine === '' || index === lines.length - 1)) {
+            if (currentSegment.some(l => l.trim() !== '')) {
+                segments.push({
+                    type: currentSegment.some(l => l.trim().startsWith('function') || l.trim().startsWith('const ') || 
+                                              l.trim().startsWith('let ') || l.trim().startsWith('var ')) ? 'declaration' : 'topLevel',
+                    code: currentSegment.join('\n')
+                });
+            }
+            currentSegment = [];
+        }
+    });
+
+    // Removing earlier occurrences of identical segments
+    let uniqueSegments = [];
+    segments.forEach((segment, index) => {
+        if (!segments.slice(index + 1).some(s => s.code.trim() === segment.code.trim())) {
+            uniqueSegments.push(segment);
+        }
+    });
+
+    // console.log('Unique Segments:', uniqueSegments);
+    return uniqueSegments;
+}
+
+function reorderSegments(segments) {
+    const declarations = segments.filter(segment => segment.type === 'declaration').map(segment => segment.code);
+    const topLevelCode = segments.filter(segment => segment.type === 'topLevel').map(segment => segment.code);
+
+    return [...declarations, ...topLevelCode].join('\n\n').trim();
+}
+
+
+function removeFunction(jsCode, functionInfo) {
+    let lines = jsCode.split('\n');
+    // Remove from the start line to the end line of the function
+    lines.splice(functionInfo.line, functionInfo.endLine - functionInfo.line + 1);
+    console.log("Removed function:", functionInfo);
+    return lines.join('\n');
 }
 
 function extractFunctions(jsCode) {
     let functions = {};
-    let functionPattern = /function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*\{([\s\S]*?)\}/gm;
+    let functionPattern = /function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*\{([\s\S]*?\n)\}/gm;
     let match;
 
-    // Apply the regex to the entire JavaScript code
     while ((match = functionPattern.exec(jsCode)) !== null) {
         let functionName = match[1];
-        // Calculate the line number for the start of the match
-        let line = jsCode.substring(0, match.index).split('\n').length - 1; // Subtract 1 for zero-based indexing
+        let functionCode = match[0]; // Capture the entire function code
+        let line = jsCode.substring(0, match.index).split('\n').length - 1;
         let endLine = findEndLine(jsCode, line);
-        functions[functionName] = { line: line, endLine: endLine };
-    }
 
+        functions[functionName] = { code: functionCode, line: line, endLine: endLine };
+    }
     console.log("Extracted functions with line numbers:", functions);
     return functions;
 }
@@ -629,17 +730,52 @@ function checkForPlaceholder() {
     document.getElementById('uploadArea').style.display = imagePlaceholderFound || audioPlaceholderFound ? 'block' : 'none';
 }
 
-function handleFile(file) {
-    const fileType = file.type.startsWith('image/') ? 'image' : 'audio';
-    const placeholders = findPlaceholders(fileType);
+document.getElementById('uploadFileBtn').addEventListener('click', function() {
+    document.getElementById('fileInput').click();  // Trigger file input when button is clicked
+});
 
-    if (placeholders.length > 1) {
-        showPlaceholderSelectionUI(placeholders, fileType, file);
-    } else if (placeholders.length === 1) {
-        replacePlaceholder(file, placeholders[0], fileType);
+function handleFileUpload(event) {
+    handleFile(event.target.files[0]);  // Handle file selection
+}
+
+function handleFile(file) {
+    const fileType = file.type;
+
+    if (fileType.startsWith('image/')) {
+        // Handle image files
+        processMediaFile(file, 'image');
+    } else if (fileType.startsWith('audio/')) {
+        // Handle audio files
+        processMediaFile(file, 'audio');
+    } else if (fileType === 'text/html') {
+        // Handle HTML files
+        processHtmlFile(file);
     } else {
-        displayMessage("No placeholders found for this type of file.");
+        displayMessage("Unsupported file type.");
     }
+}
+
+function processMediaFile(file, mediaType) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        const placeholders = findPlaceholders(mediaType);
+        if (placeholders.length > 0) {
+            replacePlaceholder(file, placeholders[0], mediaType);
+        } else {
+            displayMessage("No placeholders found for this type of file.");
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function processHtmlFile(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const htmlContent = e.target.result;
+        updateHTML(htmlContent);
+    };
+    reader.readAsText(file);
 }
 
 function findPlaceholders(fileType) {
@@ -688,10 +824,6 @@ function replaceMediaPlaceholders() {
 
     // After replacing placeholders, update the display or other necessary elements
     checkForPlaceholder();
-}
-
-function handleFileUpload(event) {
-    handleFile(event.target.files[0]);  // Handle file selection
 }
 
 // Call this function initially and whenever HTML code is updated
