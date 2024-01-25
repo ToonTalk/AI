@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word Embedding Visualization</title>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three/build/three.module.js",
+      "FontLoader": "https://unpkg.com/three/examples/jsm/loaders/FontLoader.js"
+    }
+  }
+</script>
+
+</head>
+<body>
+    <div>
+        <input type="text" id="dimension1" value="gender">
+        <input type="text" id="dimension2" value="age">
+        <input type="text" id="dimension3" value="royalty">
+
+        <input type="text" id="word" placeholder="Enter a word">
+        <input type="number" id="value1" min="0" max="10" placeholder="Value for Dimension 1">
+        <input type="number" id="value2" min="0" max="10" placeholder="Value for Dimension 2">
+        <input type="number" id="value3" min="0" max="10" placeholder="Value for Dimension 3">
+
+        <button id="addWordButton">Add Word</button>
+    </div>
+
+    <div id="visualization"></div>
+
+    
+<script type="module">
+import * as THREE from 'three';
+import { FontLoader } from 'https://unpkg.com/three/examples/jsm/loaders/FontLoader.js';
+import { TextGeometry } from 'https://unpkg.com/three/examples/jsm/geometries/TextGeometry.js';
+
+function addWord() {
+    // Get user input
+    var word = document.getElementById('word').value;
+    var values = [
+        parseFloat(document.getElementById('value1').value),
+        parseFloat(document.getElementById('value2').value),
+        parseFloat(document.getElementById('value3').value)
+    ];
+
+    // Validate input
+    if (word === '' || values.some(isNaN)) {
+        alert('Please enter a word and specify values for all dimensions.');
+        return;
+    }
+
+    // Add the word to the visualization with its corresponding values
+    addWordToVisualization(word, values);
+
+    // Clear the input fields for the next word
+    document.getElementById('word').value = '';
+    document.getElementById('value1').value = '';
+    document.getElementById('value2').value = '';
+    document.getElementById('value3').value = '';
+}
+
+let scene, camera, renderer;
+
+
+function initThreeJS() {
+    // Scene setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    // Camera setup
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    // Renderer setup
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('visualization').appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x404040); // soft white light
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    scene.add(directionalLight);
+
+    // Render the scene
+    render();
+}
+
+function render() {
+    requestAnimationFrame(render);
+    renderer.render(scene, camera);
+}
+
+function addWordToVisualization(word, values) {
+    if (!isFontLoaded) {
+        console.error("Font is not loaded yet.");
+        return;
+    }
+
+    // Scale the values to fit in the scene
+    let [x, y, z] = values.map(v => (v - 5) / 2);
+
+    // Create a sphere to represent the word
+    const sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+    const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    sphere.position.set(x, y, z);
+    scene.add(sphere);
+
+    // Create text geometry
+    const textGeometry = new TextGeometry(word, {
+        font: font,
+        size: 0.2,
+        height: 0.05,
+    });
+    const textMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+    textMesh.position.set(x, y + 0.2, z); // Adjust position relative to the sphere
+    scene.add(textMesh);
+}
+
+let font;
+let isFontLoaded = false;
+
+function loadFont() {
+    const loader = new FontLoader();
+    loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function (loadedFont) {
+        font = loadedFont;
+        isFontLoaded = true;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', (event) => {
+    initThreeJS();
+    loadFont();
+
+    document.getElementById('addWordButton').addEventListener('click', addWord);
+});
+
+</script></body>
+</html>

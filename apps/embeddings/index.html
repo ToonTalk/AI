@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word Embedding Visualization</title>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three/build/three.module.js",
+      "FontLoader": "https://unpkg.com/three/examples/jsm/loaders/FontLoader.js"
+    }
+  }
+</script>
+<style>
+  /* Input group styles to align items inline */
+  .input-group {
+      display: flex;
+      align-items: center; /* Align items vertically */
+      justify-content: flex-start; /* Align items to the start of the container */
+      margin-bottom: 10px;
+  }
+
+  /* Style for dimension input to fit approximately 20 characters */
+  .dimension-input {
+      width: auto; /* Adjust this to fit the content */
+      flex: 0 0 140px; /* Enough for 20 characters plus some padding */
+      margin-right: 10px; /* Space between the dimension input and the value input */
+      padding: 8px; /* Padding for aesthetic spacing inside the input */
+      box-sizing: border-box; /* Include padding and borders in the element's total width and height */
+  }
+
+  /* Style for value input to fit a single digit */
+.value-input {
+    width: 50px; /* Set a fixed width sufficient for a single digit */
+    margin-right: 10px; /* Maintain the margin on the right side */
+}
+
+  /* Style adjustments for the button to make it align to the right of the word input */
+  .word-input-group {
+      display: flex;
+      justify-content: flex-start; /* Align items to the start */
+      align-items: center;
+      margin-top: 20px; /* Spacing from the input groups above */
+  }
+
+
+#word {
+    flex-grow: 0; /* Do not allow the input to grow */
+    width: 140px; /* Set a fixed width to accommodate 20 characters */
+    margin-right: 10px; /* Space between the word input and the button */
+}
+
+
+  #addWordButton {
+      padding: 10px 20px; /* Adjust padding for the button */
+      /* Rest of your button styles */
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px; /* Rounded corners */
+      cursor: pointer;
+      white-space: nowrap; /* Keep the button text on a single line */
+  }
+
+  #addWordButton:hover {
+      opacity: 0.8;
+  }
+
+  /* Full-width container adjustments */
+  input[type="text"], input[type="number"] {
+      padding: 8px;
+      margin-bottom: 5px;
+      display: block; /* Stack the inputs vertically */
+      width: 100%; /* Full width */
+      box-sizing: border-box; /* Border and padding included in width */
+  }
+
+  /* Prevent unwanted scrollbars */
+  body, html {
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden; /* Hide horizontal scrollbar */
+  }
+</style>
+
+</head>
+<body>
+
+<!-- Dimension and value input groups -->
+<div class="input-group">
+    <input type="text" id="dimension1" class="dimension-input" value="gender">
+    <input type="number" id="value1" class="value-input" min="0" max="9" placeholder="Value for Dimension 1">
+</div>
+<div class="input-group">
+    <input type="text" id="dimension2" class="dimension-input" value="age">
+    <input type="number" id="value2" class="value-input" min="0" max="9" placeholder="Value for Dimension 2">
+</div>
+<div class="input-group">
+    <input type="text" id="dimension3" class="dimension-input" value="royalty">
+    <input type="number" id="value3" class="value-input" min="0" max="9" placeholder="Value for Dimension 3">
+</div>
+
+<!-- Word input and 'Add Word' button -->
+<div class="word-input-group">
+    <input type="text" id="word" placeholder="Enter a word">
+    <button id="addWordButton">Add Word</button>
+</div>
+
+<!-- Visualization container -->
+<div id="visualization"></div>
+
+    
+<script type="module">
+import * as THREE from 'three';
+import { FontLoader } from 'https://unpkg.com/three/examples/jsm/loaders/FontLoader.js';
+import { TextGeometry } from 'https://unpkg.com/three/examples/jsm/geometries/TextGeometry.js';
+
+function addWord() {
+    // Get user input
+    var word = document.getElementById('word').value;
+    var values = [
+        parseFloat(document.getElementById('value1').value),
+        parseFloat(document.getElementById('value2').value),
+        parseFloat(document.getElementById('value3').value)
+    ];
+
+    // Validate input
+    if (word === '' || values.some(isNaN)) {
+        alert('Please enter a word and specify values for all dimensions.');
+        return;
+    }
+
+    // Add the word to the visualization with its corresponding values
+    addWordToVisualization(word, values);
+
+    // Clear the input fields for the next word
+    document.getElementById('word').value = '';
+    document.getElementById('value1').value = '';
+    document.getElementById('value2').value = '';
+    document.getElementById('value3').value = '';
+}
+
+let scene, camera, renderer;
+
+
+function initThreeJS() {
+    // Scene setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    // Camera setup
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    // Renderer setup
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('visualization').appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x404040); // soft white light
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    scene.add(directionalLight);
+
+    // Render the scene
+    render();
+}
+
+function render() {
+    requestAnimationFrame(render);
+    renderer.render(scene, camera);
+}
+
+function addWordToVisualization(word, values) {
+    if (!isFontLoaded) {
+        console.error("Font is not loaded yet.");
+        return;
+    }
+
+    // Scale the values to fit in the scene
+    let [x, y, z] = values.map(v => (v - 5) / 2);
+
+    // Create a sphere to represent the word
+    const sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+    const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    sphere.position.set(x, y, z);
+    scene.add(sphere);
+
+    // Create text geometry
+    const textGeometry = new TextGeometry(word, {
+        font: font,
+        size: 0.2,
+        height: 0.05,
+    });
+    const textMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+    textMesh.position.set(x, y + 0.2, z); // Adjust position relative to the sphere
+    scene.add(textMesh);
+}
+
+let font;
+let isFontLoaded = false;
+
+function loadFont() {
+    const loader = new FontLoader();
+    loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function (loadedFont) {
+        font = loadedFont;
+        isFontLoaded = true;
+    });
+}
+
+function adjustValueInputWidth() {
+    // Estimate the average width of a character plus some additional padding
+    const charWidth = 9; // Increase this if the inputs are too narrow
+
+    for (let i = 1; i <= 3; i++) {
+        const dimensionInput = document.getElementById(`dimension${i}`);
+        const valueInput = document.getElementById(`value${i}`);
+
+        // Calculate width based on the "Value for " text plus the dimension name
+        const text = `Value for ${dimensionInput.value}`;
+        const newWidth = text.length * charWidth;
+
+        // Set the new width to the value input
+        valueInput.style.width = `${newWidth}px`;
+        valueInput.placeholder = text;
+    }
+}
+
+// Run the function once to set the initial widths
+adjustValueInputWidth();
+
+// Add the event listener to each dimension input to adjust the width when the text changes
+document.querySelectorAll('.dimension-input').forEach(input => {
+    input.addEventListener('input', adjustValueInputWidth);
+});
+
+document.addEventListener('DOMContentLoaded', (event) => {
+    initThreeJS();
+    loadFont();
+
+    document.getElementById('addWordButton').addEventListener('click', addWord);
+});
+
+</script></body>
+</html>
