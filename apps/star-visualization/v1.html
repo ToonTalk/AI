@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Star Visualization of Embeddings</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<div class="load-embeddings-group">
+    <select id="embeddingsList" class="button"></select>
+    <button id="loadEmbeddingsButton" class="button">Load Selected Embeddings</button>
+</div>
+<canvas id="myCanvas" width="800" height="600"></canvas>
+
+<script>
+        
+function createStarVisualization(embedding, word, offsetX, offsetY) {
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const scale = 2; // Adjust this scale factor as needed
+    const maxLineLength = 100; // You can adjust or remove this limit
+
+    const centerX = offsetX;
+    const centerY = offsetY;
+
+    embedding.forEach((value, index) => {
+        const angle = (2 * Math.PI / embedding.length) * index;
+        let length = Math.abs(value) * scale; // Scale the length
+
+        // Optional: Limit the length if needed
+        length = Math.min(length, maxLineLength);
+
+        const endX = centerX + length * Math.cos(angle);
+        const endY = centerY - length * Math.sin(angle); // Canvas y-coordinates are inverted
+
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = value >= 0 ? 'green' : 'red';
+        ctx.stroke();
+    });
+
+    // Render the word below the star visualization
+    ctx.fillStyle = 'black';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(word, centerX, centerY + maxLineLength + 20); // Position text below the star
+}
+
+function clearCanvas() {
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+document.getElementById('loadEmbeddingsButton').addEventListener('click', function() {
+    const embeddingsList = document.getElementById('embeddingsList');
+    const setName = embeddingsList.value;
+    if (setName) {
+        const savedEmbeddingsDataString = localStorage.getItem(setName);
+        if (savedEmbeddingsDataString) {
+            const savedEmbeddingsData = JSON.parse(savedEmbeddingsDataString);
+
+            clearCanvas(); // Clear the existing visualization
+
+            // Define the canvas variable here
+            const canvas = document.getElementById('myCanvas');
+
+            let offsetX = 100; // Starting X offset
+            let offsetY = 100; // Starting Y offset
+            const spacingX = 200; // Horizontal spacing between visualizations
+            const spacingY = 200; // Vertical spacing between visualizations
+
+            savedEmbeddingsData.embeddings.forEach((item, index) => {
+                const embeddingVector = [item.position.x, item.position.y, item.position.z];
+                createStarVisualization(embeddingVector, item.word, offsetX, offsetY);
+
+                // Update offsets for the next visualization
+                offsetX += spacingX;
+                if (offsetX + spacingX > canvas.width) {
+                    offsetX = 100; // Reset X offset
+                    offsetY += spacingY; // Move down to the next row
+                }
+            });
+
+            alert('Embeddings loaded successfully!');
+        } else {
+            alert('No saved embeddings found with that name.');
+        }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateEmbeddingsList(); // Populate the embeddings list on page load
+});
+
+const embeddingKeyPrefix = "embeddingSet_"; // The prefix used in the previous app
+
+function updateEmbeddingsList() {
+    const embeddingsList = document.getElementById('embeddingsList');
+    embeddingsList.innerHTML = '';
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith(embeddingKeyPrefix)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = key.replace(embeddingKeyPrefix, '');
+            embeddingsList.appendChild(option);
+        }
+    }
+}
+
+
+    </script>
+</body>
+</html>
