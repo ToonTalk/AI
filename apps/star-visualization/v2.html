@@ -66,7 +66,6 @@
         <input type="text" id="wordInput" placeholder="Enter a word or sentence">
         <button id="visualizeButton" class="button" disabled>Loading...</button>
     </div>
-    <button id="howToUseButton" class="button">How to Use</button>
     <canvas id="myCanvas" width="1024" height="768"></canvas>
 </body>
 
@@ -97,9 +96,6 @@ function createStarVisualization(embedding, word) {
     // Calculate the scale based on the maximum absolute value in the embedding
     const maxAbsValue = Math.max(...embedding.map(Math.abs));
     const scale = maxAbsValue > 0 ? (maxLineLength / maxAbsValue) : 1;
-    const starWidth = maxAbsValue * scale * 2;
-    // Reduce maxWidth slightly for padding
-    const maxWidth = starWidth * 0.5; // Reduce to 50% of the star width
 
     // Draw the star visualization
     embedding.forEach((value, index) => {
@@ -116,22 +112,10 @@ function createStarVisualization(embedding, word) {
     });
 
     // Render the word below the star visualization
-    // Calculate the required space for the visualization
-    // Ensure we don't draw off the edge of the canvas
-    if (currentX + requiredSpace > canvas.width) {
-        currentX = 20; // Reset X
-        currentY += spacingY; // Increment Y
-    }
-
-    // Render the word below the star visualization
-    // Split the label to fit the adjusted maxWidth
-    const textLines = splitText(ctx, word, maxWidth);
     ctx.fillStyle = 'black';
     ctx.font = '16px Arial';
     ctx.textAlign = 'center';
-    textLines.forEach((line, index) => {
-        ctx.fillText(line, currentX, currentY + requiredSpace / 2 + (index * 20));
-    });
+    ctx.fillText(word, currentX, currentY + requiredSpace / 2); // Place text below the star
 
     // Update currentX for the next visualization
     currentX += requiredSpace;
@@ -145,60 +129,6 @@ function clearCanvasAndReset() {
     currentY = initialY; // Reset vertical position to initial value
 }
 
-// Function to split a long text into multiple lines
-function splitText(ctx, text, maxWidth) {
-    const words = text.split(' ');
-    let lines = [];
-    let currentLine = words[0];
-
-    for (let i = 1; i < words.length; i++) {
-        const testLine = currentLine + ' ' + words[i];
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && i > 0) {
-            lines.push(currentLine);
-            currentLine = words[i];
-        } else {
-            currentLine = testLine;
-        }
-    }
-    lines.push(currentLine);
-    return lines;
-}
-    
-// Function to parse the input and perform the arithmetic on embeddings
-async function performEmbeddingArithmetic(input) {
-    // Check if there are explicit operators
-    if (!input.includes('+') && !input.includes('-')) {
-        const embeddings = await useModel.embed([input]);
-        const embeddingArray = await embeddings.array();
-        createStarVisualization(embeddingArray[0], input, currentX, currentY);
-        return;
-    }
-
-    // Match phrases inside quotes and individual words outside quotes
-    const phraseRegex = /"([^"]+)"|(\b\w+\b)/g;
-    const operationRegex = /[+-]/g;
-    let phrases = [...input.matchAll(phraseRegex)].map(match => match[1] || match[2]);
-    let operations = [...input.matchAll(operationRegex)].map(match => match[0]);
-
-    // Obtain embeddings for each phrase
-    const embeddings = await Promise.all(
-        phrases.map(phrase => useModel.embed([phrase]))
-    );
-    const embeddingArrays = await Promise.all(embeddings.map(e => e.array()));
-
-    // Perform operations on embeddings
-    let resultEmbedding = embeddingArrays[0][0];
-    for (let i = 0; i < operations.length; i++) {
-        let nextEmbedding = embeddingArrays[i + 1][0];
-        resultEmbedding = resultEmbedding.map((val, index) => 
-            operations[i] === '+' ? val + nextEmbedding[index] : val - nextEmbedding[index]
-        );
-    }
-
-    // Visualize the resulting embedding
-    createStarVisualization(resultEmbedding, input, currentX, currentY);
-}
 
 function clearCanvas() {
     const canvas = document.getElementById('myCanvas');
@@ -287,21 +217,7 @@ function visualizeEmbeddings() {
 }
 
 // Set up button event listener
-// This would be called when the 'Visualize Embedding' button is pressed
-// The input would be the value from the text field
-visualizeButton.addEventListener('click', () => {
-    const inputExpression = document.getElementById('wordInput').value;
-    performEmbeddingArithmetic(inputExpression);
-});
-
-document.getElementById('howToUseButton').addEventListener('click', function() {
-    alert("How to Use:\n\n" +
-          "- To visualize a word or phrase, simply enter it and click 'Visualize Embedding'.\n" +
-          "- You can perform arithmetic on phrases or words. For example, 'king' - 'man' + 'woman' results in the embedding for 'queen'.\n" +
-          "- Use quotes for multi-word phrases, e.g., \"computer programmer\" - \"hacker\".\n" +
-          "- The visualizations will appear on the canvas below.\n\n" +
-          "Note: Ensure the model is loaded (the 'Visualize Embedding' button will be enabled) before attempting to visualize.");
-});
+document.getElementById('visualizeButton').addEventListener('click', visualizeEmbeddings);
 
 </script>
 </body>
