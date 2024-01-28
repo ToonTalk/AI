@@ -49,6 +49,42 @@
         border: 1px solid #ddd;
         width: 300px; /* Adjust as needed */
     }
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgb(0,0,0);
+    background-color: rgba(0,0,0,0.4);
+    padding-top: 60px;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
 </style>
 
 
@@ -58,15 +94,22 @@
 
 </head>
 <body>
-    <div class="load-embeddings-group">
+    <div class="load-embeddings-group" id="loadEmbeddingsInterface">
         <select id="embeddingsList" class="button"></select>
         <button id="loadEmbeddingsButton" class="button">Load Selected Embeddings</button>
     </div>
-    <div class="input-group">
+    <div class="input-group" id="visualizeTextInterface">
         <input type="text" id="wordInput" placeholder="Enter a word or sentence">
         <button id="visualizeButton" class="button" disabled>Loading...</button>
     </div>
     <button id="howToUseButton" class="button">How to Use</button>
+    <div id="howToUseModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <p id="howToUseText"></p>
+        </div>
+    </div>
+
     <canvas id="myCanvas" width="1024" height="768"></canvas>
 </body>
 
@@ -294,14 +337,58 @@ visualizeButton.addEventListener('click', () => {
     performEmbeddingArithmetic(inputExpression);
 });
 
-document.getElementById('howToUseButton').addEventListener('click', function() {
-    alert("How to Use:\n\n" +
-          "- To visualize a word or phrase, simply enter it and click 'Visualize Embedding'.\n" +
-          "- You can perform arithmetic on phrases or words. For example, 'king' - 'man' + 'woman' results in the embedding for 'queen'.\n" +
-          "- Use quotes for multi-word phrases, e.g., \"computer programmer\" - \"hacker\".\n" +
-          "- The visualizations will appear on the canvas below.\n\n" +
-          "Note: Ensure the model is loaded (the 'Visualize Embedding' button will be enabled) before attempting to visualize.");
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const loadEmbeddingsInterface = document.getElementById('loadEmbeddingsInterface');
+    const visualizeTextInterface = document.getElementById('visualizeTextInterface');
+
+    // Default to showing both interfaces
+    loadEmbeddingsInterface.style.display = 'block';
+    visualizeTextInterface.style.display = 'block';
+
+    // Check URL parameters and adjust display
+    if (urlParams.has('show')) {
+        const showParam = urlParams.get('show');
+        if (showParam === 'load') {
+            visualizeTextInterface.style.display = 'none';
+        } else if (showParam === 'visualize') {
+            loadEmbeddingsInterface.style.display = 'none';
+        }
+    }
 });
+
+document.getElementById('howToUseButton').addEventListener('click', function() {
+    const modal = document.getElementById('howToUseModal');
+    const modalText = document.getElementById('howToUseText');
+    let instructions = "How to Use:\n\n";
+
+    // Check which interfaces are available and customize the instructions
+    if (document.getElementById('loadEmbeddingsInterface').style.display !== 'none') {
+        instructions += "- Load embeddings to visualize pre-saved phrases.\n";
+    }
+    if (document.getElementById('visualizeTextInterface').style.display !== 'none') {
+        instructions += "- Enter a word or phrase and click 'Visualize Embedding' to see its representation.\n";
+        instructions += "- Perform arithmetic on phrases or words, e.g., 'king' - 'man' + 'woman'.\n";
+        instructions += "- Use quotes for multi-word phrases, e.g., \"computer programmer\" - \"hacker\".\n";
+    }
+
+    modalText.innerText = instructions;
+    modal.style.display = "block";
+});
+
+// Close the modal when the user clicks on <span> (x)
+document.getElementsByClassName("close")[0].onclick = function() {
+    document.getElementById('howToUseModal').style.display = "none";
+}
+
+// Close the modal when the user clicks anywhere outside of the modal
+window.onclick = function(event) {
+    const modal = document.getElementById('howToUseModal');
+    if (event.target === modal) {
+        modal.style.display = "none";
+    }
+}
 
 </script>
 </body>

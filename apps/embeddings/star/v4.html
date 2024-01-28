@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Star Visualization of Embeddings</title>
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #f5f5f5;
+        font-family: Arial, sans-serif;
+    }
+
+    .load-embeddings-group, .input-group {
+        margin-top: 20px;
+    }
+
+    canvas {
+        border: 1px solid #ddd;
+        margin-top: 20px;
+    }
+
+    .button {
+        padding: 10px 15px;
+        margin: 5px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        background-color: #4CAF50;
+        color: white;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .button:hover {
+        background-color: #45a049;
+    }
+
+    .button:disabled {
+        background-color: #cccccc;
+        cursor: default;
+    }
+
+    input[type="text"] {
+        padding: 10px;
+        margin: 5px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        width: 300px; /* Adjust as needed */
+    }
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgb(0,0,0);
+    background-color: rgba(0,0,0,0.4);
+    padding-top: 60px;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<!-- Load the Universal Sentence Encoder model -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
+
+</head>
+<body>
+    <div class="load-embeddings-group" id="loadEmbeddingsInterface">
+        <select id="embeddingsList" class="button"></select>
+        <button id="loadEmbeddingsButton" class="button">Load Selected Embeddings</button>
+    </div>
+    <div class="input-group" id="visualizeTextInterface">
+        <input type="text" id="wordInput" placeholder="Enter a word or sentence">
+        <button id="visualizeButton" class="button" disabled>Loading...</button>
+    </div>
+    <button id="howToUseButton" class="button">How to Use</button>
+    <div id="howToUseModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <p id="howToUseText"></p>
+        </div>
+    </div>
+
+    <canvas id="myCanvas" width="1024" height="768"></canvas>
+</body>
+
+<script>
+       
+const canvasWidth = 800; // Assuming a fixed canvas width
+const initialX = canvasWidth / 8; // Starting position for X, 1/8th of the canvas width
+const initialY = 150; // Starting position for Y
+let currentX = initialX; // Current X position for drawing
+let currentY = initialY; // Current Y position for drawing
+const spacingX = 300; // Horizontal spacing between visualizations
+const spacingY = 300; // Vertical spacing between visualizations
+const maxLineLength = 100; // Maximum line length for star visualization
+
+function createStarVisualization(embedding, word) {
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Calculate the required space for the visualization
+    const requiredSpace = maxLineLength * 2 + 20; // Double the line length and add some buffer for text
+
+    // Ensure we don't draw off the edge of the canvas
+    if (currentX + requiredSpace > canvas.width) {
+        currentX = initialX; // Reset X
+        currentY += spacingY; // Increment Y
+    }
+
+    // Calculate the scale based on the maximum absolute value in the embedding
+    const maxAbsValue = Math.max(...embedding.map(Math.abs));
+    const scale = maxAbsValue > 0 ? (maxLineLength / maxAbsValue) : 1;
+    const starWidth = maxAbsValue * scale * 2;
+    // Reduce maxWidth slightly for padding
+    const maxWidth = starWidth * 0.5; // Reduce to 50% of the star width
+
+    // Draw the star visualization
+    embedding.forEach((value, index) => {
+        const angle = (2 * Math.PI / embedding.length) * index;
+        const length = Math.abs(value) * scale;
+        const endX = currentX + length * Math.cos(angle);
+        const endY = currentY - length * Math.sin(angle);
+
+        ctx.beginPath();
+        ctx.moveTo(currentX, currentY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = value >= 0 ? 'green' : 'red';
+        ctx.stroke();
+    });
+
+    // Render the word below the star visualization
+    // Calculate the required space for the visualization
+    // Ensure we don't draw off the edge of the canvas
+    if (currentX + requiredSpace > canvas.width) {
+        currentX = 20; // Reset X
+        currentY += spacingY; // Increment Y
+    }
+
+    // Render the word below the star visualization
+    // Split the label to fit the adjusted maxWidth
+    const textLines = splitText(ctx, word, maxWidth);
+    ctx.fillStyle = 'black';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'center';
+    textLines.forEach((line, index) => {
+        ctx.fillText(line, currentX, currentY + requiredSpace / 2 + (index * 20));
+    });
+
+    // Update currentX for the next visualization
+    currentX += requiredSpace;
+}
+
+function clearCanvasAndReset() {
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    currentX = initialX; // Reset horizontal position to initial value
+    currentY = initialY; // Reset vertical position to initial value
+}
+
+// Function to split a long text into multiple lines
+function splitText(ctx, text, maxWidth) {
+    const words = text.split(' ');
+    let lines = [];
+    let currentLine = words[0];
+
+    for (let i = 1; i < words.length; i++) {
+        const testLine = currentLine + ' ' + words[i];
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && i > 0) {
+            lines.push(currentLine);
+            currentLine = words[i];
+        } else {
+            currentLine = testLine;
+        }
+    }
+    lines.push(currentLine);
+    return lines;
+}
+    
+// Function to parse the input and perform the arithmetic on embeddings
+async function performEmbeddingArithmetic(input) {
+    // Check if there are explicit operators
+    if (!input.includes('+') && !input.includes('-')) {
+        const embeddings = await useModel.embed([input]);
+        const embeddingArray = await embeddings.array();
+        createStarVisualization(embeddingArray[0], input, currentX, currentY);
+        return;
+    }
+
+    // Match phrases inside quotes and individual words outside quotes
+    const phraseRegex = /"([^"]+)"|(\b\w+\b)/g;
+    const operationRegex = /[+-]/g;
+    let phrases = [...input.matchAll(phraseRegex)].map(match => match[1] || match[2]);
+    let operations = [...input.matchAll(operationRegex)].map(match => match[0]);
+
+    // Obtain embeddings for each phrase
+    const embeddings = await Promise.all(
+        phrases.map(phrase => useModel.embed([phrase]))
+    );
+    const embeddingArrays = await Promise.all(embeddings.map(e => e.array()));
+
+    // Perform operations on embeddings
+    let resultEmbedding = embeddingArrays[0][0];
+    for (let i = 0; i < operations.length; i++) {
+        let nextEmbedding = embeddingArrays[i + 1][0];
+        resultEmbedding = resultEmbedding.map((val, index) => 
+            operations[i] === '+' ? val + nextEmbedding[index] : val - nextEmbedding[index]
+        );
+    }
+
+    // Visualize the resulting embedding
+    createStarVisualization(resultEmbedding, input, currentX, currentY);
+}
+
+function clearCanvas() {
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+document.getElementById('loadEmbeddingsButton').addEventListener('click', function() {
+    const embeddingsList = document.getElementById('embeddingsList');
+    const setName = embeddingsList.value;
+    if (setName) {
+        const savedEmbeddingsDataString = localStorage.getItem(setName);
+        if (savedEmbeddingsDataString) {
+            const savedEmbeddingsData = JSON.parse(savedEmbeddingsDataString);
+
+            clearCanvasAndReset(); // Clear the canvas and reset positioning
+
+            // Define the canvas variable here
+            const canvas = document.getElementById('myCanvas');
+
+            let offsetX = 100; // Starting X offset
+            let offsetY = 100; // Starting Y offset
+            const spacingX = 200; // Horizontal spacing between visualizations
+            const spacingY = 200; // Vertical spacing between visualizations
+
+            savedEmbeddingsData.embeddings.forEach((item, index) => {
+                const embeddingVector = [item.position.x, item.position.y, item.position.z];
+                createStarVisualization(embeddingVector, item.word, offsetX, offsetY);
+
+                // Update offsets for the next visualization
+                offsetX += spacingX;
+                if (offsetX + spacingX > canvas.width) {
+                    offsetX = 100; // Reset X offset
+                    offsetY += spacingY; // Move down to the next row
+                }
+            });
+
+            alert('Embeddings loaded successfully!');
+        } else {
+            alert('No saved embeddings found with that name.');
+        }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateEmbeddingsList(); // Populate the embeddings list on page load
+});
+
+const embeddingKeyPrefix = "embeddingSet_"; // The prefix used in the previous app
+
+function updateEmbeddingsList() {
+    const embeddingsList = document.getElementById('embeddingsList');
+    embeddingsList.innerHTML = '';
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith(embeddingKeyPrefix)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = key.replace(embeddingKeyPrefix, '');
+            embeddingsList.appendChild(option);
+        }
+    }
+}
+
+use.load().then(model => {
+    useModel = model;
+    console.log("USE model loaded");
+    document.getElementById('visualizeButton').textContent = 'Visualize Embedding'; // Update button text
+    document.getElementById('visualizeButton').disabled = false; // Enable the button
+});
+
+// Function to get embeddings and visualize
+function visualizeEmbeddings() {
+    const word = document.getElementById('wordInput').value;
+    if (word && useModel) {
+        useModel.embed([word]).then(embeddings => {
+            // Convert embeddings to array and visualize
+            embeddings.array().then(array => {
+                createStarVisualization(array[0], word, 100, 100); // Adjust offsets as needed
+            });
+        });
+    } else {
+        console.log("Model not loaded or no word input");
+    }
+}
+
+// Set up button event listener
+// This would be called when the 'Visualize Embedding' button is pressed
+// The input would be the value from the text field
+visualizeButton.addEventListener('click', () => {
+    const inputExpression = document.getElementById('wordInput').value;
+    performEmbeddingArithmetic(inputExpression);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const loadEmbeddingsInterface = document.getElementById('loadEmbeddingsInterface');
+    const visualizeTextInterface = document.getElementById('visualizeTextInterface');
+
+    // Default to showing both interfaces
+    loadEmbeddingsInterface.style.display = 'block';
+    visualizeTextInterface.style.display = 'block';
+
+    // Check URL parameters and adjust display
+    if (urlParams.has('show')) {
+        const showParam = urlParams.get('show');
+        if (showParam === 'load') {
+            visualizeTextInterface.style.display = 'none';
+        } else if (showParam === 'visualize') {
+            loadEmbeddingsInterface.style.display = 'none';
+        }
+    }
+});
+
+document.getElementById('howToUseButton').addEventListener('click', function() {
+    const modal = document.getElementById('howToUseModal');
+    const modalText = document.getElementById('howToUseText');
+    let instructions = "How to Use:\n\n";
+
+    // Check which interfaces are available and customize the instructions
+    if (document.getElementById('loadEmbeddingsInterface').style.display !== 'none') {
+        instructions += "- Load embeddings to visualize pre-saved phrases.\n";
+    }
+    if (document.getElementById('visualizeTextInterface').style.display !== 'none') {
+        instructions += "- Enter a word or phrase and click 'Visualize Embedding' to see its representation.\n";
+        instructions += "- Perform arithmetic on phrases or words, e.g., 'king' - 'man' + 'woman'.\n";
+        instructions += "- Use quotes for multi-word phrases, e.g., \"computer programmer\" - \"hacker\".\n";
+    }
+
+    modalText.innerText = instructions;
+    modal.style.display = "block";
+});
+
+// Close the modal when the user clicks on <span> (x)
+document.getElementsByClassName("close")[0].onclick = function() {
+    document.getElementById('howToUseModal').style.display = "none";
+}
+
+// Close the modal when the user clicks anywhere outside of the modal
+window.onclick = function(event) {
+    const modal = document.getElementById('howToUseModal');
+    if (event.target === modal) {
+        modal.style.display = "none";
+    }
+}
+
+</script>
+</body>
+</html>
