@@ -19,11 +19,18 @@
         font-size: 40px;
         cursor: pointer;
     }
+    #helpButton {
+        font-size: 40px; /* Adjust size as needed */
+        cursor: pointer;
+        /* Additional styling as needed */
+    }
 </style>
 </head>
 <body>
 
 <div id="microphoneButton">🎤</div>
+<div id="helpButton">❓</div> <!-- Big question mark button -->
+
 <script src='emoji_dict.js'></script>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
@@ -32,9 +39,36 @@
 <script>
 let useModel;
 
+let emojiDescriptions = []; // Array to store emoji descriptions
+let emojiDescriptionsEmbeddings; // Variable to store precomputed embeddings
+
 async function loadUSEModel() {
     useModel = await use.load();
     console.log("USE Model loaded");
+
+    // Populate emojiDescriptions array from emojiDict
+    emojiDescriptions = Object.keys(emojiDict);
+
+    // Compute and store embeddings for all emoji descriptions
+    emojiDescriptionsEmbeddings = await useModel.embed(emojiDescriptions);
+    onUSEModelLoaded();
+}
+
+function speak(text) {
+    const msg = new SpeechSynthesisUtterance(text);
+    // You can experiment with different voices to find one that's child-friendly
+    const voices = window.speechSynthesis.getVoices();
+    msg.voice = voices.find(voice => voice.lang === 'en-US'); // Example: English voice
+    window.speechSynthesis.speak(msg);
+}
+
+function onUSEModelLoaded() {
+    speak("I can now understand almost anything you say.");
+
+    // Check if the microphone is not active and inform the user to click the microphone icon
+    if (!listening) { 
+        speak("Click on the picture of the microphone to talk.");
+    }
 }
 
 async function findClosestEmojiDescription(userInput) {
@@ -42,15 +76,13 @@ async function findClosestEmojiDescription(userInput) {
     let highestSimilarity = -1;
     let closestEmoji = null;
 
-    // Assuming 'emojiDescriptions' is an array of emoji description strings
-    const emojiDescriptionsEmbeddings = await useModel.embed(emojiDescriptions);
+    // Convert embeddings to array once to avoid repeated conversions
+    const userInputArray = userInputEmbedding.arraySync()[0];
+    const emojiEmbeddingsArray = emojiDescriptionsEmbeddings.arraySync();
 
     // Calculate similarity with each emoji description
     for (let i = 0; i < emojiDescriptions.length; i++) {
-        const similarity = cosineSimilarity(
-            userInputEmbedding.arraySync()[0],
-            emojiDescriptionsEmbeddings.arraySync()[0][i]
-        );
+        const similarity = cosineSimilarity(userInputArray, emojiEmbeddingsArray[i]);
 
         if (similarity > highestSimilarity) {
             highestSimilarity = similarity;
@@ -60,6 +92,9 @@ async function findClosestEmojiDescription(userInput) {
 
     return closestEmoji;
 }
+
+// Load the model and embeddings when the page loads
+window.onload = loadUSEModel;
 
 // Cosine similarity function
 function cosineSimilarity(a, b) {
@@ -79,9 +114,7 @@ function cosineSimilarity(a, b) {
 
 // Load the model when the page loads
 window.onload = loadUSEModel;
-</script>
 
-<script>
 let emojiSize = 30;
 let currentEmoji = "";
 let mouseDown = false;
@@ -170,28 +203,40 @@ microphoneButton.addEventListener('click', function(event) {
 });
 
 recognition.onresult = function(event) {
-    const last = event.results.length - 1;
-    const command = event.results[last][0].transcript.trim().toLowerCase();
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+            const command = event.results[i][0].transcript.trim().toLowerCase();
 
-    // Store the original state of blackHoleActive and set it to false by default
-    const originalBlackHoleActive = blackHoleActive;
-    blackHoleActive = false;
-
-    if (command === 'black hole') {
-        blackHoleActive = true;
-        showBlackHoleBriefly();
-    } else if (command === 'random') {
-        currentEmoji = "";
-    } else if (command === 'bigger') {
-        emojiSize += 10;
-    } else if (command === 'smaller') {
-        emojiSize -= 10;
-    } else if (emojiDict[command]) {
-        currentEmoji = emojiDict[command];
-        showFeedbackEmoji(currentEmoji);
-    } else {
-        // Restore the original state if no specific command is recognized
-        blackHoleActive = originalBlackHoleActive;
+            // Store the original state of blackHoleActive and set it to false by default
+            const originalBlackHoleActive = blackHoleActive;
+            blackHoleActive = false;
+        
+            if (command.includes('black hole')) {
+                blackHoleActive = true;
+                showBlackHoleBriefly();
+            } else if (command.includes('random')) {
+                currentEmoji = "";
+            } else if (command.includes('bigger')) {
+                emojiSize += 10;
+            } else if (command.includes('smaller')) {
+                emojiSize -= 10;
+            } else if (emojiDict[command]) {
+                currentEmoji = emojiDict[command];
+                showFeedbackEmoji(currentEmoji);
+            } else if (useModel) {
+                // If USE model is loaded and no exact match is found
+                findClosestEmojiDescription(command).then(closestEmojiDescription => {
+                    if (closestEmojiDescription && emojiDict[closestEmojiDescription]) {
+                        currentEmoji = emojiDict[closestEmojiDescription];
+                        showFeedbackEmoji(currentEmoji);
+                        console.log(command, closestEmojiDescription);
+                    }
+                });
+            } else {
+                // Restore the original state if no specific command is recognized
+                blackHoleActive = originalBlackHoleActive;
+            }
+        }
     }
 
     // Update the display of the black hole based on its active state
@@ -311,6 +356,17 @@ function updateEmojiVelocityAndPosition() {
 
 // Start the animation loop
 updateEmojiVelocityAndPosition();
+
+document.getElementById('helpButton').addEventListener('click', function() {
+    event.stopPropagation(); // Prevent click from propagating to parent elements
+    const commandsInfo = "Here are some things you can say: " +
+                         "'Black hole' to create a black hole. " +
+                         "'Bigger' or 'smaller' to change the size of the emojis. " +
+                         "'Random' to change emojis to random ones. " +
+                         "You can also say any emoji description.";
+
+    speak(commandsInfo);
+});
 
 </script>
 
