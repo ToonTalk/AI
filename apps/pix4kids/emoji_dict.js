@@ -1,118 +1,3 @@
-
-<!DOCTYPE html>
-<html>
-<head>
-<title>Emoji Follow Cursor with Final Emoji Selection</title>
-<style>
-    body {
-        cursor: none; /* Hide the default cursor */
-    }
-    .emoji {
-        position: fixed;
-        pointer-events: none; /* Ignore mouse events on emojis */
-        transition: font-size 0.5s; /* Smooth transition for size change */
-    }
-    #microphoneButton {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        font-size: 40px;
-        cursor: pointer;
-    }
-</style>
-</head>
-<body>
-
-<div id="microphoneButton">🎤</div>
-
-<script>
-let emojiSize = 30;
-let currentEmoji = "";
-let mouseDown = false;
-let listening = false;
-const recognition = new webkitSpeechRecognition();
-recognition.continuous = true;
-recognition.lang = 'en-US';
-recognition.interimResults = true;
-recognition.maxAlternatives = 1;
-
-function createEmojiElement(x, y, emoji) {
-    let emojiElement = document.createElement('div');
-    emojiElement.classList.add('emoji');
-    emojiElement.textContent = emoji || currentEmoji || Object.values(emojiDict)[Math.floor(Math.random() * Object.values(emojiDict).length)];
-    emojiElement.style.left = x + 'px';
-    emojiElement.style.top = y + 'px';
-    emojiElement.style.fontSize = emojiSize + 'px';
-    document.body.appendChild(emojiElement);
-    return emojiElement;
-}
-
-document.addEventListener('mousemove', function(e) {
-    if (mouseDown) {
-        createEmojiElement(e.clientX, e.clientY);
-    }
-});
-
-document.addEventListener('mousedown', function() {
-    mouseDown = true;
-});
-
-document.addEventListener('mouseup', function() {
-    mouseDown = false;
-});
-
-document.addEventListener('touchmove', function(e) {
-    e.preventDefault();
-    let touch = e.touches[0];
-    createEmojiElement(touch.clientX, touch.clientY);
-});
-
-document.addEventListener('touchstart', function() {
-    mouseDown = true;
-});
-
-document.addEventListener('touchend', function() {
-    mouseDown = false;
-});
-
-const microphoneButton = document.getElementById('microphoneButton');
-microphoneButton.addEventListener('click', function() {
-    if (!listening) {
-        recognition.start();
-        listening = true;
-        microphoneButton.textContent = '🛑'; // Emoji for the microphone 'on'
-    } else {
-        recognition.stop();
-        listening = false;
-        microphoneButton.textContent = '🎤'; // Emoji for the microphone 'off'
-    }
-});
-
-recognition.onresult = function(event) {
-    const last = event.results.length - 1;
-    const command = event.results[last][0].transcript.trim().toLowerCase();
-
-    if (command === 'random') {
-        currentEmoji = "";
-    } else if (command === 'bigger') {
-        emojiSize += 10;
-    } else if (command === 'smaller') {
-        emojiSize -= 10;
-    } else if (emojiDict[command]) {
-        currentEmoji = emojiDict[command];
-    }
-};
-
-document.addEventListener('click', function(e) {
-    createEmojiElement(e.clientX, e.clientY);
-});
-
-document.addEventListener('touchstart', function(e) {
-    if (!e.touches.length) return;
-    let touch = e.touches[0];
-    createEmojiElement(touch.clientX, touch.clientY);
-});
-
 const emojiDict = {
 'watch': '⌚',
 'hourglass done': '⌛',
@@ -710,7 +595,7 @@ const emojiDict = {
 'dove': '🕊️',
 'candle': '🕯️',
 'mantelpiece clock': '🕰️',
-'hole': '🕳️',
+// 'hole': '🕳️',
 'person in suit levitating': '🕴️',
 'detective': '🕵️',
 'sunglasses': '🕶️',
@@ -757,8 +642,3 @@ const emojiDict = {
 'satellite': '🛰️',
 'passenger ship': '🛳️', 
 };
-
-</script>
-
-</body>
-</html>

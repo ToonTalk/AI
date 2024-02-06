@@ -47,6 +47,19 @@ function createEmojiElement(x, y, emoji) {
     return emojiElement;
 }
 
+function showFeedbackEmoji(emoji) {
+    let feedbackEmoji = document.createElement('div');
+    feedbackEmoji.textContent = emoji;
+    feedbackEmoji.style.position = 'fixed';
+    feedbackEmoji.style.left = '50%';
+    feedbackEmoji.style.top = '50%';
+    feedbackEmoji.style.transform = 'translate(-50%, -50%)';
+    feedbackEmoji.style.fontSize = '100px';
+    feedbackEmoji.style.zIndex = '1000';
+    document.body.appendChild(feedbackEmoji);
+    setTimeout(() => feedbackEmoji.remove(), 1000); // Remove after 1 second
+}
+
 document.addEventListener('mousemove', function(e) {
     if (mouseDown) {
         createEmojiElement(e.clientX, e.clientY);
@@ -100,6 +113,12 @@ recognition.onresult = function(event) {
         emojiSize -= 10;
     } else if (emojiDict[command]) {
         currentEmoji = emojiDict[command];
+        showFeedbackEmoji(currentEmoji); // Add this line
+    } else if (command === 'black hole') {
+        blackHoleActive = !blackHoleActive;
+        if (!blackHoleActive) {
+            blackHole.style.display = 'none';
+        }
     }
 };
 
@@ -111,6 +130,43 @@ document.addEventListener('touchstart', function(e) {
     if (!e.touches.length) return;
     let touch = e.touches[0];
     createEmojiElement(touch.clientX, touch.clientY);
+});
+
+function createBlackHole() {
+    let blackHole = document.createElement('div');
+    blackHole.id = 'blackHole';
+    blackHole.style.width = '50px';
+    blackHole.style.height = '50px';
+    blackHole.style.borderRadius = '50%';
+    blackHole.style.backgroundColor = 'black';
+    blackHole.style.position = 'fixed';
+    blackHole.style.display = 'none'; // Initially hidden
+    document.body.appendChild(blackHole);
+    return blackHole;
+}
+
+let blackHole = createBlackHole();
+let blackHoleActive = false;
+
+// Function to move the black hole
+function moveBlackHole(x, y) {
+    blackHole.style.left = x + 'px';
+    blackHole.style.top = y + 'px';
+    blackHole.style.display = 'block';
+}
+
+// Event listeners for mouse and touch movement
+document.addEventListener('mousemove', function(e) {
+    if (blackHoleActive) {
+        moveBlackHole(e.clientX, e.clientY);
+    }
+});
+
+document.addEventListener('touchmove', function(e) {
+    if (blackHoleActive && e.touches.length) {
+        let touch = e.touches[0];
+        moveBlackHole(touch.clientX, touch.clientY);
+    }
 });
 
 const emojiDict = {
