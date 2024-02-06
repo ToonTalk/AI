@@ -78,6 +78,7 @@ async function findClosestEmojiDescription(userInput) {
 
     // Convert embeddings to array once to avoid repeated conversions
     const userInputArray = userInputEmbedding.arraySync()[0];
+    userInputEmbedding.dispose(); // Dispose of the userInputEmbedding tensor
     const emojiEmbeddingsArray = emojiDescriptionsEmbeddings.arraySync();
 
     // Calculate similarity with each emoji description
@@ -206,6 +207,13 @@ recognition.onresult = function(event) {
     for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
             const command = event.results[i][0].transcript.trim().toLowerCase();
+            
+            // Skip processing if the command is an empty string
+            if (!command) {
+                continue; // Skip to the next loop iteration
+            }
+            
+            console.log("Spoken:", command);
 
             // Store the original state of blackHoleActive and set it to false by default
             const originalBlackHoleActive = blackHoleActive;
@@ -229,7 +237,10 @@ recognition.onresult = function(event) {
                     if (closestEmojiDescription && emojiDict[closestEmojiDescription]) {
                         currentEmoji = emojiDict[closestEmojiDescription];
                         showFeedbackEmoji(currentEmoji);
-                        console.log(command, closestEmojiDescription);
+                        console.log("->", closestEmojiDescription);
+                    } else {
+                        // Restore the original state if no specific command is recognized
+                        blackHoleActive = originalBlackHoleActive;
                     }
                 });
             } else {
@@ -241,6 +252,18 @@ recognition.onresult = function(event) {
 
     // Update the display of the black hole based on its active state
     blackHole.style.display = blackHoleActive ? 'block' : 'none';
+};
+
+recognition.onend = function() {
+    console.log("Speech recognition service disconnected");
+    if (listening) { // Assuming 'listening' is a flag indicating whether recognition should be active
+        recognition.start();
+    }
+};
+
+recognition.onerror = function(event) {
+    console.error("Speech recognition error", event.error);
+    // Optionally restart recognition or handle differently based on the error
 };
 
 document.addEventListener('click', function(e) {
