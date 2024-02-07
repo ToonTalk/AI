@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Emoji Follow Cursor with Final Emoji Selection</title>
+        <style>
+            body {
+                cursor: none;
+                /* Hide the default cursor */
+            }
+
+            .emoji {
+                position: fixed;
+                pointer-events: none;
+                /* Ignore mouse events on emojis */
+                transition: font-size 0.5s;
+                /* Smooth transition for size change */
+            }
+
+            #microphoneButton {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                font-size: 40px;
+                cursor: pointer;
+            }
+
+            #helpButton {
+                font-size: 40px;
+                /* Adjust size as needed */
+                cursor: pointer;
+                /* Additional styling as needed */
+            }
+        </style>
+    </head>
+    <body>
+        <div id="microphoneButton">🎤</div>
+        <div id="helpButton">❓</div>
+        <!-- Big question mark button -->
+        <script src='emoji_dict.js'></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
+        <script>
+            let useModel;
+
+            let emojiDescriptions = [];
+            // Array to store emoji descriptions
+            let emojiDescriptionsEmbeddings;
+            // Variable to store precomputed embeddings
+
+            async function loadUSEModel() {
+                useModel = await use.load();
+                console.log("USE Model loaded");
+
+                // Populate emojiDescriptions array from emojiDict
+                emojiDescriptions = Object.keys(emojiDict);
+
+                // Compute and store embeddings for all emoji descriptions
+                emojiDescriptionsEmbeddings = await useModel.embed(emojiDescriptions);
+                onUSEModelLoaded();
+            }
+
+            function speak(text) {
+                const msg = new SpeechSynthesisUtterance(text);
+                // You can experiment with different voices to find one that's child-friendly
+                const voices = window.speechSynthesis.getVoices();
+                msg.voice = voices.find(voice => voice.lang === 'en-US');
+                // Example: English voice
+                window.speechSynthesis.speak(msg);
+            }
+
+            function onUSEModelLoaded() {
+                speak("I can now understand almost anything you say.");
+
+                // Check if the microphone is not active and inform the user to click the microphone icon
+                if (!listening) {
+                    speak("Click on the picture of the microphone to talk.");
+                }
+            }
+
+            async function findClosestEmojiDescription(userInput) {
+                const userInputEmbedding = await useModel.embed([userInput]);
+
+                // Compute cosine proximity between user input and all emoji descriptions
+                const cosineProximities = tf.metrics.cosineProximity(userInputEmbedding, emojiDescriptionsEmbeddings);
+
+                // Since cosineProximity is negative of cosine similarity, find the max value for closest match
+                const closestEmojiIndex = (await cosineProximities.argMin().data())[0];
+
+                // Dispose tensors to free memory
+                userInputEmbedding.dispose();
+                cosineProximities.dispose();
+
+                return emojiDescriptions[closestEmojiIndex];
+            }
+
+            // Load the model and embeddings when the page loads
+            window.onload = loadUSEModel;
+
+            // Cosine similarity function
+            function cosineSimilarity(a, b) {
+                let dotProduct = 0;
+                let mA = 0;
+                let mB = 0;
+                for (let i = 0; i < a.length; i++) {
+                    dotProduct += (a[i] * b[i]);
+                    mA += (a[i] * a[i]);
+                    mB += (b[i] * b[i]);
+                }
+                mA = Math.sqrt(mA);
+                mB = Math.sqrt(mB);
+                const similarity = (dotProduct) / ((mA) * (mB));
+                return similarity;
+            }
+
+            // Load the model when the page loads
+            window.onload = loadUSEModel;
+
+            let emojiSpeed = 2; // Default speed for emoji movement
+            let gravityStrength = 1000; // Default strength for gravity
+            let emojiSize = 50;
+            let currentEmoji = "";
+            let mouseDown = false;
+            let listening = false;
+            const recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.lang = 'en-US';
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
+
+            function createEmojiElement(x, y, emoji) {
+                let emojiElement = document.createElement('div');
+                emojiElement.classList.add('emoji');
+                emojiElement.textContent = emoji || currentEmoji || Object.values(emojiDict)[Math.floor(Math.random() * Object.values(emojiDict).length)];
+                emojiElement.style.left = x + 'px';
+                emojiElement.style.top = y + 'px';
+                emojiElement.style.fontSize = emojiSize + 'px';
+                emojiElement.velocity = {
+                    x: 0,
+                    y: 0
+                };
+                document.body.appendChild(emojiElement);
+                return emojiElement;
+            }
+
+            function showFeedbackEmoji(emoji) {
+                let feedbackEmoji = document.createElement('div');
+                feedbackEmoji.textContent = emoji;
+                feedbackEmoji.style.position = 'fixed';
+                feedbackEmoji.style.left = '50%';
+                feedbackEmoji.style.top = '50%';
+                feedbackEmoji.style.transform = 'translate(-50%, -50%)';
+                feedbackEmoji.style.fontSize = '100px';
+                feedbackEmoji.style.zIndex = '1000';
+                document.body.appendChild(feedbackEmoji);
+                setTimeout(() => feedbackEmoji.remove(), 1000);
+                // Remove after 1 second
+            }
+
+            function showBlackHoleBriefly() {
+                if (!blackHoleActive)
+                    return;
+                blackHole.style.display = 'block';
+                setTimeout(() => {
+                    blackHole.style.display = 'none';
+                }, 1000);
+                // Show for 1 second
+            }
+
+            document.addEventListener('mousemove', function(e) {
+                if (mouseDown && !blackHoleActive) {
+                    // Check if the black hole is not active
+                    createEmojiElement(e.clientX, e.clientY);
+                }
+            });
+
+            document.addEventListener('mousedown', function() {
+                mouseDown = true;
+            });
+
+            document.addEventListener('mouseup', function() {
+                mouseDown = false;
+            });
+
+            document.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+                if (!blackHoleActive) {
+                    // Check if the black hole is not active
+                    let touch = e.touches[0];
+                    createEmojiElement(touch.clientX, touch.clientY);
+                }
+            });
+
+            document.addEventListener('touchstart', function() {
+                mouseDown = true;
+            });
+
+            document.addEventListener('touchend', function() {
+                mouseDown = false;
+            });
+
+            const microphoneButton = document.getElementById('microphoneButton');
+            microphoneButton.addEventListener('click', function(event) {
+                event.stopPropagation();
+                // Prevent click from propagating to parent elements
+                if (!listening) {
+                    recognition.start();
+                    listening = true;
+                    microphoneButton.textContent = '🛑';
+                    // Emoji for the microphone 'on'
+                } else {
+                    recognition.stop();
+                    listening = false;
+                    microphoneButton.textContent = '🎤';
+                    // Emoji for the microphone 'off'
+                }
+            });
+
+            recognition.onresult = function(event) {
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        const command = event.results[i][0].transcript.trim().toLowerCase();
+
+                        // Skip processing if the command is an empty string
+                        if (!command) {
+                            continue;
+                            // Skip to the next loop iteration
+                        }
+
+                        console.log("Spoken:", command);
+
+                        // Store the original state of blackHoleActive and set it to false by default
+                        const originalBlackHoleActive = blackHoleActive;
+                        blackHoleActive = false;
+
+                        if (command.includes('black hole')) {
+                            blackHoleActive = true;
+                            showBlackHoleBriefly();
+                        } else if (command.includes('chase')) {
+                            toggleChaseMode();
+                        } else if (command.includes('random')) {
+                            currentEmoji = "";
+                        } else if (command.includes('bigger')) {
+                            emojiSize += 20;
+                        } else if (command.includes('smaller')) {
+                            emojiSize -= 20;
+                        } else if (command.includes('faster')) {
+                            emojiSpeed *= 1.5; // Increase speed by 50%
+                            gravityStrength *= 1.5; // Increase gravity strength by 50%
+                        } else if (command.includes('slower')) {
+                            emojiSpeed *= 0.67; // Decrease speed by 33%
+                            gravityStrength *= 0.67; // Decrease gravity strength by 33%
+                        } else if (emojiDict[command]) {
+                            currentEmoji = emojiDict[command];
+                            showFeedbackEmoji(currentEmoji);
+                        } else if (useModel) {
+                            // If USE model is loaded and no exact match is found
+                            findClosestEmojiDescription(command).then(closestEmojiDescription => {
+                                if (closestEmojiDescription && emojiDict[closestEmojiDescription]) {
+                                    currentEmoji = emojiDict[closestEmojiDescription];
+                                    showFeedbackEmoji(currentEmoji);
+                                    console.log("->", closestEmojiDescription);
+                                } else {
+                                    // Restore the original state if no specific command is recognized
+                                    blackHoleActive = originalBlackHoleActive;
+                                }
+                            });
+                        } else {
+                            // Restore the original state if no specific command is recognized
+                            blackHoleActive = originalBlackHoleActive;
+                        }
+                    }
+                }
+
+                // Update the display of the black hole based on its active state
+                blackHole.style.display = blackHoleActive ? 'block' : 'none';
+            };
+
+            recognition.onend = function() {
+                console.log("Speech recognition service disconnected");
+                if (listening) {
+                    // Assuming 'listening' is a flag indicating whether recognition should be active
+                    recognition.start();
+                }
+            };
+
+            recognition.onerror = function(event) {
+                console.error("Speech recognition error", event.error);
+                // Optionally restart recognition or handle differently based on the error
+            };
+
+            document.addEventListener('click', function(e) {
+                createEmojiElement(e.clientX, e.clientY);
+            });
+
+            document.addEventListener('touchstart', function(e) {
+                if (!e.touches.length)
+                    return;
+                let touch = e.touches[0];
+                createEmojiElement(touch.clientX, touch.clientY);
+            });
+
+            function createBlackHole() {
+                let blackHole = document.createElement('div');
+                blackHole.id = 'blackHole';
+                blackHole.style.width = '50px';
+                blackHole.style.height = '50px';
+                blackHole.style.borderRadius = '50%';
+                blackHole.style.backgroundColor = 'black';
+                blackHole.style.position = 'fixed';
+                blackHole.style.display = 'none';
+                // Initially hidden
+                document.body.appendChild(blackHole);
+                return blackHole;
+            }
+
+            let blackHole = createBlackHole();
+            let blackHoleActive = false;
+
+            // Function to move the black hole
+            function moveBlackHole(x, y) {
+                blackHole.style.left = x + 'px';
+                blackHole.style.top = y + 'px';
+                blackHole.style.display = 'block';
+            }
+
+            // Event listeners for mouse and touch movement
+            document.addEventListener('mousemove', function(e) {
+                if (blackHoleActive) {
+                    moveBlackHole(e.clientX, e.clientY);
+                }
+            });
+
+            document.addEventListener('touchmove', function(e) {
+                if (blackHoleActive && e.touches.length) {
+                    let touch = e.touches[0];
+                    moveBlackHole(touch.clientX, touch.clientY);
+                }
+            });
+
+            let frameCount = 0;
+            const batchSize = 100;
+            // Number of emojis to update per frame
+            let isVelocityZero = true;
+            // Flag to track if all velocities are zero
+
+            let isChaseMode = false;
+
+            function updateChaseMode(emojis, chasers) {
+                // Determine chasers for each emoji
+                emojis.forEach(emoji => {
+                    chasers.set(emoji, []);
+                });
+
+                // Determine chasers for each emoji
+                emojis.forEach(emoji => {
+                    const target = emojiTargets.get(emoji);
+                    if (target && !target.isRemoved) {
+                        const targetChasers = chasers.get(target);
+                        if (targetChasers) {
+                            targetChasers.push(emoji);
+                        }
+                    }
+                });
+
+                emojis.forEach(emoji => {
+                    let target = emojiTargets.get(emoji);
+
+                    // Check if the target is still valid
+                    if (!target || target.isRemoved) {
+                        assignNewTarget(emoji);
+                        // Assign a new target
+                        target = emojiTargets.get(emoji);
+                        // Update the target reference
+                    }
+
+                    if (target && !target.isRemoved) {
+                        // Calculate distance to the target
+                        const dx = target.offsetLeft - emoji.offsetLeft;
+                        const dy = target.offsetTop - emoji.offsetTop;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        // Remove target and assign a new one if distance is small enough
+                        if (distance < 10) {
+                            // Threshold for reaching the target
+                            target.remove();
+                            target.isRemoved = true;
+                            assignNewTarget(emoji);
+                            // Assign a new target
+                        } else {
+                            // Calculate attraction towards the target
+                            let dx = target.offsetLeft - emoji.offsetLeft;
+                            let dy = target.offsetTop - emoji.offsetTop;
+                            let distance = Math.sqrt(dx * dx + dy * dy);
+                            let attraction = {
+                                x: dx / distance,
+                                y: dy / distance
+                            };
+
+                            // Calculate repulsion from chasers
+                            let repulsion = {
+                                x: 0,
+                                y: 0
+                            };
+                            chasers.get(emoji).forEach(chaser => {
+                                let rdx = emoji.offsetLeft - chaser.offsetLeft;
+                                let rdy = emoji.offsetTop - chaser.offsetTop;
+                                let rDistance = Math.sqrt(rdx * rdx + rdy * rdy);
+                                rDistance = Math.max(rDistance, 1);
+                                // Avoid division by zero
+                                repulsion.x += rdx / rDistance;
+                                repulsion.y += rdy / rDistance;
+                            });
+
+                            // Combine attraction and repulsion
+                            const speed = emojiSpeed; // Use the global emojiSpeed variable
+                            let vx = (attraction.x + repulsion.x) * speed;
+                            let vy = (attraction.y + repulsion.y) * speed;
+
+                            const windowWidth = window.innerWidth;
+                            const windowHeight = window.innerHeight;
+
+                            // Calculate new position with boundaries
+                            let newX = emoji.offsetLeft + vx;
+                            let newY = emoji.offsetTop + vy;
+
+                            // Boundary checks and adjustments
+                            if (newX < 0) {
+                                newX = 0;
+                                vx = -vx;
+                                // Reverse horizontal velocity
+                            } else if (newX + emoji.offsetWidth > windowWidth) {
+                                newX = windowWidth - emoji.offsetWidth;
+                                vx = -vx;
+                                // Reverse horizontal velocity
+                            }
+
+                            if (newY < 0) {
+                                newY = 0;
+                                vy = -vy;
+                                // Reverse vertical velocity
+                            } else if (newY + emoji.offsetHeight > windowHeight) {
+                                newY = windowHeight - emoji.offsetHeight;
+                                vy = -vy;
+                                // Reverse vertical velocity
+                            }
+
+                            // Update position with boundaries
+                            emoji.style.left = newX + 'px';
+                            emoji.style.top = newY + 'px';
+                        }
+                    }
+
+                });
+            }
+
+            function updateBlackHoleMode(emojis) {
+                const blackHoleRadius = 25;
+                const totalEmojis = emojis.length;
+
+                let start, end;
+
+                if (batchSize >= totalEmojis) {
+                    // If batchSize is greater than or equal to totalEmojis, update all emojis
+                    start = 0;
+                    end = totalEmojis;
+                } else {
+                    // Otherwise, pick a random start and set end so that it doesn't exceed totalEmojis
+                    start = Math.floor(Math.random() * (totalEmojis - batchSize));
+                    end = start + batchSize;
+                }
+
+                // Skip updating if black hole is inactive and all velocities are zero
+                if (!blackHoleActive && isVelocityZero) {
+                    frameCount++;
+                    requestAnimationFrame(updateEmojiVelocityAndPosition);
+                    return;
+                }
+
+                isVelocityZero = true;
+                // Reset flag, will be updated in loop
+
+                const blackHoleCenterX = parseInt(blackHole.style.left) + blackHoleRadius;
+                // Center X of black hole
+                const blackHoleCenterY = parseInt(blackHole.style.top) + blackHoleRadius;
+                // Center Y of black hole
+
+                for (let i = start; i < end; i++) {
+                    const emoji = emojis[i];
+                    const emojiCenterX = emoji.offsetLeft + emoji.offsetWidth / 2;
+                    const emojiCenterY = emoji.offsetTop + emoji.offsetHeight / 2;
+
+                    let dx = blackHoleCenterX - emojiCenterX;
+                    let dy = blackHoleCenterY - emojiCenterY;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < blackHoleRadius) {
+                        emoji.remove();
+                        continue;
+                        // Skip the rest of the loop for this emoji
+                    }
+                    if (blackHoleActive && distance > 0) {
+                        // Update velocity
+                        let strength = gravityStrength / (distance * distance); // Use the global gravityStrength variable
+                        emoji.velocity.x += strength * dx / distance;
+                        emoji.velocity.y += strength * dy / distance;
+                        isVelocityZero = false;
+                        // Velocities are being updated
+                    } else {
+                        emoji.velocity = {
+                            x: 0,
+                            y: 0
+                        };
+                    }
+
+                    emoji.style.left = (emoji.offsetLeft + emoji.velocity.x) + 'px';
+                    emoji.style.top = (emoji.offsetTop + emoji.velocity.y) + 'px';
+                }
+            }
+
+            function updateEmojiVelocityAndPosition() {
+                let emojis = document.querySelectorAll('.emoji');
+                // Initialize chasers map with an empty array for each emoji
+                let chasers = new Map();
+
+                if (isChaseMode) {
+                    updateChaseMode(emojis, chasers);
+                    emojis = document.querySelectorAll('.emoji');
+                    // emojis may have been removed       
+                }
+
+                if (blackHoleActive) {
+                    updateBlackHoleMode(emojis);
+                }
+
+                frameCount++;
+
+                requestAnimationFrame(updateEmojiVelocityAndPosition);
+            }
+
+            // Start the animation loop
+            updateEmojiVelocityAndPosition();
+
+            document.getElementById('helpButton').addEventListener('click', function(event) {
+                event.stopPropagation(); // Prevent click from propagating to parent elements
+
+            const commandsInfo = "Here are some things you can say: " +
+                     "'Black hole' to create a black hole, which attracts emojis. " +
+                     "'Chase' to start a chase mode where each emoji follows and tries to catch another one. " +
+                     "'Dance' to make the emojis dance in sync with music. " +
+                     "'Bigger' or 'smaller' to change the size of the emojis. " +
+                     "'Random' to change emojis to random ones. " +
+                     "'Faster' or 'Slower' to adjust the speed of emoji movement and gravity's pull. " +
+                     "You can also say anything and you'll get a matching emoji.";
+
+
+                speak(commandsInfo);
+            });
+
+            let emojiTargets = new Map();
+            // Map each emoji to its target
+
+            function toggleChaseMode() {
+                isChaseMode = !isChaseMode;
+                if (isChaseMode) {
+                    assignEmojiTargets();
+                } else {
+                    emojiTargets.clear();
+                }
+            }
+
+            function assignEmojiTargets() {
+                const emojis = document.querySelectorAll('.emoji');
+                emojis.forEach(emoji => {
+                    assignNewTarget(emoji);
+                });
+            }
+
+            function assignNewTarget(emoji) {
+                const emojis = Array.from(document.querySelectorAll('.emoji'));
+                const currentEmojiChar = emoji.textContent;
+                const differentCharEmojis = emojis.filter(e => e.textContent !== currentEmojiChar && !e.isRemoved);
+
+                let newTarget;
+
+                if (differentCharEmojis.length > 0) {
+                    // Choose a random target from emojis with a different character
+                    newTarget = differentCharEmojis[Math.floor(Math.random() * differentCharEmojis.length)];
+                } else {
+                    // If no different character emojis are available, choose any other random emoji
+                    const otherEmojis = emojis.filter(e => e !== emoji && !e.isRemoved);
+                    if (otherEmojis.length > 0) {
+                        newTarget = otherEmojis[Math.floor(Math.random() * otherEmojis.length)];
+                    }
+                }
+
+                if (newTarget) {
+                    emojiTargets.set(emoji, newTarget);
+                } else {
+                    // No valid targets available
+                    emojiTargets.delete(emoji);
+                }
+            }
+        </script>
+    </body>
+</html>

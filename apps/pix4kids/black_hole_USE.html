@@ -71,27 +71,46 @@ function onUSEModelLoaded() {
     }
 }
 
+// async function findClosestEmojiDescription(userInput) {
+//     const userInputEmbedding = await useModel.embed([userInput]);
+//     let highestSimilarity = -1;
+//     let closestEmoji = null;
+
+//     // Convert embeddings to array once to avoid repeated conversions
+//     const userInputArray = userInputEmbedding.arraySync()[0];
+//     userInputEmbedding.dispose(); // Dispose of the userInputEmbedding tensor
+//     const emojiEmbeddingsArray = emojiDescriptionsEmbeddings.arraySync();
+
+//     // Calculate similarity with each emoji description
+//     for (let i = 0; i < emojiDescriptions.length; i++) {
+//         const similarity = cosineSimilarity(userInputArray, emojiEmbeddingsArray[i]);
+
+//         if (similarity > highestSimilarity) {
+//             highestSimilarity = similarity;
+//             closestEmoji = emojiDescriptions[i];
+//         }
+//     }
+
+//     return closestEmoji;
+// }
+
 async function findClosestEmojiDescription(userInput) {
     const userInputEmbedding = await useModel.embed([userInput]);
-    let highestSimilarity = -1;
-    let closestEmoji = null;
+    
+    // Compute cosine proximity between user input and all emoji descriptions
+    const cosineProximities = tf.metrics.cosineProximity(
+        userInputEmbedding, 
+        emojiDescriptionsEmbeddings
+    );
 
-    // Convert embeddings to array once to avoid repeated conversions
-    const userInputArray = userInputEmbedding.arraySync()[0];
-    userInputEmbedding.dispose(); // Dispose of the userInputEmbedding tensor
-    const emojiEmbeddingsArray = emojiDescriptionsEmbeddings.arraySync();
+    // Since cosineProximity is negative of cosine similarity, find the max value for closest match
+    const closestEmojiIndex = (await cosineProximities.argMin().data())[0];
 
-    // Calculate similarity with each emoji description
-    for (let i = 0; i < emojiDescriptions.length; i++) {
-        const similarity = cosineSimilarity(userInputArray, emojiEmbeddingsArray[i]);
+    // Dispose tensors to free memory
+    userInputEmbedding.dispose();
+    cosineProximities.dispose();
 
-        if (similarity > highestSimilarity) {
-            highestSimilarity = similarity;
-            closestEmoji = emojiDescriptions[i];
-        }
-    }
-
-    return closestEmoji;
+    return emojiDescriptions[closestEmojiIndex];
 }
 
 // Load the model and embeddings when the page loads
@@ -116,7 +135,7 @@ function cosineSimilarity(a, b) {
 // Load the model when the page loads
 window.onload = loadUSEModel;
 
-let emojiSize = 30;
+let emojiSize = 50;
 let currentEmoji = "";
 let mouseDown = false;
 let listening = false;
@@ -222,6 +241,8 @@ recognition.onresult = function(event) {
             if (command.includes('black hole')) {
                 blackHoleActive = true;
                 showBlackHoleBriefly();
+            else if (command.includes('chase')) {
+                toggleChaseMode();
             } else if (command.includes('random')) {
                 currentEmoji = "";
             } else if (command.includes('bigger')) {
@@ -374,6 +395,30 @@ function updateEmojiVelocityAndPosition() {
     }
 
     frameCount++;
+
+    if (isChaseMode) {
+        document.querySelectorAll('.emoji').forEach(emoji => {
+            const target = emojiTargets.get(emoji);
+            if (target && !target.isRemoved) { // Check if the target is still valid
+                // Move emoji towards its target
+                const dx = target.offsetLeft - emoji.offsetLeft;
+                const dy = target.offsetTop - emoji.offsetTop;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < 10) { // Threshold to consider 'reaching' the target
+                    target.remove();
+                    target.isRemoved = true; // Mark the target as removed
+                    emojiTargets.delete(emoji); // Remove the target for this emoji
+                } else {
+                    // Update velocity towards the target
+                    const speed = 2; // Adjust as needed
+                    emoji.style.left = (emoji.offsetLeft + speed * dx / distance) + 'px';
+                    emoji.style.top = (emoji.offsetTop + speed * dy / distance) + 'px';
+                }
+            }
+        });
+    }
+    
     requestAnimationFrame(updateEmojiVelocityAndPosition);
 }
 
@@ -390,6 +435,30 @@ document.getElementById('helpButton').addEventListener('click', function() {
 
     speak(commandsInfo);
 });
+
+let isChaseMode = false;
+let emojiTargets = new Map(); // Map each emoji to its target
+
+function toggleChaseMode() {
+    isChaseMode = !isChaseMode;
+    if (isChaseMode) {
+        assignEmojiTargets();
+    } else {
+        emojiTargets.clear();
+    }
+}
+
+function assignEmojiTargets() {
+    const emojis = document.querySelectorAll('.emoji');
+    emojis.forEach(emoji => {
+        // Randomly select another emoji as the target
+        let target;
+        do {
+            target = emojis[Math.floor(Math.random() * emojis.length)];
+        } while (target === emoji); // Ensure the emoji does not target itself
+        emojiTargets.set(emoji, target);
+    });
+}
 
 </script>
 
