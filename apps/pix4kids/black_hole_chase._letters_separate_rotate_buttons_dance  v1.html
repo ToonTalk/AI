@@ -733,8 +733,6 @@
                 if (!audioCtx) {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                     analyser = audioCtx.createAnalyser();
-                    BUFFER_SIZE = analyser.frequencyBinCount;
-                    audioData = new Uint8Array(BUFFER_SIZE);
                 }
                 audioCtx.decodeAudioData(arrayBuffer)
                     .then(audioBuffer => {
@@ -809,52 +807,31 @@
                     maxValuesList.shift(); // Remove the oldest value
                 }
                 maxValuesList.push(maxValue); // Add the new maximum value
-            } 
+            }      
 
-            let previousEnergy = 0;
-            let energyThreshold = 0;
-            const ENERGY_THRESHOLD_FACTOR = 1.5; // Adjust based on experimentation
-            let BUFFER_SIZE;
-            let audioData;
-
-            function calculateEnergy(data) {
-                let sum = 0;
-                for (let i = 0; i < data.length; i++) {
-                    sum += data[i] * data[i]; // Energy is the square of amplitude
-                }
-                return sum / data.length;
-            }
-            
-            function updateThreshold(currentEnergy) {
+            function updateThreshold() {
                 if (maxValuesList.length >= MAX_VALUES_LIST_SIZE) {
-                    maxValuesList.shift(); // Remove the oldest value
+                    beatThreshold = calculateMedian(maxValuesList);
                 }
-                maxValuesList.push(currentEnergy); // Add the new energy value
-            
-                // Update the energy threshold to be the median of maxValuesList
-                energyThreshold = calculateMedian(maxValuesList);
-                console.log(energyThreshold);
-            }
-            
-            function detectBeat() {
-                analyser.getByteFrequencyData(audioData);
-                let currentEnergy = calculateEnergy(audioData);
-                
-                // updateMaxValuesList(currentEnergy);
-                updateThreshold(currentEnergy);
-            
-                let beatDetected = currentEnergy > energyThreshold && currentEnergy > previousEnergy * ENERGY_THRESHOLD_FACTOR;
-                previousEnergy = currentEnergy;
-                return beatDetected;
+                console.log(beatThreshold);
             }
 
             function animateEmojis() {
                 if (!isPlaying) {
-                    return; // Stop animation if music is not playing
+                    return;
                 }
             
-                let beatDetected = detectBeat();
-                
+                let data = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(data);
+            
+                // Find the max value in this frame
+                let maxValue = Math.max(...data);
+            
+                // Update the maxValuesList and the threshold
+                updateMaxValuesList(maxValue);
+                updateThreshold();
+            
+                let beatDetected = maxValue >= beatThreshold; // Beat detection logic
                 // Animate emojis based on beat detection
  
                 // Select all emojis
