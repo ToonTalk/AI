@@ -15,59 +15,93 @@
                 transition: font-size 0.5s;
                 /* Smooth transition for size change */
             }
+            
+            #microphoneButton, #helpButton, #blackHoleButton, #chaseButton, #dancingButton, #smallerButton, #biggerButton, #fasterButton, #slowerButton {
+                font-size: 40px;
+                cursor: pointer;
+                position: relative; /* Needed for absolute positioning of stop signs */
+            }
+            
+            .stopSign {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                pointer-events: none; /* Ignore pointer events */
+            }
 
-            #microphoneButton, #helpButton, #blackHoleButton, #chaseButton, #smallerButton, #biggerButton, #fasterButton, #slowerButton {
+            #microphoneContainer, #blackHoleContainer, #dancingContainer, #chaseContainer {
                 position: fixed;
-                top: 20px; /* Adjust as needed */
+                left: 20px; /* Align containers to the left edge */
+            }
+            
+            #microphoneContainer { top: 20px; }
+            #blackHoleContainer { top: 80px; }
+            #dancingContainer { top: 140px; }
+            #chaseContainer { top: 200px; }
+            
+            #smallerButton, #biggerButton, #fasterButton, #slowerButton, #helpButton {
+                position: fixed;
+                left: 20px;
                 font-size: 40px;
                 cursor: pointer;
             }
-            
-            #helpButton {
-                right: 20px; /* Adjust as needed */
-            }
 
-            #microphoneButton {
-                right: 80px; /* Adjust as needed */
-            }
-
-            #blackHoleButton { 
-                right: 140px; 
-            }
-            
-            #chaseButton { 
-                right: 200px; 
-            }
-            
-            #smallerButton { 
-                right: 260px; 
-            }
-            
-            #biggerButton { 
-                right: 320px; 
-            }
-            
-            #fasterButton { 
-                right: 380px; 
-            }
-            
-            #slowerButton { 
-                right: 440px; 
-            }
+            #smallerButton { top: 260px; }
+            #biggerButton { top: 320px; }
+            #fasterButton { top: 380px; }
+            #slowerButton { top: 440px; }
+            #helpButton { top: 500px; } /* Place help button last */           
 
         </style>
     </head>
     <body>
         <div id="feedbackDisplay" style="font-size: 40px; text-align: center; display: none;"></div>
-        <div id="microphoneButton">🎤</div>
-        <div id="blackHoleButton">🌀</div>
-        <div id="chaseButton">🏃</div>
+        <div id="microphoneContainer">
+            <div id="microphoneButton">🎤</div>
+            <div class="stopSign" style="display: none;">
+                <svg width="50" height="50" viewBox="0 0 50 50">
+                    <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                    <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                </svg>
+            </div>
+        </div>
+        <div id="blackHoleContainer">
+            <div id="blackHoleButton">🌀</div>
+            <div id="stopSignBlackHole" class="stopSign" style="display: none;">
+                <svg width="50" height="50" viewBox="0 0 50 50">
+                    <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                    <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                </svg> 
+            </div>
+        </div>
+        <div id="dancingContainer">
+            <div id="dancingButton">💃</div> <!-- or use 🕺 for Man Dancing -->
+            <div class="stopSign" style="display: none;"> 
+                <svg width="50" height="50" viewBox="0 0 50 50">
+                    <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                    <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                </svg>
+            </div>
+        </div>
+        <div id="chaseContainer">
+            <div id="chaseButton">🏃</div>
+            <div class="stopSign" style="display: none;">
+                <svg width="50" height="50" viewBox="0 0 50 50">
+                    <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                    <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                </svg> 
+            </div>
+        </div>
         <div id="slowerButton">🐢</div>
         <div id="fasterButton">🐎</div>
         <div id="smallerButton">🐜</div>
         <div id="biggerButton">🐘</div>
-        <div id="helpButton">❓</div>
-        <!-- Big question mark button -->
+        <div id="helpButton">❓</div> 
         <script src='emoji_dict.js'></script>
         <script src='ascii_letters.js'></script>
         <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
@@ -82,7 +116,6 @@
 
             async function loadUSEModel() {
                 useModel = await use.load();
-                console.log("USE Model loaded");
 
                 // Populate emojiDescriptions array from emojiDict
                 emojiDescriptions = Object.keys(emojiDict);
@@ -105,9 +138,9 @@
                 speak("I can now understand almost anything you say.");
 
                 // Check if the microphone is not active and inform the user to click the microphone icon
-                if (!listening) {
-                    speak("Click on the picture of the microphone to talk.");
-                }
+                // if (!listening) {
+                //     speak("Click on the picture of the microphone to talk.");
+                // }
             }
 
             async function findClosestEmojiDescription(userInput) {
@@ -127,9 +160,6 @@
             
                 return emojiDescriptions[closestEmojiIndex];
             }
-
-            // Load the model and embeddings when the page loads
-            window.onload = loadUSEModel;
 
             let emojiSpeed = 2; // Default speed for emoji movement
             let gravityStrength = 1000; // Default strength for gravity
@@ -190,11 +220,16 @@
                             const wordsToSpell = command.substring(6); // Extract the words after "spell "
                             spellWords(wordsToSpell);
                             updateSpellMode();
+                        } else if (command.includes('dance')) {
+                            dance();
+                            toggleStopSign('dancingContainer');
                         } else if (command.includes('black hole')) {
-                            blackHoleActive = true;
+                            blackHoleActive = !blackHoleActive;
                             updateBlackHoleMode();
+                            toggleStopSign('blackHoleContainer');
                         } else if (command.includes('chase')) {
                             toggleChaseMode();
+                            toggleStopSign('chaseContainer');
                         } else if (command.includes('random')) {
                             currentEmoji = "";
                         } else if (command.includes('bigger')) {
@@ -473,8 +508,14 @@
                 let emojis = document.querySelectorAll('.emoji');
                 // Check if the emoji collection is empty
                 if (!emojis.length || !blackHoleActive) {
-                    blackHoleActive = false; // Turn off black hole
+                    blackHoleActive = false;
                     blackHole.style.display = 'none';
+            
+                    const stopSignBlackHole = document.getElementById('stopSignBlackHole');
+                    if (stopSignBlackHole) {
+                        stopSignBlackHole.style.display = 'none';
+                    }
+            
                     return; // Exit the function early
                 } else {
                     blackHole.style.display = 'block';
@@ -636,7 +677,40 @@
                     emojiTargets.delete(emoji);
                 }
             }
-                
+
+            function createInvisibleEmoji(x, y, emojiSize) {
+                const invisibleEmoji = document.createElement('div');
+                invisibleEmoji.style.left = `${x}px`;
+                invisibleEmoji.style.top = `${y}px`;
+                invisibleEmoji.style.position = 'absolute';
+                invisibleEmoji.style.visibility = 'hidden';
+                invisibleEmoji.style.width = `${emojiSize}px`;
+                invisibleEmoji.style.height = `${emojiSize}px`;
+                invisibleEmoji.classList.add('invisible-emoji');
+                document.body.appendChild(invisibleEmoji);
+
+                return invisibleEmoji;
+            }
+
+           function spellWords(words) {
+                const letters = words.toUpperCase(); // Convert to uppercase, but keep spaces
+                let offset = 150; // Start a bit to the right of the buttons, adjust as needed
+                let allInvisibleEmojis = [];
+            
+                letters.split('').forEach(letter => {
+                    if (letter === ' ') {
+                        offset += emojiSize * 2;
+                    } else {
+                        const letterInvisibleEmojis = formLetter(letter, offset);
+                        allInvisibleEmojis = allInvisibleEmojis.concat(letterInvisibleEmojis);
+                        offset += getLetterWidth(letter) + emojiSize; // Add space after each letter
+                    }
+                });
+            
+                // After creating all invisible emojis, assign them as targets
+                assignTargetsToVisibleEmojis(allInvisibleEmojis);
+            }
+              
            function formLetter(letter, xOffset = 0) {
                 const art = asciiArtLetters[letter];
                 if (!art) return [];
@@ -658,39 +732,6 @@
                 });
             
                 return invisibleEmojis;
-            }
-
-            function createInvisibleEmoji(x, y, emojiSize) {
-                const invisibleEmoji = document.createElement('div');
-                invisibleEmoji.style.left = `${x}px`;
-                invisibleEmoji.style.top = `${y}px`;
-                invisibleEmoji.style.position = 'absolute';
-                invisibleEmoji.style.visibility = 'hidden';
-                invisibleEmoji.style.width = `${emojiSize}px`;
-                invisibleEmoji.style.height = `${emojiSize}px`;
-                invisibleEmoji.classList.add('invisible-emoji');
-                document.body.appendChild(invisibleEmoji);
-
-                return invisibleEmoji;
-            }
-
-            function spellWords(words) {
-                const letters = words.toUpperCase(); // Convert to uppercase, but keep spaces
-                let offset = 0;
-                let allInvisibleEmojis = [];
-            
-                letters.split('').forEach(letter => {
-                    if (letter === ' ') {
-                        offset += emojiSize*2;
-                    } else {
-                        const letterInvisibleEmojis = formLetter(letter, offset);
-                        allInvisibleEmojis = allInvisibleEmojis.concat(letterInvisibleEmojis);
-                        offset += getLetterWidth(letter) + emojiSize; // Add space after each letter
-                    }
-                });
-            
-                // After creating all invisible emojis, assign them as targets
-                assignTargetsToVisibleEmojis(allInvisibleEmojis);
             }
             
             function assignTargetsToVisibleEmojis(invisibleEmojis) {
@@ -723,12 +764,15 @@
                 }, 3000); // Adjust time as needed
             }
             
-            let isPlaying = true;
+            let isPlaying;
             let audioCtx;
             let analyser;
             let lastDroppedAudio = null; // Store the ArrayBuffer of the last dropped file
             
             // Function to start playing audio
+            let isDancing = false;
+            let currentSource = null; // To keep track of the current audio source
+            
             function playAudio(arrayBuffer) {
                 if (!audioCtx) {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -736,30 +780,119 @@
                     BUFFER_SIZE = analyser.frequencyBinCount;
                     audioData = new Uint8Array(BUFFER_SIZE);
                 }
+                isPlaying = true;
                 audioCtx.decodeAudioData(arrayBuffer)
                     .then(audioBuffer => {
-                        let source = audioCtx.createBufferSource();
-                        source.buffer = audioBuffer;
-                        source.connect(analyser);
-                        source.connect(audioCtx.destination);
-                        source.start();
-                        source.onended = () => {
+                        if (currentSource) {
+                            currentSource.disconnect(); // Disconnect the current source if any
+                        }
+                        currentSource = audioCtx.createBufferSource();
+                        currentSource.buffer = audioBuffer;
+                        currentSource.connect(analyser);
+                        currentSource.connect(audioCtx.destination);
+                        currentSource.start();
+                        currentSource.onended = () => {
                             isPlaying = false;
+                            isDancing = false; // Update dance state when music ends
                         };
                     });
-                // Start the animation loop
                 requestAnimationFrame(animateEmojis);
             }
             
+            function stopMusic() {
+                if (currentSource) {
+                    currentSource.stop();
+                    isPlaying = false;
+                }
+            }
+
             function dance() {
-                if (lastDroppedAudio) {
-                    // Play the last dropped MP3 file
-                    playAudio(lastDroppedAudio);
+                if (!isDancing) {
+                    if (listening) {
+                        // Microphone is on, switch to dancing to microphone input
+                        danceToMicrophone();
+                    } else {
+                        // Microphone is off, play dropped audio or default audio
+                        if (lastDroppedAudio) {
+                            playAudio(lastDroppedAudio);
+                        } else {
+                            fetch('https://toontalk.github.io/AI/apps/pix4kids/ellis sisi song.mp3')
+                                .then(response => response.arrayBuffer())
+                                .then(arrayBuffer => playAudio(arrayBuffer));
+                        }
+                        isDancing = true;
+                    }
                 } else {
-                    // Fetch and play the default audio
-                    fetch('https://toontalk.github.io/AI/apps/pix4kids/ellis sisi song.mp3')
-                        .then(response => response.arrayBuffer())
-                        .then(arrayBuffer => playAudio(arrayBuffer));
+                    // Stop dancing
+                    stopMusic();
+                    isDancing = false;
+                    if (listening) {
+                        // If microphone was used for dancing, restart speech recognition
+                        restartSpeechRecognition();
+                    }
+                }
+            }
+
+            function getMicrophoneInput() {
+                navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                    .then(stream => {
+                        if (!audioCtx) {
+                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            analyser = audioCtx.createAnalyser();
+                            BUFFER_SIZE = analyser.frequencyBinCount;
+                            audioData = new Uint8Array(BUFFER_SIZE); 
+                        }
+            
+                        const microphone = audioCtx.createMediaStreamSource(stream);
+                        microphone.connect(analyser);
+            
+                        isPlaying = true; // Set isPlaying to true for microphone input
+                        requestAnimationFrame(animateEmojis);
+                    })
+                    .catch(err => {
+                        console.error('Error accessing the microphone', err);
+                    });
+            }
+
+            function danceToMicrophone() {
+                if (!isDancing) {
+                    if (listening) {
+                        recognition.stop();
+                        listening = false;
+                    }
+                    getMicrophoneInput();
+                    isDancing = true;
+                } else {
+                    // Stop dancing to microphone
+                    isPlaying = false; // Set isPlaying to false when stopping microphone input
+                    isDancing = false;
+                    restartSpeechRecognition();
+                }
+            }
+            
+            function restartSpeechRecognition() {
+                if (!listening) {
+                    recognition.start();
+                    listening = true;
+                }
+            }
+
+            let isModelLoaded = false;
+            
+            function toggleMicrophone() {
+                if (!listening) {
+                    if (!isModelLoaded) {
+                        isModelLoaded = true;
+                        loadUSEModel(); 
+                    }
+                    if (isDancing) {
+                        // Stop dancing if it's active
+                        danceToMicrophone(); // This will toggle off the dancing
+                    }
+                    restartSpeechRecognition();
+                } else {
+                    recognition.stop();
+                    listening = false;
                 }
             }
             
@@ -804,16 +937,8 @@
                 }
             }
 
-            function updateMaxValuesList(maxValue) {
-                if (maxValuesList.length >= MAX_VALUES_LIST_SIZE) {
-                    maxValuesList.shift(); // Remove the oldest value
-                }
-                maxValuesList.push(maxValue); // Add the new maximum value
-            } 
-
             let previousEnergy = 0;
             let energyThreshold = 0;
-            const ENERGY_THRESHOLD_FACTOR = 1.5; // Adjust based on experimentation
             let BUFFER_SIZE;
             let audioData;
 
@@ -833,18 +958,15 @@
             
                 // Update the energy threshold to be the median of maxValuesList
                 energyThreshold = calculateMedian(maxValuesList);
-                console.log(energyThreshold);
+                
             }
             
             function detectBeat() {
                 analyser.getByteFrequencyData(audioData);
                 let currentEnergy = calculateEnergy(audioData);
-                
-                // updateMaxValuesList(currentEnergy);
                 updateThreshold(currentEnergy);
-            
-                let beatDetected = currentEnergy > energyThreshold && currentEnergy > previousEnergy * ENERGY_THRESHOLD_FACTOR;
-                previousEnergy = currentEnergy;
+                let beatDetected = currentEnergy > energyThreshold; 
+
                 return beatDetected;
             }
 
@@ -879,29 +1001,12 @@
                 requestAnimationFrame(animateEmojis);
             }
 
-            function toggleMicrophone(event) {
-                console.log('toggle');
-                event.stopPropagation();
-                // Prevent event from propagating to parent elements
-                if (!listening) {
-                    recognition.start();
-                    listening = true;
-                    microphoneButton.textContent = '🛑'; // Emoji for the microphone 'on'
-                } else {
-                    recognition.stop();
-                    listening = false;
-                    microphoneButton.textContent = '🎤'; // Emoji for the microphone 'off'
-                }
-            }
-            
-            // Add the event listeners
-            document.getElementById('microphoneButton').addEventListener('click', toggleMicrophone);
-
             function showHelp(event) {
                 event.stopPropagation(); // Prevent click from propagating to parent elements
             
-                const commandsInfo = "Here are some things you can say: " +
+                const commandsInfo = "Here are some things you can say or do: " +
                     "'Black hole' to create a black hole, which attracts emojis. " +
+                    "'Dance' to make emojis move and dance to the beat of the music. You can also drop an MP3 file onto the app to use your own music for dancing. " +
                     "'Chase' to start a chase mode where each emoji follows and tries to catch another one. " +
                     "'Bigger' or 'smaller' to change the size of the emojis. " +
                     "'Random' to change emojis to random ones. " +
@@ -913,80 +1018,68 @@
             }
             
             // Attach event listeners
-            document.getElementById('helpButton').addEventListener('click', showHelp);
+            document.getElementById('helpButton').addEventListener('click', () => {
+                showHelp(event);
+            });
 
+            function toggleStopSign(containerId) {
+                var container = document.getElementById(containerId);
+                var stopSign = container.querySelector('.stopSign'); // Find the stop sign within the container
+                if (stopSign.style.display === 'none') {
+                    stopSign.style.display = 'flex'; // Show the stop sign
+                } else {
+                    stopSign.style.display = 'none'; // Hide the stop sign
+                }
+            }
+            
+            document.getElementById('microphoneButton').addEventListener('click', () => {
+                event.stopPropagation();
+                toggleMicrophone();
+                toggleStopSign('microphoneContainer');
+            });
+            
             document.getElementById('blackHoleButton').addEventListener('click', () => {
                 event.stopPropagation();
                 blackHoleActive = !blackHoleActive;
                 updateBlackHoleMode();
+                toggleStopSign('blackHoleContainer');
             });
             
             document.getElementById('chaseButton').addEventListener('click', () => {
                 event.stopPropagation();
                 toggleChaseMode();
+                toggleStopSign('chaseContainer');
             });
             
+            document.getElementById('dancingButton').addEventListener('click', () => {
+                event.stopPropagation();
+                dance();
+                toggleStopSign('dancingContainer');
+            });
+
+            const buttonChangeFactor = 1.2; // 20% increase
+
             document.getElementById('smallerButton').addEventListener('click', () => {
                 event.stopPropagation();
-                emojiSize *= 2/3;
+                emojiSize /= buttonChangeFactor;
             });
             
             document.getElementById('biggerButton').addEventListener('click', () => {
                 event.stopPropagation();
-                // emojiSize *= 1.5;
-                dance();
+                emojiSize *= buttonChangeFactor;
             });
             
             document.getElementById('fasterButton').addEventListener('click', () => {
                 event.stopPropagation();
-                emojiSpeed *= 1.5; // Increase speed by 50%
-                gravityStrength *= 1.5; // Increase gravity strength by 50%
+                emojiSpeed *= buttonChangeFactor; 
+                gravityStrength *= buttonChangeFactor;
             });
             
             document.getElementById('slowerButton').addEventListener('click', () => {
                 event.stopPropagation();
-                emojiSpeed *= 2/3; // Decrease speed by 33%
-                gravityStrength *= 2/3; // Decrease gravity strength by 33%
+                emojiSpeed /= buttonChangeFactor; 
+                gravityStrength /= buttonChangeFactor; 
             });
-
-            
-            // commented out see https://developer.mozilla.org/en-US/docs/Web/API/Touch_events/Using_Touch_Events
-
-            // document.getElementById('helpButton').addEventListener('touchend', showHelp);
-            // document.getElementById('microphoneButton').addEventListener('touchend', toggleMicrophone);
-
-            // document.getElementById('blackHoleButton').addEventListener('touchend', () => {
-            //     event.stopPropagation();
-            //     blackHoleActive = blackHoleActive = !blackHoleActive;
-            //     updateBlackHoleMode();
-            // });
-            
-            // document.getElementById('chaseButton').addEventListener('touchend', () => {
-            //     event.stopPropagation();
-            //     toggleChaseMode();
-            // });
-            
-            // document.getElementById('smallerButton').addEventListener('touchend', () => {
-            //     event.stopPropagation();
-            //     emojiSize *= 2/3;
-            // });
-            
-            // document.getElementById('biggerButton').addEventListener('touchend', () => {
-            //     event.stopPropagation();
-            //     emojiSize *= 1.5;
-            // });
-            
-            // document.getElementById('fasterButton').addEventListener('touchend', () => {
-            //     event.stopPropagation();
-            //     emojiSpeed *= 1.5; // Increase speed by 50%
-            //     gravityStrength *= 1.5; // Increase gravity strength by 50%
-            // });
-            
-            // document.getElementById('slowerButton').addEventListener('touchend', () => {
-            //     event.stopPropagation();
-            //     emojiSpeed *= 2/3; // Decrease speed by 33%
-            //     gravityStrength *= 2/3; // Decrease gravity strength by 33%
-            // });
                         
             document.addEventListener('mousemove', function(e) {
                 if (mouseDown && !blackHoleActive) {
@@ -1019,7 +1112,6 @@
             document.addEventListener('touchend', function() {
                 mouseDown = false;
             });
-
 
         </script>
     </body>
