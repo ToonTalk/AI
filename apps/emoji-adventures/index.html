@@ -2,6 +2,7 @@
 <html>
     <head>
         <title>Emoji Adventures: Play and Interact with Emojis</title>
+        <link rel="icon" type="image/png" href="favicon-48x48.png">
         <style>
 
             .emoji {
@@ -157,20 +158,27 @@
                 }
             }
 
+            // Check if the speechSynthesis API is available
+            if ('speechSynthesis' in window) {
+                // Attempt to load the list of speech synthesis voices available
+                voices = window.speechSynthesis.getVoices();
+            
+                // Set up an event listener for when the list of voices changes (e.g., when voices are loaded)
+                window.speechSynthesis.onvoiceschanged = function() {
+                    // Update the voices list when new voices become available
+                    voices = window.speechSynthesis.getVoices();
+                };
+            }
+
             function speak(text) {
-                if (false && 'speechSynthesis' in window) {
-                    const voices = window.speechSynthesis.getVoices();
-                    if (voices.length > 0) {
-                        const msg = new SpeechSynthesisUtterance(text);
-                        msg.voice = voices.find(voice => voice.lang === 'en-US') || voices[0];
-                        window.speechSynthesis.speak(msg);
-                    } else {
-                        const sentences = text.split('. '); // Split text into sentences
-                        displayFeedback(sentences); // Display text if no voices are available
-                    }
+                if ('speechSynthesis' in window && voices.length > 0) {
+                    const msg = new SpeechSynthesisUtterance(text);
+                    msg.voice = voices.find(voice => voice.lang === 'en-US') || voices[0];
+                    window.speechSynthesis.speak(msg);
                 } else {
-                    const sentences = text.split('. '); // Split text into sentences
-                    displayFeedback(sentences); // Display text if speech synthesis is not supported
+                    // Split text into sentences for display if speech synthesis is not supported or no voices are available
+                    const sentences = text.split('. ');
+                    displayFeedback(sentences);
                 }
             }
 
@@ -1067,11 +1075,6 @@
             
                 speak(commandsInfo);
             }
-            
-            // Attach event listeners
-            document.getElementById('helpButton').addEventListener('click', () => {
-                showHelp(event);
-            });
 
             function toggleStopSign(containerId) {
                 var container = document.getElementById(containerId);
@@ -1096,6 +1099,11 @@
                     currentEmoji = ""; // Reset to default behavior
                 }
             }
+
+            document.getElementById('helpButton').addEventListener('click', () => {
+                event.stopPropagation();
+                showHelp(event);
+            });
             
             // Add event listener to the Random button
             document.getElementById('randomButton').addEventListener('click', () => {
