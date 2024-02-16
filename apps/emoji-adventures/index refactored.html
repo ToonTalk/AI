@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Emoji Adventures: Play and Interact with Emojis</title>
+        <link rel="icon" type="image/png" href="favicon-48x48.png">
+        <style>
+
+            .emoji {
+                position: fixed;
+                pointer-events: none;
+                /* Ignore mouse events on emojis */
+                transition: font-size 0.5s;
+                /* Smooth transition for size change */
+            }
+
+            #emojiContainer {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 1; /* Lower than buttons */
+            }
+            
+            #buttonContainer {
+                position: fixed;
+                left: 20px;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                z-index: 20; /* Ensure it's higher than the emoji container */
+            }
+            
+            #microphoneContainer, #blackHoleContainer, #dancingContainer, #chaseContainer, #randomContainer, #helpButton {
+                font-size: 6vh; /* Adjust the size based on viewport height */
+                position: relative; /* This is crucial for correct positioning of the stop sign */
+                z-index: 10; /* Ensures buttons are above emojis */
+            }
+            
+            .stopSign {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                display: block; /* Changed from flex to block */
+                pointer-events: none; /* The stop sign won't block click events */
+                z-index: 10; /* Ensures buttons are above emojis */
+            }
+            
+            .stopSign svg {
+                width: 100%;
+                height: auto; /* Adjust height to maintain aspect ratio */
+            }
+
+            #microphoneButton, #helpButton, #blackHoleButton, #chaseButton, #dancingButton, #smallerButton, #biggerButton, #fasterButton, #slowerButton, #randomButton {
+                font-size: 6vh; 
+                cursor: pointer;
+                position: relative;
+                z-index: 10; /* Ensures buttons are above emojis */
+            }
+
+        </style>
+    </head>
+    <body>
+        <div id="feedbackDisplay" style="font-size: 4vh; text-align: center; display: none;"></div>
+        <div id="buttonContainer">
+            <div id="microphoneContainer">
+                <div id="microphoneButton">🎤</div>
+                <div class="stopSign" style="display: none;">
+                    <svg viewBox="0 0 50 50">
+                        <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                        <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                    </svg>
+                </div>
+            </div>
+
+            <div id="blackHoleContainer">
+                <div id="blackHoleButton">🌀</div>
+                <div id="stopSignBlackHole" class="stopSign" style="display: none;">
+                    <svg width="50" height="50" viewBox="0 0 50 50">
+                        <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                        <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                    </svg> 
+                </div>
+            </div>
+            <div id="dancingContainer">
+                <div id="dancingButton">💃</div> <!-- or use 🕺 for Man Dancing -->
+                <div class="stopSign" style="display: none;"> 
+                    <svg width="50" height="50" viewBox="0 0 50 50">
+                        <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                        <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                    </svg>
+                </div>
+            </div>
+            <div id="chaseContainer">
+                <div id="chaseButton">🏃</div>
+                <div class="stopSign" style="display: none;">
+                    <svg width="50" height="50" viewBox="0 0 50 50">
+                        <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                        <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                    </svg> 
+                </div>
+            </div>
+            <div id="slowerButton">🐢</div>
+            <div id="fasterButton">🐎</div>
+            <div id="smallerButton">🐜</div>
+            <div id="biggerButton">🐘</div>
+            <div id="randomContainer">
+                <div id="randomButton">🎲</div>
+                <div class="stopSign" style="display: flex;"> <!-- Initially visible -->
+                    <svg width="50" height="50" viewBox="0 0 50 50">
+                        <circle cx="25" cy="25" r="23" stroke="red" stroke-width="4" fill="none" />
+                        <line x1="10" y1="10" x2="40" y2="40" stroke="red" stroke-width="4" />
+                    </svg>
+                </div>
+            </div>
+            <div id="helpButton">❓</div> 
+        </div>
+        <div id="emojiContainer"></div>
+        <script>
+            let useModel;
+
+            let emojiDescriptions = [];
+            // Array to store emoji descriptions
+            let emojiDescriptionsEmbeddings;
+            // Variable to store precomputed embeddings
+
+            async function loadUSEModel() {
+                // Function to dynamically load a script
+                function loadScript(url) {
+                    return new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = url;
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    });
+                }
+            
+                try {
+                    // Load TensorFlow.js
+                    await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
+                    // Load Universal Sentence Encoder
+                    await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder');
+            
+                    // TensorFlow.js and USE are now loaded and can be used
+                    useModel = await use.load();
+            
+                    // Populate emojiDescriptions array from emojiDict
+                    emojiDescriptions = Object.keys(emojiDict);
+            
+                    // Compute and store embeddings for all emoji descriptions
+                    emojiDescriptionsEmbeddings = await useModel.embed(emojiDescriptions);
+                    onUSEModelLoaded();
+                } catch (error) {
+                    console.error('Error loading scripts:', error);
+                }
+            }
+
+            // Check if the speechSynthesis API is available
+            if ('speechSynthesis' in window) {
+                // Attempt to load the list of speech synthesis voices available
+                voices = window.speechSynthesis.getVoices();
+            
+                // Set up an event listener for when the list of voices changes (e.g., when voices are loaded)
+                window.speechSynthesis.onvoiceschanged = function() {
+                    // Update the voices list when new voices become available
+                    voices = window.speechSynthesis.getVoices();
+                };
+            }
+
+            function speak(text) {
+                if ('speechSynthesis' in window && voices.length > 0) {
+                    const msg = new SpeechSynthesisUtterance(text);
+                    msg.voice = voices.find(voice => voice.lang === 'en-US') || voices[0];
+                    window.speechSynthesis.speak(msg);
+                } else {
+                    // Split text into sentences for display if speech synthesis is not supported or no voices are available
+                    const sentences = text.split('. ');
+                    displayFeedback(sentences);
+                }
+            }
+
+            function onUSEModelLoaded() {
+                const message = "I can now understand almost anything you say."
+                speak(message);
+                displayFeedback(message);
+            }
+
+            async function findClosestEmojiDescription(userInput) {
+                const userInputEmbedding = await useModel.embed([userInput]);
+            
+                // Compute cosine proximity between user input and all emoji descriptions
+                const cosineProximities = tf.metrics.cosineProximity(userInputEmbedding, emojiDescriptionsEmbeddings);
+            
+                // Temporary variable for the argMin tensor
+                const closestEmojiTensor = cosineProximities.argMin();
+                const closestEmojiIndex = (await closestEmojiTensor.data())[0];
+            
+                // Dispose tensors to free memory
+                userInputEmbedding.dispose();
+                cosineProximities.dispose();
+                closestEmojiTensor.dispose(); // Dispose the argMin tensor
+            
+                return emojiDescriptions[closestEmojiIndex];
+            }
+
+            let emojiSpeed = 2; // Default speed for emoji movement
+            let gravityStrength = 1000; // Default strength for gravity
+            let emojiSize = 50;
+            let currentEmoji = "";
+            let mouseDown = false;
+            let listening = false;
+            const recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.lang = 'en-US';
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
+
+            function createEmojiElement(x, y, emoji) {
+                let emojiElement = document.createElement('div');
+                emojiElement.classList.add('emoji');
+                emojiElement.textContent = emoji || currentEmoji || Object.values(emojiDict)[Math.floor(Math.random() * Object.values(emojiDict).length)];
+                emojiElement.style.left = x + 'px';
+                emojiElement.style.top = y + 'px';
+                emojiElement.style.fontSize = emojiSize + 'px';
+                emojiElement.velocity = {
+                    x: 0,
+                    y: 0
+                };
+                const emojiContainer = document.getElementById('emojiContainer');
+                emojiContainer.appendChild(emojiElement);
+                return emojiElement;
+            }
+
+            function showFeedbackEmoji(emoji) {
+                let feedbackEmoji = document.createElement('div');
+                feedbackEmoji.textContent = emoji;
+                feedbackEmoji.style.position = 'fixed';
+                feedbackEmoji.style.left = '50%';
+                feedbackEmoji.style.top = '50%';
+                feedbackEmoji.style.transform = 'translate(-50%, -50%)';
+                feedbackEmoji.style.fontSize = '100px';
+                feedbackEmoji.style.zIndex = '1000';
+                document.body.appendChild(feedbackEmoji);
+                setTimeout(() => feedbackEmoji.remove(), 2000);
+                // Remove after 2 seconds
+            }
+
+            recognition.onresult = function(event) {
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        const command = event.results[i][0].transcript.trim().toLowerCase();
+
+                        // Skip processing if the command is an empty string
+                        if (!command) {
+                            continue;
+                            // Skip to the next loop iteration
+                        }
+
+                        console.log("Spoken:", command);
+                        displayFeedback(command); 
+
+                        if (command.startsWith('spell ')) {
+                            const wordsToSpell = command.substring(6); // Extract the words after "spell "
+                            spellWords(wordsToSpell);
+                            updateSpellMode();
+                        } else if (command.includes('dance')) {
+                            dance();
+                            toggleStopSign('dancingContainer');
+                        } else if (command.includes('black hole')) {
+                            blackHoleActive = !blackHoleActive;
+                            updateBlackHoleMode();
+                            toggleStopSign('blackHoleContainer');
+                        } else if (command.includes('chase')) {
+                            toggleChaseMode();
+                            toggleStopSign('chaseContainer');
+                        } else if (command.includes('random')) {
+                            toggleRandom();
+                        } else if (command.includes('bigger')) {
+                            emojiSize *= 1.5;
+                        } else if (command.includes('smaller')) {
+                            emojiSize *= 2/3;
+                        } else if (command.includes('faster')) {
+                            emojiSpeed *= 1.5; // Increase speed by 50%
+                            gravityStrength *= 1.5; // Increase gravity strength by 50%
+                        } else if (command.includes('slower')) {
+                            emojiSpeed *= 2/3; // Decrease speed by 33%
+                            gravityStrength *= 2/3; // Decrease gravity strength by 33%
+                        } else if (emojiDict[command]) {
+                            currentEmoji = emojiDict[command];
+                            showFeedbackEmoji(currentEmoji);
+                        } else if (useModel) {
+                            // If USE model is loaded and no exact match is found
+                            findClosestEmojiDescription(command).then(closestEmojiDescription => {
+                                if (closestEmojiDescription && emojiDict[closestEmojiDescription]) {
+                                    currentEmoji = emojiDict[closestEmojiDescription];
+                                    showFeedbackEmoji(currentEmoji);
+                                    console.log("->", closestEmojiDescription);
+                                }
+                            });
+                        }
+                    }
+                }
+
+            };
+
+            recognition.onend = function() {
+                console.log("Speech recognition service disconnected");
+                if (listening) {
+                    // Assuming 'listening' is a flag indicating whether recognition should be active
+                    recognition.start();
+                }
+            };
+
+            recognition.onerror = function(event) {
+                console.error("Speech recognition error", event.error);
+                // Optionally restart recognition or handle differently based on the error
+            };
+
+            document.addEventListener('click', function(e) {
+                createEmojiElement(e.clientX, e.clientY);
+            });
+
+            document.addEventListener('touchstart', function(e) {
+                if (!e.touches.length)
+                    return;
+                let touch = e.touches[0];
+                createEmojiElement(touch.clientX, touch.clientY);
+            });
+
+            function createBlackHole() {
+                let blackHole = document.createElement('div');
+                blackHole.id = 'blackHole';
+                blackHole.style.width = '50px';
+                blackHole.style.height = '50px';
+                blackHole.style.borderRadius = '50%';
+                blackHole.style.backgroundColor = 'black';
+                blackHole.style.position = 'fixed';
+                blackHole.style.display = 'none';
+                // Initially hidden
+                document.body.appendChild(blackHole);
+                return blackHole;
+            }
+
+            let blackHole = createBlackHole();
+            let blackHoleActive = false;
+
+            // Function to move the black hole
+            function moveBlackHole(x, y) {
+                blackHole.style.left = x + 'px';
+                blackHole.style.top = y + 'px';
+                blackHole.style.display = 'block';
+            }
+
+            // Event listeners for mouse and touch movement
+            document.addEventListener('mousemove', function(e) {
+                if (blackHoleActive) {
+                    moveBlackHole(e.clientX, e.clientY);
+                }
+            });
+
+            document.addEventListener('touchmove', function(e) {
+                if (blackHoleActive && e.touches.length) {
+                    let touch = e.touches[0];
+                    moveBlackHole(touch.clientX, touch.clientY);
+                }
+            });
+
+            let isChaseMode = false;
+
+function updateChaseMode() {
+    let emojis = document.querySelectorAll('.emoji');
+    let chasers = initializeChasers(emojis);
+
+    updateChasers(emojis, chasers);
+
+    const maxUpdateTime = 16; // milliseconds
+    const startTime = performance.now();
+    let processedCount = 0;
+
+    while (processedCount < emojis.length) {
+        if (performance.now() - startTime > maxUpdateTime) {
+            break; // Exit the loop if maximum update time is exceeded
+        }
+
+        // Pick a random emoji
+        const randomIndex = Math.floor(Math.random() * emojis.length);
+        const emoji = emojis[randomIndex];
+
+        if (!processEmoji(emoji, chasers)) {
+            continue; // Skip to the next iteration if the emoji was not processed
+        }
+
+        processedCount++;
+    }
+
+    if (isChaseMode) {
+        requestAnimationFrame(updateChaseMode);
+    }
+}
+
+function initializeChasers(emojis) {
+    let chasers = new Map();
+    emojis.forEach(emoji => {
+        chasers.set(emoji, []);
+    });
+    return chasers;
+}
+
+function updateChasers(emojis, chasers) {
+    emojis.forEach(emoji => {
+        const target = emojiTargets.get(emoji);
+        if (target && !target.isRemoved) {
+            const targetChasers = chasers.get(target);
+            targetChasers.push(emoji);
+        }
+    });
+}
+
+function processEmoji(emoji, chasers) {
+    let target = emojiTargets.get(emoji);
+    if (!target || target.isRemoved) {
+        assignNewTarget(emoji);
+        target = emojiTargets.get(emoji);
+    }
+
+    if (!target || target.isRemoved) {
+        return false; // Target is not valid
+    }
+
+    processMovement(emoji, target, chasers);
+    
+    return true; // Emoji was processed
+    
+}
+
+function processMovement(emoji, target, chasers) {
+    const { dx, dy, distance } = calculateDistance(emoji, target);
+    if (distance < 10) {
+        target.remove();
+        target.isRemoved = true;
+        assignNewTarget(emoji);
+    } else {
+        moveEmoji(emoji, dx, dy, distance, chasers);
+    }
+}
+
+function calculateDistance(emoji, target) {
+    const dx = target.offsetLeft - emoji.offsetLeft;
+    const dy = target.offsetTop - emoji.offsetTop;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    return { dx, dy, distance };
+}
+
+function moveEmoji(emoji, dx, dy, distance, chasers) {
+    let { attraction, repulsion } = calculateForces(emoji, dx, dy, distance, chasers);
+    applyMovement(emoji, attraction, repulsion);
+}
+
+function calculateForces(emoji, dx, dy, distance, chasers) {
+    let attraction = { x: dx / distance, y: dy / distance };
+    let repulsion = calculateRepulsion(emoji, chasers);
+    return { attraction, repulsion };
+}
+
+function calculateRepulsion(emoji, chasers) {
+    let repulsion = { x: 0, y: 0 };
+    chasers.get(emoji).forEach(chaser => {
+        let { rdx, rdy, rDistance } = calculateRepulsionDistance(emoji, chaser);
+        repulsion.x += rdx / rDistance;
+        repulsion.y += rdy / rDistance;
+    });
+    return repulsion;
+}
+
+function calculateRepulsionDistance(emoji, chaser) {
+    let rdx = emoji.offsetLeft - chaser.offsetLeft;
+    let rdy = emoji.offsetTop - chaser.offsetTop;
+    let rDistance = Math.max(Math.sqrt(rdx * rdx + rdy * rdy), 1); // Avoid division by zero
+    return { rdx, rdy, rDistance };
+}
+
+function applyMovement(emoji, attraction, repulsion) {
+    const speed = emojiSpeed;
+    let vx = (attraction.x + repulsion.x) * speed;
+    let vy = (attraction.y + repulsion.y) * speed;
+    updatePosition(emoji, vx, vy);
+}
+
+function calculateNewPosition(emoji, vx, vy) {
+    let newX = emoji.offsetLeft + vx;
+    let newY = emoji.offsetTop + vy;
+    return { newX, newY };
+}
+
+function updatePosition(emoji, vx, vy) {
+    let { newX, newY } = calculateNewPosition(emoji, vx, vy);
+    let adjustedPosition = adjustForBoundaries(emoji, newX, newY, vx, vy);
+
+    updateEmojiPosition(emoji, adjustedPosition, vx, vy);
+}
+
+function updateEmojiPosition(emoji, newPosition, vx, vy) {
+    emoji.style.left = newPosition.newX + 'px';
+    emoji.style.top = newPosition.newY + 'px';
+
+    // Only rotate the emoji if it is moving
+    if (vx !== 0 || vy !== 0) {
+        const angle = Math.atan2(vy, vx) * 180 / Math.PI + 90;
+        emoji.style.transform = `rotate(${angle}deg)`;
+    }
+}
+
+function adjustForBoundaries(emoji, newX, newY, vx, vy) {
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+
+    if (newX < 0) {
+        newX = 0;
+        vx = -vx;
+    } else if (newX + emoji.offsetWidth > windowWidth) {
+        newX = windowWidth - emoji.offsetWidth;
+        vx = -vx;
+    }
+
+    if (newY < 0) {
+        newY = 0;
+        vy = -vy;
+    } else if (newY + emoji.offsetHeight > windowHeight) {
+        newY = windowHeight - emoji.offsetHeight;
+        vy = -vy;
+    }
+
+    return { newX, newY, vx, vy };
+}
+
+
+            function moveEmojiTowardsTarget(emoji, target) {
+                const speed = emojiSpeed;
+            
+                // Current position of the emoji
+                const emojiX = parseFloat(emoji.style.left);
+                const emojiY = parseFloat(emoji.style.top);
+            
+                // Target position
+                const targetX = parseFloat(target.style.left);
+                const targetY = parseFloat(target.style.top);
+            
+                // Calculate distance to target
+                const dx = targetX - emojiX;
+                const dy = targetY - emojiY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+            
+                // If the emoji is close enough to the target, stop moving
+                if (distance < 1) {
+                    return;
+                }
+            
+                // Calculate movement vector
+                const vx = (dx / distance) * speed;
+                const vy = (dy / distance) * speed;
+
+                // Only rotate the emoji if it is moving
+                if (vx !== 0 || vy !== 0) {
+                    // Calculate the angle of motion and adjust by 90 degrees
+                    const angle = Math.atan2(vy, vx) * 180 / Math.PI + 90;
+            
+                    // Rotate the emoji to face the direction of motion
+                    emoji.style.transform = `rotate(${angle}deg)`;
+                }
+            
+                // Update emoji position
+                emoji.style.left = (emojiX + vx) + 'px';
+                emoji.style.top = (emojiY + vy) + 'px';
+
+                // console.log(`Target for emoji at x: ${emoji.style.left}, y: ${emoji.style.top} is x: ${target.style.left}, y: ${target.style.top}`);
+
+            }
+
+            function updateBlackHoleMode() {
+                let emojis = document.querySelectorAll('.emoji');
+                // Check if the emoji collection is empty
+                if (!emojis.length || !blackHoleActive) {
+                    blackHoleActive = false;
+                    blackHole.style.display = 'none';
+            
+                    const stopSignBlackHole = document.getElementById('stopSignBlackHole');
+                    if (stopSignBlackHole) {
+                        stopSignBlackHole.style.display = 'none';
+                    }
+            
+                    return; // Exit the function early
+                } else {
+                    blackHole.style.display = 'block';
+                }
+            
+                const blackHoleRadius = 25;
+                const blackHoleRadiusSquared = blackHoleRadius * blackHoleRadius; // Pre-calculate the squared radius
+                const blackHoleCenterX = parseFloat(blackHole.style.left) + blackHoleRadius;
+                const blackHoleCenterY = parseFloat(blackHole.style.top) + blackHoleRadius;
+            
+                let processedCount = 0;
+                const maxUpdateTime = 33; // milliseconds
+                const startTime = performance.now();
+                
+                // Convert NodeList to Array
+                let emojiArray = Array.from(emojis);
+            
+                while (processedCount < emojiArray.length) {
+                    if (performance.now() - startTime > maxUpdateTime) {
+                        // console.log(processedCount, emojiArray.length);
+                        break; // Exit the function early if maximum update time is exceeded
+                    }
+                
+                    // Pick a random emoji from the array
+                    const randomIndex = Math.floor(Math.random() * emojiArray.length);
+                    const emoji = emojiArray[randomIndex];
+                
+                    const emojiCenterX = emoji.offsetLeft + emoji.offsetWidth / 2;
+                    const emojiCenterY = emoji.offsetTop + emoji.offsetHeight / 2;
+                
+                    let dx = blackHoleCenterX - emojiCenterX;
+                    let dy = blackHoleCenterY - emojiCenterY;
+                    let distanceSquared = dx * dx + dy * dy; // Use squared distance
+
+                    if (distanceSquared < blackHoleRadiusSquared) {
+                        emoji.remove();
+                        emojiArray.splice(randomIndex, 1); // Remove the emoji from the array
+                    } else if (distanceSquared > 0) {
+                        // Update velocity
+                        let strength = gravityStrength / distanceSquared;
+                        const distance = Math.sqrt(distanceSquared); // Use actual distance
+                        emoji.velocity.x += strength * dx / distance; 
+                        emoji.velocity.y += strength * dy / distance;
+                    } else {
+                        emoji.velocity = { x: 0, y: 0 };
+                    }
+                
+                    emoji.style.left = (emoji.offsetLeft + emoji.velocity.x) + 'px';
+                    emoji.style.top = (emoji.offsetTop + emoji.velocity.y) + 'px';
+
+                    processedCount++;
+                }
+            
+                if (blackHoleActive) {
+                    requestAnimationFrame(updateBlackHoleMode);
+                }
+            }
+
+            function updateSpellMode() {
+                const emojis = document.querySelectorAll('.emoji');
+                let allReached = true;
+            
+                emojis.forEach(emoji => {
+                    const target = emojiTargets.get(emoji);
+                    if (target) {
+                        moveEmojiTowardsTarget(emoji, target);
+                        if (!hasReachedTarget(emoji)) {
+                            allReached = false;
+                        }
+                    }
+                });
+            
+                if (allReached) {
+                    exitLetterMode();
+                } else {
+                    requestAnimationFrame(updateSpellMode);
+                }
+            }
+
+            function hasReachedTarget(emoji) {
+                const target = emojiTargets.get(emoji);
+                if (!target) {
+                    return false; // No target assigned
+                }
+            
+                const threshold = 5; // Pixels, adjust based on how close they need to get
+            
+                // Get current position of emoji
+                const emojiX = parseFloat(emoji.style.left);
+                const emojiY = parseFloat(emoji.style.top);
+            
+                // Get target position
+                const targetX = parseFloat(target.style.left);
+                const targetY = parseFloat(target.style.top);
+            
+                // Calculate distance to target
+                const dx = targetX - emojiX;
+                const dy = targetY - emojiY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+            
+                // return distance <= threshold;
+                const reached =  distance <= threshold;
+                // console.log(`Emoji has reached target: ${reached}`);
+                return reached;                
+            }
+
+            function exitLetterMode() {           
+                // Select and remove all invisible emojis
+                const invisibleEmojis = document.querySelectorAll('.invisible-emoji'); 
+                invisibleEmojis.forEach(emoji => emoji.remove());
+            
+                // Clear targets from visible emojis
+                const visibleEmojis = document.querySelectorAll('.emoji');
+                visibleEmojis.forEach(emoji => emojiTargets.delete(emoji));
+            }
+
+            let emojiTargets = new Map();
+            // Map each emoji to its target
+
+            function toggleChaseMode() {
+                isChaseMode = !isChaseMode;
+                if (isChaseMode) {
+                    assignEmojiTargets();
+                    updateChaseMode();
+                } else {
+                    emojiTargets.clear();
+                }
+            }
+
+            function assignEmojiTargets() {
+                const emojis = document.querySelectorAll('.emoji');
+                emojis.forEach(emoji => {
+                    assignNewTarget(emoji);
+                });
+            }
+
+            function assignNewTarget(emoji) {
+                const emojis = Array.from(document.querySelectorAll('.emoji'));
+                const currentEmojiChar = emoji.textContent;
+                const differentCharEmojis = emojis.filter(e => e.textContent !== currentEmojiChar && !e.isRemoved);
+
+                let newTarget;
+
+                if (differentCharEmojis.length > 0) {
+                    // Choose a random target from emojis with a different character
+                    newTarget = differentCharEmojis[Math.floor(Math.random() * differentCharEmojis.length)];
+                } else {
+                    // If no different character emojis are available, choose any other random emoji
+                    const otherEmojis = emojis.filter(e => e !== emoji && !e.isRemoved);
+                    if (otherEmojis.length > 0) {
+                        newTarget = otherEmojis[Math.floor(Math.random() * otherEmojis.length)];
+                    }
+                }
+
+                if (newTarget) {
+                    emojiTargets.set(emoji, newTarget);
+                } else {
+                    // No valid targets available
+                    emojiTargets.delete(emoji);
+                }
+            }
+
+            function createInvisibleEmoji(x, y, emojiSize) {
+                const invisibleEmoji = document.createElement('div');
+                invisibleEmoji.style.left = `${x}px`;
+                invisibleEmoji.style.top = `${y}px`;
+                invisibleEmoji.style.position = 'absolute';
+                invisibleEmoji.style.visibility = 'hidden';
+                invisibleEmoji.style.width = `${emojiSize}px`;
+                invisibleEmoji.style.height = `${emojiSize}px`;
+                invisibleEmoji.classList.add('invisible-emoji');
+                document.body.appendChild(invisibleEmoji);
+
+                return invisibleEmoji;
+            }
+
+           function spellWords(words) {
+                const letters = words.toUpperCase(); // Convert to uppercase, but keep spaces
+                let offset = 150; // Start a bit to the right of the buttons, adjust as needed
+                let allInvisibleEmojis = [];
+            
+                letters.split('').forEach(letter => {
+                    if (letter === ' ') {
+                        offset += emojiSize * 2;
+                    } else {
+                        const letterInvisibleEmojis = formLetter(letter, offset);
+                        allInvisibleEmojis = allInvisibleEmojis.concat(letterInvisibleEmojis);
+                        offset += getLetterWidth(letter) + emojiSize; // Add space after each letter
+                    }
+                });
+            
+                // After creating all invisible emojis, assign them as targets
+                assignTargetsToVisibleEmojis(allInvisibleEmojis);
+            }
+              
+           function formLetter(letter, xOffset = 0) {
+                const art = asciiArtLetters[letter];
+                if (!art) return [];
+            
+                let yOffset = window.innerHeight / 2 - (art.length * emojiSize) / 2; // Center vertically
+                const invisibleEmojis = [];
+            
+                // Create invisible emojis for each character in the ASCII art
+                art.forEach((line, y) => {
+                    line.split('').forEach((char, x) => {
+                        if (char !== ' ') {
+                            const xPosition = xOffset + x * emojiSize;
+                            const yPosition = yOffset + y * emojiSize;
+                            // console.log(`Creating invisible emoji for letter '${letter}' at x: ${xPosition}, y: ${yPosition}`);
+                            const invisibleEmoji = createInvisibleEmoji(xPosition, yPosition, emojiSize);
+                            invisibleEmojis.push(invisibleEmoji);
+                        }
+                    });
+                });
+            
+                return invisibleEmojis;
+            }
+            
+            function assignTargetsToVisibleEmojis(invisibleEmojis) {
+                const visibleEmojis = document.querySelectorAll('.emoji');
+                if (invisibleEmojis.length > 0) {
+                    visibleEmojis.forEach(emoji => {
+                        const randomIndex = Math.floor(Math.random() * invisibleEmojis.length);
+                        emojiTargets.set(emoji, invisibleEmojis[randomIndex]);
+                        // console.log(`Emoji at (${emoji.style.left}, ${emoji.style.top}) assigned target at (${invisibleEmojis[randomIndex].style.left}, ${invisibleEmojis[randomIndex].style.top})`);
+                    });
+                }
+            }
+
+            function getLetterWidth(letter) {
+                const art = asciiArtLetters[letter];
+                if (!art) return 0;
+            
+                const maxWidthInChars = Math.max(...art.map(line => line.length)); // Max width in characters
+                return maxWidthInChars * emojiSize; // Convert to pixels
+            }
+
+            function displayFeedback(text, index = 0) {
+                const feedbackDisplay = document.getElementById('feedbackDisplay');
+            
+                if (Array.isArray(text)) {
+                    // If text is an array, display each element in sequence
+                    if (index < text.length) {
+                        feedbackDisplay.innerText = text[index];
+                        feedbackDisplay.style.display = 'block';
+            
+                        setTimeout(() => {
+                            feedbackDisplay.style.display = 'none';
+                            displayFeedback(text, index + 1); // Display next sentence
+                        }, 6000); // Adjust time as needed
+                    }
+                } else {
+                    // If text is a string, display it directly
+                    feedbackDisplay.innerText = text;
+                    feedbackDisplay.style.display = 'block';
+            
+                    setTimeout(() => {
+                        feedbackDisplay.style.display = 'none';
+                    }, 5000); // Adjust time as needed for single string
+                }
+            }
+  
+            let isPlaying;
+            let audioCtx;
+            let analyser;
+            let lastDroppedAudio = null; // Store the ArrayBuffer of the last dropped file
+            
+            // Function to start playing audio
+            let isDancing = false;
+            let currentSource = null; // To keep track of the current audio source
+            
+            function playAudio(arrayBuffer) {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioCtx.createAnalyser();
+                    BUFFER_SIZE = analyser.frequencyBinCount;
+                    audioData = new Uint8Array(BUFFER_SIZE);
+                }
+                isPlaying = true;
+                audioCtx.decodeAudioData(arrayBuffer)
+                    .then(audioBuffer => {
+                        if (currentSource) {
+                            currentSource.disconnect(); // Disconnect the current source if any
+                        }
+                        currentSource = audioCtx.createBufferSource();
+                        currentSource.buffer = audioBuffer;
+                        currentSource.connect(analyser);
+                        currentSource.connect(audioCtx.destination);
+                        currentSource.start();
+                        currentSource.onended = () => {
+                            isPlaying = false;
+                            isDancing = false; // Update dance state when music ends
+                        };
+                    });
+                requestAnimationFrame(animateEmojis);
+            }
+            
+            function stopMusic() {
+                if (currentSource) {
+                    currentSource.stop();
+                    isPlaying = false;
+                }
+            }
+
+            function dance() {
+                if (!isDancing) {
+                    if (listening) {
+                        // Microphone is on, switch to dancing to microphone input
+                        danceToMicrophone();
+                    } else {
+                        // Microphone is off, play dropped audio or default audio
+                        if (lastDroppedAudio) {
+                            playAudio(lastDroppedAudio);
+                        } else {
+                            fetch('https://toontalk.github.io/AI/apps/emoji-adventures/ellis sisi song.mp3') 
+                                .then(response => response.arrayBuffer())
+                                .then(arrayBuffer => playAudio(arrayBuffer));
+                        }
+                        isDancing = true;
+                    }
+                } else {
+                    // Stop dancing
+                    stopMusic();
+                    isDancing = false;
+                    if (listening) {
+                        // If microphone was used for dancing, restart speech recognition
+                        restartSpeechRecognition();
+                    }
+                }
+            }
+
+            function getMicrophoneInput() {
+                navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                    .then(stream => {
+                        if (!audioCtx) {
+                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            analyser = audioCtx.createAnalyser();
+                            BUFFER_SIZE = analyser.frequencyBinCount;
+                            audioData = new Uint8Array(BUFFER_SIZE); 
+                        }
+            
+                        const microphone = audioCtx.createMediaStreamSource(stream);
+                        microphone.connect(analyser);
+            
+                        isPlaying = true; // Set isPlaying to true for microphone input
+                        requestAnimationFrame(animateEmojis);
+                    })
+                    .catch(err => {
+                        console.error('Error accessing the microphone', err);
+                    });
+            }
+
+            function danceToMicrophone() {
+                if (!isDancing) {
+                    if (listening) {
+                        recognition.stop();
+                        listening = false;
+                    }
+                    getMicrophoneInput();
+                    isDancing = true;
+                } else {
+                    // Stop dancing to microphone
+                    isPlaying = false; // Set isPlaying to false when stopping microphone input
+                    isDancing = false;
+                    restartSpeechRecognition();
+                }
+            }
+            
+            function restartSpeechRecognition() {
+                if (!listening) {
+                    recognition.start();
+                    listening = true;
+                }
+            }
+
+            let isModelLoaded = false;
+            
+            function toggleMicrophone() {
+                if (!listening) {
+                    if (!isModelLoaded) {
+                        isModelLoaded = true;
+                        loadUSEModel(); 
+                    }
+                    if (isDancing) {
+                        // Stop dancing if it's active
+                        danceToMicrophone(); // This will toggle off the dancing
+                    }
+                    restartSpeechRecognition();
+                } else {
+                    recognition.stop();
+                    listening = false;
+                }
+            }
+            
+            // Prevent default dragover behavior
+            document.addEventListener('dragover', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+            });
+            
+            // Add event listener for file drop
+            document.addEventListener('drop', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+            
+                if (event.dataTransfer.files.length > 0) {
+                    let file = event.dataTransfer.files[0];
+                    if (file.type === "audio/mpeg" || file.type === "audio/mp3") {
+                        let reader = new FileReader();
+                        reader.onload = function(e) {
+                            lastDroppedAudio = e.target.result; // Store the ArrayBuffer of the dropped file
+                        };
+                        reader.readAsArrayBuffer(file);
+                    }
+                }
+            });
+
+            let beatThreshold = 0; // Starting value, will be updated dynamically
+            const EMOJI_MOVEMENT_AMOUNT = 1; // Pixels to move up or down
+            const ROTATION_AMOUNT = 10; // Degrees to rotate
+
+            const MAX_VALUES_LIST_SIZE = 50; // Size of the list to store max values
+            let maxValuesList = [];
+
+            function calculateMedian(values) {
+                const sortedValues = values.slice().sort((a, b) => a - b);
+                const middleIndex = Math.floor(sortedValues.length / 2);
+            
+                if (sortedValues.length % 2 === 0) {
+                    return (sortedValues[middleIndex - 1] + sortedValues[middleIndex]) / 2;
+                } else {
+                    return sortedValues[middleIndex];
+                }
+            }
+
+            let previousEnergy = 0;
+            let energyThreshold = 0;
+            let BUFFER_SIZE;
+            let audioData;
+
+            function calculateEnergy(data) {
+                let sum = 0;
+                for (let i = 0; i < data.length; i++) {
+                    sum += data[i] * data[i]; // Energy is the square of amplitude
+                }
+                return sum / data.length;
+            }
+            
+            function updateThreshold(currentEnergy) {
+                if (maxValuesList.length >= MAX_VALUES_LIST_SIZE) {
+                    maxValuesList.shift(); // Remove the oldest value
+                }
+                maxValuesList.push(currentEnergy); // Add the new energy value
+            
+                // Update the energy threshold to be the median of maxValuesList
+                energyThreshold = calculateMedian(maxValuesList);
+                
+            }
+            
+            function detectBeat() {
+                analyser.getByteFrequencyData(audioData);
+                let currentEnergy = calculateEnergy(audioData);
+                updateThreshold(currentEnergy);
+                let beatDetected = currentEnergy > energyThreshold; 
+
+                return beatDetected;
+            }
+
+            function animateEmojis() {
+                if (!isPlaying) {
+                    return; // Stop animation if music is not playing
+                }
+            
+                let beatDetected = detectBeat();
+                
+                // Animate emojis based on beat detection
+ 
+                // Select all emojis
+                let emojis = document.querySelectorAll('.emoji');
+                    
+                emojis.forEach(emoji => {
+                    let currentTop = parseInt(emoji.style.top, 10) || 0; // Get current top position, default to 0 if not set
+                
+                    if (beatDetected) {
+                        // Move emoji up
+                        emoji.style.top = (currentTop - EMOJI_MOVEMENT_AMOUNT) + 'px';
+                        // Rotate right on the beat
+                        emoji.style.transform = `rotate(${ROTATION_AMOUNT}deg)`;
+                    } else {
+                        // Move emoji down
+                        emoji.style.top = (currentTop + EMOJI_MOVEMENT_AMOUNT) + 'px';
+                        // Rotate right on the beat
+                        emoji.style.transform = `rotate(${-ROTATION_AMOUNT}deg)`;
+                    }
+                });
+                
+                requestAnimationFrame(animateEmojis);
+            }
+
+            function showHelp(event) {
+                event.stopPropagation(); // Prevent click from propagating to parent elements
+            
+                const commandsInfo = "Here are some things you can say or do: " +
+                    "'Black hole' to create a black hole, which attracts emojis. " +
+                    "'Dance' to make emojis move and dance to the beat of the music. You can also drop an MP3 file onto the app to use your own music for dancing. " +
+                    "'Chase' to start a chase mode where each emoji follows and tries to catch another one. " +
+                    "'Bigger' or 'smaller' to change the size of the emojis. " +
+                    "'Random' to change emojis to random ones. " +
+                    "'Faster' or 'Slower' to adjust the speed of emoji movement and gravity's pull. " +
+                    "'Spell' followed by any word to have emojis form the letters of that word. " +
+                    "You can also say anything and you'll get a matching emoji.";
+            
+                speak(commandsInfo);
+            }
+
+            function toggleStopSign(containerId) {
+                var container = document.getElementById(containerId);
+                var stopSign = container.querySelector('.stopSign'); // Find the stop sign within the container
+                if (stopSign.style.display === 'none') {
+                    stopSign.style.display = 'flex'; // Show the stop sign
+                } else {
+                    stopSign.style.display = 'none'; // Hide the stop sign
+                }
+            }
+
+            let isRandomActive = true; // The app starts with the random feature active
+
+            function toggleRandom() {
+                isRandomActive = !isRandomActive;
+                toggleStopSign('randomContainer'); // Toggles the visibility of the stop sign
+            
+                if (!isRandomActive) {
+                    // Set currentEmoji to a random emoji when turning off random mode
+                    currentEmoji = Object.values(emojiDict)[Math.floor(Math.random() * Object.values(emojiDict).length)];
+                } else {
+                    currentEmoji = ""; // Reset to default behavior
+                }
+            }
+
+            document.getElementById('helpButton').addEventListener('click', () => {
+                event.stopPropagation();
+                showHelp(event);
+            });
+            
+            // Add event listener to the Random button
+            document.getElementById('randomButton').addEventListener('click', () => {
+                event.stopPropagation();
+                toggleRandom();
+            });
+            
+            document.getElementById('microphoneButton').addEventListener('click', () => {
+                event.stopPropagation();
+                toggleMicrophone();
+                toggleStopSign('microphoneContainer');
+            });
+            
+            document.getElementById('blackHoleButton').addEventListener('click', () => {
+                event.stopPropagation();
+                blackHoleActive = !blackHoleActive;
+                updateBlackHoleMode();
+                toggleStopSign('blackHoleContainer');
+            });
+            
+            document.getElementById('chaseButton').addEventListener('click', () => {
+                event.stopPropagation();
+                toggleChaseMode();
+                toggleStopSign('chaseContainer');
+            });
+            
+            document.getElementById('dancingButton').addEventListener('click', () => {
+                event.stopPropagation();
+                dance();
+                toggleStopSign('dancingContainer');
+            });
+
+            const buttonChangeFactor = 1.2; // 20% increase
+
+            document.getElementById('smallerButton').addEventListener('click', () => {
+                event.stopPropagation();
+                emojiSize /= buttonChangeFactor;
+            });
+            
+            document.getElementById('biggerButton').addEventListener('click', () => {
+                event.stopPropagation();
+                emojiSize *= buttonChangeFactor;
+            });
+            
+            document.getElementById('fasterButton').addEventListener('click', () => {
+                event.stopPropagation();
+                emojiSpeed *= buttonChangeFactor; 
+                gravityStrength *= buttonChangeFactor;
+            });
+            
+            document.getElementById('slowerButton').addEventListener('click', () => {
+                event.stopPropagation();
+                emojiSpeed /= buttonChangeFactor; 
+                gravityStrength /= buttonChangeFactor; 
+            });
+                        
+            document.addEventListener('mousemove', function(e) {
+                if (mouseDown && !blackHoleActive) {
+                    // Check if the black hole is not active
+                    createEmojiElement(e.clientX, e.clientY);
+                }
+            });
+
+            document.addEventListener('mousedown', function() {
+                mouseDown = true;
+            });
+
+            document.addEventListener('mouseup', function() {
+                mouseDown = false;
+            });
+
+            document.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+                if (!blackHoleActive) {
+                    // Check if the black hole is not active
+                    let touch = e.touches[0];
+                    createEmojiElement(touch.clientX, touch.clientY);
+                }
+            });
+
+            document.addEventListener('touchstart', function() {
+                mouseDown = true;
+            });
+
+            document.addEventListener('touchend', function() {
+                mouseDown = false;
+            });
+
+const asciiArtLetters = {
+    'A': ["  A  ", " A A ", "AAAAA", "A   A", "A   A"],
+    'B': ["BBB  ", "B  B ", "BBBB ", "B   B", "BBBB "],
+    'C': [" CCC ", "C   C", "C    ", "C   C", " CCC "],
+    'D': ["DDD  ", "D  D ", "D   D", "D  D ", "DDD  "],
+    'E': ["EEEE ", "E    ", "EEE  ", "E    ", "EEEE "],
+    'F': ["FFFF ", "F    ", "FFF  ", "F    ", "F    "],
+    'G': [" GGG ", "G    ", "G  GG", "G   G", " GGG "],
+    'H': ["H   H", "H   H", "HHHHH", "H   H", "H   H"],
+    'I': [" III ", "  I  ", "  I  ", "  I  ", " III "],
+    'J': [" JJJ ", "   J ", "   J ", "J  J ", " JJ  "],
+    'K': ["K  K ", "K K  ", "KK   ", "K K  ", "K  K "],
+    'L': ["L    ", "L    ", "L    ", "L    ", "LLLL "],
+    'M': ["M   M", "MM MM", "M M M", "M   M", "M   M"],
+    'N': ["N   N", "NN  N", "N N N", "N  NN", "N   N"],
+    'O': [" OOO ", "O   O", "O   O", "O   O", " OOO "],
+    'P': ["PPP  ", "P   P", "PPP  ", "P    ", "P    "],
+    'Q': [" QQQ ", "Q   Q", "Q   Q", "Q  Q ", " QQ Q"],
+    'R': ["RRR  ", "R   R", "RRR  ", "R R  ", "R  RR"],
+    'S': [" SSS ", "S    ", " SSS ", "    S", "SSSS "],
+    'T': ["TTTTT", "  T  ", "  T  ", "  T  ", "  T  "],
+    'U': ["U   U", "U   U", "U   U", "U   U", " UUU "],
+    'V': ["V   V", "V   V", "V   V", " V V ", "  V  "],
+    'W': ["W   W", "W   W", "W W W", "WW WW", "W   W"],
+    'X': ["X   X", " X X ", "  X  ", " X X ", "X   X"],
+    'Y': ["Y   Y", " Y Y ", "  Y  ", "  Y  ", "  Y  "],
+    'Z': ["ZZZZZ", "   Z ", "  Z  ", " Z   ", "ZZZZZ"]
+};
+
+const emojiDict = {
+    // generated from https://unicode.org/Public/emoji/15.1/emoji-sequences.txt - February 2024
+'watch': '⌚',
+'hourglass done': '⌛',
+'fast-forward button': '⏩',
+'fast down button': '⏬',
+'alarm clock': '⏰',
+'hourglass not done': '⏳',
+'white medium-small square': '◽',
+'black medium-small square': '◾',
+'umbrella with rain drops': '☔',
+'hot beverage': '☕',
+'aries': '♈',
+'pisces': '♓',
+'wheelchair symbol': '♿',
+'anchor': '⚓',
+'high voltage': '⚡',
+'white circle': '⚪',
+'black circle': '⚫',
+'soccer ball': '⚽',
+'baseball': '⚾',
+'snowman without snow': '⛄',
+'sun behind cloud': '⛅',
+'ophiuchus': '⛎',
+'no entry': '⛔',
+'church': '⛪',
+'fountain': '⛲',
+'flag in hole': '⛳',
+'sailboat': '⛵',
+'tent': '⛺',
+'fuel pump': '⛽',
+'check mark button': '✅',
+'raised fist': '✊',
+'raised hand': '✋',
+'sparkles': '✨',
+'cross mark': '❌',
+'cross mark button': '❎',
+'red question mark': '❓',
+'white exclamation mark': '❕',
+'red exclamation mark': '❗',
+'plus': '➕',
+'divide': '➗',
+'curly loop': '➰',
+'double curly loop': '➿',
+'black large square': '⬛',
+'white large square': '⬜',
+'star': '⭐',
+'hollow red circle': '⭕',
+'mahjong red dragon': '🀄',
+'joker': '🃏',
+'ab button (blood type)': '🆎',
+'cl button': '🆑',
+'vs button': '🆚',
+'japanese “here” button': '🈁',
+'japanese “free of charge” button': '🈚',
+'japanese “reserved” button': '🈯',
+'japanese “prohibited” button': '🈲',
+'japanese “not free of charge” button': '🈶',
+'japanese “application” button': '🈸',
+'japanese “open for business” button': '🈺',
+'japanese “bargain” button': '🉐',
+'japanese “acceptable” button': '🉑',
+'cyclone': '🌀',
+'milky way': '🌌',
+'globe showing europe-africa': '🌍',
+'globe showing americas': '🌎',
+'globe showing asia-australia': '🌏',
+'globe with meridians': '🌐',
+'new moon': '🌑',
+'waxing crescent moon': '🌒',
+'first quarter moon': '🌓',
+'full moon': '🌕',
+'waning gibbous moon': '🌖',
+'waning crescent moon': '🌘',
+'crescent moon': '🌙',
+'new moon face': '🌚',
+'first quarter moon face': '🌛',
+'last quarter moon face': '🌜',
+'full moon face': '🌝',
+'sun with face': '🌞',
+'glowing star': '🌟',
+'shooting star': '🌠',
+'hot dog': '🌭',
+'burrito': '🌯',
+'chestnut': '🌰',
+'seedling': '🌱',
+'evergreen tree': '🌲',
+'deciduous tree': '🌳',
+'palm tree': '🌴',
+'cactus': '🌵',
+'tulip': '🌷',
+'tangerine': '🍊',
+'lemon': '🍋',
+'banana': '🍌',
+'green apple': '🍏',
+'pear': '🍐',
+'peach': '🍑',
+'clinking beer mugs': '🍻',
+'baby bottle': '🍼',
+'bottle with popping cork': '🍾',
+'popcorn': '🍿',
+'ribbon': '🎀',
+'graduation cap': '🎓',
+'carousel horse': '🎠',
+'person surfing': '🏄',
+'sports medal': '🏅',
+'trophy': '🏆',
+'horse racing': '🏇',
+'american football': '🏈',
+'rugby football': '🏉',
+'person swimming': '🏊',
+'cricket game': '🏏',
+'ping pong': '🏓',
+'house': '🏠',
+'japanese post office': '🏣',
+'post office': '🏤',
+'hospital': '🏥',
+'castle': '🏰',
+'black flag': '🏴',
+'badminton': '🏸',
+'rabbit': '🐇',
+'cat': '🐈',
+'dragon': '🐉',
+'whale': '🐋',
+'snail': '🐌',
+'horse': '🐎',
+'ram': '🐏',
+'goat': '🐐',
+'ewe': '🐑',
+'monkey': '🐒',
+'rooster': '🐓',
+'chicken': '🐔',
+'dog': '🐕',
+'pig': '🐖',
+'boar': '🐗',
+'poodle': '🐩',
+'camel': '🐪',
+'two-hump camel': '🐫',
+'paw prints': '🐾',
+'eyes': '👀',
+'ear': '👂',
+'bust in silhouette': '👤',
+'busts in silhouette': '👥',
+'boy': '👦',
+'woman and man holding hands': '👫',
+'men holding hands': '👬',
+'women holding hands': '👭',
+'police officer': '👮',
+'speech balloon': '💬',
+'thought balloon': '💭',
+'white flower': '💮',
+'dollar banknote': '💵',
+'euro banknote': '💶',
+'pound banknote': '💷',
+'money with wings': '💸',
+'closed mailbox with raised flag': '📫',
+'open mailbox with raised flag': '📬',
+'open mailbox with lowered flag': '📭',
+'postbox': '📮',
+'postal horn': '📯',
+'newspaper': '📰',
+'mobile phone off': '📴',
+'no mobile phones': '📵',
+'antenna bars': '📶',
+'camera': '📷',
+'camera with flash': '📸',
+'video camera': '📹',
+'videocassette': '📼',
+'prayer beads': '📿',
+'repeat single button': '🔂',
+'clockwise vertical arrows': '🔃',
+'counterclockwise arrows button': '🔄',
+'muted speaker': '🔇',
+'speaker low volume': '🔈',
+'speaker medium volume': '🔉',
+'speaker high volume': '🔊',
+'bell': '🔔',
+'bell with slash': '🔕',
+'bookmark': '🔖',
+'water pistol': '🔫',
+'microscope': '🔬',
+'telescope': '🔭',
+'crystal ball': '🔮',
+'downwards button': '🔽',
+'kaaba': '🕋',
+'menorah': '🕎',
+'one o’clock': '🕐',
+'twelve o’clock': '🕛',
+'one-thirty': '🕜',
+'twelve-thirty': '🕧',
+'man dancing': '🕺',
+'middle finger': '🖕',
+'vulcan salute': '🖖',
+'black heart': '🖤',
+'mount fuji': '🗻',
+'moai': '🗿',
+'grinning face': '😀',
+'beaming face with smiling eyes': '😁',
+'grinning squinting face': '😆',
+'smiling face with halo': '😇',
+'smiling face with horns': '😈',
+'winking face': '😉',
+'smiling face with heart-eyes': '😍',
+'smiling face with sunglasses': '😎',
+'smirking face': '😏',
+'neutral face': '😐',
+'expressionless face': '😑',
+'unamused face': '😒',
+'pensive face': '😔',
+'confused face': '😕',
+'confounded face': '😖',
+'kissing face': '😗',
+'face blowing a kiss': '😘',
+'kissing face with smiling eyes': '😙',
+'kissing face with closed eyes': '😚',
+'face with tongue': '😛',
+'winking face with tongue': '😜',
+'disappointed face': '😞',
+'worried face': '😟',
+'angry face': '😠',
+'sad but relieved face': '😥',
+'frowning face with open mouth': '😦',
+'anguished face': '😧',
+'fearful face': '😨',
+'tired face': '😫',
+'grimacing face': '😬',
+'loudly crying face': '😭',
+'face with open mouth': '😮',
+'hushed face': '😯',
+'anxious face with sweat': '😰',
+'flushed face': '😳',
+'sleeping face': '😴',
+'face with crossed-out eyes': '😵',
+'face without mouth': '😶',
+'face with medical mask': '😷',
+'weary cat': '🙀',
+'slightly frowning face': '🙁',
+'face with rolling eyes': '🙄',
+'person gesturing no': '🙅',
+'folded hands': '🙏',
+'rocket': '🚀',
+'helicopter': '🚁',
+'locomotive': '🚂',
+'railway car': '🚃',
+'bullet train': '🚅',
+'train': '🚆',
+'metro': '🚇',
+'light rail': '🚈',
+'station': '🚉',
+'tram': '🚊',
+'tram car': '🚋',
+'bus': '🚌',
+'oncoming bus': '🚍',
+'trolleybus': '🚎',
+'bus stop': '🚏',
+'minibus': '🚐',
+'ambulance': '🚑',
+'police car': '🚓',
+'oncoming police car': '🚔',
+'taxi': '🚕',
+'oncoming taxi': '🚖',
+'automobile': '🚗',
+'oncoming automobile': '🚘',
+'sport utility vehicle': '🚙',
+'delivery truck': '🚚',
+'articulated lorry': '🚛',
+'aerial tramway': '🚡',
+'ship': '🚢',
+'person rowing boat': '🚣',
+'speedboat': '🚤',
+'horizontal traffic light': '🚥',
+'vertical traffic light': '🚦',
+'construction': '🚧',
+'no smoking': '🚭',
+'litter in bin sign': '🚮',
+'non-potable water': '🚱',
+'bicycle': '🚲',
+'no bicycles': '🚳',
+'person mountain biking': '🚵',
+'person walking': '🚶',
+'no pedestrians': '🚷',
+'children crossing': '🚸',
+'men’s room': '🚹',
+'water closet': '🚾',
+'shower': '🚿',
+'person taking bath': '🛀',
+'bathtub': '🛁',
+'left luggage': '🛅',
+'person in bed': '🛌',
+'place of worship': '🛐',
+'stop sign': '🛑',
+'shopping cart': '🛒',
+'hindu temple': '🛕',
+'hut': '\u{0001f6d6}',
+'elevator': '\u{0001f6d7}',
+'wireless': '\u{0001f6dc}',
+'playground slide': '\u{0001f6dd}',
+'ring buoy': '\u{0001f6df}',
+'airplane departure': '🛫',
+'airplane arrival': '🛬',
+'kick scooter': '🛴',
+'canoe': '🛶',
+'sled': '🛷',
+'flying saucer': '🛸',
+'skateboard': '🛹',
+'auto rickshaw': '🛺',
+'pickup truck': '\u{0001f6fb}',
+'roller skate': '\u{0001f6fc}',
+'orange circle': '🟠',
+'brown square': '🟫',
+'heavy equals sign': '\u{0001f7f0}',
+'pinched fingers': '\u{0001f90c}',
+'white heart': '🤍',
+'pinching hand': '🤏',
+'zipper-mouth face': '🤐',
+'sign of the horns': '🤘',
+'call me hand': '🤙',
+'crossed fingers': '🤞',
+'love-you gesture': '🤟',
+'cowboy hat face': '🤠',
+'sneezing face': '🤧',
+'face with raised eyebrow': '🤨',
+'exploding head': '🤯',
+'pregnant woman': '🤰',
+'breast-feeding': '🤱',
+'palms up together': '🤲',
+'selfie': '🤳',
+'person fencing': '🤺',
+'people wrestling': '🤼',
+'person playing handball': '🤾',
+'diving mask': '🤿',
+'wilted flower': '🥀',
+'goal net': '🥅',
+'1st place medal': '🥇',
+'martial arts uniform': '🥋',
+'curling stone': '🥌',
+'lacrosse': '🥍',
+'flying disc': '🥏',
+'croissant': '🥐',
+'pancakes': '🥞',
+'dumpling': '🥟',
+'canned food': '🥫',
+'leafy green': '🥬',
+'smiling face with hearts': '🥰',
+'yawning face': '🥱',
+'smiling face with tear': '\u{0001f972}',
+'partying face': '🥳',
+'cold face': '🥶',
+'ninja': '\u{0001f977}',
+'disguised face': '\u{0001f978}',
+'face holding back tears': '\u{0001f979}',
+'pleading face': '🥺',
+'sari': '🥻',
+'lab coat': '🥼',
+'flat shoe': '🥿',
+'crab': '🦀',
+'unicorn': '🦄',
+'eagle': '🦅',
+'squid': '🦑',
+'giraffe': '🦒',
+'cricket': '🦗',
+'kangaroo': '🦘',
+'swan': '🦢',
+'mammoth': '\u{0001f9a3}',
+'dodo': '\u{0001f9a4}',
+'sloth': '🦥',
+'oyster': '🦪',
+'beaver': '\u{0001f9ab}',
+'seal': '\u{0001f9ad}',
+'guide dog': '🦮',
+'white cane': '🦯',
+'red hair': '🦰',
+'supervillain': '🦹',
+'safety vest': '🦺',
+'mechanical leg': '🦿',
+'cheese wedge': '🧀',
+'cupcake': '🧁',
+'salt': '🧂',
+'beverage box': '🧃',
+'ice': '🧊',
+'bubble tea': '\u{0001f9cb}',
+'troll': '\u{0001f9cc}',
+'person standing': '🧍',
+'deaf person': '🧏',
+'face with monocle': '🧐',
+'socks': '🧦',
+'red envelope': '🧧',
+'nazar amulet': '🧿',
+'ballet shoes': '🩰',
+'shorts': '🩳',
+'thong sandal': '\u{0001fa74}',
+'light blue heart': '\u{0001fa75}',
+'pink heart': '\u{0001fa77}',
+'drop of blood': '🩸',
+'stethoscope': '🩺',
+'x-ray': '\u{0001fa7b}',
+'crutch': '\u{0001fa7c}',
+'yo-yo': '🪀',
+'parachute': '🪂',
+'boomerang': '\u{0001fa83}',
+'nesting dolls': '\u{0001fa86}',
+'maracas': '\u{0001fa87}',
+'flute': '\u{0001fa88}',
+'ringed planet': '🪐',
+'banjo': '🪕',
+'military helmet': '\u{0001fa96}',
+'rock': '\u{0001faa8}',
+'mirror ball': '\u{0001faa9}',
+'hamsa': '\u{0001faac}',
+'folding hand fan': '\u{0001faad}',
+'khanda': '\u{0001faaf}',
+'fly': '\u{0001fab0}',
+'feather': '\u{0001fab6}',
+'lotus': '\u{0001fab7}',
+'nest with eggs': '\u{0001faba}',
+'hyacinth': '\u{0001fabb}',
+'wing': '\u{0001fabd}',
+'goose': '\u{0001fabf}',
+'anatomical heart': '\u{0001fac0}',
+'people hugging': '\u{0001fac2}',
+'pregnant man': '\u{0001fac3}',
+'person with crown': '\u{0001fac5}',
+'moose': '\u{0001face}',
+'donkey': '\u{0001facf}',
+'blueberries': '\u{0001fad0}',
+'teapot': '\u{0001fad6}',
+'pouring liquid': '\u{0001fad7}',
+'jar': '\u{0001fad9}',
+'ginger root': '\u{0001fada}',
+'pea pod': '\u{0001fadb}',
+'melting face': '\u{0001fae0}',
+'bubbles': '\u{0001fae7}',
+'shaking face': '\u{0001fae8}',
+'hand with index finger and thumb crossed': '\u{0001faf0}',
+'heart hands': '\u{0001faf6}',
+'leftwards pushing hand': '\u{0001faf7}',
+'rightwards pushing hand': '\u{0001faf8}',
+'copyright': '©️',
+'registered': '®️',
+'double exclamation mark': '‼️',
+'exclamation question mark': '⁉️',
+'trade mark': '™️',
+'information': 'ℹ️',
+'left-right arrow': '↔️',
+'up-down arrow': '↕️',
+'up-left arrow': '↖️',
+'up-right arrow': '↗️',
+'down-right arrow': '↘️',
+'down-left arrow': '↙️',
+'right arrow curving left': '↩️',
+'left arrow curving right': '↪️',
+'keyboard': '⌨️',
+'eject button': '⏏️',
+'next track button': '⏭️',
+'last track button': '⏮️',
+'play or pause button': '⏯️',
+'stopwatch': '⏱️',
+'timer clock': '⏲️',
+'pause button': '⏸️',
+'stop button': '⏹️',
+'record button': '⏺️',
+'circled m': 'Ⓜ️',
+'black small square': '▪️',
+'white small square': '▫️',
+'play button': '▶️',
+'reverse button': '◀️',
+'white medium square': '◻️',
+'black medium square': '◼️',
+'sun': '☀️',
+'cloud': '☁️',
+'umbrella': '☂️',
+'snowman': '☃️',
+'comet': '☄️',
+'telephone': '☎️',
+'check box with check': '☑️',
+'shamrock': '☘️',
+'index pointing up': '☝️',
+'skull and crossbones': '☠️',
+'radioactive': '☢️',
+'biohazard': '☣️',
+'orthodox cross': '☦️',
+'star and crescent': '☪️',
+'peace symbol': '☮️',
+'yin yang': '☯️',
+'wheel of dharma': '☸️',
+'frowning face': '☹️',
+'smiling face': '☺️',
+'female sign': '♀️',
+'male sign': '♂️',
+'chess pawn': '♟️',
+'spade suit': '♠️',
+'club suit': '♣️',
+'heart suit': '♥️',
+'diamond suit': '♦️',
+'hot springs': '♨️',
+'recycling symbol': '♻️',
+'infinity': '♾️',
+'hammer and pick': '⚒️',
+'crossed swords': '⚔️',
+'medical symbol': '⚕️',
+'balance scale': '⚖️',
+'alembic': '⚗️',
+'gear': '⚙️',
+'atom symbol': '⚛️',
+'fleur-de-lis': '⚜️',
+'warning': '⚠️',
+'transgender symbol': '⚧️',
+'coffin': '⚰️',
+'funeral urn': '⚱️',
+'cloud with lightning and rain': '⛈️',
+'pick': '⛏️',
+'rescue worker’s helmet': '⛑️',
+'chains': '⛓️',
+'shinto shrine': '⛩️',
+'mountain': '⛰️',
+'umbrella on ground': '⛱️',
+'ferry': '⛴️',
+'skier': '⛷️',
+'ice skate': '⛸️',
+'person bouncing ball': '⛹️',
+'scissors': '✂️',
+'airplane': '✈️',
+'envelope': '✉️',
+'victory hand': '✌️',
+'writing hand': '✍️',
+'pencil': '✏️',
+'black nib': '✒️',
+'check mark': '✔️',
+'multiply': '✖️',
+'latin cross': '✝️',
+'star of david': '✡️',
+'eight-spoked asterisk': '✳️',
+'eight-pointed star': '✴️',
+'snowflake': '❄️',
+'sparkle': '❇️',
+'heart exclamation': '❣️',
+'red heart': '❤️',
+'right arrow': '➡️',
+'right arrow curving up': '⤴️',
+'right arrow curving down': '⤵️',
+'left arrow': '⬅️',
+'up arrow': '⬆️',
+'down arrow': '⬇️',
+'wavy dash': '〰️',
+'part alternation mark': '〽️',
+'japanese “congratulations” button': '㊗️',
+'japanese “secret” button': '㊙️',
+'a button (blood type)': '🅰️',
+'b button (blood type)': '🅱️',
+'o button (blood type)': '🅾️',
+'p button': '🅿️',
+'japanese “service charge” button': '🈂️',
+'japanese “monthly amount” button': '🈷️',
+'thermometer': '🌡️',
+'sun behind small cloud': '🌤️',
+'sun behind large cloud': '🌥️',
+'sun behind rain cloud': '🌦️',
+'cloud with rain': '🌧️',
+'cloud with snow': '🌨️',
+'cloud with lightning': '🌩️',
+'tornado': '🌪️',
+'fog': '🌫️',
+'wind face': '🌬️',
+'hot pepper': '🌶️',
+'fork and knife with plate': '🍽️',
+'military medal': '🎖️',
+'reminder ribbon': '🎗️',
+'studio microphone': '🎙️',
+'level slider': '🎚️',
+'control knobs': '🎛️',
+'film frames': '🎞️',
+'admission tickets': '🎟️',
+'person lifting weights': '🏋️',
+'person golfing': '🏌️',
+'motorcycle': '🏍️',
+'racing car': '🏎️',
+'snow-capped mountain': '🏔️',
+'camping': '🏕️',
+'beach with umbrella': '🏖️',
+'building construction': '🏗️',
+'houses': '🏘️',
+'cityscape': '🏙️',
+'derelict house': '🏚️',
+'classical building': '🏛️',
+'desert': '🏜️',
+'desert island': '🏝️',
+'national park': '🏞️',
+'stadium': '🏟️',
+'white flag': '🏳️',
+'rosette': '🏵️',
+'label': '🏷️',
+'chipmunk': '🐿️',
+'eye': '👁️',
+'film projector': '📽️',
+'om': '🕉️',
+'dove': '🕊️',
+'candle': '🕯️',
+'mantelpiece clock': '🕰️',
+// 'hole': '🕳️',
+'person in suit levitating': '🕴️',
+'detective': '🕵️',
+'sunglasses': '🕶️',
+'spider': '🕷️',
+'spider web': '🕸️',
+'joystick': '🕹️',
+'linked paperclips': '🖇️',
+'pen': '🖊️',
+'fountain pen': '🖋️',
+'paintbrush': '🖌️',
+'crayon': '🖍️',
+'hand with fingers splayed': '🖐️',
+'desktop computer': '🖥️',
+'printer': '🖨️',
+'computer mouse': '🖱️',
+'trackball': '🖲️',
+'framed picture': '🖼️',
+'card index dividers': '🗂️',
+'card file box': '🗃️',
+'file cabinet': '🗄️',
+'wastebasket': '🗑️',
+'spiral notepad': '🗒️',
+'spiral calendar': '🗓️',
+'clamp': '🗜️',
+'old key': '🗝️',
+'rolled-up newspaper': '🗞️',
+'dagger': '🗡️',
+'speaking head': '🗣️',
+'left speech bubble': '🗨️',
+'right anger bubble': '🗯️',
+'ballot box with ballot': '🗳️',
+'world map': '🗺️',
+'couch and lamp': '🛋️',
+'shopping bags': '🛍️',
+'bellhop bell': '🛎️',
+'bed': '🛏️',
+'hammer and wrench': '🛠️',
+'shield': '🛡️',
+'oil drum': '🛢️',
+'motorway': '🛣️',
+'railway track': '🛤️',
+'motor boat': '🛥️',
+'small airplane': '🛩️',
+'satellite': '🛰️',
+'passenger ship': '🛳️', 
+};
+
+
+        </script>
+    </body>
+</html>
