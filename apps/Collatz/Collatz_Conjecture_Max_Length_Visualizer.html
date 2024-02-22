@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Collatz Conjecture Max Length Visualizer</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        #collatzChart { width: 800px; height: 400px; margin: auto; }
+    </style>
+</head>
+<body>
+    <h2>Collatz Conjecture Max Length Visualizer</h2>
+    <input type="number" id="maxNumberInput" placeholder="Enter Maximum Number">
+    <input type="number" id="rangeSizeInput" placeholder="Enter Range Size">
+    <button onclick="showCollatzMaxSequences()">Calculate</button>
+
+    <canvas id="collatzChart"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+    <script>
+        var ctx = document.getElementById('collatzChart').getContext('2d');
+        var collatzChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Maximum Length of Collatz Sequence',
+                    data: [],
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    zoom: {
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'xy'
+                        },
+                        pan: {
+                            enabled: true,
+                            mode: 'xy'
+                        }
+                    }
+                }
+            }
+        });
+
+        function showCollatzMaxSequences() {
+            var maxNumber = parseInt(document.getElementById('maxNumberInput').value);
+            var rangeSize = parseInt(document.getElementById('rangeSizeInput').value);
+            collatzChart.data.labels = [];
+            collatzChart.data.datasets.forEach((dataset) => {
+                dataset.data = [];
+            });
+
+            for (let i = 1; i <= maxNumber; i += rangeSize) {
+                let maxSequenceLength = 0;
+                for (let j = i; j < i + rangeSize && j <= maxNumber; j++) {
+                    let sequenceLength = calculateCollatzSequenceLength(j);
+                    if (sequenceLength > maxSequenceLength) {
+                        maxSequenceLength = sequenceLength;
+                    }
+                }
+                let rangeLabel = `${i}-${i + rangeSize - 1}`;
+                collatzChart.data.labels.push(rangeLabel);
+                collatzChart.data.datasets.forEach((dataset) => {
+                    dataset.data.push(maxSequenceLength);
+                });
+            }
+
+            collatzChart.update();
+        }
+
+        function calculateCollatzSequenceLength(number) {
+            var length = 1;
+            while (number != 1) {
+                if (number % 2 == 0) {
+                    number = number / 2;
+                } else {
+                    number = number * 3 + 1;
+                }
+                length++;
+            }
+            return length;
+        }
+    </script>
+</body>
+</html>
