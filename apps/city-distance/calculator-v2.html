@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Distance Calculator</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            text-align: center;
+        }
+        h2 {
+            margin-bottom: 20px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        label {
+            margin-bottom: 5px;
+        }
+        input {
+            margin-bottom: 10px;
+            padding: 5px;
+            width: 200px;
+        }
+        #result, #error { 
+            margin-top: 20px; 
+            color: red; 
+        }
+    </style>
+</head>
+<body>
+    <h2>City Distance Calculator</h2>
+    <form id="distanceForm">
+        <label for="cityName">Enter City Name:</label>
+        <input type="text" id="cityName" name="cityName" required><br>
+        <label for="apiKey">API Key:</label>
+        <input type="password" id="apiKey" name="apiKey" required><br>
+        <label for="latitude">Your Latitude:</label>
+        <input type="number" id="latitude" name="latitude" step="any" required><br>
+        <label for="longitude">Your Longitude:</label>
+        <input type="number" id="longitude" name="longitude" step="any" required><br>
+        <button id="getCityLocation">Get City Location</button><br>
+        <button id="getLocation">Use My Location</button><br>
+        <input type="submit" value="Calculate Distance">
+    </form>
+    <div id="result"></div>
+    <div id="error"></div>
+
+    <script>
+        document.getElementById("getCityLocation").addEventListener("click", function(){
+            var cityName = document.getElementById("cityName").value;
+            var apiKey = document.getElementById("apiKey").value;
+            var geonamesURL = "http://api.geonames.org/searchJSON?q=" + cityName + "&maxRows=1&username=" + apiKey;
+
+            fetch(geonamesURL)
+                .then(response => response.json())
+                .then(data => {
+                    if(data.totalResultsCount > 0){
+                        var cityLat = data.geonames[0].lat;
+                        var cityLng = data.geonames[0].lng;
+                        document.getElementById("latitude").value = cityLat;
+                        document.getElementById("longitude").value = cityLng;
+                    } else {
+                        document.getElementById("error").innerHTML = "City not found.";
+                    }
+                })
+                .catch(error => {
+                    document.getElementById("error").innerHTML = "Error fetching city location: " + error;
+                });
+        });
+
+        document.getElementById("getLocation").addEventListener("click", function(){
+            if ("geolocation" in navigator){
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    document.getElementById("latitude").value = position.coords.latitude;
+                    document.getElementById("longitude").value = position.coords.longitude;
+                }, function(error) {
+                    document.getElementById("error").innerHTML = "Error: " + error.message;
+                });
+            } else {
+                document.getElementById("error").innerHTML = "Geolocation is not available.";
+            }
+        });
+
+        document.getElementById("distanceForm").addEventListener("submit", function(event){
+            event.preventDefault();
+            var userLat = document.getElementById("latitude").value;
+            var userLng = document.getElementById("longitude").value;
+            var distance = calculateDistance(userLat, userLng, userLat, userLng);
+            document.getElementById("result").innerHTML = "Distance: " + distance.toFixed(2) + " km";
+        });
+
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            var R = 6371; // Radius of the Earth in km
+            var dLat = deg2rad(lat2 - lat1);
+            var dLng = deg2rad(lng2 - lng1);
+            var a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distance in km
+        }
+
+        function deg2rad(deg) {
+            return deg * (Math.PI / 180)
+        }
+    </script>
+</body>
+</html>

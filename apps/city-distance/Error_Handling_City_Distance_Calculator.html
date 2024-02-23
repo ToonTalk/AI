@@ -1,0 +1,81 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Distance Calculator</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #result, #error { margin-top: 20px; color: red; }
+    </style>
+</head>
+<body>
+    <h2>City Distance Calculator</h2>
+    <button id="getLocation">Get My Location</button><br><br>
+    <form id="distanceForm">
+        <label for="latitude">Your Latitude:</label><br>
+        <input type="number" id="latitude" name="latitude" step="any" required><br><br>
+        <label for="longitude">Your Longitude:</label><br>
+        <input type="number" id="longitude" name="longitude" step="any" required><br><br>
+        <label for="city">City:</label><br>
+        <select id="city" name="city">
+            <option value="New York">New York</option>
+            <option value="London">London</option>
+            <option value="Tokyo">Tokyo</option>
+            <option value="Sydney">Sydney</option>
+        </select><br><br>
+        <input type="submit" value="Calculate Distance">
+    </form>
+    <div id="result"></div>
+    <div id="error"></div>
+
+    <script>
+        document.getElementById("getLocation").addEventListener("click", function(){
+            if ("geolocation" in navigator){
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    document.getElementById("latitude").value = position.coords.latitude;
+                    document.getElementById("longitude").value = position.coords.longitude;
+                }, function(error) {
+                    document.getElementById("error").innerHTML = "Error: " + error.message;
+                });
+            } else {
+                document.getElementById("error").innerHTML = "Geolocation is not available.";
+            }
+        });
+
+        document.getElementById("distanceForm").addEventListener("submit", function(event){
+            event.preventDefault();
+            var userLat = document.getElementById("latitude").value;
+            var userLng = document.getElementById("longitude").value;
+            var city = document.getElementById("city").value;
+
+            var cityCoords = {
+                "New York": { lat: 40.7128, lng: -74.0060 },
+                "London": { lat: 51.5074, lng: -0.1278 },
+                "Tokyo": { lat: 35.6895, lng: 139.6917 },
+                "Sydney": { lat: -33.8688, lng: 151.2093 }
+            };
+
+            var distance = calculateDistance(userLat, userLng, cityCoords[city].lat, cityCoords[city].lng);
+            document.getElementById("result").innerHTML = "Distance to " + city + ": " + distance.toFixed(2) + " km";
+        });
+
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            var R = 6371; // Radius of the Earth in km
+            var dLat = deg2rad(lat2 - lat1);
+            var dLng = deg2rad(lng2 - lng1);
+            var a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distance in km
+        }
+
+        function deg2rad(deg) {
+            return deg * (Math.PI / 180)
+        }
+    </script>
+</body>
+</html>
