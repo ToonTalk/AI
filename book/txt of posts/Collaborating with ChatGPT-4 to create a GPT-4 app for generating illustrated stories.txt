@@ -1,0 +1,715 @@
+﻿Collaborating with ChatGPT-4 to create a GPT-4 app for generating illustrated stories
+
+
+Ken Kahn <toontalk@gmail.com>
+
+
+Introduction
+Previously, I created an app that uses large language models (LLM) to generate, criticize, update, and illustrate stories. This was implemented using blocks I had developed in Snap!, a block-based programming language. It runs by generating prompts for a selected LLM. I created over 20 illustrated stories using it.
+
+
+The release of GPT-4 with its very strong programming capabilities led me to wonder if I could recreate my app in JavaScript without entering any lines of code. I found I could. After 111 dialogue exchanges with ChatGPT-4 I had over 500 lines of JavaScript, over 150 lines of CSS, and about 50 lines of HTML. As described in detail below, with a few minor exceptions my role was solely to prompt GPT-4 and copy and paste as instructed by ChatGPT-4. The entire conversation with ChatGPT-4 is available here.
+Feasibility of using ChatGPT-4 to generate an illustrated story
+In the Calliope story by Neil Gaiman, a writer is cursed with too many good ideas. One of the ideas is a story about a man who falls in love with a paper doll. So I prompted ChatGPT-4 with
+
+
+Create a 3 paragraph long story about a man who falls in love with a paper doll
+
+
+I won’t repeat the response here but all responses are available here.
+
+
+Can you generate constructive criticism of the first paragraph
+
+
+Four suggestions resulted so I entered
+
+
+Rewrite the first paragraph following suggestions 1 and 4
+
+
+Satisfied with the result, I repeated this with the second and third paragraphs. Happy with the story and confident I could ask for more suggestions and rewrites if I wanted, I entered
+
+
+Generate a description of an illustration for each paragraph. Include the kind of medium, artistic style, mood, point of view, lighting, and the like. 
+
+
+I then wanted to automate the illustration process so I asked
+
+
+How can I create a web page that asks for an OpenAI API key and uses the API to generate the 3 images. The page should interleave each paragraph and its illustration.
+
+
+It generated appropriate JavaScript, CSS, and HTML. But it suggested that to communicate with the OpenAI API that I create a simple server in Python. I wanted a pure web page solutions so I wrote
+
+
+Rewrite "generateImage" to work without a server following this documentation <where I copied and pasted the contents of https://platform.openai.com/docs/api-reference/images/create>
+
+
+The response included two versions where one of them relied upon a CORS proxy which I ignored. The response left the descriptions of the images as an empty list to be filled in so I entered
+
+
+Complete "const descriptions = [
+    // Add the description of the illustrations here
+  ];" with the descriptions you generated earlier
+
+
+I entered
+
+
+Display the image description when the mouse hovers over an image. Also alternate the story paragraphs and the images
+
+
+Since the JavaScript had an empty list of the paragraphs of the story I requested
+
+
+Complete storyParagraphs with the story you generated
+
+
+It used the original version of the story so I said
+
+
+Use the rewritten version of the story instead
+
+
+I then requested
+
+
+I'm not seeing the tooltips when hovering. Also remove the API key interface after the key is provided. The text should be larger and have a font appropriate for stories like this.
+
+
+ChatGPT-4 was creating an HTML element for the tooltip instead of using the title attribute of the image. It made an error using a similar id for an element instead of the exact one. So I copied the error as follows
+
+
+script.js:39 Uncaught (in promise) TypeError: Cannot read properties of null (reading 'classList')
+    at HTMLFormElement.<anonymous> (script.js:39:40)"  And I still don't see the tooltips. 
+
+
+But it was still confused - perhaps it forgot the HTML so I entered
+
+
+Remember that the HTML file is "<I copied and pasted the index.html contents here>”
+
+
+Confusion persisted and I copied the error (accidently truncating the first part)
+
+
+ript.js:1 Uncaught TypeError: Cannot read properties of null (reading 'addEventListener')
+    at script.js:1:36
+
+
+It fixed the errors but still no tooltips. So I looked at the CSS and wondered what part of it meant. I entered
+
+
+Still no tooltips. What does the "after" mean in "img:hover::after"
+
+
+It provided a clear answer and finally fixed the tooltips. I then went on
+
+
+I would like to be able to click on an image to display an alternative image next to the original. Then the user is asked if they want to replace the image with the new one and if the user confirms the new image replaces the old one.
+
+
+This resulted in an error when clicking on an illustration
+
+
+script.js:62 Uncaught (in promise) ReferenceError: descriptions is not defined
+    at handleImageClick (script.js:62:51)
+    at HTMLImageElement.<anonymous> (script.js:40:53)
+
+
+With the problem fixed I noticed then when I refreshed the page identical images were generated. So I asked
+
+
+Can you make it so each time the program is run we get different images matching the descriptions
+
+
+Its solution was to add a timestamp to each image generation request - a bit of a hack but maybe there is no better way since there is no seed input to the image creation API. But the app didn’t display the new image so I said
+
+
+I can't see the alternative illustration
+
+
+ChatGPT-4 fixed this. I decided to get rid of the confirmation so I suggested
+
+
+Let's not ask the user for confirmation but instead when clicked the image is replaced. Also the API key field should act like a password field
+
+
+That worked and here’s the resulting app.
+Generalizing the app to be able to work with any story description
+
+
+The app was good at illustrating the story about the man who loved a paper doll but I then requested a more general app.
+
+
+Let's change things so the paragraphs and illustration descriptions are generated by ChatGPT-4
+
+
+It created code for communicating with the OpenAI completion API to use GPT-3 (since GPT-4 was trained before there was a chat API) but it always created stories about a man who loved a paper doll. So I entered
+
+
+The story prompt should be based on user input but keep the illustration part of the prompt
+
+
+The app was working well so I asked it to add comments to the code.
+
+
+Add comments to generateStoryAndDescriptions and displayStoryAndImages
+
+
+I then asked for small improvements
+
+
+Change the HTML have a better title and heading. And remove the story prompt field after reading it
+
+
+But in the rewrite it generated code to remove some element ids with similar but incorrect ids causing this error
+
+
+ript.js:1 Uncaught ReferenceError: apiForm is not defined
+    at script.js:1:1
+
+
+It suggested changes but
+
+
+Same error
+
+
+Fixed this time but then a new error
+
+
+ript.js:26 Uncaught (in promise) ReferenceError: OpenAIApi is not defined
+    at generateStoryAndDescriptions (script.js:26:18)
+    at displayStoryAndImages (script.js:60:63)
+    at HTMLFormElement. (script.js:14:9)
+
+
+It had been using OpenAI’s completion API with GPT-3. I wanted GPT-4 but its API is newer than GPT-4 training data, so I entered
+
+
+I want to use GPT-4. Here's its documentation "<copy and paste from https://platform.openai.com/docs/api-reference/chat>”
+
+
+It worked the first time. So I asked for more
+
+
+Make the story prompt field much bigger. Add "Create a 3 paragraph long story about" to the prompt. And provide feedback by displaying the responses from GPT-4 in a dismissable popup. And remember to comment functions.
+
+
+It generated lots of code (but not commented much) but there was an error (again due to mismatched element ids)
+
+
+ript.js:10 Uncaught (in promise) TypeError: Cannot read properties of null (reading 'classList')
+    at HTMLFormElement. (script.js:10:20)
+
+
+The error was fixed but there was a new one
+
+
+There is no popup for the story and illustration descriptions. And we have this error: ript.js:205 ReferenceError: generateImages is not defined
+    at displayStoryAndImages (script.js:188:23)
+    at async HTMLFormElement. (script.js:217:5)
+
+
+Bugs were fixed but there was an empty popup at opening the app. I thought why not ask it to fill it in with instructions rather than get rid of it.
+
+
+I think the popup is being displayed at the opening of the app. Start with the popup providing instructions before the user submits anything.
+
+
+It generated good instructions but there were two kinds of buttons for closing popups
+
+
+When I click on the button labled "Close" it works but then I see a small button with an x as a label. Popups don't need both, right?
+
+
+The changes didn’t quite work so I explained
+
+
+I see a red x and clicking it closes the popup but then I see an uncolored x. Maybe the HTML needs updating. Here it is "<copied and pasted index.html>”
+
+
+It removed the extra popup but introduced an error due to using similar but not identical names for calls to a function and it definition
+
+
+ript.js:210 ReferenceError: generateImagesFromDescriptions is not defined
+    at displayStoryAndImages (script.js:193:23)
+    at async HTMLFormElement. (script.js:31:5)
+displayStoryAndImages @ script.js:210
+await in displayStoryAndImages (async)
+(anonymous) @ script.js:31
+script.js:146 Uncaught (in promise) TypeError: Cannot set properties of null (setting 'textContent')
+    at displayPopup (script.js:146:31)
+    at displayStoryAndImages (script.js:211:5)
+    at async HTMLFormElement. (script.js:31:5)
+
+
+
+
+
+
+It improved things but another error due to inconsistent naming appeared
+
+
+Use something other than "alert". And we have this error: "ript.js:209 ReferenceError: generateImages is not defined
+    at displayStoryAndImages (script.js:193:20)
+    at async HTMLFormElement. (script.js:31:5)
+
+
+It replaced the alert with the popup function it had created but
+
+
+generateImagesFromDescriptions  isn't defined
+
+
+It was still confused
+
+
+Neither generateImagesFromDescriptions  nor generateImages is defined
+
+
+I decided to help since it had earlier created a working generateImage (singular)
+
+
+But createImageFromDescription isn't defined. Long ago you defined this: <copied from its earlier generated code>”
+
+
+With that it fixed the problems. The app asked GPT-4 for story paragraphs and corresponding illustration descriptions. But they came back in a format that wasn’t reliably being parsed. So
+
+
+Change the prompt sent to GPT to be sure that the response can easily be broken up into paragraphs and their corresponding illustration descriptions. Then update displayStoryAndImages.
+
+
+It did this well by generating this prompt to its API:
+
+
+`Create a 3 paragraph long story about ${prompt}. For each paragraph, also provide a short description for an illustration that corresponds to the paragraph's content.\n\n[PARAGRAPH]`;
+
+
+But
+
+
+We are not using Node - use fetch to communicate with OpenAI
+
+
+It did that but unlike the original man who fell in love with a paper doll story, the prompt was too generic. So
+
+
+You should modify the prompt you were using before: `${userInput} and generate a description of an illustration for each paragraph. Include the kind of medium, artistic style, mood, point of view, lighting, and the like.` by specifying a format that makes it easy to separate each paragraph and illustration description.
+
+
+That was OK but a new popup error occurred
+
+
+ript.js:124 Uncaught (in promise) TypeError: Cannot set properties of null (setting 'textContent')
+    at displayPopup (script.js:124:31)
+    at displayStoryAndImages (script.js:160:5)
+    at async HTMLFormElement. (script.js:31:5)
+
+
+I got impatient with all these minor popup errors. It forgot in this case the order of the function’s inputs. It also had a more subtle bug that it wasn’t fixing. This was caused by a function returning { paragraphs, illustrationDescriptions } and the caller deconstructing it using const { story, illustrationDescriptions } = …. So those variables became undefined. Using [] instead of {} was one of the rare edits I made in addition to swapping the function’s inputs that it kept getting wrong.
+
+
+I just fixed two problems. You switched prompt and apiKey in generateStoryAndDescriptions and it reports a structure with paragraphs and illustrationDescriptions  as keys. A list is simpler so I updated that and its caller. No need for you do anything about this. But could make it so as the app runs it displays messages about what it is doing and waiting for.
+
+
+ChatGPT-4 replied “I'm glad you were able to fix the issues.” but it continued to ignore them. It seemed that it was forgetting code that it had generated much earlier. So I decided to remind it by
+
+
+What needs to be fixed in this "<copy and paste of the script.js file>”
+
+
+Its response was “It seems that there are some inconsistencies in the code you provided.” It made changes that resulted in an error and I decided to report the error and also be sure it knew the code involved
+
+
+I'm seeing this error "ript.js:84 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'index')
+    at handleImageClick (script.js:84:29)" when I click on an image. Here's the function "async function handleImageClick(img, apiKey, descriptions) {
+  const index = img.dataset.index;
+  const alternativeImageURL = await generateImage(`${descriptions[index]} - Unique ID: ${Date.now()}${index}`, apiKey);
+
+
+  img.src = alternativeImageURL;
+}"
+
+
+The {} instead of [] problem returned. And I asked for some improvements
+
+
+But generateStoryAndDescriptions ends with return [ paragraphs, illustrationDescriptions ];. Let's remove displayPopup("Generated story and illustration descriptions:",...). The title and header should come from the user prompt.
+
+
+Most everything was working but the tooltip for describing illustrations was broken again
+
+
+The display of the illustration description when hovering has stopped working. Also can you set the text font to match the style and mood of the story
+
+
+It fixed this and replied “As for setting the text font to match the style and mood of the story, it's quite challenging to do this automatically since it would require an analysis of the story's mood and style. A simpler approach would be…”
+
+
+You could try asking GPT-4 for a font suggestion based on the story it generates
+
+
+It replied “That's a great idea! …” and implemented it. But the API call was returning multiple sentences describing possible fonts for the story and the code was not reliably getting a proper font name. But I didn’t notice this until later so asked for another feature since there often was a long lag when waiting for GPT-4’s API to respond.
+
+
+Can we display something to indicate that the app is generating that is removed once we begin adding paragraphs
+
+
+Again it was forgetting the names of things and using similar names that didn’t match other parts of the code
+
+
+script.js:197 ReferenceError: storyParagraphs is not defined
+    at generateStoryAndDescriptions (script.js:85:62)
+    at async displayStoryAndImages (script.js:169:61)
+    at async HTMLFormElement. (script.js:31:5)
+displayStoryAndImages @ script.js:197
+await in displayStoryAndImages (async)
+(anonymous) @ script.js:31
+script.js:200 Uncaught (in promise) ReferenceError: loadingMessage is not defined
+    at displayStoryAndImages (script.js:200:5)
+    at async HTMLFormElement. (script.js:31:5)
+
+
+ChatGPT-4 fixed things but the font problem popped up
+
+
+Consider this error "ript.js:197 DOMException: Failed to execute 'add' on 'DOMTokenList': The token provided ('Font suggestion: Old Style or Typewriter Style, such as Garamond, Caslon, or Courier New. These fonts have a classic, historical appearance that reflects the ancient library and the vintage nature of the story's elements.') contains HTML space characters, which are not valid in tokens.
+    at displayStoryAndImages (file:///C:/Users/toont/Documents/GitHub/ai/misc/Illustrated%20story%20generator/script.js:183:27)
+    at async HTMLFormElement. (file:///C:/Users/toont/Documents/GitHub/ai/misc/Illustrated%20story%20generator/script.js:214:5)" I wonder if you could add code to extract the first font name in the response or else change the request to report just a font name.
+
+
+I was getting tired of so many errors so I tried to help with the next error
+
+
+You didn't use fontSuggestionResponse - probably why we got this error: ript.js:198 DOMException: Failed to execute 'add' on 'DOMTokenList': The token provided ('When Oscar received the tattered') contains HTML space characters, which are not valid in tokens.
+    at displayStoryAndImages (file:///C:/Users/toont/Documents/GitHub/ai/misc/Illustrated%20story%20generator/script.js:184:27)
+    at async HTMLFormElement. (file:///C:/Users/toont/Documents/GitHub/ai/misc/Illustrated%20story%20generator/script.js:31:5)
+
+
+It continued to have problems with font suggestion since it was not a separate request but added to the story and illustration description prompt.
+
+
+No. The font suggestion was the first part of the story. Let's get GPT-4 to reply to our request with only the font name and nothing else.
+
+
+It continued to get mixed up about how to extract the font suggestion from the response. And said to not forget to update one of the functions that already was working fine
+
+
+But we do we do with "<copy and paste relevant code>" anymore [not sure why I wrote “anymore” and repeated we do]
+
+
+Its suggested code wasn’t going to work so I assumed it has forgotten its own code so I wrote
+
+
+No that won't work.  Here's the current definition "<copy and paste code>”
+
+
+I got tired of trying to fix this font suggestion problem so I commented it out. (This was a mistake - I should have asked GPT to remove it since it later generated code that contained font suggestion code that I needed to comment out again.) I wanted to recreate the experience with the paper doll story app where GPT-4 generated criticism and then rewrote a paragraph based on which suggestions I liked.
+
+
+Can we make it so if the user clicks on a paragraph a prompt is sent to GPT-4: "Can you generate a numbered list of constructive criticisms of paragraph number N" where N is the index of the paragraph clicked on. Each of the numbered items in the response should be buttons that are added above the paragraph.
+
+
+Sorta worked the first time. In splitting up the criticisms response it got many empty lines which became empty buttons.
+
+
+Don't create buttons for empty strings. When a criticism button is clicked send the following to GPT-4: "Rewrite paragraph number N following CRITICISM" where CRITICISM is the text of the button. Then replace the current paragraph with the response and remove the button.
+
+
+A scoping bug:
+
+
+script.js:263 Uncaught ReferenceError: apiKey is not defined
+    at HTMLButtonElement. (script.js:263:24)
+
+
+Again I got impatient and provided more help than maybe should given my goal of seeing how much ChatGPT-4 can do
+
+
+No. Here's the problem code "<copy and paste relevant code>”
+
+
+A typical response “I apologize for the confusion. You're right, the issue is that the apiKey is not in the scope of the displayCriticismsButtons function.” and it produced a fix that worked.
+
+
+Display something while waiting for GPT-4 to generate criticism and when rewriting a paragraph
+
+
+Bug due to using different similar names for a variable
+
+
+ript.js:283 Uncaught (in promise) ReferenceError: paragraphs is not defined
+    at rewriteParagraph (script.js:283:26)
+    at HTMLButtonElement. (script.js:272:7)
+
+
+I noticed that the constructive criticism was very generic (unlike with the paper doll story) and realized that the prompt was lacking the full context
+
+
+Update getConstructiveCriticisms so that the prompt also includes the entire story
+
+
+Working fine. Since there are many buttons I ask for a way to close them all. And then I thought why not also allow the user to enter criticism. (I probably didn’t need to mention alert which used earlier but it wasn’t an issue here.)
+
+
+Add a close button to the list of criticism buttons. And add a new button that asks the user for the criticism to apply (don't use "alert").
+
+
+Perhaps I was being too helpful when I wrote
+
+
+You forgot that the call is "displayCriticismsButtons(apiKey, paragraphElement, paragraphIndex, criticisms);"
+
+
+Fixed. GPT-4 generated criticism buttons worked. But when I tried the user criticism button the code tried to remove the button.
+
+
+caught (in promise) TypeError: Cannot read properties of null (reading 'remove')
+    at rewriteParagraph (script.js:335:10)
+When using the add your own criticism button - note it should not be removed
+
+
+As with the paper doll story I noticed that the context for generating criticism and rewriting was the original story
+
+
+The prompts to GPT-4 for criticism and for rewriting should include the current story (after any rewrites) and not the original story
+
+
+It generated reasonable code but when I looked at the prompt sent to GPT-4 I saw it was empty. I decided to also try a different idea regarding the font for the text of the story.
+
+
+I looked at the prompts sent to GPT-4 and the story was empty. By the way what font would you recommend for stories like this one "<copy and paste a story the app generated>”
+
+
+This time asking for two things was a mistake. It only answered my question about a font suggestion (here I’m planning on using the same font for all stories, unlike the failed attempt to get a custom font for each story). Its font suggestions were reasonable. I described the problem again
+
+
+I looked at the prompts sent to GPT-4 and the story was empty. 
+
+
+Looking at its fix I see it had forgotten how the current story was computed
+
+
+Here's how we compute the current story:  const currentStory = Array.from(document.querySelectorAll('.story-paragraph')).map(paragraph =&gt; paragraph.textContent).join('\n');
+
+
+The response was “Thank you for providing the correct code to compute the current story.” and then suggested code that was the same as before. So I gave the hint
+
+
+We did that already. I think the problem is the paragraphs aren't ".story-paragraph"
+
+
+Fixed. I then asked for a feature and intended to provide help by listing the functions affect but ChatGPT-4 did fine without my help
+
+
+While waiting for GPT-4 we display an indicator using the following functions. The text of the indicator should be customized for each kind of prompt we are waiting on
+
+
+Everything was working so I thought we should pretty things up. I was worried it had forgotten the CSS it had generated so long ago so I included it
+
+
+Could you improve the following CSS so that there is a nice background color and rounded edges: <copy and paste of class style>
+
+
+After more testing I noticed a problem
+
+
+Rewrite is rewriting the wrong paragraph
+
+
+Looking at the prompts sent to GPT-4 I saw the problem. (Seeing the prompts required some technical expertise but later I asked ChatGPT-4 to make the prompts and completions available. Had I done so earlier I could have seen problems more easily.) Also I noticed that a recent fix removed the feature that a criticism button should be removed after being applied.
+
+
+I see the prompt becomes "Rewrite paragraph number 0 following this criticism: [object HTMLParagraphElement]" 0 is wrong and so is the criticism. Remember the button is removed after it runs. Here is the code that calls rewriteParagraph: button.addEventListener('click', (event) =&gt; {
+      rewriteParagraph(apiKey, event.target, paragraphElement, criticism);
+    });
+
+
+But it was confused about restoring the button removal and removed the button element from the arguments to a function. So I helped
+
+
+No - earlier the second argument was the button element so it could be removed afterwards. You removed it
+
+
+It failed to restore it
+
+
+It already was that way. rewriteParagraph should receive the button element and remove it at the end
+
+
+Working fine now. The story header started with “Create a 3 paragraph long story about” so I asked ChatGPT-4 to fix it
+
+
+The header should just contain what the user entered not the full prompt. The title of the page should also be just how the user described the story
+
+
+Its fix didn’t work
+
+
+I don't want the full prompt that starts with "Create a 3 paragraph long story about" - just what the user typed in the story-prompt area
+
+
+So it removed the prefix from the title. But
+
+
+That looks like it will work but we shouldn't hard code the prefix to the user's story description ('Create a 3 paragraph long story about ') - we should use the contents of the area where the user entered the story description
+
+
+It replied “You're right. We should avoid hardcoding the prefix.” And fixed the problem. I decided we should not hard code that stories should be 3 paragraphs
+
+
+Currently we prompt for 3 paragraphs. Let's add a way for the user to set the number of paragraphs but keep the default at 3
+
+
+Done. When testing I noticed
+
+
+The loading indicator cannot be seen when the page has been scrolled down
+
+
+It changed position from ‘absolute’ to ‘fixed’. Moving on I asked
+
+
+Update the instructions to cover all the click events
+
+
+It suggested adding the instructions to the HTML
+
+
+Remember that the instructions are displayed by this:<copy and paste showInstructionsPopup definition>
+
+
+Did a good job but forgot to
+
+
+Also include that a user can click on an image to replace it
+
+
+I then thought it would be good to see the communications with GPT-4
+
+
+Let's add to the end of the page a record of all the prompts and completions that can be toggled between visible and hidden
+
+
+It worked. I was tired of this so I added by hand one line of code to also record the communication with DALL-E. Next I wanted to give some high-level control over the images.
+
+
+Now I would like when one clicks on an illustration that a dialog opens up. It should display the description of the illustration and provide a field where a user can suggest changes to the illustration. Then when they submit their suggested changes they are applied to the description using GPT-4. The new description replaces the old and a new image is generated to replace the old one. The dialog can be closed by the user at any time.
+
+
+It generated lots of new JavaScript, CSS, and HTML and its response included “Don't forget to replace the callGPT4 and generateImage functions with your actual implementations.”
+
+
+Regarding callGPT4, earlier you defined a somewhat similar function. Update callGPT4 accordingly. Here's the similar function: <copy and paste of the definition of the rewriteParagraph function>
+
+
+It wrote a good callGPT function and when I tried it
+
+
+The edit illustration dialog appears when the app is loaded. It should only appear when a user clicks on an illustration
+
+
+It generated code equivalent to what was already there. I incorrectly thought the problem was that classes for dialog conflicted so I wrote
+
+
+We already did something like that. I think the problem is in the index.html file: <copy and paste of index.html>
+
+
+It suggested HTML that we already had
+
+
+It already is like that
+
+
+It suggested CSS that we already had
+
+
+The CSS is already like that
+
+
+It suggested JavaScript similar to what was already there. So I suggested my (incorrect) theory.
+
+
+Could the order of the classes for edit-illustration-dialog matter?
+
+
+It replied “The order of classes in an HTML element should not affect whether the element is displayed or hidden…” I looked at the Element Inspector and saw that display: hidden was being overridden. 
+
+
+When I inspect the element I see <copy and paste from the Element Inspector> [but the copy and paste lost the important information that some style components were crossed out]
+
+
+It came up with theories of what was happening but not helpful. So I gave my theory.
+
+
+I think that the display: flex is overriding display: none
+
+
+It came up with a solution that was unfamiliar to me: 
+#edit-illustration-dialog.hidden {
+  display: none;
+}
+
+
+Doing more testing resulted in this scoping error
+
+
+script.js:249 Uncaught (in promise) ReferenceError: apiKey is not defined
+    at applyChangesToIllustration (script.js:249:54)
+    at dialog.querySelector.onsubmit (script.js:234:5)
+
+
+That problem fixed the dialog wasn’t filled in properly
+
+
+The dialog has an empty string for the current description. Recall that the current description is the title of the image [by title of the image I meant title attribute of the image element]
+
+
+It generated a partial solution
+
+
+openEditIllustrationDialog is not passed the apiKey
+
+
+Fixed but
+
+
+openEditIllustrationDialog does not fill in the current description part of the edit illustration dialog
+
+
+Fixed. Then since the text entry field were too small for a reasonable amount of text
+
+
+Make the text entry areas in the illustration edit dialog big enough for about 100 words
+
+
+Then
+
+
+After rewriting the illustration description the current description field should be updated
+
+
+And
+
+
+After applying the illustration [description] make the text area empty. And instead of automatically generating an image after generating the new description we should have a new button for replacing the image
+
+
+And
+
+
+Update the instructions with this change
+Discussion
+Someone with no or little programming experience can learn a great deal from collaborations with ChatGPT-4 like this one. They learn to incrementally design an app. They learn how to test and evaluate an app in order to instruct ChatGPT-4 to take the next steps. ChatGPT-4 doesn’t just produce the code to be copied but surrounds it with explanations. And it frequently adds helpful comments to the generated code. It can also answer questions about the app and its code.
+
+
+The most annoying aspect of this dialog with ChatGPT-4 is how often it forgot the exact name of an element, variable, or function and used a very similar name in subsequent generated code. Maybe a larger context for ChatGPT-4 (there is a version with context that accepts up to 32k tokens) would address this. I did try to copy and paste the current program to help it but it exceeded the maximum size of a prompt.
+
+
+There were relatively rare occasions where the feedback I was giving ChatGPT-4 could only have been made by an experienced programmer. But these instances may be hurdles that a novice programmer cannot overcome. Or maybe with enough patience ChatGPT-4 could be used to fix these problems without being an expert.
+
+
+Large language models have been improving at a rapid rate. Maybe the next generation will make the entire process easier for novices.
