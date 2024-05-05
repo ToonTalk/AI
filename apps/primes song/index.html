@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Image Slideshow with Audio</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    #slideshow {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #slideshow img {
+      position: absolute;
+      max-width: 85vw;  /* Set width to 85% of the viewport */
+      max-height: 85vh; /* Set height to 85% of the viewport */
+      width: auto;  /* Maintain the natural aspect ratio */
+      height: auto;
+      transition: opacity 2s ease-in-out;
+      opacity: 0;
+    }
+
+    #slideshow img.active {
+      opacity: 1;
+    }
+
+    #startButton {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.5rem;
+      padding: 0.5rem 1rem;
+      background-color: #ff69b4;
+      color: white;
+      border-radius: 20px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      cursor: pointer;
+      border: none;
+      outline: none;
+      z-index: 100;  /* Ensure it's above other elements */
+    }
+
+    #startButton:hover {
+      background-color: #ff8fd4;
+    }
+  </style>
+</head>
+<body>
+  <div id="slideshow">
+    <button id="startButton">Discover Infinite Primes</button>
+  </div>
+
+  <audio id="audioPlayer">
+    <source src="song.mp3" type="audio/mpeg">
+    Your browser does not support the audio element.
+  </audio>
+
+<script>
+  const slideshowContainer = document.getElementById('slideshow');
+  const audioElement = document.getElementById('audioPlayer');
+  const startButton = document.getElementById('startButton');
+  const imageFiles = ['1.webp', '2.webp', '3.webp', '4.webp', '5.webp'];
+  let currentIndex = 0;
+  let running = false; // Start with running set to false
+  let timeoutHandle = null;
+
+  imageFiles.forEach(file => {
+    const img = document.createElement('img');
+    img.src = file;
+    img.alt = `Image ${imageFiles.indexOf(file) + 1}`;
+    slideshowContainer.appendChild(img);
+  });
+
+  function changeImage() {
+    if (!running) return;
+
+    const imageElements = slideshowContainer.querySelectorAll('img');
+    if (currentIndex > 0) {
+      imageElements[currentIndex - 1].classList.remove('active');
+    }
+    imageElements[currentIndex].classList.add('active');
+
+    let delay = 20000; // Default delay
+    if (currentIndex === 0) delay = 26000; // First image
+    if (currentIndex === 1) delay = 18000; // Second image
+
+    currentIndex++;
+    if (currentIndex < imageElements.length) {
+      timeoutHandle = setTimeout(changeImage, delay);
+    } else {
+      running = false; // Optionally reset or stop after the last image
+      startButton.style.display = 'block'; // Show the start button again
+    }
+  }
+
+  function stopSlideshow(event) {
+    if (event.target === startButton) return; // Prevent stopping when clicking the start button
+    clearTimeout(timeoutHandle);
+    const imageElements = slideshowContainer.querySelectorAll('img');
+    imageElements.forEach(img => { img.classList.remove('active'); });
+    audioElement.pause();
+    audioElement.currentTime = 0;
+    running = false;
+    currentIndex = 0; // Reset index to start from the first image next time
+    startButton.style.display = 'block';
+  }
+
+  document.addEventListener('keydown', stopSlideshow);
+  document.addEventListener('click', stopSlideshow);
+
+  startButton.addEventListener('click', function() {
+    this.style.display = 'none'; // Hide button after starting the slideshow
+    running = true; // Set running to true to start the slideshow
+    changeImage(); // Start changing images
+    audioElement.play(); // Start playing the audio
+  });
+</script>
+
+</body>
+</html>
