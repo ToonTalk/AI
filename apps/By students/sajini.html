@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aqua Quest: Hydro Heroes</title>
+    <style>
+.title-box {
+    background-color: #007bff; /* Blue color */
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.game-title {
+    color: #fff; /* White color */
+    margin: 0;
+}
+
+/* Existing CSS styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-image: url('https://cdn.pixabay.com/animation/2023/06/13/21/51/21-51-13-541_512.gif');
+    background-size: cover;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.panel {
+    background-color: #f9f9f9;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.hidden {
+    display: none;
+}
+
+.action-btn {
+    display: block;
+    margin-top: 10px;
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.action-btn:hover {
+    background-color: #0056b3;
+}
+
+.water-meter-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.water-meter {
+    width: 300px; /* Adjust width as needed */
+    transform: rotate(180deg); /* Rotate the meter horizontally */
+    margin-bottom: 20px; /* Add margin to separate from other elements */
+}
+
+.message {
+    text-align: center;
+    font-weight: bold;
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 10px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+</style>
+</head>
+<body>
+    <div class="background-image">
+        <div class="container">
+            <header>
+                <div class="title-box"> <!-- Added title-box class -->
+                    <h1 class="game-title">Aqua Quest: Hydro Heroes</h1>
+                </div>
+            </header>
+            <main>
+                <div id="instructions" class="panel">
+                    <h2>Instructions</h2>
+                    <p>Welcome to the Water Conservation Game! You are the town manager responsible for managing water resources and preventing a water shortage crisis. Each day, you'll receive a report on water usage and availability. Take actions to manage water usage and earn points. Prevent a water shortage crisis to win!</p>
+                    <button id="start-btn">Start Game</button>
+                </div>
+                <div id="game-panel" class="panel hidden">
+                    <h2>Game Status</h2>
+                    <p>Days Remaining: <span id="days-remaining">30</span></p>
+                    <p>Water Resources: <span id="water-resources">1000</span> liters</p>
+                    <p>Points: <span id="points">0</span></p>
+                    <div id="actions">
+                        <button id="action-1" class="action-btn" data-amount="50" data-points="10">Promote water-saving practices</button>
+                        <button id="action-2" class="action-btn" data-amount="-100" data-points="20">Implement water restrictions</button>
+                        <button id="action-3" class="action-btn" data-amount="20" data-points="5">Fix leaks</button>
+                        <button id="action-help" class="action-btn" data-amount="0" data-points="0">Help</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Adding audio element -->
+    <audio id="audioPlayer" src="C:/Users/LENOVO/Downloads/Water Conservation Song Final.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+
+    <div id="message" class="message hidden"></div> <!-- Message box -->
+    <button id="next-btn" class="hidden">Next</button> <!-- Next button -->
+    
+    <div class="water-meter-container">
+        <meter id="water-meter" min="0" max="1000" value="500" class="water-meter">1000 liters</meter>
+    </div>
+    
+    <!-- Play button -->
+    <button id="play-btn">Play</button>
+    <script>
+        // JavaScript to handle play button functionality
+        const audioPlayer = document.getElementById('audioPlayer');
+        const playButton = document.getElementById('play-btn');
+
+        playButton.addEventListener('click', function() {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                playButton.textContent = 'Pause';
+            } else {
+                audioPlayer.pause();
+                playButton.textContent = 'Play';
+            }
+        });
+
+document.addEventListener('DOMContentLoaded', function(){
+    const instructionsPanel = document.getElementById('instructions');
+    const gamePanel = document.getElementById('game-panel');
+    const startButton = document.getElementById('start-btn');
+    const daysRemainingDisplay = document.getElementById('days-remaining');
+    const waterResourcesDisplay = document.getElementById('water-resources');
+    const pointsDisplay = document.getElementById('points');
+    const actionsContainer = document.getElementById('actions');
+    const messageBox = document.getElementById('message');
+
+    let waterResources = 1000;
+    let daysRemaining = 30;
+    let points = 0;
+    let clickCounter = 0;
+
+    // Array of quotes
+    const quotes = [
+        "Saving water now means a better future for all.",
+        "Conservation starts with you!",
+        "Every drop counts.",
+        "Water is life. Don't waste it.",
+        "Be a water hero!",
+        "Conserve water, conserve life.",
+        "Water is a precious resource, let's use it wisely.",
+        "Small actions can make a big difference.",
+        "Protecting water today, securing tomorrow.",
+        "Use water wisely, be water wise."
+    ];
+
+    startButton.addEventListener('click', function() {
+        instructionsPanel.classList.add('hidden');
+        gamePanel.classList.remove('hidden');
+        showGameStatus();
+    });
+
+    actionsContainer.querySelectorAll('.action-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const amount = parseInt(button.getAttribute('data-amount'));
+            const earnedPoints = parseInt(button.getAttribute('data-points'));
+            
+            waterResources += amount;
+            points += earnedPoints;
+
+            // Decrease days remaining for all actions
+            daysRemaining--;
+
+            // Update water meter dynamically
+            document.getElementById('water-meter').value = waterResources;
+
+            showGameStatus();
+            checkGameOver();
+            if (button.id !== 'action-help') {
+                clickCounter++;
+                if (clickCounter % 2 === 0) {
+                    showFeedback();
+                }
+            }
+        });
+    });
+
+    const helpButton = document.getElementById('action-help');
+    helpButton.addEventListener('click', function() {
+        messageBox.textContent = "Click on any one of these buttons to fix the water crisis. Ensure that your time doesn't run out.";
+        messageBox.classList.remove('hidden');
+        setTimeout(() => {
+            messageBox.classList.add('hidden');
+        }, 10000);
+    });
+
+    function showGameStatus() {
+        daysRemainingDisplay.textContent = daysRemaining;
+        waterResourcesDisplay.textContent = waterResources;
+        pointsDisplay.textContent = points;
+    }
+
+    function checkGameOver() {
+        if (waterResources <= 0 || daysRemaining === 0) {
+            // Display positive game over message with instructions
+            alert("Game's over, but you have managed to show quick-thinking, speed, and accuracy skills in your endeavor to save water. You're a hydro hero! Click on the 'Next' button in the home page at the left corner to view the next page.");
+
+            // Create and append the new "Next" button
+            const nextButton = document.createElement('button');
+            nextButton.textContent = 'Next';
+            nextButton.id = 'next-btn';
+            nextButton.classList.add('action-btn');
+            document.body.appendChild(nextButton);
+
+            // Add event listener to the new button to navigate to the new page
+            nextButton.addEventListener('click', function() {
+                window.location.href = "https://blog.cwf-fcf.org/wp-content/uploads/2017/03/Loren-Eiseley-1100x619.jpg";
+            });
+
+            resetGame();
+        } else if (daysRemaining === 20 || daysRemaining === 10) {
+            alert("Warning: Water shortage crisis approaching!");
+        }
+    }
+
+    function resetGame() {
+        // Reset game state
+        waterResources = 1000;
+        daysRemaining = 30;
+        points = 0;
+        
+        // Hide game panel and show instructions panel
+        showGameStatus();
+        instructionsPanel.classList.remove('hidden');
+        gamePanel.classList.add('hidden');
+    }
+
+    function showFeedback() {
+        const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+        messageBox.textContent = randomQuote;
+        messageBox.classList.remove('hidden');
+        setTimeout(() => {
+            messageBox.classList.add('hidden');
+        }, 10000);
+    }
+});
+    </script>
+</body>
+</html>
