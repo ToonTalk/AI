@@ -1,12 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const apiKeyInput = document.getElementById('apiKey');
+    const apiKeyForm = document.getElementById('apiKeyForm');
     const rememberKeyCheckbox = document.getElementById('rememberKey');
-    const addPersonaButton = document.getElementById('addPersona');
+    const addPersonaForm = document.getElementById('addPersonaForm');
     const startConversationButton = document.getElementById('startConversation');
     const pauseConversationButton = document.getElementById('pauseConversation');
-    const personasDiv = document.getElementById('personas');
-    const responseDiv = document.getElementById('response');
     const animationContainer = document.getElementById('animationContainer');
+    const responseDiv = document.getElementById('response');
 
     let personas = [];
     let conversationHistories = {}; // Object to store conversation history for each persona pair
@@ -16,45 +15,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load API key from local storage if available
     if (localStorage.getItem('apiKey')) {
-        apiKeyInput.value = localStorage.getItem('apiKey');
+        apiKeyForm.apiKey.value = localStorage.getItem('apiKey');
         rememberKeyCheckbox.checked = true;
     }
 
     // Save API key to local storage if checkbox is checked
-    const saveApiKey = () => {
+    apiKeyForm.addEventListener('submit', (event) => {
+        event.preventDefault();
         if (rememberKeyCheckbox.checked) {
-            localStorage.setItem('apiKey', apiKeyInput.value);
+            localStorage.setItem('apiKey', apiKeyForm.apiKey.value);
         } else {
             localStorage.removeItem('apiKey');
         }
-    };
+    });
 
-    // Add a new persona input section
-    const addPersona = async () => {
-        const name = prompt('Enter persona name:');
-        if (!name) return;
-
-        let initialPrompt = localStorage.getItem(`initialPrompt_${name}`);
-        initialPrompt = prompt(`Enter initial prompt for ${name}:`, initialPrompt || '');
-
-        if (!initialPrompt) return;
-        localStorage.setItem(`initialPrompt_${name}`, initialPrompt);
-
+    // Add a new persona
+   addPersonaForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const name = addPersonaForm.personaName.value.trim();
+        const initialInstructions = addPersonaForm.initialInstructions.value.trim();
+    
+        if (!name || !initialInstructions) return;
+    
+        // Store initial instructions in local storage
+        localStorage.setItem(`initialInstructions_${name}`, initialInstructions);
+    
         const imageUrl = await fetchWikipediaImage(name);
-
+    
         const personaDiv = document.createElement('div');
         personaDiv.className = 'persona';
         personaDiv.style.left = `${Math.random() * 90}%`;
         personaDiv.style.top = `${Math.random() * 90}%`;
-
+    
         const img = document.createElement('img');
         img.src = imageUrl;
         img.alt = name;
         personaDiv.appendChild(img);
-
+    
         animationContainer.appendChild(personaDiv);
+    
+        // Correctly use initialInstructions here instead of initialPrompt
+        personas.push({ name, imageUrl, element: personaDiv, initialInstructions: initialInstructions });
+    
+        addPersonaForm.reset();
+    });
 
-        personas.push({ name, imageUrl, element: personaDiv, initialInstructions: initialPrompt });
+    document.getElementById('personaName').addEventListener('input', function() {
+        const name = this.value.trim();
+        const storedInstructions = localStorage.getItem(`initialInstructions_${name}`);
+        if (storedInstructions) {
+            document.getElementById('initialInstructions').value = storedInstructions;
+        } else {
+            document.getElementById('initialInstructions').value = ''; // Clear if no instructions are stored
+        }
+    });
+
+    // Function to send a prompt to the Cohere API and get a response
+    const sendPrompt = async (persona, prompt, history) => {
+        try {
+            const apiKey = document.getElementById('apiKey').value;  // Use the actual ID of the API key input field
+    
+            const response = await fetch('https://api.cohere.ai/v1/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`  // Use the variable where the API key is stored
+                },
+                body: JSON.stringify({
+                    model: 'command-r-plus',
+                    prompt: `${persona} says: ${prompt}\n\n${history || ''}`,
+                    max_tokens: 300
+                })
+            });
+    
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Error: ${response.status} ${response.statusText} - ${errorData.message}`);
+            }
+    
+            const data = await response.json();
+            return data.generations[0].text.trim();
+        } catch (error) {
+            console.error('Error:', error);
+            responseDiv.innerText = `An error occurred: ${error.message}`;
+            return null;
+        }
     };
 
     // Add a new cake
@@ -90,7 +135,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const startConversation = async () => {
         if (running) return;
         running = true;
-        saveApiKey();
+        if (rememberKeyCheckbox.checked) {
+            localStorage.setItem('apiKey', apiKeyForm.apiKey.value);
+        } else {
+            localStorage.removeItem('apiKey');
+        }
         startConversationButton.disabled = true;
         pauseConversationButton.disabled = false;
 
@@ -112,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pauseConversationButton.disabled = true;
         running = false;
     };
-    
+
     // Replenish cakes once all existing cakes are consumed
     const replenishCakes = () => {
         if (document.querySelectorAll('.cake').length === 0) {
@@ -145,93 +194,80 @@ document.addEventListener('DOMContentLoaded', () => {
             const personaRect = persona.element.getBoundingClientRect();
             const deltaX = cakeRect.left - personaRect.left;
             const deltaY = cakeRect.top - personaRect.top;
-            const step = 3; // Adjust this value to change the speed of movement
+            const step = 3; // Increase this value to make the personas move faster
 
             const angle = Math.atan2(deltaY, deltaX);
             persona.element.style.left = `${parseFloat(persona.element.style.left) + Math.cos(angle) * step}%`;
             persona.element.style.top = `${parseFloat(persona.element.style.top) + Math.sin(angle) * step}%`;
         }
     };
-
-    // Detect collisions and handle conversations
+    
     const detectCakeCollisions = () => {
         const cakes = document.querySelectorAll('.cake');
-        const rects = personas.map(p => p.element.getBoundingClientRect());
-
         cakes.forEach(cake => {
             const cakeRect = cake.getBoundingClientRect();
-            const nearbyPersonas = [];
-
-            rects.forEach((rect, index) => {
-                if (isColliding(cakeRect, rect)) {
-                    nearbyPersonas.push(personas[index]);
+            personas.forEach(persona => {
+                if (!persona.conversing && isColliding(cakeRect, persona.element.getBoundingClientRect())) {
+                    // Find another persona not conversing and collide
+                    const other = personas.find(p => p !== persona && !p.conversing && isColliding(cakeRect, p.element.getBoundingClientRect()));
+                    if (other) {
+                        handleConversation(persona, other);
+                        removeElement(cake); // Remove cake after collision
+                    }
                 }
             });
-
-            if (nearbyPersonas.length >= 2) {
-                animationContainer.removeChild(cake);
-                nearbyPersonas[0].conversing = true;
-                nearbyPersonas[1].conversing = true;
-                handleConversation(nearbyPersonas[0], nearbyPersonas[1]);
-            }
         });
+    };
+    
+    const removeElement = (element) => {
+        if (element && element.parentNode) {
+            element.parentNode.removeChild(element);
+        }
+    };
+    
+    let recentConversations = new Set(); // Tracks pairs of personas that have recently conversed
+    
+    const handleConversation = async (persona1, persona2) => {
+        if (persona1.conversing || persona2.conversing) return; // Skip if either is already conversing
+    
+        const pairKey = [persona1.name, persona2.name].sort().join("-");
+        if (recentConversations.has(pairKey)) return; // Skip if they've recently conversed
+    
+        // Mark both personas as conversing
+        persona1.conversing = true;
+        persona2.conversing = true;
+    
+        // Add to recent conversations
+        recentConversations.add(pairKey);
+        setTimeout(() => recentConversations.delete(pairKey), 30000); // Reset after 30 seconds
+    
+        // Simulate conversation
+        for (let i = 0; i < 3; i++) {
+            await converse(persona1, persona2);
+            await converse(persona2, persona1);
+        }
+    
+        // Reset conversing state after conversation
+        persona1.conversing = false;
+        persona2.conversing = false;
     };
 
     // Check if two elements are colliding
     const isColliding = (rect1, rect2) => {
         return !(rect1.right < rect2.left || rect1.left > rect2.right || rect1.bottom < rect2.top || rect1.top > rect2.bottom);
     };
-    
-    // Function to send a prompt to the Cohere API and get a response
-    const sendPrompt = async (persona, prompt, history) => {
-        try {
-            const response = await fetch('https://api.cohere.ai/v1/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKeyInput.value}`
-                },
-                body: JSON.stringify({
-                    model: 'command-r-plus',
-                    prompt: `${persona} says: ${prompt}\n\n${history || ''}`,
-                    max_tokens: 300
-                })
-            });
-    
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`Error: ${response.status} ${response.statusText} - ${errorData.message}`);
-            }
-    
-            const data = await response.json();
-            return data.generations[0].text.trim();
-        } catch (error) {
-            console.error('Error:', error);
-            responseDiv.innerText = `An error occurred: ${error.message}`;
-            return null;
-        }
-    };
 
-    // Handle conversation between two personas
-    const handleConversation = async (persona1, persona2) => {
-        if (conversationInProgress) return;
-        conversationInProgress = true;
-
-        for (let i = 0; i < 3; i++) {
-            await converse(persona1, persona2);
-            await converse(persona2, persona1);
-        }
-
-        persona1.conversing = false;
-        persona2.conversing = false;
-        conversationInProgress = false;
-    };
+   // Define a property for conversing state
+    personas.forEach(persona => {
+        persona.conversing = false; // Initially, no one is conversing
+    });
 
     // Perform a conversation exchange
     const converse = async (speaker, listener) => {
         const historyKey = getHistoryKey(speaker.name, listener.name);
         const lastResponse = (conversationHistories[historyKey] || '').split('\n').slice(-3, -2)[0] || speaker.initialInstructions;
         const context = `Here's your earlier conversation with ${speaker.name} for context: ${conversationHistories[historyKey] || ''}\n\nNow please respond to what ${speaker.name} has just said to you: ${lastResponse}`;
+        
         let newResponse = await sendPrompt(listener.name, context, conversationHistories[historyKey]);
 
         if (newResponse) {
@@ -253,7 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Event listeners
-    addPersonaButton.addEventListener('click', addPersona);
     startConversationButton.addEventListener('click', startConversation);
     pauseConversationButton.addEventListener('click', () => {
         paused = true;
