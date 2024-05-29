@@ -146,114 +146,74 @@ function initGame() {
 
 }
 
-// Define global variables for API details
-const API_DETAILS = {
-    'OpenAI': {
-        endpoint: 'https://api.openai.com/v1/chat/completions',
-        prepareHeaders: function(apiKey) {
-            return {
+const apiKeyButton = document.getElementById('initializeGame');
+apiKeyButton.addEventListener('click', function() {
+    const apiKey = document.getElementById('apiKey').value;
+    if (apiKey) {
+        // Show loading icon when starting the API call
+        const loadingIcon = document.getElementById('loadingIcon');
+        loadingIcon.className = 'loading-icon-visible';
+        const userPrompt = document.getElementById('gpt4Prompt').value;
+        const fullPrompt = [
+          userPrompt,
+          'The output should be in valid JSON format with double quotes, like so:',
+          '{',
+          '  "FISH": ["Bass", "Flounder", "Salmon", "Trout"], ',
+          '  "PLANETS": ["Earth", "Mars", "Jupiter", "Venus"], ',
+          '  "COLORS": ["Red", "Blue", "Green", "Yellow"], ',
+          '  "FRUITS": ["Apple", "Banana", "Cherry", "Date"]',
+          '}. '
+        ].join('\n');
+        // Prepare the fetch API call for GPT-4
+        fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json'
-            };
-        },
-        body: function(userPrompt) {
-            return JSON.stringify({
+            },
+            body: JSON.stringify({
                 model: "gpt-4",
                 messages: [
                     {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": userPrompt}
+                    {
+                      "role": "user", 
+                      "content": fullPrompt
+                    }
                 ]
-            });
-        }
-    },
-    'Cohere': {
-        endpoint: 'https://api.cohere.com/v1/chat',
-        prepareHeaders: function(apiKey) {
-            return {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            };
-        },
-        body: function(userPrompt) {
-            return JSON.stringify({
-                "chat_history": [
-                    {"role": "USER", "message": userPrompt},
-                    {"role": "CHATBOT", "message": "Generating categories based on your input."}
-                ],
-                "message": "Further details about the categories are as follows:",
-                "model": "latest",
-                "temperature": 0.5,
-                "max_tokens": 250
-            });
-        }
-    }
-};
-
-// Main function to initialize the game based on selected API
-function initializeGame(apiName) {
-    const apiDetails = API_DETAILS[apiName];
-    const apiKey = document.getElementById('apiKey').value;
-
-    if (!apiKey) {
-        console.error('No API key provided.');
-        document.getElementById('statusMessage').textContent = 'Please enter an API key.';
-        document.getElementById('statusMessage').className = 'invalid-message';
-        return;
-    }
-
-    const headers = apiDetails.prepareHeaders(apiKey);
-    const body = apiDetails.body(document.getElementById('gpt4Prompt').value);
-
-    const loadingIcon = document.getElementById('loadingIcon');
-    loadingIcon.className = 'loading-icon-visible';
-
-    fetch(apiDetails.endpoint, {
-        method: 'POST',
-        headers: headers,
-        body: body
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        loadingIcon.className = 'loading-icon-hidden';
-        console.log('API Response:', data);
-        // Handle the response properly based on the API structure
-        populateGrid(); // Adjust accordingly
-    })
-    .catch(error => {
-        console.error('Request Failed:', error);
-        loadingIcon.className = 'loading-icon-hidden';
-        document.getElementById('statusMessage').textContent = 'API error: ' + error.message;
-        document.getElementById('statusMessage').className = 'invalid-message';
-    });
-}
-
-// Function to build the full JSON prompt for API requests
-function buildFullJSONPrompt(userInput, apiName) {
-    // Example for Cohere API, adjust for others if necessary
-    if (apiName === 'Cohere') {
-        return JSON.stringify({
-            "chat_history": [
-                {"role": "USER", "message": userInput},
-                {"role": "CHATBOT", "message": "Generating categories based on your input."}
-            ],
-            "message": "Further details about the categories are as follows:",
-            "model": "latest", // or another model as required by your configuration
-            "temperature": 0.5,  // This can be adjusted or removed based on your need
-            "max_tokens": 250
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+              // Hide loading icon when API call is successful
+              loadingIcon.className = 'loading-icon-hidden';
+              console.log(data.choices[0].message.content);
+              // The output is already in JSON format, so you can directly access its properties
+              // const jsonString = data.choices[0].message.content.replace(/'/g, '"');
+              categories = JSON.parse(data.choices[0].message.content); // Update the 'categories' object         
+              initGame();  // Call the existing initGame logic to refresh the game
+        }).catch(error => {
+              console.error('Error:', error);
+              // Hide loading icon when API call fails
+              loadingIcon.className = 'loading-icon-hidden';
+              // Inform the user
+              const statusMessage = document.getElementById('statusMessage');
+              statusMessage.textContent = 'Error parsing JSON from GPT-4.';
+              statusMessage.className = 'invalid-message';
+      
+              // Ask whether to try again
+              const tryAgain = window.confirm('An error occurred while parsing the JSON data. Would you like to try again?');
+              if (tryAgain) {
+                  // Trigger the game initialization again (you may want to wrap this in a function)
+                  document.getElementById('initializeGame').click();
+              }
         });
     } else {
-        return JSON.stringify({
-            model: "gpt-4",
-            prompt: userInput,
-            max_tokens: 150
-        });
+        // Update the message area to notify the user to enter an API key
+        const statusMessage = document.getElementById('statusMessage');
+        statusMessage.textContent = 'Please enter an API key.';
+        statusMessage.className = 'invalid-message';
     }
-}
+});
 
 // Get the modal
 var modal = document.getElementById("instructionsModal");
@@ -280,27 +240,6 @@ window.onclick = function(event) {
     modal.style.display = "none";
   }
 }
-
-document.addEventListener('DOMContentLoaded', (event) => {
-    // Attach event listener to the Initialize Game button
-    const initializeBtn = document.getElementById('initializeGame');
-    initializeBtn.addEventListener('click', function() {
-        const selectedApi = document.getElementById('apiSelector').value;
-        initializeGame(selectedApi); // Initialize the game with the selected API
-    });
-
-    // Attach event listener to the API selector if you want to perform any action on API switch
-    const apiSelector = document.getElementById('apiSelector');
-    apiSelector.addEventListener('change', function() {
-        // Optionally, you can do something when the API is switched
-        console.log('Switched to:', this.value);
-        // Clear any status messages or reset the game state if needed
-        document.getElementById('statusMessage').textContent = '';
-    });
-
-    // Initialize the game for the first time (optional, you can also wait for user action)
-    // initGame('OpenAI');
-});
 
 document.addEventListener('DOMContentLoaded', (event) => {
     // Attach event listener to the Submit button
