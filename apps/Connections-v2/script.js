@@ -159,24 +159,89 @@ function constructFullPrompt(userPrompt) {
     return [userPrompt, ...jsonStructure].join("\n");
 }
 
-document.getElementById('initializeGame').addEventListener('click', function() {
+document.getElementById('initializeGame').addEventListener('click', async function() {
     const apiKey = document.getElementById('apiKey').value;
-    if (!apiKey) {
-        // Notify the user to enter an API key
-        updateStatusMessage('Please enter an API key.', 'invalid-message');
-        return;
-    }
-
     const apiChoice = document.getElementById('apiChoice').value;
     const userPrompt = document.getElementById('gpt4Prompt').value;
     const fullPrompt = constructFullPrompt(userPrompt);
 
-    if (apiChoice === 'openai') {
-        callAPI(apiKey, fullPrompt, callOpenAI);
-    } else if (apiChoice === 'cohere') {
-        callAPI(apiKey, fullPrompt, callCohere);
+    showLoadingIcon();
+
+    try {
+        let result;
+        switch (apiChoice) {
+            case 'openai':
+                result = await callOpenAI(apiKey, fullPrompt);
+                break;
+            case 'cohere':
+                result = await callCohere(apiKey, fullPrompt);
+                break;
+            case 'gemini':
+                result = await geminiNano(fullPrompt);
+                if (result === undefined) { // Assume geminiNano() handles its own errors
+                    throw new Error("Session creation or prompt failed in Gemini Nano.");
+                }
+                break;
+            default:
+                throw new Error("Unsupported AI provider selected.");
+        }
+        handleApiResponse(result);
+    } catch (error) {
+        // Specific error handling for Gemini Nano or other API errors
+        console.error('Error during API interaction:', error);
+        // Only update the status message if it's not already set by the API-specific function
+        if (document.getElementById('statusMessage').textContent === "") {
+            updateStatusMessage(error.message, "invalid-message");
+        }
+    } finally {
+        hideLoadingIcon();
     }
 });
+
+document.getElementById('apiChoice').addEventListener('change', function() {
+    var selectedAI = this.value;
+    var apiKeyContainer = document.getElementById('apiKeyContainer');
+    if (selectedAI === 'openai' || selectedAI === 'cohere') {
+        apiKeyContainer.style.display = 'block'; // Show API key input for OpenAI or Cohere
+    } else {
+        apiKeyContainer.style.display = 'none';  // Hide for Gemini or no selection
+    }
+});
+
+function handleApiResponse(result) {
+    console.log("API response:", result);  // Log the API result for debugging purposes
+
+    if (result) {
+        let jsonSubstring = "";
+        try {
+            // Normalize the JSON string by removing potentially problematic control characters
+            result = result.replace(/\r?\n|\r|\t/g, '').trim();
+
+            // Handle case-insensitive 'json' block detection and removal of backticks
+            const jsonStart = result.toLowerCase().indexOf('```json') + 7;  // Use toLowerCase() for case-insensitive matching
+            if (jsonStart > 6) {  // Check if '```json' was actually found
+                const jsonEnd = result.indexOf('```', jsonStart);  // Find the end index of the JSON data
+                jsonSubstring = result.substring(jsonStart, jsonEnd).trim();  // Extract the JSON string
+                jsonSubstring = jsonSubstring.replace(/```/g, '').trim();  // Ensure removal of any backticks around JSON
+            } else {
+                // Assume the response is plain JSON if no markdown backticks found
+                jsonSubstring = result.trim();
+            }
+
+            console.log("Processed JSON string before parsing:", jsonSubstring);  // Log the JSON string for debugging
+
+            // Parse the JSON string
+            categories = JSON.parse(jsonSubstring);
+            initGame();  // Initialize the game with new categories
+        } catch (error) {
+            console.error('Error parsing JSON:', error, 'JSON String:', jsonSubstring);
+            updateStatusMessage("Failed to parse JSON from the API response.", "invalid-message");
+        }
+    } else {
+        console.error("No valid response from AI.");
+        updateStatusMessage("No valid response from AI.", "invalid-message");
+    }
+}
 
 function updateStatusMessage(message, className) {
     const statusMessage = document.getElementById('statusMessage');
@@ -186,13 +251,13 @@ function updateStatusMessage(message, className) {
 
 function constructFullPrompt(userPrompt) {
     const jsonStructure = [
-        'The output should be in valid JSON format with double quotes, like so:',
+        'The output should be 4 categories in valid JSON format with double quotes, like so:',
         '{',
         '  "FISH": ["Bass", "Flounder", "Salmon", "Trout"], ',
         '  "PLANETS": ["Earth", "Mars", "Jupiter", "Venus"], ',
         '  "COLORS": ["Red", "Blue", "Green", "Yellow"], ',
         '  "FRUITS": ["Apple", "Banana", "Cherry", "Date"]',
-        '}. '
+        '}. Be sure to quote each entry properly.'
     ];
     return [userPrompt, ...jsonStructure].join("\n");
 }
@@ -212,54 +277,39 @@ function hideLoadingIcon() {
 }
 
 function callOpenAI(apiKey, fullPrompt) {
-    // Implementation of the OpenAI API call using fullPrompt
     console.log("Calling OpenAI with prompt:", fullPrompt);
-    // Show loading icon when starting the API call
     showLoadingIcon();
 
-        // Prepare the fetch API call for GPT-4
-        fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: "gpt-4",
-                messages: [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {
-                      "role": "user", 
-                      "content": fullPrompt
-                    }
-                ]
-            })
+    return fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model: "gpt-4",
+            messages: [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": fullPrompt}
+            ]
         })
-        .then(response => response.json())
-        .then(data => {
-              // Hide loading icon when API call is successful
-              hideLoadingIcon();
-              console.log(data.choices[0].message.content);
-              // The output is already in JSON format, so you can directly access its properties
-              // const jsonString = data.choices[0].message.content.replace(/'/g, '"');
-              categories = JSON.parse(data.choices[0].message.content); // Update the 'categories' object         
-              initGame();  // Call the existing initGame logic to refresh the game
-        }).catch(error => {
-              console.error('Error:', error);
-              // Hide loading icon when API call fails
-              loadingIcon.className = 'loading-icon-hidden';
-              // Inform the user
-              const statusMessage = document.getElementById('statusMessage');
-              statusMessage.textContent = 'Error parsing JSON from GPT-4.';
-              statusMessage.className = 'invalid-message';
-      
-              // Ask whether to try again
-              const tryAgain = window.confirm('An error occurred while parsing the JSON data. Would you like to try again?');
-              if (tryAgain) {
-                  // Trigger the game initialization again (you may want to wrap this in a function)
-                  document.getElementById('initializeGame').click();
-              }
-        });
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.choices && data.choices.length > 0) {
+            return data.choices[0].message.content; // Return the response content directly
+        } else {
+            throw new Error("Invalid response format from OpenAI.");
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        updateStatusMessage('Error communicating with OpenAI.', 'invalid-message');
+        throw error;  // Re-throw to be caught by caller
+    })
+    .finally(() => {
+        hideLoadingIcon();
+    });
 }
 
 function callCohere(apiKey, fullPrompt) {
@@ -272,7 +322,7 @@ function callCohere(apiKey, fullPrompt) {
         "message": "Generate 4 categories of words with 4 unique words each, formatted as JSON."
     };
 
-    fetch(url, {
+    return fetch(url, {
         method: 'POST',
         headers: {
             'accept': 'application/json',
@@ -283,34 +333,19 @@ function callCohere(apiKey, fullPrompt) {
     })
     .then(response => response.json())
     .then(data => {
-        try {
-            let jsonSubstring;
-            // Check if the response is embedded in additional text
-            if (data.text && data.text.includes('```json')) {
-                const jsonStart = data.text.indexOf('```json') + 7; // Finds start of JSON code block
-                const jsonEnd = data.text.indexOf('```', jsonStart); // Finds end of JSON code block
-                jsonSubstring = data.text.substring(jsonStart, jsonEnd).trim(); // Extracts the JSON substring
-            } else if (data.text) {
-                jsonSubstring = data.text.trim(); // Direct JSON
-            }
-            
-            if (jsonSubstring) {
-                categories = JSON.parse(jsonSubstring); // Parses the JSON to the categories object
-                initGame();  // Re-initializes the game with new categories
-            } else {
-                throw new Error("No JSON data found in response.");
-            }
-        } catch (error) {
-            console.error('Error parsing JSON:', error);
-            updateStatusMessage('Failed to parse JSON from Cohere response.', 'invalid-message');
-        } finally {
-            hideLoadingIcon();
+        if (data.text) {
+            return data.text; // Return the response text directly
+        } else {
+            throw new Error("No valid JSON data found in Cohere response.");
         }
     })
     .catch(error => {
         console.error('API Request Error:', error);
-        hideLoadingIcon();
         updateStatusMessage('Error making API request to Cohere.', 'invalid-message');
+        throw error;  // Re-throw to be caught by caller
+    })
+    .finally(() => {
+        hideLoadingIcon();
     });
 }
 
@@ -319,6 +354,38 @@ function updateGameWithCategories(categories) {
     // Here you'd call a function to update your game state and UI with these categories
     // For example, clearing old categories, setting new ones, and reinitializing the game grid
     initGameWithNewCategories(categories);
+}
+
+let aiSession = null;  // Global variable to hold the session
+
+async function geminiNano(prompt) {
+    if (!aiSession) {  // Check if session exists
+        try {
+            let canCreateSession = await window.ai.canCreateTextSession();
+            if (canCreateSession === "no") {
+                // Inform the user and provide a link to the documentation
+                const statusMessage = document.getElementById('statusMessage');
+                statusMessage.innerHTML = 'Unable to create an AI session. Please refer to the <a href="https://docs.google.com/document/d/1VG8HIyz361zGduWgNG7R_R8Xkv0OOJ8b5C9QKeCjU0c/edit?pli=1#heading=h.5s2qlonhpm36" target="_blank">documentation</a> for more information.';
+                statusMessage.className = 'invalid-message';
+                throw new Error("Session creation denied."); // Abort the function by throwing an error
+            }
+            aiSession = await window.ai.createTextSession();  // Create a session if possible
+        } catch (error) {
+            // console.error('Error checking session capability:', error);
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.innerHTML = 'Error checking AI session capability. Please refer to the <a href="https://docs.google.com/document/d/1VG8HIyz361zGduWgNG7R_R8Xkv0OOJ8b5C9QKeCjU0c/edit?pli=1#heading=h.5s2qlonhpm36" target="_blank">documentation</a> for troubleshooting.';
+            statusMessage.className = 'invalid-message';
+            throw error;  // Re-throw to ensure the caller knows the function has failed
+        }
+    }
+
+    try {
+        const result = await aiSession.prompt(prompt);
+        return result;  // Return the AI's response
+    } catch (error) {
+        console.error('Error in aiPrompt:', error);  // Log errors in aiPrompt
+        throw new Error("Error during AI interaction");
+    }
 }
 
 // Get the modal
