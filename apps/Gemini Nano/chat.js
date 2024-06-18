@@ -1,13 +1,24 @@
 
 let personas = [];
+let isPaused = false; // This will control whether the interactions are paused or active
 
 async function createPersona() {
     const attributes = getRandomAttributes();  // Retrieves random attributes for the persona
-    const name = await generatePersonaName(attributes.personality, attributes.role); // AI generates a name
+    let name = await generatePersonaName(attributes.personality, attributes.role); // AI generates a name
 
     if (!name) {
         alert('Failed to generate a name. Please try again.');
         return;
+    }
+
+    let retryCount = 0;
+    while (personas.some(persona => persona.name.toLowerCase() === name.toLowerCase())) {
+        if (retryCount >= 3) {  // Limit the number of retries to prevent infinite loops
+            alert('Failed to generate a unique name after several attempts. Please try again later.');
+            return;
+        }
+        name = await generatePersonaName(attributes.personality, attributes.role); // Try generating a new name
+        retryCount++;
     }
 
     const newPersona = {
@@ -18,6 +29,7 @@ async function createPersona() {
             this.history.push(event);
         }
     };
+
     personas.push(newPersona);
     updateUI(); // Update the UI with the new persona
 }
@@ -70,14 +82,17 @@ function getRandomAttributes() {
     };
 }
 
-
 function updateUI() {
-    const container = document.getElementById('personas-container');
-    container.innerHTML = '';
-    personas.forEach((persona, index) => {
-        const personaDiv = document.createElement('div');
-        personaDiv.innerHTML = `<strong>${persona.name}</strong> (${persona.attributes.personality}, ${persona.attributes.role})`;
-        container.appendChild(personaDiv);
+    const container = document.getElementById('personas-content');
+    // Iterate through personas and update UI with new entries only
+    personas.forEach(persona => {
+        const existingEntry = document.querySelector(`div[data-persona-id="${persona.name}"]`);
+        if (!existingEntry) {
+            const personaDiv = document.createElement('div');
+            personaDiv.setAttribute('data-persona-id', persona.name);  // Helps identify the div later
+            personaDiv.innerHTML = `<strong>${persona.name}</strong> (${persona.attributes.personality}, ${persona.attributes.role})`;
+            container.appendChild(personaDiv);
+        }
     });
 }
 
@@ -94,44 +109,59 @@ function handleBroadcast() {
 
 function broadcastEvent(event) {
     personas.forEach(persona => {
-        persona.logEvent(`Broadcast: ${event}`); // Ensure the log is clear it's a broadcast
-        updateUI(persona); // Optionally update the UI if needed
+        persona.logEvent(`Broadcast from Game Master: ${event}`);
+        appendBroadcastToUI(persona, event);  // Append new event to each persona's UI without refreshing everything
     });
 }
 
-function broadcastEvent(event) {
-    personas.forEach(persona => {
-        persona.logEvent(event);
-    });
+function appendBroadcastToUI(persona, event) {
+    const container = document.getElementById('personas-content');
+    const personaDiv = document.createElement('div');
+    personaDiv.innerHTML = `<strong>${persona.name}:</strong> Broadcast from Game Master: ${event}`;
+    container.appendChild(personaDiv);
 }
 
 function updateActionUI(persona, action) {
-    const container = document.getElementById('personas-container');
     const actionDiv = document.createElement('div');
+    const parsedAction = marked.parse(action);  // Convert Markdown to HTML
     
-    // Convert Markdown to HTML before adding to the DOM
-    const parsedAction = marked.parse(action);  // Use marked.parse to convert Markdown to HTML
+    // Determine the correct container based on whether the update is for a persona or the Game Master
+    let container = persona ? document.getElementById('personas-content') : document.getElementById('gmUpdatesList');
 
-    actionDiv.innerHTML = `<strong>${persona.name}</strong> action: ${parsedAction}`;  // Embed the HTML in the DOM
+    // Prepare the content format depending on the target
+    if (persona) {
+        // For persona updates, display with persona's name
+        actionDiv.innerHTML = `<strong>${persona.name}</strong> action: ${parsedAction}`;
+    } else {
+        // For Game Master updates, use list item tags to match the list format
+        actionDiv.innerHTML = `<li>${parsedAction}</li>`;
+    }
+
     container.appendChild(actionDiv);
 }
 
 async function gatherAndProcessActions() {
+    if (isPaused) {
+        console.log("Action processing is paused.");
+        return; // Exit the function if the system is paused
+    }
+
     let actions = [];
     for (let persona of personas) {
-        // Prompt each persona for an action
         const action = await promptForAction(persona);
         actions.push({ persona: persona.name, action: action });
         persona.logEvent(`Action decided: ${action}`);
         console.log(`${persona.name} took the action: ${action}`);
-        updateActionUI(persona, action); // Display action immediately after gathering
+        updateActionUI(persona, action);
     }
 
-    // Shuffle actions to simulate dynamic interactions
     shuffleArray(actions);
 
-    // Process each shuffled action
     for (let action of actions) {
+        if (isPaused) {
+            console.log("Processing paused during action handling.");
+            return; // Check again if paused during processing loop
+        }
         await processAction(action);
     }
 }
@@ -163,30 +193,69 @@ async function processAction(action) {
     for (let persona of personas) {
         if (persona.name === action.persona) continue; // Skip the actor
 
-        // Updated prompt to limit response length
-        const reactionPrompt = `I am ${persona.name}, a ${persona.attributes.personality} ${persona.attributes.role}. Given the action '${action.action}' by ${action.persona}, how should I react? Please keep your response to just 2 or 3 sentences, focusing on my immediate reaction based on my attributes and past interactions.`;
+        const reactionPrompt = `I am ${persona.name}, a ${persona.attributes.personality} ${persona.attributes.role}. Given the action '${action.action}' by ${action.persona}, how should I react?`;
 
         try {
-            const reaction = await aiPrompt('GeminiNano', reactionPrompt); // Prompt for reaction
+            const reaction = await aiPrompt('GeminiNano', reactionPrompt);
             persona.logEvent(`My reaction to ${action.persona}'s action: ${reaction}`);
             updateActionUI(persona, `My reaction to ${action.persona}'s action: ${reaction}`);
 
-            // Check if the reaction involves communication
-            const communicationPrompt = `Does my reaction involve communication with ${action.persona}? Please respond only with 'yes' or 'no'.`;
-            const involvesCommunicationHtml = await aiPrompt('GeminiNano', communicationPrompt);
-            const involvesCommunication = extractText(involvesCommunicationHtml);
-
-            if (involvesCommunication.toLowerCase().trim() === 'yes') {
-                const recipientPersona = personas.find(p => p.name === action.persona); // Find the recipient persona object
-                if (recipientPersona) {
-                    await handleCommunication(persona, recipientPersona, 3); // Pass the full recipient persona object
-                }
+            if (shouldInformGameMaster(reaction)) {
+                await informGameMaster(action, reaction);
             }
         } catch (error) {
             console.error(`Error prompting AI for ${persona.name}:`, error);
             updateActionUI(persona, `Error reacting due to AI failure.`);
         }
     }
+}
+
+async function isCommunication(reaction) {
+    // Construct a prompt asking the AI if the reaction involves communication
+    const prompt = `Does the following statement involve communication with another persona? Response: "${reaction}". Please answer 'yes' or 'no'.`;
+    
+    try {
+        const response = await aiPrompt('GeminiNano', prompt); // Using the aiPrompt function to query the AI
+        console.log('AI determined:', response.trim().toLowerCase());
+        return response.trim().toLowerCase() === 'yes';
+    } catch (error) {
+        console.error('Error querying AI to determine if the reaction is communication:', error);
+        return false; // Assume no communication if there's an error
+    }
+}
+
+async function shouldInformGameMaster(reaction) {
+    // Use the AI to determine if the reaction is communicative
+    const isComm = await isCommunication(reaction);
+    return !isComm; // Inform the Game Master if it is not a communication
+}
+
+async function processAction(action) {
+    for (let persona of personas) {
+        const reaction = await aiPrompt('GeminiNano', `Reaction prompt for ${persona.name}`);
+        persona.logEvent(`My reaction: ${reaction}`);
+        updateActionUI(persona, reaction);
+
+        if (await shouldInformGameMaster(reaction)) {
+            await informGameMaster(action, reaction);
+        }
+    }
+}
+
+async function informGameMaster(action, reaction) {
+    // Assume some mechanism to inform the Game Master
+    const gameMasterContext = `Game Master needs to update environment based on: ${action.action} which led to: ${reaction}`;
+    const environmentUpdate = await aiPrompt('GeminiNano', gameMasterContext);
+    
+    broadcastEvent(`Game Master has updated the environment: ${environmentUpdate}`);
+    updateActionUI(null, environmentUpdate); // Assuming updateActionUI can handle null persona for GM updates
+}
+
+function broadcastEvent(event) {
+    personas.forEach(persona => {
+        persona.logEvent(`Broadcast from Game Master: ${event}`);
+    });
+    updateUI(); // Update the UI with the new game master's broadcast
 }
 
 function extractText(html) {
@@ -241,24 +310,35 @@ async function handleCommunication(initiator, recipient, exchanges) {
 
 let aiSession = null;  // Global variable to hold the session
 
-async function aiPrompt(model, prompt) {
-    if (!aiSession) {  // Check if session exists
-        if (await window.ai.canCreateTextSession() === "no") {
-            throw new Error("Unable to create an AI session.");
+async function aiPrompt(model, prompt, retries = 3) {
+    while (retries > 0) {
+        try {
+            if (!aiSession) {  // Check if session exists
+                if (await window.ai.canCreateTextSession() === "no") {
+                    throw new Error("Unable to create an AI session.");
+                }
+                aiSession = await window.ai.createTextSession();  // Create a session if none
+            }
+
+            console.log('Sending prompt to AI:', prompt);  // Log the prompt for debugging
+            const result = await aiSession.prompt(prompt);
+            console.log('Received response from AI:', result);  // Log the response for debugging
+            return result;  // Return the AI's response
+        } catch (error) {
+            console.error('Attempt failed in aiPrompt:', error);  // Log attempt failure
+            retries -= 1;  // Decrement the retry counter
+            if (retries <= 0) {
+                throw new Error("Error during AI interaction after several attempts");
+            }
+            console.log(`Retrying... attempts left: ${retries}`);
         }
-        aiSession = await window.ai.createTextSession();  // Create a session if none
     }
+}
 
-    console.log('Sending prompt to AI:', prompt);  // Log the prompt for debugging
-
-    try {
-        const result = await aiSession.prompt(prompt);
-        console.log('Received response from AI:', result);  // Log the response for debugging
-        return result;  // Return the AI's response
-    } catch (error) {
-        console.error('Error in aiPrompt:', error);  // Log errors in aiPrompt
-        throw new Error("Error during AI interaction");
-    }
+function togglePauseResume() {
+    isPaused = !isPaused; // Toggle the pause state
+    document.getElementById('pauseResumeButton').textContent = isPaused ? 'Resume' : 'Pause'; // Update button text based on state
+    console.log(isPaused ? "System is paused." : "System is resumed.");
 }
 
 document.getElementById('start-process-actions-button').addEventListener('click', gatherAndProcessActions);
