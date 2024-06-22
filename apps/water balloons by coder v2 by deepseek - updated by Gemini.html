@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Balloon Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background-color: #fff;
+            overflow: hidden;
+            font-size: 30px;
+        }
+        .flower {
+            position: absolute;
+            bottom: 0;
+            transition: all 1s;
+        }
+        .balloon {
+            position: absolute;
+            width: 30px;
+            height: 40px;
+            background-color: blue;
+            border-radius: 50%;
+            transition: all 0.5s;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- Flowers will be dynamically added here -->
+    </div>
+    <script>
+        const gameContainer = document.getElementById('game-container');
+        const flowers = [];
+        const balloons = [];
+
+        const flowerEmojis = ['🌸', '🌼', '🌹', '🌷', '🌺', '🌻', '🌾', '🌵', '🌿', '🍀'];
+
+        class Flower {
+            constructor(x) {
+                this.x = x;
+                this.y = 50;
+                this.size = 1;
+                this.emoji = flowerEmojis[Math.floor(Math.random() * flowerEmojis.length)];
+                this.element = this.createFlower();
+                gameContainer.appendChild(this.element);
+                flowers.push(this);
+            }
+
+            createFlower() {
+                const flower = document.createElement('div');
+                flower.className = 'flower';
+                flower.style.left = `${this.x}px`;
+                flower.style.bottom = `${this.y}px`;
+                flower.textContent = this.emoji;
+                return flower;
+            }
+
+            grow() {
+                this.size += 0.2;
+                this.element.style.transform = `scale(${this.size})`;
+                this.element.style.color = 'initial';
+            }
+
+            shrink() {
+                this.size -= 0.02;
+                this.element.style.transform = `scale(${this.size})`;
+                this.element.style.color = 'gray';
+            }
+        }
+
+        class Balloon {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.element = this.createBalloon();
+                gameContainer.appendChild(this.element);
+                balloons.push(this);
+            }
+
+            createBalloon() {
+                const balloon = document.createElement('div');
+                balloon.className = 'balloon';
+                balloon.style.left = `${this.x}px`;
+                balloon.style.bottom = `${this.y}px`;
+                balloon.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                return balloon;
+            }
+
+            fall() {
+                this.y -= 5;
+                this.element.style.bottom = `${this.y}px`;
+            }
+        }
+
+        function createFlowers() {
+            for (let i = 0; i < 10; i++) {
+                new Flower(Math.random() * 750);
+            }
+        }
+
+        gameContainer.addEventListener('click', (event) => {
+          const clickX = event.clientX - gameContainer.offsetLeft - 15; // Adjust for balloon width
+          const clickY = gameContainer.clientHeight - event.clientY - 20; // Adjust for balloon height
+          if (clickY > gameContainer.clientHeight / 3) { // Only create in top 2/3
+            new Balloon(clickX, clickY);
+          }
+        });
+
+        function update() {
+          balloons.forEach(balloon => {
+            balloon.fall();
+
+              
+    
+            flowers.forEach(flower => {
+              const flowerCenterX = flower.x + flower.element.offsetWidth / 2; // Get flower center
+              const balloonCenterY = balloon.y + balloon.element.offsetHeight / 2; // Calculate balloon center
+            
+              if (
+                balloonCenterY <= flower.y + flower.element.offsetHeight &&
+                balloon.x >= flowerCenterX - 15 &&
+                balloon.x <= flowerCenterX + 15
+              ) {
+                flower.grow();
+                balloon.element.remove();
+                balloons.splice(balloons.indexOf(balloon), 1);
+              }
+            });
+    
+            if (balloon.y + balloon.element.offsetHeight <= 0) { // Check if balloon fully off-screen
+              balloon.element.remove();
+              balloons.splice(balloons.indexOf(balloon), 1);
+            }
+          });
+          flowers.forEach(flower => {
+                if (Math.random() < 0.01) {
+                    flower.shrink();
+                }
+          });
+
+            requestAnimationFrame(update);
+        }
+
+        createFlowers();
+        update();
+    </script>
+</body>
+</html>
