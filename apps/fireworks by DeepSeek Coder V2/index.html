@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fireworks Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="fireworksCanvas"></canvas>
+    <audio id="explosionSound" src="explode.wav" preload="auto"></audio>
+    <script>
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const gravity = 0.05;
+        const explosionSound = document.getElementById('explosionSound');
+
+        class Particle {
+            constructor(x, y, color, radius) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = radius;
+                this.velocity = {
+                    x: (Math.random() - 0.5) * 5,
+                    y: (Math.random() - 0.5) * 5
+                };
+                this.ttl = 100;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+
+            update() {
+                this.velocity.y += gravity;
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+                this.ttl -= 1;
+                if (this.ttl > 0) this.draw();
+            }
+        }
+
+        class Firework {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.targetY = Math.random() * (canvas.height / 2);
+                this.color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                this.radius = 2;
+                this.particles = [];
+                this.exploded = false;
+            }
+
+            createParticles() {
+                for (let i = 0; i < 100; i++) {
+                    this.particles.push(new Particle(this.x, this.y, this.color, 2));
+                }
+            }
+
+            update() {
+                if (!this.exploded) {
+                    this.y -= 5;
+                    this.draw();
+                    if (this.y <= this.targetY) {
+                        this.exploded = true;
+                        this.createParticles();
+                        explosionSound.play(); // Play the explosion sound
+                    }
+                } else {
+                    this.particles.forEach((particle, index) => {
+                        particle.update();
+                        if (particle.ttl <= 0) {
+                            this.particles.splice(index, 1);
+                        }
+                    });
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        let fireworks = [];
+
+        function animate() {
+            requestAnimationFrame(animate);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            fireworks.forEach((firework, index) => {
+                firework.update();
+                if (firework.exploded && firework.particles.length === 0) {
+                    fireworks.splice(index, 1);
+                }
+            });
+
+            if (Math.random() < 0.05) {
+                fireworks.push(new Firework(Math.random() * canvas.width, canvas.height));
+            }
+        }
+
+        animate();
+    </script>
+</body>
+</html>
