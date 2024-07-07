@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online 2-Player Box Clicking Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #game-info, #connection-info, #instructions {
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        #box-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 800px;
+        }
+        .box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            margin: 1px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .box.player1 { background-color: #ff9999; }
+        .box.player2 { background-color: #99ccff; }
+        #connection-controls, #game-controls { margin-bottom: 20px; }
+        #game-controls, #game-id-display { display: none; }
+        .button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        #join-input {
+            padding: 10px;
+            font-size: 16px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        <h2>How to Play:</h2>
+        <p>1. First player: Click "Create Game" and share the game ID.</p>
+        <p>2. Second player: Enter the game ID and click "Join Game".</p>
+        <p>3. Take turns clicking boxes. Most boxes wins!</p>
+    </div>
+    <div id="connection-info">Status: Disconnected</div>
+    <div id="game-id-display"></div>
+    <div id="connection-controls">
+        <button id="create-btn" class="button">Create Game</button>
+        <input id="join-input" type="text" placeholder="Enter game ID here">
+        <button id="join-btn" class="button">Join Game</button>
+    </div>
+    <div id="game-controls">
+        <button id="reset-btn" class="button">Reset Game</button>
+    </div>
+    <div id="game-info"></div>
+    <div id="box-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <script>
+        const peer = new Peer();
+        let conn;
+        let isHost = false;
+        let currentPlayer = 1;
+        let scores = { 1: 0, 2: 0 };
+        let gameActive = false;
+
+        const connectionInfo = document.getElementById('connection-info');
+        const gameIdDisplay = document.getElementById('game-id-display');
+        const gameInfo = document.getElementById('game-info');
+        const boxContainer = document.getElementById('box-container');
+        const createBtn = document.getElementById('create-btn');
+        const joinInput = document.getElementById('join-input');
+        const joinBtn = document.getElementById('join-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const connectionControls = document.getElementById('connection-controls');
+        const gameControls = document.getElementById('game-controls');
+
+        function updateGameInfo() {
+            gameInfo.textContent = `Player 1: ${scores[1]} | Player 2: ${scores[2]} | Current Player: ${currentPlayer}`;
+        }
+
+        function createBoxes() {
+            boxContainer.innerHTML = '';
+            for (let i = 0; i < 400; i++) {
+                const box = document.createElement('div');
+                box.className = 'box';
+                box.dataset.id = i;
+                box.addEventListener('click', handleBoxClick);
+                boxContainer.appendChild(box);
+            }
+        }
+
+        function handleBoxClick(event) {
+            if (!gameActive || (isHost && currentPlayer !== 1) || (!isHost && currentPlayer !== 2)) return;
+            const boxId = event.target.dataset.id;
+            makeMove(boxId);
+            if (conn) conn.send({ type: 'move', boxId });
+        }
+
+        function makeMove(boxId) {
+            const box = document.querySelector(`.box[data-id="${boxId}"]`);
+            if (!box.classList.contains('player1') && !box.classList.contains('player2')) {
+                box.classList.add(`player${currentPlayer}`);
+                scores[currentPlayer]++;
+                currentPlayer = currentPlayer === 1 ? 2 : 1;
+                updateGameInfo();
+            }
+        }
+
+        function resetGame() {
+            currentPlayer = 1;
+            scores = { 1: 0, 2: 0 };
+            createBoxes();
+            updateGameInfo();
+            if (conn) conn.send({ type: 'reset' });
+        }
+
+        createBtn.addEventListener('click', () => {
+            isHost = true;
+            connectionInfo.textContent = 'Status: Creating game...';
+            peer.on('open', (id) => {
+                connectionInfo.textContent = 'Status: Waiting for other player to join...';
+                gameIdDisplay.style.display = 'block';
+                gameIdDisplay.innerHTML = `<strong>Your game ID is: ${id}</strong><br>Share this ID with the other player.`;
+                createBtn.style.display = 'none';
+                joinInput.style.display = 'none';
+                joinBtn.style.display = 'none';
+            });
+            peer.on('connection', (connection) => {
+                conn = connection;
+                setupConnection();
+            });
+        });
+
+        joinBtn.addEventListener('click', () => {
+            const hostId = joinInput.value.trim();
+            if (hostId) {
+                connectionInfo.textContent = 'Status: Joining game...';
+                conn = peer.connect(hostId);
+                setupConnection();
+            } else {
+                alert('Please enter a valid game ID');
+            }
+        });
+
+        resetBtn.addEventListener('click', resetGame);
+
+        function setupConnection() {
+            connectionInfo.textContent = 'Status: Connected! Game starting...';
+            connectionControls.style.display = 'none';
+            gameIdDisplay.style.display = 'none';
+            gameControls.style.display = 'block';
+            gameActive = true;
+            createBoxes();
+            updateGameInfo();
+
+            conn.on('data', (data) => {
+                if (data.type === 'move') {
+                    makeMove(data.boxId);
+                } else if (data.type === 'reset') {
+                    resetGame();
+                }
+            });
+        }
+
+        createBoxes();
+        updateGameInfo();
+    </script>
+</body>
+</html>

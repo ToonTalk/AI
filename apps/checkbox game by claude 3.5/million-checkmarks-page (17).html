@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkbox Conquest: Dynamic Color-Flipping Multiplayer Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        #gameBoard {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            width: 100%;
+            max-width: 600px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            padding: 5px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            max-height: calc(100vh - 400px);
+        }
+        .checkbox {
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            width: 28px;
+            height: 28px;
+            border: 2px solid #ccc;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+        #gameInfo, #connectionInfo, #scores, #colorInfo {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        #connectForm {
+            margin: 20px 0;
+        }
+        #startGame {
+            font-size: 18px;
+            padding: 10px 20px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Checkbox Conquest: Color-Flipping Edition</h1>
+    <div id="connectionInfo">Your ID: <span id="peerId"></span></div>
+    <div id="connectForm">
+        <input type="text" id="connectId" placeholder="Enter peer ID to connect">
+        <button id="connectButton">Connect</button>
+    </div>
+    <div id="colorInfo">Your Color: <span id="yourColorDisplay">Not assigned yet</span></div>
+    <div id="gameInfo">Waiting for connection...</div>
+    <div id="scores">
+        <div>You: <span id="yourScore">0</span></div>
+        <div>Opponent: <span id="opponentScore">0</span></div>
+    </div>
+    <div id="timer">Time: 60s</div>
+    <div id="gameBoard"></div>
+    <button id="startGame" style="display: none;">Start Game</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <script>
+// Add this code to your existing JavaScript, replacing or updating the corresponding functions
+
+function handleCheckboxClick(event) {
+    if (!gameActive) return;
+    const checkbox = event.target.closest('.checkbox');
+    if (checkbox) {
+        const index = parseInt(checkbox.dataset.index);
+        console.log(`Clicked on checkbox with index: ${index}`);
+        console.log(`Current background color: ${checkbox.style.backgroundColor}`);
+        console.log(`Your color: ${yourColor.value}, Opponent color: ${opponentColor.value}`);
+        makeMove(index);
+        conn.send({type: 'move', index: index});
+    }
+}
+
+function makeMove(index) {
+    const checkbox = gameBoard.children[index];
+    console.log(`Making move on index: ${index}`);
+    console.log(`Current background color: ${checkbox.style.backgroundColor}`);
+    console.log(`Your color: ${yourColor.value}, Opponent color: ${opponentColor.value}`);
+    
+    if (checkbox.style.backgroundColor === opponentColor.value) {
+        console.log("Flipping opponent's square");
+        checkbox.style.backgroundColor = yourColor.value;
+        yourScore++;
+        opponentScore--;
+    } else if (!checkbox.style.backgroundColor) {
+        console.log("Claiming empty square");
+        checkbox.style.backgroundColor = yourColor.value;
+        yourScore++;
+    } else {
+        console.log("Square already yours, no action taken");
+    }
+    updateScores();
+    console.log(`After move - Your score: ${yourScore}, Opponent score: ${opponentScore}`);
+}
+
+function handleOpponentMove(index) {
+    const checkbox = gameBoard.children[index];
+    console.log(`Opponent move on index: ${index}`);
+    console.log(`Current background color: ${checkbox.style.backgroundColor}`);
+    console.log(`Your color: ${yourColor.value}, Opponent color: ${opponentColor.value}`);
+    
+    if (checkbox.style.backgroundColor === yourColor.value) {
+        console.log("Opponent flipping your square");
+        checkbox.style.backgroundColor = opponentColor.value;
+        opponentScore++;
+        yourScore--;
+    } else if (!checkbox.style.backgroundColor) {
+        console.log("Opponent claiming empty square");
+        checkbox.style.backgroundColor = opponentColor.value;
+        opponentScore++;
+    } else {
+        console.log("Square already opponent's, no action taken");
+    }
+    updateScores();
+    console.log(`After opponent move - Your score: ${yourScore}, Opponent score: ${opponentScore}`);
+}
+</script>
+</body>
+</html>
