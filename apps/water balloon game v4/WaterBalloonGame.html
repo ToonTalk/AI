@@ -1,0 +1,242 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Balloon Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #eee;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            border: 1px solid #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        let score = 0;
+        let combo = 0;
+        let highScore = localStorage.getItem('highScore') || 0;
+        let multiplier = 1;
+        let lastScoreTime = Date.now();
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreDisplay = document.createElement("div");
+        scoreDisplay.style.position = "absolute";
+        scoreDisplay.style.top = "10px";
+        scoreDisplay.style.left = "10px";
+        scoreDisplay.style.fontSize = "24px";
+        scoreDisplay.style.color = "black";
+        document.body.appendChild(scoreDisplay);
+
+        let flowers = [];
+        let balloons = [];
+        let lastTimestamp = 0;
+
+        class Flower {
+            constructor(x, y, hue) {
+                this.x = x;
+                this.y = y;
+                this.size = 2;
+                this.hue = hue;
+                this.color = `hsl(${this.hue}, 100%, 50%)`;
+            }
+
+            drawPetals(n, radius) {
+                const angle = Math.PI * 2 / n;
+                for (let i = 0; i < n; i++) {
+                    const petalX = this.x + radius * Math.cos(angle * i);
+                    const petalY = this.y - this.size * 20 + radius * Math.sin(angle * i);
+                    ctx.beginPath();
+                    ctx.arc(petalX, petalY, this.size * 7, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                // Draw stem
+                const stemHeight = this.size * 15 * 3;
+                ctx.fillRect(this.x - this.size * 2, this.y, this.size * 4, stemHeight); // Adjusted stem y-coordinate
+                // Draw petals
+                this.drawPetals(5, this.size * 15);
+            }
+
+            update(deltaTime) {
+                const decreaseFactor = deltaTime * 0.0001; // Change this value to make the flowers shrink slower (initially 0.0005)
+                this.size = Math.max(0, this.size - decreaseFactor);
+                const lightness = 50 + (1 - this.size / 2) * 50;
+                this.color = `hsl(${this.hue}, 100%, ${lightness}%)`;
+            }
+        }
+
+        class Balloon {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 10;
+                this.speed = 300;
+            }
+
+            draw() {
+                ctx.fillStyle = "blue";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            update(deltaTime) {
+                this.y += this.speed * deltaTime * 0.001;
+            }
+        }
+
+        function createFlowers() {
+            for (let i = 0; i < 5; i++) {
+                const hue = Math.floor(Math.random() * 360); // Random hue for each flower
+                flowers.push(new Flower(100 + i * 150, canvas.height - 100, hue));
+            }
+        }
+
+        function drawInstructions() {
+            ctx.font = '20px Arial';
+            ctx.fillStyle = 'black';
+            ctx.fillText('Click in the upper third of the canvas', 200, 50);
+            ctx.fillText('to drop water balloons on the flowers', 210, 80);
+        }
+
+        function updateScoreDisplay() {
+            scoreDisplay.textContent = `Score: ${score} | Combo: ${combo}x | High Score: ${highScore}`;
+        }
+
+        function increaseScore(points) {
+            updateMultiplier();
+            score += Math.floor(points * multiplier);
+            updateScoreDisplay();
+            updateHighScore();
+        }
+
+        function resetCombo() {
+            combo = 0;
+            updateScoreDisplay();
+        }
+
+        function updateHighScore() {
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('highScore', highScore);
+            }
+        }
+
+        function updateMultiplier() {
+            const currentTime = Date.now();
+            if (currentTime - lastScoreTime < 2000) { // 2 seconds window
+                multiplier = Math.min(multiplier + 0.1, 2); // Cap at 2x
+            } else {
+                multiplier = 1;
+            }
+            lastScoreTime = currentTime;
+        }
+
+        function checkCollisions() {
+            for (let i = balloons.length - 1; i >= 0; i--) {
+                const balloon = balloons[i];
+                let hit = false;
+                for (const flower of flowers) {
+                    const dx = balloon.x - flower.x;
+                    const dy = balloon.y - (flower.y - flower.size * 20);
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < balloon.radius + flower.size * 10) {
+                        const oldSize = flower.size;
+                        flower.size = Math.min(2, flower.size + 0.5);
+
+                        combo++;
+                        const points = calculateScore(flower, oldSize);
+                        increaseScore(points);
+
+                        balloons.splice(i, 1);
+                        hit = true;
+                        break;
+                    }
+                }
+                if (!hit && balloon.y > canvas.height) {
+                    score = Math.max(0, score - 5); // Penalty for missed balloon
+                    resetCombo();
+                    balloons.splice(i, 1);
+                }
+            }
+        }
+
+        function calculateScore(flower, oldSize) {
+            let points = 10; // Base points for hitting a flower
+            points += combo * 5; // Combo bonus
+            if (oldSize < 2 && flower.size === 2) {
+                points += 50; // Growth bonus
+            }
+            return points;
+        }
+
+        function updateFlowerScore(deltaTime) {
+            for (const flower of flowers) {
+                if (flower.size === 2) {
+                    score += Math.floor(deltaTime * 0.001); // 1 point per second
+                }
+            }
+            updateScoreDisplay();
+        }
+
+        function onClick(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            if (y < canvas.height / 3) { // Only create balloons when the click is in the upper third of the canvas
+                balloons.push(new Balloon(x, y));
+            }
+        }
+
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (const flower of flowers) {
+                flower.update(deltaTime);
+                flower.draw();
+            }
+
+            for (const balloon of balloons) {
+                balloon.update(deltaTime);
+                balloon.draw();
+            }
+
+            checkCollisions();
+            updateFlowerScore(deltaTime);
+            updateScoreDisplay();
+
+            drawInstructions();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        canvas.addEventListener("click", onClick);
+
+        createFlowers();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
