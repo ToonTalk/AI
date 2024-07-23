@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatComposer: Multi-Bot Response Assembler</title>
+    <style>
+        :root {
+            --primary-color: #4a6fa5;
+            --secondary-color: #166088;
+            --background-color: #f0f4f8;
+            --text-color: #333;
+            --border-color: #d1d9e6;
+            --danger-color: #e74c3c;
+            --danger-hover-color: #c0392b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--secondary-color);
+            font-style: italic;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 5px rgba(74, 111, 165, 0.5);
+        }
+
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+
+        button {
+            padding: 10px 15px;
+            cursor: pointer;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: var(--secondary-color);
+        }
+
+        #status-message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #2ecc71;
+            color: white;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #status-message.show {
+            opacity: 1;
+        }
+
+        #model-inputs {
+            margin-bottom: 20px;
+        }
+
+        .model-input {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .model-input input {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+
+        #result-container {
+            position: relative;
+            margin-top: 30px;
+        }
+
+        #result-area {
+            width: 100%;
+            height: 200px;
+            resize: vertical;
+            padding: 10px;
+            padding-right: 50px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        #copy-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        #reset-button {
+            background-color: var(--danger-color);
+        }
+
+        #reset-button:hover {
+            background-color: var(--danger-hover-color);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>ChatComposer</h1>
+        <p class="subtitle">Seamlessly assemble responses from multiple chatbots</p>
+    </header>
+    <div class="input-group">
+        <label for="name">Your Name (optional):</label>
+        <input type="text" id="name" placeholder="Enter your name (optional)">
+    </div>
+    <div class="input-group">
+        <label for="message">Your Message (optional):</label>
+        <textarea id="message" placeholder="Enter your initial message or prompt (optional)"></textarea>
+    </div>
+    <div id="model-inputs">
+        <div class="model-input">
+            <input type="text" id="model-name-1" placeholder="Enter chatbot name (e.g., ChatGPT, Claude)">
+            <button class="paste-button" data-index="1">Paste Response</button>
+        </div>
+    </div>
+    <div class="button-container">
+        <button id="add-model-button">Add Another Chatbot</button>
+        <button id="reset-button">Reset Responses</button>
+    </div>
+    <div id="status-message"></div>
+    <div id="result-container">
+        <textarea id="result-area" readonly></textarea>
+        <button id="copy-button">Copy All</button>
+    </div>
+
+    <script>
+        let modelCount = 1;
+        let pastedContents = {};
+
+        function showMessage(message) {
+            const statusMessage = document.getElementById('status-message');
+            statusMessage.textContent = message;
+            statusMessage.classList.add('show');
+            setTimeout(() => {
+                statusMessage.classList.remove('show');
+            }, 3000);
+        }
+
+        function updateAssembledString() {
+            const name = document.getElementById('name').value.trim();
+            const message = document.getElementById('message').value.trim();
+
+            let assembledString = '';
+
+            if (name || message) {
+                if (name) {
+                    assembledString += `${name}`;
+                    if (message) {
+                        assembledString += `: ${message}\n`;
+                    } else {
+                        assembledString += '\n';
+                    }
+                } else if (message) {
+                    assembledString += `${message}\n`;
+                }
+                assembledString += '---------------\n';
+            }
+
+            for (let i = 1; i <= modelCount; i++) {
+                const modelName = document.getElementById(`model-name-${i}`).value.trim();
+                const pastedContent = pastedContents[i] || '<no response yet>';
+                if (modelName) {
+                    assembledString += `${modelName}: ${pastedContent}\n---------------\n`;
+                } else {
+                    assembledString += `${pastedContent}\n---------------\n`;
+                }
+            }
+
+            document.getElementById('result-area').value = assembledString.trim();
+        }
+
+        document.getElementById('add-model-button').addEventListener('click', function() {
+            modelCount++;
+            const modelInputs = document.getElementById('model-inputs');
+            const newInput = document.createElement('div');
+            newInput.className = 'model-input';
+            newInput.innerHTML = `
+                <input type="text" id="model-name-${modelCount}" placeholder="Enter chatbot name (e.g., ChatGPT, Claude)">
+                <button class="paste-button" data-index="${modelCount}">Paste Response</button>
+            `;
+            modelInputs.appendChild(newInput);
+            newInput.querySelector('input').addEventListener('input', updateAssembledString);
+            updateAssembledString();
+        });
+
+        document.body.addEventListener('click', async function(event) {
+            if (event.target.classList.contains('paste-button')) {
+                const index = event.target.getAttribute('data-index');
+                try {
+                    const clipboardContent = await navigator.clipboard.readText();
+                    pastedContents[index] = clipboardContent;
+                    showMessage('Response saved for this chatbot.');
+                    updateAssembledString();
+                } catch (err) {
+                    console.error('Failed to read clipboard: ', err);
+                    showMessage('Error reading from clipboard. Please make sure you have granted clipboard permissions.');
+                }
+            }
+        });
+
+        document.getElementById('copy-button').addEventListener('click', async function() {
+            try {
+                await navigator.clipboard.writeText(document.getElementById('result-area').value);
+                showMessage('Assembled responses have been copied to clipboard!');
+            } catch (err) {
+                console.error('Failed to write to clipboard: ', err);
+                showMessage('Error copying to clipboard. Please manually copy the text from the result area.');
+            }
+        });
+
+        document.getElementById('reset-button').addEventListener('click', function() {
+            pastedContents = {};
+            showMessage('All pasted responses have been cleared.');
+            updateAssembledString();
+        });
+
+        // Add event listeners for real-time updates
+        document.getElementById('name').addEventListener('input', updateAssembledString);
+        document.getElementById('message').addEventListener('input', updateAssembledString);
+        document.getElementById('model-name-1').addEventListener('input', updateAssembledString);
+
+        // Initial assembly
+        updateAssembledString();
+    </script>
+</body>
+</html>
