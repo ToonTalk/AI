@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number to French Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        input, button {
+            font-size: 16px;
+            padding: 5px;
+            margin: 10px 0;
+        }
+        #result {
+            font-weight: bold;
+            margin-top: 20px;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <h1>Number to French Converter</h1>
+    <input type="text" id="numberInput" placeholder="Enter a number">
+    <button onclick="convertToFrench()">Convert</button>
+    <div id="result"></div>
+
+    <script>
+        const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
+        const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante', 'quatre-vingt', 'quatre-vingt'];
+        const scalePrefixes = ['', 'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem', 'dec'];
+
+        function getScaleName(power) {
+            if (power === 0) return '';
+            if (power === 1) return 'mille';
+            
+            const prefixIndex = Math.floor((power - 2) / 2);
+            const suffixIndex = (power - 2) % 2;
+            
+            let prefix = '';
+            let currentIndex = prefixIndex;
+            while (currentIndex >= 0) {
+                prefix = scalePrefixes[currentIndex % 10] + prefix;
+                currentIndex = Math.floor(currentIndex / 10) - 1;
+            }
+            
+            const suffix = suffixIndex === 0 ? 'illion' : 'illiard';
+            return prefix + suffix;
+        }
+
+        function numberToFrench(n) {
+            if (n === 0n) return 'zéro';
+            if (n < 0n) return 'moins ' + numberToFrench(-n);
+            
+            let result = [];
+            let remaining = n;
+            let power = 0;
+            
+            while (remaining > 0n) {
+                const divisor = 1000n ** BigInt(power + 1);
+                const chunk = remaining % divisor;
+                if (chunk > 0n) {
+                    const scale = getScaleName(power);
+                    const chunkStr = numberToFrenchSmall(chunk / (1000n ** BigInt(power)));
+                    result.unshift(chunkStr + (scale ? ' ' + scale : '') + (chunk > 1000n ** BigInt(power) && power > 1 ? 's' : ''));
+                }
+                remaining = remaining / 1000n;
+                power++;
+            }
+            
+            return result.join(' ');
+        }
+
+        function numberToFrenchSmall(n) {
+            n = Number(n);
+            if (n < 20) return units[n];
+            
+            if (n < 100) {
+                let ten = Math.floor(n / 10);
+                let one = n % 10;
+                if (ten === 7 || ten === 9) {
+                    return tens[ten] + '-' + units[10 + one];
+                } else if (ten === 8 && one === 0) {
+                    return 'quatre-vingts';
+                } else {
+                    return tens[ten] + (one > 0 ? '-' + units[one] : '');
+                }
+            }
+            
+            if (n < 1000) {
+                let hundred = Math.floor(n / 100);
+                let remainder = n % 100;
+                let result = (hundred === 1 ? 'cent' : units[hundred] + ' cent');
+                if (remainder > 0) {
+                    result += ' ' + numberToFrenchSmall(remainder);
+                } else if (hundred > 1) {
+                    result += 's';
+                }
+                return result;
+            }
+        }
+
+        function convertToFrench() {
+            const input = document.getElementById('numberInput').value;
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                if (!/^\d+$/.test(input)) {
+                    throw new Error('Only positive integers are supported');
+                }
+                const number = BigInt(input);
+                const french = numberToFrench(number);
+                resultDiv.textContent = french;
+            } catch (error) {
+                resultDiv.textContent = 'Invalid input. Please enter a valid positive integer.';
+            }
+        }
+    </script>
+</body>
+</html>
