@@ -1,4 +1,5 @@
 let isMonitoring = false;
+let audioContext, microphone, analyser, dataArray;
 let breathCount = 0;
 let lastBreathTime = Date.now();
 let breathRates = [];
@@ -11,29 +12,53 @@ function startMonitoring() {
     breathCount = 0;
     breathRates = [];
     lastBreathTime = Date.now();
-    window.addEventListener('devicemotion', detectBreathing);
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            microphone = audioContext.createMediaStreamSource(stream);
+            microphone.connect(analyser);
+            monitorBreathing();
+        })
+        .catch(err => {
+            console.error('Error accessing the microphone: ', err);
+        });
 }
 
 function stopMonitoring() {
-    window.removeEventListener('devicemotion', detectBreathing);
+    if (microphone) {
+        microphone.disconnect();
+    }
+    if (audioContext) {
+        audioContext.close();
+    }
     calculateBreathingRate();
 }
 
-function detectBreathing(event) {
-    const acceleration = event.acceleration.y;  // Assuming the phone is vertical in the pocket
-    const threshold = 1.0;  // Increased threshold to reduce false positives
-    const minTimeBetweenBreaths = 2000; // Minimum time in milliseconds between breaths (e.g., 2 seconds)
+function monitorBreathing() {
+    if (!isMonitoring) return;
 
+    analyser.getByteTimeDomainData(dataArray);
+    const threshold = 150;  // Adjust this based on your testing
     const currentTime = Date.now();
     const timeDiff = currentTime - lastBreathTime;
 
-    if (Math.abs(acceleration) > threshold && timeDiff > minTimeBetweenBreaths) {
-        const timeDiffMinutes = timeDiff / 1000 / 60; // Convert time difference to minutes
+    const maxAmplitude = Math.max(...dataArray);
+
+    if (maxAmplitude > threshold && timeDiff > 2000) {  // Detect peaks that are above the threshold
+        const timeDiffMinutes = timeDiff / 1000 / 60;
         breathRates.push(1 / timeDiffMinutes);
         breathCount++;
         lastBreathTime = currentTime;
         calculateBreathingRate();
     }
+
+    requestAnimationFrame(monitorBreathing);
 }
 
 function calculateBreathingRate() {
