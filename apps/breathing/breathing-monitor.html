@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Permissions-Policy" content="accelerometer=(), gyroscope=()">
+    <title>Breathing Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        #breathRate { font-size: 2em; margin: 20px 0; }
+        #status, #error, #debug { margin: 20px 0; }
+        #error { color: red; }
+        #debug { font-size: 0.8em; color: #666; }
+        button { font-size: 1em; padding: 10px 20px; }
+    </style>
+</head>
+<body>
+    <h1>Breathing Monitor</h1>
+    <div id="status">Click the button below to start monitoring.</div>
+    <div id="error"></div>
+    <button id="startButton">Start Monitoring</button>
+    <div id="breathRate">Waiting to start...</div>
+    <div id="advice"></div>
+    <div id="debug"></div>
+
+    <script>
+        let lastTime = 0;
+        let breathCount = 0;
+        let breathRate = 0;
+        const startButton = document.getElementById('startButton');
+        const statusDiv = document.getElementById('status');
+        const errorDiv = document.getElementById('error');
+        const breathRateDiv = document.getElementById('breathRate');
+        const adviceDiv = document.getElementById('advice');
+        const debugDiv = document.getElementById('debug');
+
+        startButton.addEventListener('click', requestPermission);
+
+        function requestPermission() {
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            startMonitoring();
+                        } else {
+                            showError('Permission to access motion sensors was denied.');
+                        }
+                    })
+                    .catch(error => {
+                        showError('Error requesting permission: ' + error.message);
+                    });
+            } else {
+                startMonitoring();
+            }
+        }
+
+        function startMonitoring() {
+            statusDiv.textContent = 'Attempting to start monitoring...';
+            startButton.style.display = 'none';
+            breathRateDiv.textContent = 'Initializing...';
+            
+            if (window.DeviceMotionEvent) {
+                window.addEventListener('devicemotion', handleMotion, false);
+                debugLog('DeviceMotionEvent listener added.');
+            } else {
+                showError('Device motion not supported on this device.');
+            }
+        }
+
+        function handleMotion(event) {
+            statusDiv.textContent = 'Monitoring active. Place your phone in your shirt pocket and breathe normally.';
+            const { x, y, z } = event.accelerationIncludingGravity || {};
+            if (x === null || y === null || z === null) {
+                showError('Unable to read acceleration data.');
+                return;
+            }
+
+            const magnitude = Math.sqrt(x*x + y*y + z*z);
+            const currentTime = new Date().getTime();
+
+            debugLog(`Magnitude: ${magnitude.toFixed(2)}`);
+
+            if (magnitude > 10.2 && currentTime - lastTime > 1000) {
+                breathCount++;
+                lastTime = currentTime;
+                
+                if (breathCount >= 3) {
+                    breathRate = (breathCount / ((currentTime - lastTime) / 60000)).toFixed(1);
+                    breathRateDiv.textContent = `${breathRate} breaths/min`;
+                    provideAdvice(breathRate);
+                }
+            }
+        }
+
+        function provideAdvice(rate) {
+            let advice = '';
+            if (rate < 12) {
+                advice = 'Your breathing is slow. Try taking deeper breaths.';
+            } else if (rate > 20) {
+                advice = 'Your breathing is fast. Try to relax and slow down your breathing.';
+            } else {
+                advice = 'Your breathing rate is normal. Keep breathing steadily.';
+            }
+            adviceDiv.textContent = advice;
+        }
+
+        function showError(message) {
+            errorDiv.textContent = 'Error: ' + message;
+        }
+
+        function debugLog(message) {
+            debugDiv.textContent += message + '\n';
+        }
+
+        // Log some initial debug information
+        debugLog('User Agent: ' + navigator.userAgent);
+        debugLog('Screen size: ' + screen.width + 'x' + screen.height);
+    </script>
+</body>
+</html>
