@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Permissions-Policy" content="accelerometer=(), gyroscope=()">
+    <title>Breathing Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        #breathRate { font-size: 2em; margin: 20px 0; }
+        #status, #advice { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Breathing Monitor</h1>
+    <div id="status">Monitoring active. Place your phone in your shirt pocket and breathe normally.</div>
+    <div id="breathRate">Calculating...</div>
+    <div id="advice"></div>
+
+    <script>
+        let accelerationData = [];
+        let breathTimes = [];
+        const dataWindow = 300; // 5 seconds at 60Hz
+        const breathRateDiv = document.getElementById('breathRate');
+        const adviceDiv = document.getElementById('advice');
+
+        function handleMotion(event) {
+            const { x, y, z } = event.accelerationIncludingGravity;
+            const magnitude = Math.sqrt(x*x + y*y + z*z);
+            
+            accelerationData.push({time: Date.now(), magnitude: magnitude});
+            if (accelerationData.length > dataWindow) {
+                accelerationData.shift();
+            }
+
+            if (accelerationData.length === dataWindow) {
+                detectBreaths();
+            }
+        }
+
+        function detectBreaths() {
+            const smoothedData = movingAverage(accelerationData.map(d => d.magnitude), 10);
+            const peaks = findPeaks(smoothedData);
+            
+            breathTimes = peaks.map(index => accelerationData[index].time);
+            
+            if (breathTimes.length >= 2) {
+                const duration = (breathTimes[breathTimes.length - 1] - breathTimes[0]) / 1000;
+                const rate = ((breathTimes.length - 1) / duration * 60).toFixed(1);
+                breathRateDiv.textContent = `${rate} breaths/min`;
+                provideAdvice(parseFloat(rate));
+            }
+        }
+
+        function movingAverage(data, windowSize) {
+            const result = [];
+            for (let i = 0; i < data.length; i++) {
+                const start = Math.max(0, i - windowSize + 1);
+                const end = i + 1;
+                const avg = data.slice(start, end).reduce((a, b) => a + b, 0) / (end - start);
+                result.push(avg);
+            }
+            return result;
+        }
+
+        function findPeaks(data) {
+            const peaks = [];
+            for (let i = 1; i < data.length - 1; i++) {
+                if (data[i] > data[i-1] && data[i] > data[i+1]) {
+                    peaks.push(i);
+                }
+            }
+            return peaks;
+        }
+
+        function provideAdvice(rate) {
+            let advice = '';
+            if (rate < 12) {
+                advice = 'Your breathing is slow. Try taking deeper breaths.';
+            } else if (rate > 20) {
+                advice = 'Your breathing is fast. Try to relax and slow down your breathing.';
+            } else {
+                advice = 'Your breathing rate is normal. Keep breathing steadily.';
+            }
+            adviceDiv.textContent = advice;
+        }
+
+        window.addEventListener('devicemotion', handleMotion, false);
+    </script>
+</body>
+</html>
