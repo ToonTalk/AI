@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simplified Breathing Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        #breathRate { font-size: 1.5em; margin: 15px 0; }
+        #status, #advice, #debug { margin: 15px 0; text-align: left; }
+        #debug { font-family: monospace; white-space: pre-wrap; }
+        button { font-size: 1.2em; padding: 10px 20px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Simplified Breathing Monitor</h1>
+    <div id="status">Click Start to begin monitoring.</div>
+    <button id="startButton">Start Monitoring</button>
+    <div id="breathRate">Breathing: -- breaths/min</div>
+    <div id="advice"></div>
+    <div id="debug"></div>
+
+    <script>
+        let audioContext, analyser, microphone;
+        let isMonitoring = false;
+        const breathRateDiv = document.getElementById('breathRate');
+        const adviceDiv = document.getElementById('advice');
+        const startButton = document.getElementById('startButton');
+        const statusDiv = document.getElementById('status');
+        const debugDiv = document.getElementById('debug');
+
+        startButton.addEventListener('click', startMonitoring);
+
+        async function startMonitoring() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                analyser.fftSize = 2048;
+                
+                isMonitoring = true;
+                statusDiv.textContent = 'Monitoring active. Breathe normally near the microphone.';
+                startButton.style.display = 'none';
+                
+                updateBreathRate();
+            } catch (err) {
+                statusDiv.textContent = 'Error accessing microphone: ' + err.message;
+            }
+        }
+
+        function updateBreathRate() {
+            if (!isMonitoring) return;
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteTimeDomainData(dataArray);
+
+            const breathRate = estimateBreathRate(dataArray);
+            breathRateDiv.textContent = `Breathing: ${breathRate.toFixed(1)} breaths/min`;
+            provideAdvice(breathRate);
+
+            // Debug information
+            const debugInfo = `
+Sample Rate: ${audioContext.sampleRate} Hz
+Buffer Size: ${dataArray.length}
+Min Value: ${Math.min(...dataArray)}
+Max Value: ${Math.max(...dataArray)}
+Average Value: ${(dataArray.reduce((a, b) => a + b, 0) / dataArray.length).toFixed(2)}
+            `;
+            debugDiv.textContent = debugInfo;
+
+            requestAnimationFrame(updateBreathRate);
+        }
+
+        function estimateBreathRate(dataArray) {
+            let crossings = 0;
+            const threshold = 128; // Midpoint for 8-bit audio data
+            for (let i = 1; i < dataArray.length; i++) {
+                if ((dataArray[i] > threshold && dataArray[i-1] <= threshold) || 
+                    (dataArray[i] <= threshold && dataArray[i-1] > threshold)) {
+                    crossings++;
+                }
+            }
+            
+            const duration = dataArray.length / audioContext.sampleRate;
+            const rate = (crossings / 2) * (60 / duration);
+            
+            // Constrain the rate to a reasonable range (4 to 30 breaths per minute)
+            return Math.max(4, Math.min(30, rate));
+        }
+
+        function provideAdvice(rate) {
+            let advice = '';
+            if (rate < 12) {
+                advice = 'Your breathing is slow. Try taking deeper breaths.';
+            } else if (rate > 20) {
+                advice = 'Your breathing is fast. Try to relax and slow down your breathing.';
+            } else {
+                advice = 'Your breathing rate is normal. Keep breathing steadily.';
+            }
+            adviceDiv.textContent = advice;
+        }
+    </script>
+</body>
+</html>
