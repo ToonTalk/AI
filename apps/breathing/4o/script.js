@@ -1,4 +1,3 @@
-
 let isMonitoring = false;
 let breathCount = 0;
 let lastBreathTime = Date.now();
@@ -22,12 +21,15 @@ function stopMonitoring() {
 
 function detectBreathing(event) {
     const acceleration = event.acceleration.y;  // Assuming the phone is vertical in the pocket
-    const threshold = 0.5;  // Adjust this value based on testing
+    const threshold = 1.0;  // Increased threshold to reduce false positives
+    const minTimeBetweenBreaths = 2000; // Minimum time in milliseconds between breaths (e.g., 2 seconds)
 
-    if (Math.abs(acceleration) > threshold) {
-        const currentTime = Date.now();
-        const timeDiff = (currentTime - lastBreathTime) / 1000 / 60; // time difference in minutes
-        breathRates.push(1 / timeDiff);
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastBreathTime;
+
+    if (Math.abs(acceleration) > threshold && timeDiff > minTimeBetweenBreaths) {
+        const timeDiffMinutes = timeDiff / 1000 / 60; // Convert time difference to minutes
+        breathRates.push(1 / timeDiffMinutes);
         breathCount++;
         lastBreathTime = currentTime;
         calculateBreathingRate();
