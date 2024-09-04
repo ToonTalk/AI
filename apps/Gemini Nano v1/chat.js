@@ -1,13 +1,24 @@
 // chat.js
-let conversationHistory = []; // Continue using the renamed array to avoid conflicts
+let conversationHistory = [];
 
 document.getElementById('send-button').addEventListener('click', sendMessage);
 document.getElementById('user-input').addEventListener('keypress', function(event) {
     if (event.key === "Enter") {
-        event.preventDefault(); // Prevent the default action to avoid form submission
+        event.preventDefault();
         sendMessage();
     }
 });
+
+let aiSession = null;
+
+async function initializeAI() {
+    const capabilities = await window.ai.assistant.capabilities();
+    if (capabilities.available === "readily" || capabilities.available === "after-download") {
+        aiSession = await window.ai.assistant.create();
+    } else {
+        console.error("AI capabilities are not available on this device.");
+    }
+}
 
 async function sendMessage() {
     const userInput = document.getElementById('user-input').value;
@@ -16,31 +27,27 @@ async function sendMessage() {
 
     if (!userInput.trim()) return;
 
-    sendButton.disabled = true; // Disable the button to prevent re-entry during processing
+    sendButton.disabled = true;
     chatOutput.innerHTML += `<div>You: ${userInput}</div>`;
-    conversationHistory.push(`You: ${userInput}<ctrl23>`); // Update conversation history
-    console.log('Sending prompt:', `You: ${userInput}<ctrl23>`); // Log the prompt
+    conversationHistory.push(`You: ${userInput}<ctrl23>`);
+    console.log('Sending prompt:', `You: ${userInput}<ctrl23>`);
 
-    const canCreate = await window.ai.canCreateTextSession();
-    if (canCreate === "no") {
-        chatOutput.innerHTML += `<div>Sorry, your device does not support this feature.</div>`;
-        sendButton.disabled = false;
-        return;
+    if (!aiSession) {
+        await initializeAI();
+        if (!aiSession) {
+            chatOutput.innerHTML += `<div>Sorry, AI capabilities are not available on your device.</div>`;
+            sendButton.disabled = false;
+            return;
+        }
     }
 
-    const session = await window.ai.createTextSession();
-    let prompt = conversationHistory.join(' ');
-    if (prompt.length > 950) {
-        conversationHistory = conversationHistory.slice(-5);
-        prompt = conversationHistory.join(' ');
-    }
-
-    console.log('Full prompt to AI:', prompt); // Log the full prompt being sent to AI
     try {
-        const result = await session.prompt(prompt);
+        const prompt = conversationHistory.join(' ');
+        console.log('Full prompt to AI:', prompt);
+        const result = await aiSession.prompt(prompt);
         chatOutput.innerHTML += `<div>Gemini Nano:</div><div>${marked.parse(result)}</div>`;
         conversationHistory.push(`Gemini Nano: ${result}<ctrl23>`);
-        console.log('Received response:', result); // Log the response from AI
+        console.log('Received response:', result);
     } catch (error) {
         console.error('Error prompting Gemini Nano:', error);
         chatOutput.innerHTML += `<div>Error communicating with AI.</div>`;
@@ -49,3 +56,6 @@ async function sendMessage() {
     document.getElementById('user-input').value = '';
     sendButton.disabled = false;
 }
+
+// Initialize AI when the script loads
+initializeAI();

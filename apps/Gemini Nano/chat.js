@@ -33,27 +33,6 @@ async function createPersona() {
     updateUI(); // Update the UI with the new persona
 }
 
-async function generatePersonaName(personality, role) {
-    const prompt = `Suggest a single, suitable name for a persona characterized as '${personality}' and whose profession is '${role}'. The name should be creative and reflect these attributes. Please provide only the name without any explanations or additional text.`;
-
-    try {
-        const response = await aiPrompt(prompt);
-        // Check if the response is defined and has a valid format before splitting
-        if (response && typeof response === 'string') {
-            const suggestedName = response.split('\n')[0].trim();  // Takes only the first line to ensure it's just the name
-            console.log(`AI suggested name: ${suggestedName}`);
-            return suggestedName;
-        } else {
-            // Handle cases where response is undefined or not a string
-            console.error('Invalid response format:', response);
-            return null;
-        }
-    } catch (error) {
-        console.error('Error generating persona name:', error);
-        return null;  // Return null if there's an error
-    }
-}
-
 function getRandomAttributes() {
     const attributes = [
         'curious', 'domineering', 'shy', 'creative', 'witty', 'literal minded', 
@@ -92,14 +71,46 @@ function updateUI() {
     const container = document.getElementById('personas-content');
     // Iterate through personas and update UI with new entries only
     personas.forEach(persona => {
-        const existingEntry = document.querySelector(`div[data-persona-id="${persona.name}"]`);
+        const safePersonaId = CSS.escape(persona.name);  // Safely escape the persona name for use in a selector
+        const existingEntry = document.querySelector(`div[data-persona-id="${safePersonaId}"]`);
         if (!existingEntry) {
             const personaDiv = document.createElement('div');
             personaDiv.setAttribute('data-persona-id', persona.name);  // Helps identify the div later
-            personaDiv.innerHTML = `<strong>${persona.name}</strong> (${persona.attributes.personality}, ${persona.attributes.role})`;
+            personaDiv.innerHTML = `<strong>${escapeHtml(persona.name)}</strong> (${escapeHtml(persona.attributes.personality)}, ${escapeHtml(persona.attributes.role)})`;
             container.appendChild(personaDiv);
         }
     });
+}
+
+// Helper function to escape HTML special characters
+function escapeHtml(unsafe) {
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
+async function generatePersonaName(personality, role) {
+    const prompt = `Suggest a single, suitable name for a persona characterized as '${personality}' and whose profession is '${role}'. The name should be creative and reflect these attributes. Please provide only the name without any explanations or additional text.`;
+
+    try {
+        const response = await aiPrompt(prompt);
+        // Check if the response is defined and has a valid format before processing
+        if (response && typeof response === 'string') {
+            const suggestedName = response.split('\n')[0].trim();  // Takes only the first line to ensure it's just the name
+            console.log(`AI suggested name: ${suggestedName}`);
+            return suggestedName.replace(/['"]/g, '');  // Remove any quotes from the name
+        } else {
+            // Handle cases where response is undefined or not a string
+            console.error('Invalid response format:', response);
+            return null;
+        }
+    } catch (error) {
+        console.error('Error generating persona name:', error);
+        return null;  // Return null if there's an error
+    }
 }
 
 function handleBroadcast() {
@@ -303,6 +314,15 @@ document.getElementById('pauseResumeButton').addEventListener('click', togglePau
 // AI Interaction function
 let aiSession = null;  // Will hold the session object for Gemini
 
+async function initializeAI() {
+    const capabilities = await window.ai.assistant.capabilities();
+    if (capabilities.available === "readily" || capabilities.available === "after-download") {
+        aiSession = await window.ai.assistant.create();
+    } else {
+        console.error("AI capabilities are not available on this device.");
+    }
+}
+
 async function aiPrompt(prompt, retries = 3) {
     const model = document.getElementById('apiChoice').value || 'gemini';  // Default to Gemini Nano
     const apiKey = document.getElementById('apiKey').value;
@@ -311,11 +331,11 @@ async function aiPrompt(prompt, retries = 3) {
         try {
             switch (model) {
                 case 'gemini':
-                    if (!aiSession) { // Check if session exists for Gemini
-                        if (await window.ai.canCreateTextSession() === "no") {
+                    if (!aiSession) {
+                        await initializeAI();
+                        if (!aiSession) {
                             throw new Error("Unable to create an AI session.");
                         }
-                        aiSession = await window.ai.createTextSession(); // Create session if none exists
                     }
                     console.log('Sending prompt to GeminiNano:', prompt);
                     const resultGemini = await aiSession.prompt(prompt);
@@ -324,6 +344,7 @@ async function aiPrompt(prompt, retries = 3) {
                     return resultGemini;
 
                 case 'cohere':
+                    // The Cohere API call remains unchanged
                     if (!apiKey) {
                         throw new Error("API key for Cohere is not provided.");
                     }
@@ -343,6 +364,11 @@ async function aiPrompt(prompt, retries = 3) {
         }
     }
 }
+
+// Initialize AI when the script loads
+initializeAI();
+
+// The rest of your code remains unchanged
 
 async function callCohere(apiKey, fullPrompt, retries = 3) {
     const url = 'https://api.cohere.com/v1/generate';  // Correct API endpoint for generation
