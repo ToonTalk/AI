@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Minsky's Agents Simulation</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        textarea, input, button { width: 100%; margin-bottom: 10px; }
+        #summary, #fullLog, #errorLog { white-space: pre-wrap; background-color: #f0f0f0; padding: 10px; border-radius: 5px; margin-top: 10px; }
+        #fullLog, #errorLog { display: none; }
+        .toggle-btn { background-color: #4CAF50; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Advanced Minsky's Agents Simulation</h1>
+    <textarea id="problem" rows="3" placeholder="Enter your problem here..."></textarea>
+    <input type="number" id="maxIterations" value="10" min="1" max="20">
+    <button onclick="runSimulation()">Run Simulation</button>
+    <div id="summary"></div>
+    <button id="toggleLog" class="toggle-btn" onclick="toggleFullLog()">Show Full Log</button>
+    <div id="fullLog"></div>
+    <button id="toggleErrorLog" class="toggle-btn" onclick="toggleErrorLog()">Show Error Log</button>
+    <div id="errorLog"></div>
+
+    <script>
+        // Utility function to create an agent
+        async function createAgent(role, systemPrompt) {
+            const session = await ai.assistant.create({
+                systemPrompt: `You are a ${role} agent in Minsky's Society of Mind. ${systemPrompt}`
+            });
+            return { role, session, messages: [] };
+        }
+
+        // Create agents
+        let agents = [];
+
+        async function initializeAgents() {
+            const kline = await createAgent('K-line', 'Your role is to store and retrieve specific memories or knowledge. When asked a question, provide relevant information from your knowledge base. If you don\'t have specific information, say so.');
+            const recognizer = await createAgent('Recognizer', 'Your job is to identify patterns, concepts, or relevant information in any input you receive. Analyze the input and describe any patterns or important elements you recognize.');
+            const differenceEngine = await createAgent('Difference-engine', 'Your task is to compare the current state of a situation to the desired state and suggest actions to bridge the gap. Analyze the situation presented to you, identify discrepancies, and propose solutions.');
+            const summaryAgent = await createAgent('Summary', 'Your task is to generate concise summaries of the interactions between other agents. Highlight key points and progression towards the solution.');
+            const decisionAgent = await createAgent('Decision', 'Your role is to evaluate the current state of the problem-solving process and decide if a satisfactory solution has been found. Consider the initial problem and the proposed solutions.');
+
+            agents = [kline, recognizer, differenceEngine, summaryAgent, decisionAgent];
+        }
+
+        // Function to get a random agent excluding specific roles
+        function getRandomAgent(excludeRoles = []) {
+            const eligibleAgents = agents.filter(agent => !excludeRoles.includes(agent.role));
+            return eligibleAgents[Math.floor(Math.random() * eligibleAgents.length)];
+        }
+
+        // Function to process a message through an agent with retry logic
+        async function processMessage(agent, message, maxRetries = 3) {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    agent.messages.push(message);
+                    const fullPrompt = agent.messages.join('\n');
+                    const response = await agent.session.prompt(fullPrompt);
+                    agent.messages.push(response);
+                    return response;
+                } catch (error) {
+                    console.error(`Attempt ${attempt + 1} failed:`, error);
+                    if (attempt === maxRetries - 1) {
+                        throw error; // Rethrow the error if all retries fail
+                    }
+                    // Wait for a short time before retrying
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        }
+
+        async function runDecentralizedSystem(initialPrompt, maxIterations = 10) {
+            let currentAgent = getRandomAgent(['Summary', 'Decision']);
+            let currentPrompt = initialPrompt;
+            let output = '';
+            let interactionLog = '';
+            let errorLog = '';
+
+            for (let i = 0; i < maxIterations; i++) {
+                output += `\nIteration ${i + 1}:\n`;
+                output += `${currentAgent.role} processing: ${currentPrompt}\n`;
+                
+                try {
+                    const response = await processMessage(currentAgent, currentPrompt);
+                    output += `${currentAgent.role} response: ${response}\n`;
+                    interactionLog += `${currentAgent.role} -> ${response}\n`;
+                    
+                    // Ask Decision Agent if a solution has been found
+                    const decisionAgent = agents.find(agent => agent.role === 'Decision');
+                    const decisionPrompt = `Initial problem: ${initialPrompt}\n\nCurrent state: ${interactionLog}\n\nHas a satisfactory solution been found? Respond with YES or NO and a brief explanation.`;
+                    const decision = await processMessage(decisionAgent, decisionPrompt);
+                    
+                    if (decision.toLowerCase().includes('yes')) {
+                        // Generate final summary
+                        const summaryAgent = agents.find(agent => agent.role === 'Summary');
+                        const summaryPrompt = `Summarize the problem-solving process:\n${interactionLog}`;
+                        const summary = await processMessage(summaryAgent, summaryPrompt);
+                        
+                        return { fullLog: output, summary, errorLog, finalDecision: decision };
+                    }
+                    
+                    // Choose the next agent and prepare the next prompt
+                    currentAgent = getRandomAgent(['Summary', 'Decision']);
+                    currentPrompt = `Previous interactions:\n${interactionLog}\nYour task: ${currentAgent.role === 'K-line' ? 'Provide relevant information' : currentAgent.role === 'Recognizer' ? 'Identify patterns or concepts' : 'Suggest actions to improve the situation'}`;
+                } catch (error) {
+                    errorLog += `Error in iteration ${i + 1}: ${error.message}\n`;
+                    // Choose a new agent and continue
+                    currentAgent = getRandomAgent(['Summary', 'Decision']);
+                    currentPrompt = initialPrompt; // Reset to initial prompt on error
+                }
+            }
+
+            // Generate final summary even if max iterations reached
+            const summaryAgent = agents.find(agent => agent.role === 'Summary');
+            const summaryPrompt = `Summarize the problem-solving process (max iterations reached):\n${interactionLog}`;
+            const summary = await processMessage(summaryAgent, summaryPrompt);
+
+            return { fullLog: output + "\nMax iterations reached without a final solution.", summary, errorLog, finalDecision: "Max iterations reached" };
+        }
+
+        async function runSimulation() {
+            const problem = document.getElementById('problem').value;
+            const maxIterations = parseInt(document.getElementById('maxIterations').value);
+            const summaryDiv = document.getElementById('summary');
+            const fullLogDiv = document.getElementById('fullLog');
+            const errorLogDiv = document.getElementById('errorLog');
+
+            summaryDiv.textContent = 'Initializing agents...';
+            fullLogDiv.textContent = '';
+            errorLogDiv.textContent = '';
+            
+            if (agents.length === 0) {
+                try {
+                    await initializeAgents();
+                } catch (error) {
+                    summaryDiv.innerHTML = `<span class="error">Error initializing agents: ${error.message}</span>`;
+                    return;
+                }
+            }
+
+            summaryDiv.textContent = 'Running simulation...';
+
+            try {
+                const { fullLog, summary, errorLog, finalDecision } = await runDecentralizedSystem(problem, maxIterations);
+                summaryDiv.textContent = `Problem: ${problem}\n\nSummary:\n${summary}\n\nFinal Decision: ${finalDecision}`;
+                fullLogDiv.textContent = fullLog;
+                errorLogDiv.textContent = errorLog || 'No errors occurred during the simulation.';
+            } catch (error) {
+                summaryDiv.innerHTML = `<span class="error">An error occurred: ${error.message}</span>`;
+                errorLogDiv.textContent = `Detailed error: ${error.stack}`;
+            }
+        }
+
+        function toggleFullLog() {
+            const fullLogDiv = document.getElementById('fullLog');
+            const toggleBtn = document.getElementById('toggleLog');
+            if (fullLogDiv.style.display === 'none') {
+                fullLogDiv.style.display = 'block';
+                toggleBtn.textContent = 'Hide Full Log';
+            } else {
+                fullLogDiv.style.display = 'none';
+                toggleBtn.textContent = 'Show Full Log';
+            }
+        }
+
+        function toggleErrorLog() {
+            const errorLogDiv = document.getElementById('errorLog');
+            const toggleBtn = document.getElementById('toggleErrorLog');
+            if (errorLogDiv.style.display === 'none') {
+                errorLogDiv.style.display = 'block';
+                toggleBtn.textContent = 'Hide Error Log';
+            } else {
+                errorLogDiv.style.display = 'none';
+                toggleBtn.textContent = 'Show Error Log';
+            }
+        }
+
+        // Initialize agents when the page loads
+        initializeAgents().then(() => {
+            console.log('Agents initialized');
+        }).catch(error => {
+            console.error('Error initializing agents:', error);
+            document.getElementById('summary').innerHTML = `<span class="error">Error initializing agents: ${error.message}</span>`;
+        });
+    </script>
+</body>
+</html>
