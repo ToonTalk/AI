@@ -50,7 +50,7 @@
     <div class="container">
         <button onclick="startListening()">Start Listening</button>
         <div id="log">
-            <h3>Log of Detected Coughs</h3>
+            <h3>Log of Detected Coughs and Near Misses</h3>
             <div id="cough-log"></div>
         </div>
         <div>
@@ -64,6 +64,8 @@
     <script>
         let recognizer;
         let coughCount = 0;
+        let lastCoughTime = null;
+        const COUGH_TIME_THRESHOLD = 5000; // 5 seconds
 
         async function loadModel() {
             const URL = 'https://toontalk.github.io/AI/apps/coughing/'; // Update with the path to your model files
@@ -77,24 +79,40 @@
                 const scores = result.scores;
                 const labels = recognizer.wordLabels();
                 const coughScore = scores[labels.indexOf('cough')];
-if (coughScore > 0.4 && coughScore < 0.67) console.log(coughScore);
-                if (coughScore > 0.67) { // Adjust the threshold as necessary
-                    logCough();
+
+                if (coughScore >= 0.67) {
+                    logCough(coughScore);
+                } else if (coughScore >= 0.5) { // Near miss threshold
+                    logNearMiss(coughScore);
                 }
             }, {
-                probabilityThreshold: 0.67,
+                probabilityThreshold: 0.5, // Capture near misses as well
                 overlapFactor: 0.5 // Adjust for responsiveness
             });
         }
 
-        function logCough() {
+        function logCough(score) {
             const now = new Date();
+
+            // Log only if the last cough was more than 5 seconds ago
+            if (!lastCoughTime || now - lastCoughTime > COUGH_TIME_THRESHOLD) {
+                lastCoughTime = now;
+                updateLog(now, score, 'Cough');
+                updateCount();
+            }
+        }
+
+        function logNearMiss(score) {
+            const now = new Date();
+            updateLog(now, score, 'Near Miss');
+        }
+
+        function updateLog(time, score, eventType) {
             const log = document.getElementById('cough-log');
             const newEntry = document.createElement('div');
             newEntry.className = 'log-entry';
-            newEntry.textContent = `Cough detected at: ${now.toLocaleTimeString()}`;
+            newEntry.textContent = `${eventType} detected at: ${time.toLocaleTimeString()} (Score: ${score.toFixed(2)})`;
             log.appendChild(newEntry);
-            updateCount();
         }
 
         function updateCount() {
