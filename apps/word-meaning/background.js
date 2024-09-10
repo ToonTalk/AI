@@ -59,10 +59,12 @@ function getSelectedWordAndSentence() {
 async function fetchWordMeaning(word, sentence, tabId) {
   console.log("Fetching meaning for:", word);  // Log word before calling the API
 
+  let session;
+
   try {
     const { available } = await ai.assistant.capabilities();
     if (available === "readily") {
-      const session = await ai.assistant.create();
+      session = await ai.assistant.create();
       const promptText = `Respond with a short meaning of the word "${word}" in the following sentence: "${sentence}".`;
       const result = await session.prompt(promptText);
 
@@ -75,5 +77,11 @@ async function fetchWordMeaning(word, sentence, tabId) {
     }
   } catch (error) {
     console.error("Error while fetching meaning:", error);
+  } finally {
+    if (session) {
+      // Destroy the session after use to free resources
+      session.destroy();
+      console.log("Session destroyed.");
+    }
   }
 }
