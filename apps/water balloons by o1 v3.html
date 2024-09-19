@@ -28,19 +28,11 @@
 
         .flower-container {
             position: absolute;
-            bottom: 0;
+            bottom: 50px; /* Raised the flowers higher */
             left: 0;
             transform: translateX(-50%);
             display: flex;
-            flex-direction: column;
             align-items: center;
-        }
-
-        .stem {
-            width: 4px;
-            background-color: green;
-            flex-grow: 1;
-            transition: height 0.5s;
         }
 
         .flower {
@@ -73,26 +65,24 @@
             transform: translateX(-50%);
         }
 
-        .splash {
+        .water-drop {
             position: absolute;
-            width: 30px;
-            height: 30px;
-            background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><path fill="%2300BFFF" d="M32 0C14.355 0 0 14.355 0 32s14.355 32 32 32 32-14.355 32-32S49.645 0 32 0zm0 58C17.663 58 6 46.337 6 32S17.663 6 32 6s26 11.663 26 26-11.663 26-26 26z"/></svg>');
-            background-size: contain;
-            background-repeat: no-repeat;
-            opacity: 0.8;
-            animation: splash-animation 0.5s ease-out forwards;
+            font-size: 30px;
+            animation: shrink 0.5s forwards;
             pointer-events: none;
+            user-select: none;
+            transform: translateX(-50%);
+            background-color: transparent; /* Ensure background is transparent */
         }
 
-        @keyframes splash-animation {
-            0% {
-                transform: scale(0.5);
-                opacity: 0.8;
+        @keyframes shrink {
+            from {
+                opacity: 1;
+                transform: translateX(-50%) scale(1);
             }
-            100% {
-                transform: scale(1.5);
+            to {
                 opacity: 0;
+                transform: translateX(-50%) scale(0);
             }
         }
     </style>
@@ -113,17 +103,13 @@
 
             const flowers = [];
             const numFlowers = 5;
-            const maxFlowerSize = 2; // Maximum flower size
+            const maxFlowerSize = 6; // Tripled maximum flower size
 
             // Create flowers and position them evenly across the game area
             for (let i = 0; i < numFlowers; i++) {
                 const flowerContainer = document.createElement('div');
                 flowerContainer.classList.add('flower-container');
                 flowerContainer.style.left = ((i + 0.5) * (100 / numFlowers)) + '%';
-
-                const stem = document.createElement('div');
-                stem.classList.add('stem');
-                stem.style.height = '50px'; // Initial stem height
 
                 const flower = document.createElement('div');
                 flower.classList.add('flower');
@@ -132,16 +118,13 @@
                 const randomFlower = flowerEmojis[Math.floor(Math.random() * flowerEmojis.length)];
                 flower.innerText = randomFlower;
 
-                flowerContainer.appendChild(stem);
                 flowerContainer.appendChild(flower);
                 gameArea.appendChild(flowerContainer);
 
                 flowers.push({
                     element: flower,
-                    stem: stem,
                     size: 1,
-                    colorIntensity: 100,
-                    stemHeight: 50
+                    colorIntensity: 100
                 });
             }
 
@@ -186,29 +169,27 @@
                             
                             // Balloon hits the flower
                             clearInterval(dropInterval);
-                            gameArea.removeChild(balloon);
+
+                            // Replace balloon with water drop emoji
+                            balloon.classList.remove('balloon');
+                            balloon.classList.add('water-drop');
+                            balloon.style.top = topPosition + 'px';
+                            balloon.style.left = x + 'px';
+                            balloon.innerText = '💧'; // Water drop emoji
+
+                            // **Fix: Set background color to transparent**
+                            balloon.style.backgroundColor = 'transparent';
+
+                            // Remove water drop after animation
+                            setTimeout(() => {
+                                gameArea.removeChild(balloon);
+                            }, 500);
 
                             // Increase flower size and color intensity with maximum limit
                             flowerObj.size = Math.min(maxFlowerSize, flowerObj.size + 0.1); // Grow more slowly
                             flowerObj.colorIntensity = Math.min(flowerObj.colorIntensity + 10, 100);
                             flowerObj.element.style.transform = `scale(${flowerObj.size})`;
                             flowerObj.element.style.filter = `grayscale(${100 - flowerObj.colorIntensity}%)`;
-
-                            // Increase stem height with maximum limit
-                            flowerObj.stemHeight = Math.min(150, flowerObj.stemHeight + 5);
-                            flowerObj.stem.style.height = `${flowerObj.stemHeight}px`;
-
-                            // Create water splash effect
-                            const splash = document.createElement('div');
-                            splash.classList.add('splash');
-                            splash.style.left = (flowerRect.left + flowerRect.width / 2 - rect.left) + 'px';
-                            splash.style.top = (flowerRect.top - rect.top) + 'px';
-                            gameArea.appendChild(splash);
-
-                            // Remove splash after animation
-                            setTimeout(() => {
-                                gameArea.removeChild(splash);
-                            }, 500);
 
                         }
                     });
@@ -232,10 +213,6 @@
                     flowerObj.colorIntensity = Math.max(0, flowerObj.colorIntensity - 0.5);
                     flowerObj.element.style.transform = `scale(${flowerObj.size})`;
                     flowerObj.element.style.filter = `grayscale(${100 - flowerObj.colorIntensity}%)`;
-
-                    // Decrease stem height
-                    flowerObj.stemHeight = Math.max(50, flowerObj.stemHeight - 0.1);
-                    flowerObj.stem.style.height = `${flowerObj.stemHeight}px`;
                 });
             }, 100);
         });
