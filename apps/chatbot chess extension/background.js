@@ -1,157 +1,105 @@
 // background.js
 console.log("Background script loaded");
 
-let lastTabId = null;
-let copiedText = null;
-let readyTabs = new Set();
+let copiedText = "Sample move";  // Default text for testing pasting actions.
 
-function isValidTab(tabId) {
-  return new Promise((resolve) => {
-    chrome.tabs.get(tabId, (tab) => {
-      if (chrome.runtime.lastError) {
-        resolve(false);
-      } else {
-        resolve(!tab.url.startsWith("chrome://") && !tab.url.startsWith("edge://"));
-      }
-    });
-  });
-}
-
-function injectContentScript(tabId) {
-  return new Promise(async (resolve, reject) => {
-    if (!(await isValidTab(tabId))) {
-      console.log("Skipping script injection for invalid or browser URL");
-      resolve(false);
-      return;
-    }
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      files: ['content.js']
-    }, (results) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error injecting script: ', chrome.runtime.lastError.message);
-        reject(chrome.runtime.lastError);
-      } else {
-        console.log('Content script injected successfully');
-        resolve(true);
-      }
-    });
-  });
-}
-
-function sendMessageToTab(tabId, message, retries = 3) {
+/**
+ * Sends a message to a specific tab.
+ */
+async function sendMessageToTab(tabId, message, retries = 3) {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, { ...message, from: 'background' }, response => {
+    // Ping the tab to see if the content script is ready
+    console.log(`Pinging tab ${tabId} to check if content script is loaded...`);
+
+    chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
       if (chrome.runtime.lastError) {
-        console.error('Error sending message to tab: ', chrome.runtime.lastError.message);
+        console.error(`Error pinging tab ${tabId}: ${chrome.runtime.lastError.message}`);
         if (retries > 0) {
-          console.log(`Retrying... (${retries} attempts left)`);
-          setTimeout(() => {
-            sendMessageToTab(tabId, message, retries - 1)
-              .then(resolve)
-              .catch(reject);
-          }, 500); // Increased delay between retries
+          console.log(`Retrying... ${retries} attempts left.`);
+          setTimeout(() => sendMessageToTab(tabId, message, retries - 1).then(resolve).catch(reject), 1000);
         } else {
-          reject(chrome.runtime.lastError);
+          reject(chrome.runtime.lastError.message);
         }
+      } else if (response && response.loaded) {
+        console.log(`Content script is loaded in tab ${tabId}. Sending message.`);
+        // Content script is ready, send the actual message
+        chrome.tabs.sendMessage(tabId, message, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error(`Error sending message to tab ${tabId}: ${chrome.runtime.lastError.message}`);
+            reject(chrome.runtime.lastError.message);
+          } else {
+            resolve(response);
+          }
+        });
       } else {
-        console.log('Message sent successfully, response: ', response);
-        resolve(response);
+        console.log(`Content script not loaded in tab ${tabId}.`);
+        if (retries > 0) {
+          console.log(`Retrying... ${retries} attempts left.`);
+          setTimeout(() => sendMessageToTab(tabId, message, retries - 1).then(resolve).catch(reject), 1000);
+        } else {
+          reject('Content script not loaded');
+        }
       }
     });
   });
 }
 
-async function ensureContentScriptLoaded(tabId) {
-  if (!readyTabs.has(tabId)) {
+/**
+ * Manually trigger paste to ChatGPT.
+ */
+async function triggerPasteToChatGPT() {
+  const tabs = await chrome.tabs.query({ url: "*://*.chatgpt.com/*" });
+  if (tabs.length > 0) {
+    const tabId = tabs[0].id;
     try {
-      const injected = await injectContentScript(tabId);
-      if (!injected) {
-        console.log("Content script not injected. Skipping this tab.");
-        return false;
-      }
-      await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay to ensure script is ready
-      await sendMessageToTab(tabId, { action: 'ping' });
-      readyTabs.add(tabId);
-      return true;
+      console.log(`Manually pasting text to ChatGPT in tab ${tabId}:`, copiedText);
+      await sendMessageToTab(tabId, { action: 'pasteToChatGPT', text: copiedText });
     } catch (error) {
-      console.error('Error ensuring content script is loaded:', error);
-      return false;
+      console.error(`Error in manual paste to ChatGPT (tab ${tabId}):`, error);
     }
+  } else {
+    console.error("ChatGPT tab not found for manual paste.");
   }
-  return true;
 }
 
-async function handleTabChange(tabId) {
-  console.log("Handling tab change for tab:", tabId);
-  
-  if (lastTabId !== null && lastTabId !== tabId) {
-    const sourceTabValid = await isValidTab(lastTabId);
-    const destTabValid = await isValidTab(tabId);
-
-    if (sourceTabValid) {
-      try {
-        const sourceScriptLoaded = await ensureContentScriptLoaded(lastTabId);
-        if (sourceScriptLoaded) {
-          console.log("Attempting to copy from tab:", lastTabId);
-          const copyResponse = await sendMessageToTab(lastTabId, {action: "copy"});
-          
-          if (copyResponse && copyResponse.text) {
-            copiedText = copyResponse.text;
-            console.log("Text copied:", copiedText);
-          } else if (copyResponse && copyResponse.error) {
-            console.log("Copy error:", copyResponse.error);
-          }
-        } else {
-          console.log("Skipping copy operation. Content script not loaded in source tab.");
-        }
-      } catch (error) {
-        console.error("Error during copy operation:", error);
-      }
-    } else {
-      console.log("Skipping copy operation. Source tab is not valid.");
+/**
+ * Manually trigger paste to Chess App.
+ */
+async function triggerPasteToChessApp() {
+  const tabs = await chrome.tabs.query({ url: "*://toontalk.github.io/*" });
+  if (tabs.length > 0) {
+    const tabId = tabs[0].id;
+    try {
+      console.log(`Manually pasting text to Chess app in tab ${tabId}:`, copiedText);
+      await sendMessageToTab(tabId, { action: 'pasteToChessApp', text: copiedText });
+    } catch (error) {
+      console.error(`Error in manual paste to Chess app (tab ${tabId}):`, error);
     }
-
-    if (destTabValid && copiedText) {
-      try {
-        const destScriptLoaded = await ensureContentScriptLoaded(tabId);
-        if (destScriptLoaded) {
-          console.log("Attempting to paste to tab:", tabId);
-          const pasteResponse = await sendMessageToTab(tabId, {action: "paste", text: copiedText});
-          
-          if (pasteResponse && pasteResponse.success) {
-            console.log("Text pasted successfully");
-          } else {
-            console.log("No suitable element found for pasting or paste verification failed");
-          }
-        } else {
-          console.log("Skipping paste operation. Content script not loaded in destination tab.");
-        }
-      } catch (error) {
-        console.error("Error during paste operation:", error);
-      }
-    } else {
-      console.log("Skipping paste operation. Destination tab is not valid or no text to paste.");
-    }
+  } else {
+    console.error("Chess app tab not found for manual paste.");
   }
-  
-  lastTabId = tabId;
 }
 
-chrome.tabs.onActivated.addListener(function(activeInfo) {
-  console.log("Tab activated:", activeInfo.tabId);
-  handleTabChange(activeInfo.tabId).catch(error => {
-    console.error("Error in tab activation handler:", error);
-  });
+/**
+ * Handles copy-paste actions between ChatGPT and the chess app.
+ */
+chrome.runtime.onMessage.addListener(async function (request, sender, sendResponse) {
+  if (request.action === "copyFromChess") {
+    copiedText = request.text;
+    console.log("Text copied from chess tab:", copiedText);
+    sendResponse({ success: true });
+  }
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'contentScriptReady') {
-    console.log('Content script ready in tab:', sender.tab.id);
-    readyTabs.add(sender.tab.id);
-    sendResponse({received: true});
-  } else if (message.action === 'error') {
-    console.error('Error from content script:', message.error);
+/**
+ * Test commands (send from console)
+ */
+chrome.runtime.onMessage.addListener(async function (request, sender, sendResponse) {
+  if (request.action === "manualPasteToChatGPT") {
+    triggerPasteToChatGPT();
+  }
+
+  if (request.action === "manualPasteToChessApp") {
+    triggerPasteToChessApp();
   }
 });
