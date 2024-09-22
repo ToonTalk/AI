@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prime Sequence Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .number {
+            margin-bottom: 10px;
+        }
+        .prime {
+            color: green;
+            font-weight: bold;
+        }
+        .new-factor {
+            color: blue;
+            font-weight: bold;
+        }
+        .added-prime {
+            color: purple;
+            font-weight: bold;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            font-size: 14px;
+        }
+        #loading {
+            color: orange;
+            font-style: italic;
+        }
+        #stats {
+            margin-top: 20px;
+            font-style: italic;
+        }
+        .time-limit-message {
+            color: red;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .input-group {
+            display: inline-block;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Prime Sequence Generator</h1>
+    <div>
+        <div class="input-group">
+            <label for="prime1">First Prime: </label>
+            <input type="number" id="prime1" value="2" min="2">
+        </div>
+        <div class="input-group">
+            <label for="prime2">Second Prime: </label>
+            <input type="number" id="prime2" value="3" min="2">
+        </div>
+        <button onclick="initializeSequence()">Initialize</button>
+    </div>
+    <div id="error"></div>
+    <div id="sequence"></div>
+    <div id="loading"></div>
+    <button onclick="generateNext()">Generate Next</button>
+    <div id="stats"></div>
+
+    <script>
+        let sequence = [2n, 3n];
+        let seenFactors = new Set([2n, 3n]);
+        let currentIndex = 1;
+        const TIME_LIMIT = 10000; // 10 seconds in milliseconds
+        let totalCalculations = 0;
+        let primesFound = 2;
+
+        function formatWithCommas(n) {
+            return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        async function isPrime(n, signal) {
+            if (n <= 1n) return false;
+            if (n <= 3n) return true;
+            if (n % 2n === 0n || n % 3n === 0n) return false;
+            
+            for (let i = 5n; i * i <= n; i += 6n) {
+                if (signal.aborted) {
+                    throw new Error("Aborted");
+                }
+                if (n % i === 0n || n % (i + 2n) === 0n) return false;
+                if (i % 1000000n === 5n) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+            return true;
+        }
+
+        async function* primeFactorGenerator(n) {
+            if (n % 2n === 0n) {
+                yield 2n;
+                while (n % 2n === 0n) {
+                    n = n / 2n;
+                    yield null;
+                }
+            }
+            for (let i = 3n; i * i <= n; i += 2n) {
+                if (n % i === 0n) {
+                    yield i;
+                    while (n % i === 0n) {
+                        n = n / i;
+                        yield null;
+                    }
+                }
+                if (i % 100000n === 1n) {
+                    yield null;
+                }
+            }
+            if (n > 2n) {
+                yield n;
+            }
+        }
+
+        async function getPrimeFactors(n, signal) {
+            let factors = [];
+            let loadingElement = document.getElementById('loading');
+
+            for await (const factor of primeFactorGenerator(n)) {
+                if (signal.aborted) {
+                    throw new Error("Aborted");
+                }
+                if (factor !== null) {
+                    factors.push(factor);
+                    loadingElement.innerHTML += ` ${formatWithCommas(factor)}`;
+                }
+            }
+
+            return factors;
+        }
+
+        function formatCalculation(seq, result) {
+            return seq.map(formatWithCommas).join(' × ') + ' + 1 = ' + formatWithCommas(result);
+        }
+
+        async function generateNext() {
+            let result = sequence.reduce((a, b) => a * b, 1n) + 1n;
+            let resultElement = document.createElement('div');
+            resultElement.className = 'number';
+
+            totalCalculations++;
+            let calculation = formatCalculation(sequence, result);
+
+            document.getElementById('loading').innerHTML = `Calculating factors of ${formatWithCommas(result)}:`;
+            await new Promise(resolve => setTimeout(resolve, 10)); // Allow UI to update
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+            }, TIME_LIMIT);
+
+            try {
+                const prime = await isPrime(result, controller.signal);
+                
+                if (prime) {
+                    resultElement.innerHTML = `${calculation.replace(formatWithCommas(result), `<span class="prime">${formatWithCommas(result)}</span>`)} (Prime)`;
+                    sequence.push(result);
+                    seenFactors.add(result);
+                    primesFound++;
+                } else {
+                    let factors = await getPrimeFactors(result, controller.signal);
+                    let newFactors = factors.filter(f => !seenFactors.has(f));
+                    
+                    let factorString = factors.map(f => {
+                        if (!seenFactors.has(f)) {
+                            seenFactors.add(f);
+                            primesFound++;
+                            return `<span class="new-factor">${formatWithCommas(f)}</span>`;
+                        }
+                        return formatWithCommas(f);
+                    }).join(' × ');
+                    
+                    resultElement.innerHTML = `${calculation} = ${factorString}`;
+                    
+                    if (newFactors.length > 0) {
+                        newFactors.forEach(f => sequence.push(f));
+                        let addedPrimesString = newFactors.map(f => `<span class="prime">${formatWithCommas(f)}</span>`).join(', ');
+                        resultElement.innerHTML += ` <span class="added-prime">(Added ${addedPrimesString} to sequence)</span>`;
+                    }
+                }
+            } catch (error) {
+                if (error.message === "Aborted") {
+                    resultElement.innerHTML = `${calculation} <span class="time-limit-message">Calculation exceeded ${TIME_LIMIT / 1000} seconds. The number might be prime or have very large factors.</span>`;
+                } else {
+                    throw error;
+                }
+            } finally {
+                clearTimeout(timeoutId);
+            }
+
+            document.getElementById('sequence').appendChild(resultElement);
+            currentIndex++;
+            document.getElementById('loading').innerHTML = '';
+            updateStats();
+        }
+
+        function updateStats() {
+            const statsElement = document.getElementById('stats');
+            statsElement.innerHTML = `
+                Total calculations: ${totalCalculations}<br>
+                Primes found: ${primesFound}<br>
+                Largest number in sequence: ${formatWithCommas(sequence[sequence.length - 1])}
+            `;
+        }
+
+        async function initializeSequence() {
+            const prime1 = BigInt(document.getElementById('prime1').value);
+            const prime2 = BigInt(document.getElementById('prime2').value);
+            const errorElement = document.getElementById('error');
+            errorElement.innerHTML = '';
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), TIME_LIMIT);
+
+            try {
+                const isPrime1 = await isPrime(prime1, controller.signal);
+                const isPrime2 = await isPrime(prime2, controller.signal);
+
+                if (!isPrime1 || !isPrime2) {
+                    errorElement.innerHTML = 'Both numbers must be prime.';
+                    return;
+                }
+
+                sequence = [prime1, prime2];
+                seenFactors = new Set([prime1, prime2]);
+                currentIndex = 1;
+                totalCalculations = 0;
+                primesFound = 2;
+
+                document.getElementById('sequence').innerHTML = `
+                    <div class="number"><span class="prime">${formatWithCommas(prime1)}</span> (Prime)</div>
+                    <div class="number"><span class="prime">${formatWithCommas(prime2)}</span> (Prime)</div>
+                `;
+
+                updateStats();
+            } catch (error) {
+                if (error.message === "Aborted") {
+                    errorElement.innerHTML = 'Primality test took too long. Please try smaller numbers.';
+                } else {
+                    throw error;
+                }
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+
+        // Initialize with default values
+        initializeSequence();
+    </script>
+</body>
+</html>
