@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Water Balloon Flower Game</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+            background-color: #f0f8ff;
+        }
+        body {
+            text-align: center;
+        }
+        #instructions {
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <h1>Water Balloon Flower Game</h1>
+    <p id="instructions">Click to drop a water balloon!</p>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let flowers = [];
+        let balloons = [];
+
+        class Flower {
+            constructor(x, y, size, color) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.color = color;
+                this.growth = 0;
+                this.grayness = 0;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.scale((this.size + this.growth) * 10, (this.size + this.growth) * 10);
+                // Draw petals
+                let numPetals = 6;
+                let angle = (2 * Math.PI) / numPetals;
+
+                for (let i = 0; i < numPetals; i++) {
+                    ctx.save();
+                    ctx.rotate(i * angle);
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.quadraticCurveTo(5, -10, 0, -20);
+                    ctx.quadraticCurveTo(-5, -10, 0, 0);
+                    ctx.fillStyle = this.getColor();
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // Draw center
+                ctx.beginPath();
+                ctx.arc(0, 0, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = 'yellow';
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            update() {
+                if (this.growth > 0) {
+                    this.growth -= 0.005;
+                } else {
+                    this.grayness += 0.001; // Slower fading
+                    this.size -= 0.0005;
+                    if (this.size < 0.05) this.size = 0.05; // Prevents the flower from disappearing completely
+                }
+            }
+
+            getColor() {
+                if (this.grayness > 0) {
+                    let grayValue = 128; // Mid-gray
+                    // Blend the original color with grayness
+                    return this.blendColorWithGray(this.color, grayValue);
+                }
+                return this.color;
+            }
+
+            blendColorWithGray(color, grayValue) {
+                // Extract RGB from the color
+                let canvasColor = document.createElement('canvas');
+                canvasColor.width = canvasColor.height = 1;
+                let ctxColor = canvasColor.getContext('2d');
+                ctxColor.fillStyle = color;
+                ctxColor.fillRect(0, 0, 1, 1);
+                let colorData = ctxColor.getImageData(0, 0, 1, 1).data;
+
+                // Blend with gray
+                let r = colorData[0] + (grayValue - colorData[0]) * (this.grayness);
+                let g = colorData[1] + (grayValue - colorData[1]) * (this.grayness);
+                let b = colorData[2] + (grayValue - colorData[2]) * (this.grayness);
+
+                return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+            }
+        }
+
+        class Balloon {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.speed = 5;
+                this.radius = 10;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.ellipse(
+                    this.x,
+                    this.y,
+                    this.radius,
+                    this.radius * 1.2,
+                    0,
+                    0,
+                    2 * Math.PI
+                );
+                ctx.fill();
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+        }
+
+        function initFlowers() {
+            let flowerColors = ['red', 'blue', 'purple', 'orange', 'pink', 'green', 'teal', 'magenta', 'yellow', 'cyan'];
+            for (let i = 0; i < 5; i++) {
+                let x = 100 + i * 150;
+                let y = 500;
+                let size = 0.5;
+                let color = flowerColors[i % flowerColors.length];
+                flowers.push(new Flower(x, y, size, color));
+            }
+        }
+
+        function dropBalloon(event) {
+            let rect = canvas.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = 0;
+            let color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+            balloons.push(new Balloon(x, y, color));
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            flowers.forEach((flower) => {
+                flower.update();
+                flower.draw();
+            });
+
+            balloons.forEach((balloon, index) => {
+                balloon.update();
+                balloon.draw();
+
+                // Check collision with flowers
+                flowers.forEach((flower) => {
+                    let dx = balloon.x - flower.x;
+                    let dy = balloon.y - flower.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < 30) {
+                        flower.growth = 0.2;
+                        flower.grayness = 0;
+                        balloons.splice(index, 1);
+                    }
+                });
+
+                // Remove balloons that are off-screen
+                if (balloon.y > canvas.height) {
+                    balloons.splice(index, 1);
+                }
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        canvas.addEventListener('click', dropBalloon);
+
+        initFlowers();
+        animate();
+    </script>
+</body>
+</html>
