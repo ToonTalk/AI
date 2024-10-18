@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Etymology Globe Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Include Globe.gl and Three.js via CDN -->
+  <script src="https://unpkg.com/three@0.150.1/build/three.min.js"></script>
+  <script src="https://unpkg.com/globe.gl/dist/globe.gl.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #111;
+      color: #fff;
+    }
+    h1 {
+      margin: 10px 0;
+    }
+    #game-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 10px;
+    }
+    #globeViz {
+      width: 100%;
+      height: 600px;
+      margin: 0 auto;
+    }
+    #word-display {
+      font-size: 1.5em;
+      margin: 15px 0;
+    }
+    #result {
+      font-size: 1.2em;
+      margin: 15px 0;
+    }
+    #etymology-card {
+      background-color: #222;
+      border: 1px solid #555;
+      border-radius: 5px;
+      padding: 15px;
+      margin: 15px 0;
+      display: none;
+      text-align: left;
+      color: #fff;
+    }
+    #next-btn {
+      background-color: #28a745;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 1em;
+      display: none;
+    }
+    #next-btn:hover {
+      background-color: #218838;
+    }
+    #scoreboard {
+      font-size: 1em;
+      margin-top: 10px;
+    }
+    #hint-btn {
+      margin: 10px 0;
+    }
+    #hint {
+      font-size: 1em;
+      margin-top: 10px;
+      color: #bbb;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <h1>Etymology Globe Game</h1>
+    <div id="scoreboard">Score: <span id="score">0</span></div>
+    <div id="word-display"></div>
+
+    <!-- Hint Button and Display -->
+    <button id="hint-btn" onclick="showHint()">Show Hint</button>
+    <div id="hint"></div>
+
+    <!-- Globe Container -->
+    <div id="globeViz"></div>
+
+    <div id="result"></div>
+    <div id="etymology-card"></div>
+    <button id="next-btn" onclick="nextWord()">Next Word</button>
+  </div>
+
+  <script>
+    // Words data with 'continent' property added
+    const words = [
+      {
+        word: "Astronomy",
+        origin: { lat: 37.9838, lng: 23.7275 }, // Athens, Greece
+        etymology: "From Greek 'astron' meaning 'star' and 'nomos' meaning 'law' or 'arrangement'.",
+        continent: "Europe"
+      },
+      // Add more words as needed
+      {
+        word: "Robot",
+        origin: { lat: 50.0755, lng: 14.4378 }, // Prague, Czech Republic
+        etymology: "From Czech 'robota' meaning 'forced labor' or 'drudgery'.",
+        continent: "Europe"
+      },
+      {
+        word: "Ketchup",
+        origin: { lat: 31.2304, lng: 121.4737 }, // Shanghai, China
+        etymology: "From Chinese 'ke-tsiap', a fish sauce.",
+        continent: "Asia"
+      },
+      {
+        word: "Safari",
+        origin: { lat: -1.2921, lng: 36.8219 }, // Nairobi, Kenya (Swahili adoption)
+        etymology: "From Swahili 'safari', from Arabic 'safar' meaning 'journey'.",
+        continent: "Africa"
+      },
+      {
+        word: "Algebra",
+        origin: { lat: 33.3128, lng: 44.3615 }, // Baghdad, Iraq
+        etymology: "From Arabic 'al-jabr' meaning 'reunion of broken parts'.",
+        continent: "Asia"
+      },
+    ];
+
+    let currentWordIndex = 0;
+    let score = 0;
+    let guesses = 0;
+
+    // Initialize the globe
+    const myGlobe = Globe()
+      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
+      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+      .backgroundColor('#111')
+      .pointOfView({ lat: 20, lng: 0, altitude: 2 });
+
+    const globeContainer = document.getElementById('globeViz');
+    myGlobe(globeContainer);
+
+    // Add click event listener
+    myGlobe.onGlobeClick(onGlobeClick);
+
+    function displayWord() {
+      document.getElementById('result').innerText = '';
+      document.getElementById('etymology-card').style.display = 'none';
+      document.getElementById('next-btn').style.display = 'none';
+      document.getElementById('hint').innerText = ''; // Reset the hint display
+      guesses = 0;
+
+      const wordObj = words[currentWordIndex];
+      document.getElementById('word-display').innerText = `Where does the word "${wordObj.word}" originate?`;
+
+      // Remove previous markers
+      myGlobe.pointsData([]);
+
+      // Enable globe clicks
+      myGlobe.onGlobeClick(onGlobeClick);
+    }
+
+    function onGlobeClick(clickLatLng) {
+      const wordObj = words[currentWordIndex];
+      const playerLatLng = { lat: clickLatLng.lat, lng: clickLatLng.lng };
+      const originLatLng = wordObj.origin;
+
+      // Add player's guess marker
+      addMarker(playerLatLng.lat, playerLatLng.lng, 'blue');
+
+      // Calculate distance
+      const distance = distanceBetweenPoints(playerLatLng.lat, playerLatLng.lng, originLatLng.lat, originLatLng.lng);
+
+      const resultDiv = document.getElementById('result');
+
+      guesses++;
+      if (distance < 500) { // Within 500 km is considered correct
+        resultDiv.innerText = `Correct! You found the origin in ${guesses} guess(es).`;
+        resultDiv.style.color = 'green';
+        score++;
+        document.getElementById('score').innerText = score;
+
+        // Disable further clicks
+        myGlobe.onGlobeClick(null);
+
+        // Add origin marker
+        addMarker(originLatLng.lat, originLatLng.lng, 'red');
+
+        // Show etymology information
+        const etymologyCard = document.getElementById('etymology-card');
+        etymologyCard.innerText = wordObj.etymology;
+        etymologyCard.style.display = 'block';
+        document.getElementById('next-btn').style.display = 'inline-block';
+
+      } else {
+        resultDiv.innerText = `Your guess is ${distance.toFixed(0)} km away from the origin. Try again!`;
+        resultDiv.style.color = 'orange';
+      }
+    }
+
+    function addMarker(lat, lng, color) {
+      const point = { lat, lng, color };
+      const existingPoints = myGlobe.pointsData();
+      myGlobe.pointsData([...existingPoints, point]);
+    }
+
+    function distanceBetweenPoints(lat1, lng1, lat2, lng2) {
+      const R = 6371; // Radius of the Earth in km
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c;
+      return distance;
+    }
+
+    function toRad(Value) {
+      return Value * Math.PI / 180;
+    }
+
+    function nextWord() {
+      currentWordIndex++;
+      if (currentWordIndex >= words.length) {
+        alert('You have completed all words!');
+        currentWordIndex = 0; // Restart the game
+      }
+      displayWord();
+    }
+
+    function showHint() {
+      const wordObj = words[currentWordIndex];
+      document.getElementById('hint').innerText = `Hint: The origin is in ${wordObj.continent}.`;
+    }
+
+    // Initialize the game after the DOM is fully loaded
+    window.onload = function() {
+      displayWord();
+    };
+  </script>
+
+</body>
+</html>
