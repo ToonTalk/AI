@@ -1,0 +1,135 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cough Detection App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f8ff;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            font-size: 16px;
+            margin: 10px 0;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #log {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #fff;
+        }
+        .log-entry {
+            padding: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Cough Detection App</h1>
+    <div class="container">
+        <button onclick="startListening()">Start Listening</button>
+        <div id="log">
+            <h3>Log of Detected Coughs</h3>
+            <div id="cough-log"></div>
+        </div>
+        <div>
+            <h2>Total Detected Cough Events: <span id="cough-count">0</span></h2>
+        </div>
+    </div>
+
+    <script>
+        let audioContext;
+        let analyser;
+        let microphone;
+        let dataArray;
+        let coughCount = 0;
+        let lastCoughTime = null;
+        const COUGH_TIME_THRESHOLD = 20000; // 20 seconds
+
+        function startListening() {
+            if (!navigator.mediaDevices.getUserMedia) {
+                alert('Your browser does not support microphone access.');
+                return;
+            }
+
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    microphone = audioContext.createMediaStreamSource(stream);
+                    analyser.fftSize = 512;
+
+                    const bufferLength = analyser.frequencyBinCount;
+                    dataArray = new Uint8Array(bufferLength);
+                    microphone.connect(analyser);
+                    detectCoughs();
+                })
+                .catch(err => {
+                    console.error('Error accessing the microphone:', err);
+                    alert('Error accessing the microphone. Please check permissions and ensure HTTPS or localhost.');
+                });
+        }
+
+        function detectCoughs() {
+            try {
+                analyser.getByteTimeDomainData(dataArray);
+                const amplitude = Math.max(...dataArray);
+
+                // Simple logic to detect a potential cough (a loud burst of sound)
+                if (amplitude > 200) {
+                    logCough();
+                }
+            } catch (err) {
+                console.error('Error during cough detection:', err);
+            }
+
+            requestAnimationFrame(detectCoughs);
+        }
+
+        function logCough() {
+            const now = new Date();
+
+            // If last cough was more than 20 seconds ago, count this as a new event
+            if (!lastCoughTime || now - lastCoughTime > COUGH_TIME_THRESHOLD) {
+                lastCoughTime = now;
+                updateLog(now);
+                updateCount();
+            }
+        }
+
+        function updateLog(time) {
+            const log = document.getElementById('cough-log');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'log-entry';
+            newEntry.textContent = `Cough event detected at: ${time.toLocaleTimeString()}`;
+            log.appendChild(newEntry);
+        }
+
+        function updateCount() {
+            coughCount++;
+            document.getElementById('cough-count').textContent = coughCount;
+        }
+    </script>
+</body>
+</html>

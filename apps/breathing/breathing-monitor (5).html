@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orientation-based Breathing Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        #breathRate { font-size: 1.5em; margin: 15px 0; }
+        #status, #advice, #debug { margin: 15px 0; text-align: left; }
+        #debug { font-family: monospace; white-space: pre-wrap; }
+        button { font-size: 1.2em; padding: 10px 20px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Orientation-based Breathing Monitor</h1>
+    <div id="status">Click Start and place the phone on your chest while lying down.</div>
+    <button id="startButton">Start Monitoring</button>
+    <div id="breathRate">Breathing: -- breaths/min</div>
+    <div id="advice"></div>
+    <div id="debug"></div>
+
+    <script>
+        let isMonitoring = false;
+        let orientationData = [];
+        const breathRateDiv = document.getElementById('breathRate');
+        const adviceDiv = document.getElementById('advice');
+        const startButton = document.getElementById('startButton');
+        const statusDiv = document.getElementById('status');
+        const debugDiv = document.getElementById('debug');
+
+        startButton.addEventListener('click', startMonitoring);
+
+        function startMonitoring() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            initMonitoring();
+                        } else {
+                            statusDiv.textContent = 'Permission to access orientation was denied.';
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                initMonitoring();
+            }
+        }
+
+        function initMonitoring() {
+            isMonitoring = true;
+            statusDiv.textContent = 'Monitoring active. Place the phone on your chest while lying down.';
+            startButton.style.display = 'none';
+            window.addEventListener('deviceorientation', handleOrientation);
+        }
+
+        function handleOrientation(event) {
+            orientationData.push(event.beta);
+            if (orientationData.length > 600) orientationData.shift(); // Keep last 10 seconds at 60Hz
+
+            if (orientationData.length >= 60) {
+                const breathRate = estimateBreathRate(orientationData);
+                breathRateDiv.textContent = `Breathing: ${breathRate.toFixed(1)} breaths/min`;
+                provideAdvice(breathRate);
+
+                // Debug information
+                const debugInfo = `
+Last 5 readings: ${orientationData.slice(-5).map(v => v.toFixed(2)).join(', ')}
+Min Value: ${Math.min(...orientationData).toFixed(2)}
+Max Value: ${Math.max(...orientationData).toFixed(2)}
+Range: ${(Math.max(...orientationData) - Math.min(...orientationData)).toFixed(2)}
+                `;
+                debugDiv.textContent = debugInfo;
+            }
+        }
+
+        function estimateBreathRate(data) {
+            let peaks = 0;
+            for (let i = 1; i < data.length - 1; i++) {
+                if (data[i] > data[i-1] && data[i] > data[i+1]) {
+                    peaks++;
+                }
+            }
+            const rate = (peaks / (data.length / 60)) * 60;
+            return Math.max(4, Math.min(30, rate));
+        }
+
+        function provideAdvice(rate) {
+            let advice = '';
+            if (rate < 12) {
+                advice = 'Your breathing is slow. Try taking deeper breaths.';
+            } else if (rate > 20) {
+                advice = 'Your breathing is fast. Try to relax and slow down your breathing.';
+            } else {
+                advice = 'Your breathing rate is normal. Keep breathing steadily.';
+            }
+            adviceDiv.textContent = advice;
+        }
+    </script>
+</body>
+</html>

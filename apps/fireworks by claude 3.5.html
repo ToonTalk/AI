@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fireworks Display with Sound</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            position: absolute;
+            top: 20px;
+            color: white;
+            text-align: center;
+            width: 100%;
+        }
+        .fireworks-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background-color: #1a202c;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .fragment {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+        }
+        .alert {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            right: 16px;
+            background-color: rgba(45, 55, 72, 0.8);
+            color: white;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fireworks Display with Sound</h1>
+    <div id="fireworks-container" class="fireworks-container"></div>
+
+    <!-- Audio elements for sound effects -->
+    <audio id="launch-sound" src="/api/placeholder/audio/launch.mp3"></audio>
+    <audio id="explosion-sound" src="/api/placeholder/audio/explosion.mp3"></audio>
+
+    <script>
+        const container = document.getElementById('fireworks-container');
+        const launchSound = document.getElementById('launch-sound');
+        const explosionSound = document.getElementById('explosion-sound');
+
+        // Create the alert
+        const alert = document.createElement('div');
+        alert.className = 'alert';
+        alert.innerHTML = '<strong>Fireworks Display with Sound</strong><br>Enjoy the show! Click anywhere to add more fireworks.';
+        container.appendChild(alert);
+
+        function playSound(audio) {
+            // Create a new audio element each time to allow overlapping sounds
+            const sound = audio.cloneNode();
+            sound.play();
+            // Remove the cloned audio element after it finishes playing
+            sound.onended = () => sound.remove();
+        }
+
+        function createFragment(x, y, color, angle, speed) {
+            const fragment = document.createElement('div');
+            fragment.className = 'fragment';
+            fragment.style.backgroundColor = color;
+            container.appendChild(fragment);
+
+            let posX = x;
+            let posY = y;
+            let velocityX = Math.cos(angle) * speed;
+            let velocityY = Math.sin(angle) * speed;
+            const gravity = 0.05;
+            const resistance = 0.98;
+
+            function updatePosition() {
+                velocityX *= resistance;
+                velocityY = velocityY * resistance + gravity;
+
+                posX += velocityX;
+                posY += velocityY;
+
+                fragment.style.left = posX + '%';
+                fragment.style.top = posY + '%';
+
+                if (posY < 100) {  // Stop updating when fragment is below the container
+                    requestAnimationFrame(updatePosition);
+                } else {
+                    container.removeChild(fragment);
+                }
+            }
+
+            requestAnimationFrame(updatePosition);
+
+            setTimeout(() => {
+                if (container.contains(fragment)) {
+                    container.removeChild(fragment);
+                }
+            }, 3000);
+        }
+
+        function createExplosion(x, y) {
+            playSound(explosionSound);
+            const color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+            for (let i = 0; i < 50; i++) {
+                const angle = (Math.PI * 2 * i) / 50;
+                const speed = 1 + Math.random();
+                createFragment(x, y, color, angle, speed);
+            }
+        }
+
+        function randomExplosion() {
+            const x = 10 + Math.random() * 80;
+            const y = 10 + Math.random() * 60;
+            playSound(launchSound);
+            setTimeout(() => createExplosion(x, y), 1000);
+        }
+
+        // Create random explosions
+        setInterval(randomExplosion, 3000);
+
+        // Create explosion on click
+        container.addEventListener('click', (event) => {
+            const rect = container.getBoundingClientRect();
+            const x = ((event.clientX - rect.left) / rect.width) * 100;
+            const y = ((event.clientY - rect.top) / rect.height) * 100;
+            playSound(launchSound);
+            setTimeout(() => createExplosion(x, y), 1000);
+        });
+    </script>
+</body>
+</html>

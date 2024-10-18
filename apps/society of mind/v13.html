@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Minsky's Agents Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/12.3.2/markdown-it.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        textarea, input, button, select { width: 100%; margin-bottom: 10px; }
+        #summary, #fullLog, #errorLog { background-color: #f0f0f0; padding: 10px; border-radius: 5px; margin-top: 10px; }
+        #fullLog, #errorLog { display: none; }
+        .toggle-btn { background-color: #4CAF50; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; }
+        .error { color: red; }
+        .iteration-summary { margin-bottom: 10px; padding: 5px; background-color: #e0e0e0; border-radius: 3px; }
+        #apiKeyInput { display: none; }
+    </style>
+</head>
+<body>
+    <h1>Complete Minsky's Agents Simulation</h1>
+    <select id="llmSelect" onchange="toggleApiKeyInput()">
+        <option value="geminiNano">Gemini Nano (Default)</option>
+        <option value="gemini">Gemini</option>
+        <option value="cohere">Cohere.ai</option>
+        <option value="gpt4">GPT-4 (4o-mini)</option>
+    </select>
+    <input type="password" id="apiKeyInput" placeholder="Enter API Key">
+    <textarea id="problem" rows="3" placeholder="Enter your problem here..."></textarea>
+    <input type="number" id="maxIterations" value="10" min="1" max="20">
+    <button onclick="runSimulationWrapper()">Run Simulation</button>
+    <div id="summary"></div>
+    <button id="toggleLog" class="toggle-btn" onclick="toggleFullLog()">Show Full Log</button>
+    <div id="fullLog"></div>
+    <button id="toggleErrorLog" class="toggle-btn" onclick="toggleErrorLog()">Show Error Log</button>
+    <div id="errorLog"></div>
+
+    <script>
+                const md = window.markdownit();
+        let agents = [];
+
+        function toggleApiKeyInput() {
+            const llmSelect = document.getElementById('llmSelect');
+            const apiKeyInput = document.getElementById('apiKeyInput');
+            apiKeyInput.style.display = llmSelect.value === 'geminiNano' ? 'none' : 'block';
+        }
+
+        async function createAgent(role, systemPrompt, llmType, apiKey) {
+            const baseAgent = { 
+                role, 
+                llmType,
+                apiKey, 
+                messages: [`You are a ${role} agent in Minsky's Society of Mind. ${systemPrompt}`] 
+            };
+
+            if (llmType === 'geminiNano') {
+                const session = await ai.assistant.create({
+                    systemPrompt: `You are a ${role} agent in Minsky's Society of Mind. ${systemPrompt}`
+                });
+                return { ...baseAgent, session };
+            }
+
+            return baseAgent;
+        }
+
+        async function initializeAgents() {
+            const llmType = document.getElementById('llmSelect').value;
+            const apiKey = document.getElementById('apiKeyInput').value;
+
+            const agentRoles = [
+                { role: 'K-line', prompt: 'Your role is to store and retrieve specific memories or knowledge. When asked a question, provide relevant information from your knowledge base. If you don\'t have specific information, say so.' },
+                { role: 'Recognizer', prompt: 'Your job is to identify patterns, concepts, or relevant information in any input you receive. Analyze the input and describe any patterns or important elements you recognize.' },
+                { role: 'Difference-engine', prompt: 'Your task is to compare the current state of a situation to the desired state and suggest actions to bridge the gap. Analyze the situation presented to you, identify discrepancies, and propose solutions.' },
+                { role: 'Summary', prompt: 'Your task is to generate concise summaries of the interactions between other agents. Highlight key points and progression towards the solution.' },
+                { role: 'Decision', prompt: 'Your role is to evaluate the current state of the problem-solving process and decide if a satisfactory solution has been found. Consider the initial problem and the proposed solutions.' }
+            ];
+
+            agents = await Promise.all(agentRoles.map(({ role, prompt }) => 
+                createAgent(role, prompt, llmType, apiKey)
+            ));
+        }
+
+        async function processMessage(agent, message, maxRetries = 3) {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    let response;
+
+                    switch (agent.llmType) {
+                        case 'geminiNano':
+                            agent.messages.push(message);
+                            const fullPrompt = agent.messages.join('\n');
+                            response = await agent.session.prompt(fullPrompt);
+                            agent.messages.push(response);
+                            break;
+                        case 'gemini':
+                            agent.messages.push(message);
+                            response = await callGeminiApi(agent.apiKey, agent.messages);
+                            agent.messages.push(response);
+                            break;
+                        case 'cohere':
+                            agent.messages.push(message);
+                            response = await callCohereApi(agent.apiKey, agent.messages);
+                            agent.messages.push(response);
+                            break;
+                        case 'gpt4':
+                            agent.messages.push({role: "user", content: message});
+                            response = await callGpt4Api(agent.apiKey, agent.messages);
+                            agent.messages.push({role: "assistant", content: response});
+                            break;
+                        default:
+                            throw new Error('Invalid LLM type');
+                    }
+
+                    return response;
+                } catch (error) {
+                    console.error(`Attempt ${attempt + 1} failed:`, error);
+                    if (attempt === maxRetries - 1) {
+                        throw error;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        }
+
+        async function callCohereApi(apiKey, messages) {
+            const COHERE_API_URL = 'https://api.cohere.com/v1/chat';
+            
+            const chatHistory = messages.slice(0, -1).map(msg => ({
+                role: msg.startsWith('You are a') ? 'SYSTEM' : 'USER',
+                message: msg
+            }));
+
+            const requestBody = {
+                message: messages[messages.length - 1],
+                model: 'command-r-plus-08-2024',
+                chat_history: chatHistory,
+                temperature: 0.3,
+                max_tokens: 500,
+            };
+
+            console.log('Cohere API Request:', JSON.stringify(requestBody, null, 2));
+
+            try {
+                const response = await fetch(COHERE_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                        'X-Client-Name': 'Minsky Agents Simulation'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const responseData = await response.json();
+
+                if (!response.ok) {
+                    console.error('Cohere API Error Response:', responseData);
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${responseData.message || 'Unknown error'}`);
+                }
+
+                console.log('Cohere API Response:', responseData);
+                return responseData.text;
+            } catch (error) {
+                console.error('Error calling Cohere API:', error);
+                throw error;
+            }
+        }
+
+        async function callGpt4Api(apiKey, messages) {
+            const GPT4_API_URL = 'https://api.openai.com/v1/chat/completions';
+            
+            const requestBody = {
+                model: "gpt-4o-mini", 
+                messages: messages,
+                max_tokens: 500,
+                temperature: 0.7,
+            };
+
+            console.log('GPT-4 API Request:', JSON.stringify(requestBody, null, 2));
+
+            try {
+                const response = await fetch(GPT4_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const responseData = await response.json();
+
+                if (!response.ok) {
+                    console.error('GPT-4 API Error Response:', responseData);
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${responseData.error?.message || 'Unknown error'}`);
+                }
+
+                console.log('GPT-4 API Response:', responseData);
+                return responseData.choices[0].message.content;
+            } catch (error) {
+                console.error('Error calling GPT-4 API:', error);
+                throw error;
+            }
+        }
+
+        async function callGeminiApi(apiKey, messages) {
+            const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+            
+            const requestBody = {
+                contents: messages.map(msg => ({ parts: [{ text: msg }] })),
+                safetySettings: [
+                    {
+                        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                        threshold: "BLOCK_ONLY_HIGH"
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.7,
+                    topK: 40,
+                    topP: 0.95,
+                    maxOutputTokens: 1024,
+                }
+            };
+
+            console.log('Gemini API Request:', JSON.stringify(requestBody, null, 2));
+
+            try {
+                const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const responseData = await response.json();
+
+                if (!response.ok) {
+                    console.error('Gemini API Error Response:', responseData);
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${responseData.error?.message || 'Unknown error'}`);
+                }
+
+                console.log('Gemini API Response:', responseData);
+                return responseData.candidates[0].content.parts[0].text;
+            } catch (error) {
+                console.error('Error calling Gemini API:', error);
+                throw error;
+            }
+        }
+
+        async function runDecentralizedSystem(initialPrompt, maxIterations = 10) {
+            let currentAgent = getRandomAgent(['Summary', 'Decision']);
+            let currentPrompt = initialPrompt;
+            let output = '';
+            let interactionLog = '';
+            let errorLog = '';
+
+            const summaryDiv = document.getElementById('summary');
+            summaryDiv.innerHTML = md.render(`## Problem: ${initialPrompt}\n\n## Iteration Summaries:`);
+
+            for (let i = 0; i < maxIterations; i++) {
+                output += `\n## Iteration ${i + 1}:\n`;
+                output += `${currentAgent.role} processing: ${currentPrompt}\n`;
+                
+                try {
+                    const response = await processMessage(currentAgent, currentPrompt);
+                    output += `${currentAgent.role} response: ${response}\n`;
+                    interactionLog += `${currentAgent.role} -> ${response}\n`;
+                    
+                    const summaryAgent = agents.find(agent => agent.role === 'Summary');
+                    const iterationSummaryPrompt = `Summarize the key points and contributions of the following interaction. Ensure your summary captures all important details:\n${currentAgent.role}: ${response}`;
+                    const iterationSummary = await processMessage(summaryAgent, iterationSummaryPrompt);
+                    
+                    const iterationSummaryHTML = md.render(`### Iteration ${i + 1} (${currentAgent.role}):\n${iterationSummary}`);
+                    summaryDiv.innerHTML += iterationSummaryHTML;
+                    
+                    currentAgent = getRandomAgent(['Summary', 'Decision']);
+                    currentPrompt = `Previous interactions:\n${interactionLog}\nYour task: ${currentAgent.role === 'K-line' ? 'Provide relevant information' : currentAgent.role === 'Recognizer' ? 'Identify patterns or concepts' : 'Suggest actions to improve the situation'}`;
+                } catch (error) {
+                    errorLog += `Error in iteration ${i + 1}: ${error.message}\n`;
+                    currentAgent = getRandomAgent(['Summary', 'Decision']);
+                    currentPrompt = initialPrompt;
+                }
+            }
+
+            const summaryAgent = agents.find(agent => agent.role === 'Summary');
+            const summaryPrompt = `Provide a comprehensive summary of the solution to the following problem based on the agents' interactions. Ensure you capture all key components of the solution:\n\nProblem: "${initialPrompt}"\n\nInteractions:\n${interactionLog}`;
+            const summary = await processMessage(summaryAgent, summaryPrompt);
+
+            const decisionAgent = agents.find(agent => agent.role === 'Decision');
+            const decisionPrompt = `Evaluate if a satisfactory solution has been found for the following problem. Provide a detailed explanation of how well the solution addresses the initial problem:\n\nProblem: ${initialPrompt}\n\nFinal summary of solution: ${summary}\n\nRespond with YES or NO and your explanation.`;
+            const finalDecision = await processMessage(decisionAgent, decisionPrompt);
+
+            summaryDiv.innerHTML += md.render(`\n\n## Final Solution:\n${summary}\n\n## Final Decision: ${finalDecision}`);
+
+            return { fullLog: output, errorLog };
+        }
+
+        function getRandomAgent(excludeRoles = []) {
+            const eligibleAgents = agents.filter(agent => !excludeRoles.includes(agent.role));
+            return eligibleAgents[Math.floor(Math.random() * eligibleAgents.length)];
+        }
+
+        async function initializeAgents() {
+            const kline = await createAgent('K-line', 'Your role is to store and retrieve specific memories or knowledge. When asked a question, provide relevant information from your knowledge base. If you don\'t have specific information, say so.');
+            const recognizer = await createAgent('Recognizer', 'Your job is to identify patterns, concepts, or relevant information in any input you receive. Analyze the input and describe any patterns or important elements you recognize.');
+            const differenceEngine = await createAgent('Difference-engine', 'Your task is to compare the current state of a situation to the desired state and suggest actions to bridge the gap. Analyze the situation presented to you, identify discrepancies, and propose solutions.');
+            const summaryAgent = await createAgent('Summary', 'Your task is to generate concise summaries of the interactions between other agents. Highlight key points and progression towards the solution.');
+            const decisionAgent = await createAgent('Decision', 'Your role is to evaluate the current state of the problem-solving process and decide if a satisfactory solution has been found. Consider the initial problem and the proposed solutions.');
+
+            agents = [kline, recognizer, differenceEngine, summaryAgent, decisionAgent];
+        }
+
+        async function runSimulation() {
+            const llmType = document.getElementById('llmSelect').value;
+            const apiKey = document.getElementById('apiKeyInput').value;
+            const problem = document.getElementById('problem').value;
+            const maxIterations = parseInt(document.getElementById('maxIterations').value);
+            const summaryDiv = document.getElementById('summary');
+            const fullLogDiv = document.getElementById('fullLog');
+            const errorLogDiv = document.getElementById('errorLog');
+
+            if (llmType !== 'gemini' && !apiKey) {
+                alert('Please enter an API key for the selected LLM.');
+                return;
+            }
+
+            summaryDiv.textContent = 'Initializing agents...';
+            fullLogDiv.textContent = '';
+            errorLogDiv.textContent = '';
+            
+            try {
+                await initializeAgents();
+            } catch (error) {
+                summaryDiv.innerHTML = `<span class="error">Error initializing agents: ${error.message}</span>`;
+                return;
+            }
+
+            summaryDiv.textContent = 'Running simulation...';
+
+            try {
+                const { fullLog, errorLog } = await runDecentralizedSystem(problem, maxIterations);
+                fullLogDiv.innerHTML = md.render(fullLog);
+                errorLogDiv.textContent = errorLog || 'No errors occurred during the simulation.';
+            } catch (error) {
+                summaryDiv.innerHTML += `<span class="error">An error occurred: ${error.message}</span>`;
+                errorLogDiv.textContent = `Detailed error: ${error.stack}`;
+            }
+        }
+
+        function runSimulationWrapper() {
+            runSimulation().catch(error => {
+                console.error('Error in runSimulation:', error);
+                document.getElementById('summary').innerHTML = `<span class="error">An error occurred: ${error.message}</span>`;
+            });
+        }
+
+        function toggleFullLog() {
+            const fullLogDiv = document.getElementById('fullLog');
+            const toggleBtn = document.getElementById('toggleLog');
+            if (fullLogDiv.style.display === 'none') {
+                fullLogDiv.style.display = 'block';
+                toggleBtn.textContent = 'Hide Full Log';
+            } else {
+                fullLogDiv.style.display = 'none';
+                toggleBtn.textContent = 'Show Full Log';
+            }
+        }
+
+        function toggleErrorLog() {
+            const errorLogDiv = document.getElementById('errorLog');
+            const toggleBtn = document.getElementById('toggleErrorLog');
+            if (errorLogDiv.style.display === 'none') {
+                errorLogDiv.style.display = 'block';
+                toggleBtn.textContent = 'Hide Error Log';
+            } else {
+                errorLogDiv.style.display = 'none';
+                toggleBtn.textContent = 'Show Error Log';
+            }
+        }
+
+        // Initialize agents when the page loads
+        initializeAgents().then(() => {
+            console.log('Agents initialized');
+        }).catch(error => {
+            console.error('Error initializing agents:', error);
+            document.getElementById('summary').innerHTML = `<span class="error">Error initializing agents: ${error.message}</span>`;
+        });
+    </script>
+</body>
+</html>   

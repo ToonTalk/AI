@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Water Balloon Flower Game</title>
+    <style>
+        /* CSS styles */
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+
+        #game-area {
+            position: relative;
+            width: 80%;
+            height: 500px;
+            margin: 0 auto;
+            background-color: #e0f7fa;
+            overflow: hidden;
+            border: 2px solid #00796b;
+            cursor: crosshair;
+        }
+
+        .flower {
+            position: absolute;
+            bottom: 0;
+            font-size: 40px;
+            transition: transform 0.5s, filter 0.5s;
+            transform: translateX(-50%) scale(1);
+            transform-origin: bottom center; /* Grow upwards */
+            background: transparent;
+        }
+
+        .balloon {
+            position: absolute;
+            top: 0;
+            width: 20px;
+            height: 30px;
+            background-color: red; /* Default color */
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            transition: top 0.03s linear;
+            transform: translateX(-50%);
+            background: transparent;
+        }
+
+        .balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            width: 2px;
+            height: 10px;
+            background-color: black;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+<body>
+    <h1>Water Balloon Flower Game</h1>
+    <div id="game-area">
+        <!-- Flowers and balloons will be dynamically added here -->
+    </div>
+
+    <script>
+        // JavaScript code
+        document.addEventListener('DOMContentLoaded', () => {
+            const gameArea = document.getElementById('game-area');
+
+            const flowerEmojis = ['🌼', '🌸', '🌺', '🌻', '🌹', '🌷'];
+            const balloonColors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+
+            const flowers = [];
+            const numFlowers = 5;
+
+            // Create flowers and position them evenly across the game area
+            for (let i = 0; i < numFlowers; i++) {
+                const flower = document.createElement('div');
+                flower.classList.add('flower');
+                flower.style.left = ((i + 0.5) * (100 / numFlowers)) + '%';
+
+                // Assign a random flower emoji
+                const randomFlower = flowerEmojis[Math.floor(Math.random() * flowerEmojis.length)];
+                flower.innerText = randomFlower;
+
+                gameArea.appendChild(flower);
+                flowers.push({
+                    element: flower,
+                    size: 1,
+                    colorIntensity: 100
+                });
+            }
+
+            // Handle balloon drop on click
+            gameArea.addEventListener('click', (event) => {
+                const rect = gameArea.getBoundingClientRect();
+                const x = event.clientX - rect.left; // x position within the game area
+
+                const balloon = document.createElement('div');
+                balloon.classList.add('balloon');
+                balloon.style.left = x + 'px';
+
+                // Assign a random balloon color
+                const randomColor = balloonColors[Math.floor(Math.random() * balloonColors.length)];
+                balloon.style.backgroundColor = randomColor;
+
+                gameArea.appendChild(balloon);
+
+                // Animate balloon drop
+                let topPosition = 0;
+                const dropInterval = setInterval(() => {
+                    topPosition += 5;
+                    balloon.style.top = topPosition + 'px';
+
+                    // Check for collision with flowers
+                    flowers.forEach(flower => {
+                        const balloonRect = balloon.getBoundingClientRect();
+                        const flowerRect = flower.element.getBoundingClientRect();
+
+                        if (balloonRect.bottom >= flowerRect.top &&
+                            balloonRect.left < flowerRect.right &&
+                            balloonRect.right > flowerRect.left) {
+                            
+                            // Balloon hits the flower
+                            clearInterval(dropInterval);
+                            gameArea.removeChild(balloon);
+
+                            // Increase flower size and color intensity
+                            flower.size += 0.2;
+                            flower.colorIntensity = Math.min(flower.colorIntensity + 20, 100);
+                            flower.element.style.transform = `translateX(-50%) scale(${flower.size})`;
+                            flower.element.style.filter = `grayscale(${100 - flower.colorIntensity}%)`;
+
+                        }
+                    });
+
+                    // Remove balloon if it reaches the bottom
+                    if (topPosition >= gameArea.clientHeight) {
+                        clearInterval(dropInterval);
+                        gameArea.removeChild(balloon);
+                    }
+
+                }, 30);
+            });
+
+            // Flowers shrink and turn gray over time
+            setInterval(() => {
+                flowers.forEach(flower => {
+                    flower.size = Math.max(0.5, flower.size - 0.005);
+                    flower.colorIntensity = Math.max(0, flower.colorIntensity - 0.5);
+                    flower.element.style.transform = `translateX(-50%) scale(${flower.size})`;
+                    flower.element.style.filter = `grayscale(${100 - flower.colorIntensity}%)`;
+                });
+            }, 100);
+        });
+    </script>
+</body>
+</html>

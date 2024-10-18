@@ -178,21 +178,14 @@ document.getElementById('initializeGame').addEventListener('click', async functi
                 break;
             case 'gemini':
                 result = await geminiNano(fullPrompt);
-                if (result === undefined) { // Assume geminiNano() handles its own errors
-                    throw new Error("Session creation or prompt failed in Gemini Nano.");
-                }
                 break;
             default:
                 throw new Error("Unsupported AI provider selected.");
         }
         handleApiResponse(result);
     } catch (error) {
-        // Specific error handling for Gemini Nano or other API errors
         console.error('Error during API interaction:', error);
-        // Only update the status message if it's not already set by the API-specific function
-        if (document.getElementById('statusMessage').textContent === "") {
-            updateStatusMessage(error.message, "invalid-message");
-        }
+        updateStatusMessage(error.message, "invalid-message");
     } finally {
         hideLoadingIcon();
     }
@@ -358,35 +351,43 @@ function updateGameWithCategories(categories) {
 
 let aiSession = null;  // Global variable to hold the session
 
-async function geminiNano(prompt) {
-    if (!aiSession) {  // Check if session exists
-        try {
-            let canCreateSession = await window.ai.canCreateTextSession();
-            if (canCreateSession === "no") {
-                // Inform the user and provide a link to the documentation
-                const statusMessage = document.getElementById('statusMessage');
-                statusMessage.innerHTML = 'Unable to create an AI session. Please refer to the <a href="https://docs.google.com/document/d/1VG8HIyz361zGduWgNG7R_R8Xkv0OOJ8b5C9QKeCjU0c/edit?pli=1#heading=h.5s2qlonhpm36" target="_blank">documentation</a> for more information.';
-                statusMessage.className = 'invalid-message';
-                throw new Error("Session creation denied."); // Abort the function by throwing an error
-            }
-            aiSession = await window.ai.createTextSession();  // Create a session if possible
-        } catch (error) {
-            // console.error('Error checking session capability:', error);
-            const statusMessage = document.getElementById('statusMessage');
-            statusMessage.innerHTML = 'Error checking AI session capability. Please refer to the <a href="https://docs.google.com/document/d/1VG8HIyz361zGduWgNG7R_R8Xkv0OOJ8b5C9QKeCjU0c/edit?pli=1#heading=h.5s2qlonhpm36" target="_blank">documentation</a> for troubleshooting.';
-            statusMessage.className = 'invalid-message';
-            throw error;  // Re-throw to ensure the caller knows the function has failed
+async function initializeAI() {
+    try {
+        const capabilities = await window.ai.assistant.capabilities();
+        if (capabilities.available === "readily" || capabilities.available === "after-download") {
+            aiSession = await window.ai.assistant.create();
+            console.log("AI session created successfully");
+        } else {
+            throw new Error("AI capabilities are not available on this device.");
         }
+    } catch (error) {
+        console.error('Error initializing AI:', error);
+        const statusMessage = document.getElementById('statusMessage');
+        statusMessage.innerHTML = 'Error initializing AI. Please refer to the <a href="https://docs.google.com/document/d/1VG8HIyz361zGduWgNG7R_R8Xkv0OOJ8b5C9QKeCjU0c/edit?pli=1#heading=h.5s2qlonhpm36" target="_blank">documentation</a> for troubleshooting.';
+        statusMessage.className = 'invalid-message';
+        throw error;
+    }
+}
+
+async function geminiNano(prompt) {
+    if (!aiSession) {
+        await initializeAI();
     }
 
     try {
         const result = await aiSession.prompt(prompt);
         return result;  // Return the AI's response
     } catch (error) {
-        console.error('Error in aiPrompt:', error);  // Log errors in aiPrompt
+        console.error('Error in Gemini Nano prompt:', error);
         throw new Error("Error during AI interaction");
     }
 }
+
+// Call this function when the page loads or when the user selects Gemini Nano
+initializeAI().catch(error => {
+    console.error("Failed to initialize AI:", error);
+    // Handle the error appropriately in your UI
+});
 
 // Get the modal
 var modal = document.getElementById("instructionsModal");

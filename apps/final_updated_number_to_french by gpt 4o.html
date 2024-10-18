@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number to French Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        input, button {
+            font-size: 1.2em;
+            padding: 10px;
+            margin: 5px;
+        }
+        .result {
+            margin-top: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Convert Numbers to French</h1>
+    <input type="text" id="numberInput" placeholder="Enter a number" />
+    <button onclick="convertToFrench()">Convert</button>
+    <div class="result" id="result"></div>
+
+    <script>
+        function convertToFrench() {
+            const numberInput = document.getElementById('numberInput').value;
+            const number = BigInt(numberInput);
+            const resultDiv = document.getElementById('result');
+
+            resultDiv.textContent = numberToFrench(number);
+        }
+
+        function numberToFrench(number) {
+            if (number === 0n) return "zéro";
+
+            const units = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"];
+            const tens = ["", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante-dix", "quatre-vingt", "quatre-vingt-dix"];
+            const teens = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"];
+
+            let french = '';
+
+            // This function will be used to split the number into groups of 3 digits
+            function groupToFrench(group) {
+                const hundreds = group / 100n;
+                const remainder = group % 100n;
+                let result = '';
+
+                if (hundreds > 0n) {
+                    result += hundreds === 1n ? 'cent ' : `${units[Number(hundreds)]} cent`;
+                    if (remainder > 0n) result += ' ';
+                }
+
+                if (remainder > 0n) {
+                    if (remainder < 10n) {
+                        result += units[Number(remainder)];
+                    } else if (remainder < 20n) {
+                        result += teens[Number(remainder) - 10];
+                    } else {
+                        const ten = remainder / 10n;
+                        const unit = remainder % 10n;
+                        if (ten === 7n || ten === 9n) {
+                            result += `${tens[Number(ten - 1n)]}-`;
+                            if (unit > 0n) result += teens[Number(unit)];
+                        } else {
+                            result += tens[Number(ten)];
+                            if (unit > 0n) result += `-${units[Number(unit)]}`;
+                        }
+                    }
+                }
+
+                return result.trim();
+            }
+
+            const chunks = [];
+            let chunkCount = 0;
+            while (number > 0n) {
+                chunks.push(number % 1000n);
+                number = number / 1000n;
+                chunkCount++;
+            }
+
+            const scales = ["", "mille", "million", "milliard", "billion"];
+            for (let i = chunks.length - 1; i >= 0; i--) {
+                const group = chunks[i];
+                if (group > 0n) {
+                    french += (i > 0 ? ' ' : '') + groupToFrench(group) + (scales[i] ? ` ${scales[i]} ` : ' ');
+                }
+            }
+
+            return french.trim();
+        }
+    </script>
+</body>
+</html>

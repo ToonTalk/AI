@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkbox Conquest: Multiplayer Color-Flipping Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        #gameBoard {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            width: 100%;
+            max-width: 600px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        .checkbox {
+            width: 28px;
+            height: 28px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        #scores, #connectionInfo, #timer {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        #startGame {
+            margin-top: 20px;
+            font-size: 18px;
+            padding: 10px 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Checkbox Conquest: Multiplayer Color-Flipping Game</h1>
+    <div id="connectionInfo">
+        Your ID: <span id="peerId"></span><br>
+        <input type="text" id="connectToId" placeholder="Enter peer ID to connect">
+        <button id="connectButton">Connect</button>
+    </div>
+    <div id="scores">
+        <div>You (Red): <span id="score1">0</span></div>
+        <div>Opponent (Blue): <span id="score2">0</span></div>
+    </div>
+    <div id="timer">Time: 60s</div>
+    <div id="gameBoard"></div>
+    <button id="startGame" style="display: none;">Start Game</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <script>
+        const gameBoard = document.getElementById('gameBoard');
+        const score1Element = document.getElementById('score1');
+        const score2Element = document.getElementById('score2');
+        const peerIdElement = document.getElementById('peerId');
+        const connectToIdInput = document.getElementById('connectToId');
+        const connectButton = document.getElementById('connectButton');
+        const startGameButton = document.getElementById('startGame');
+        const timerElement = document.getElementById('timer');
+        const totalCheckboxes = 400;
+        let score1 = 0, score2 = 0;
+        let gameActive = false;
+        let timeLeft = 60;
+        let timerInterval;
+
+        const playerColors = {
+            1: 'red',
+            2: 'blue'
+        };
+
+        let peer, conn;
+        let isPlayerOne = false;
+
+        function createGameBoard() {
+            gameBoard.innerHTML = '';
+            for (let i = 0; i < totalCheckboxes; i++) {
+                const checkbox = document.createElement('div');
+                checkbox.className = 'checkbox';
+                checkbox.dataset.index = i;
+                gameBoard.appendChild(checkbox);
+            }
+        }
+
+        function updateScores() {
+            score1Element.textContent = score1;
+            score2Element.textContent = score2;
+        }
+
+        function flipTile(index) {
+            const checkbox = gameBoard.children[index];
+            const currentColor = checkbox.style.backgroundColor;
+            const newColor = isPlayerOne ? playerColors[1] : playerColors[2];
+
+            if (currentColor === '') {
+                // Claiming an empty tile
+                checkbox.style.backgroundColor = newColor;
+                isPlayerOne ? score1++ : score2++;
+            } else if (currentColor !== newColor) {
+                // Flipping opponent's tile
+                checkbox.style.backgroundColor = newColor;
+                if (isPlayerOne) {
+                    score1++;
+                    score2--;
+                } else {
+                    score2++;
+                    score1--;
+                }
+            }
+            // If it's the current player's color, do nothing
+
+            updateScores();
+        }
+
+        function handleClick(event) {
+            if (!gameActive) return;
+            const checkbox = event.target.closest('.checkbox');
+            if (checkbox) {
+                const index = parseInt(checkbox.dataset.index);
+                flipTile(index);
+                conn.send({type: 'move', index: index});
+            }
+        }
+
+        function startGame() {
+            score1 = 0;
+            score2 = 0;
+            gameActive = true;
+            timeLeft = 60;
+            updateScores();
+            startTimer();
+            gameBoard.addEventListener('click', handleClick);
+            startGameButton.style.display = 'none';
+            conn.send({type: 'gameStart'});
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerElement.textContent = `Time: ${timeLeft}s`;
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            gameActive = false;
+            gameBoard.removeEventListener('click', handleClick);
+            const winner = score1 > score2 ? "You win!" : score1 < score2 ? "Opponent wins!" : "It's a tie!";
+            alert(`Game Over! ${winner}`);
+            startGameButton.style.display = 'block';
+        }
+
+        createGameBoard();
+
+        peer = new Peer();
+
+        peer.on('open', (id) => {
+            peerIdElement.textContent = id;
+        });
+
+        peer.on('connection', (connection) => {
+            conn = connection;
+            isPlayerOne = true;
+            setupConnection();
+        });
+
+        connectButton.addEventListener('click', () => {
+            const peerId = connectToIdInput.value.trim();
+            if (peerId) {
+                conn = peer.connect(peerId);
+                isPlayerOne = false;
+                setupConnection();
+            }
+        });
+
+        startGameButton.addEventListener('click', startGame);
+
+        function setupConnection() {
+            conn.on('open', () => {
+                alert('Connected to peer!');
+                startGameButton.style.display = 'block';
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'move') {
+                    flipTile(data.index);
+                } else if (data.type === 'gameStart') {
+                    startGame();
+                }
+            });
+        }
+    </script>
+</body>
+</html>

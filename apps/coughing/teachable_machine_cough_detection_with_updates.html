@@ -1,0 +1,124 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cough Detection App - Teachable Machine</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f8ff;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            font-size: 16px;
+            margin: 10px 0;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #log {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #fff;
+        }
+        .log-entry {
+            padding: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Cough Detection App</h1>
+    <div class="container">
+        <button onclick="startListening()">Start Listening</button>
+        <div id="log">
+            <h3>Log of Detected Coughs and Near Misses</h3>
+            <div id="cough-log"></div>
+        </div>
+        <div>
+            <h2>Total Detected Cough Events: <span id="cough-count">0</span></h2>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands"></script>
+
+    <script>
+        let recognizer;
+        let coughCount = 0;
+        let lastCoughTime = null;
+        const COUGH_TIME_THRESHOLD = 5000; // 5 seconds
+
+        async function loadModel() {
+            const URL = 'https://toontalk.github.io/AI/apps/coughing/'; // Update with the path to your model files
+            recognizer = speechCommands.create('BROWSER_FFT', undefined, URL + 'model.json', URL + 'metadata.json');
+            await recognizer.ensureModelLoaded();
+        }
+
+        async function startListening() {
+            await loadModel();
+            recognizer.listen(result => {
+                const scores = result.scores;
+                const labels = recognizer.wordLabels();
+                const coughScore = scores[labels.indexOf('cough')];
+
+                if (coughScore >= 0.67) {
+                    logCough(coughScore);
+                } else if (coughScore >= 0.5) { // Near miss threshold
+                    logNearMiss(coughScore);
+                }
+            }, {
+                probabilityThreshold: 0.5, // Capture near misses as well
+                overlapFactor: 0.5 // Adjust for responsiveness
+            });
+        }
+
+        function logCough(score) {
+            const now = new Date();
+
+            // Log only if the last cough was more than 5 seconds ago
+            if (!lastCoughTime || now - lastCoughTime > COUGH_TIME_THRESHOLD) {
+                lastCoughTime = now;
+                updateLog(now, score, 'Cough');
+                updateCount();
+            }
+        }
+
+        function logNearMiss(score) {
+            const now = new Date();
+            updateLog(now, score, 'Near Miss');
+        }
+
+        function updateLog(time, score, eventType) {
+            const log = document.getElementById('cough-log');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'log-entry';
+            newEntry.textContent = `${eventType} detected at: ${time.toLocaleTimeString()} (Score: ${score.toFixed(2)})`;
+            log.appendChild(newEntry);
+        }
+
+        function updateCount() {
+            coughCount++;
+            document.getElementById('cough-count').textContent = coughCount;
+        }
+    </script>
+</body>
+</html>

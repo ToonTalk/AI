@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Water Balloon Flower Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* CSS styles */
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        #game-area {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 80vh;
+            margin: 0 auto;
+            background-color: #e0f7fa;
+            overflow: hidden;
+            border: 2px solid #00796b;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .flower-container {
+            position: absolute;
+            bottom: 50px; /* Raised the flowers higher */
+            left: 0;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+        }
+
+        .flower {
+            font-size: 40px;
+            transition: transform 0.5s, filter 0.5s;
+            background: transparent;
+            user-select: none;
+        }
+
+        .balloon {
+            position: absolute;
+            top: 0;
+            width: 30px;
+            height: 40px;
+            background-color: red; /* Default color */
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            transition: top 0.03s linear;
+            transform: translateX(-50%);
+            user-select: none;
+        }
+
+        .balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            width: 2px;
+            height: 10px;
+            background-color: black;
+            transform: translateX(-50%);
+        }
+
+        .water-drop {
+            position: absolute;
+            font-size: 30px;
+            animation: shrink 0.5s forwards;
+            pointer-events: none;
+            user-select: none;
+            transform: translateX(-50%);
+            background-color: transparent; /* Ensure background is transparent */
+        }
+
+        @keyframes shrink {
+            from {
+                opacity: 1;
+                transform: translateX(-50%) scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-50%) scale(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Water Balloon Flower Game</h1>
+    <div id="game-area">
+        <!-- Flowers and balloons will be dynamically added here -->
+    </div>
+
+    <script>
+        // JavaScript code
+        document.addEventListener('DOMContentLoaded', () => {
+            const gameArea = document.getElementById('game-area');
+
+            const flowerEmojis = ['🌼', '🌸', '🌺', '🌻', '🌹', '🌷'];
+            const balloonColors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+
+            const flowers = [];
+            const numFlowers = 5;
+            const maxFlowerSize = 6; // Tripled maximum flower size
+
+            // Create flowers and position them evenly across the game area
+            for (let i = 0; i < numFlowers; i++) {
+                const flowerContainer = document.createElement('div');
+                flowerContainer.classList.add('flower-container');
+                flowerContainer.style.left = ((i + 0.5) * (100 / numFlowers)) + '%';
+
+                const flower = document.createElement('div');
+                flower.classList.add('flower');
+
+                // Assign a random flower emoji
+                const randomFlower = flowerEmojis[Math.floor(Math.random() * flowerEmojis.length)];
+                flower.innerText = randomFlower;
+
+                flowerContainer.appendChild(flower);
+                gameArea.appendChild(flowerContainer);
+
+                flowers.push({
+                    element: flower,
+                    size: 1,
+                    colorIntensity: 100
+                });
+            }
+
+            // Handle balloon drop on click or touch
+            const handleInteraction = (event) => {
+                event.preventDefault();
+                let clientX;
+
+                if (event.type === 'touchstart') {
+                    clientX = event.touches[0].clientX;
+                } else {
+                    clientX = event.clientX;
+                }
+
+                const rect = gameArea.getBoundingClientRect();
+                const x = clientX - rect.left; // x position within the game area
+
+                const balloon = document.createElement('div');
+                balloon.classList.add('balloon');
+                balloon.style.left = x + 'px';
+
+                // Assign a random balloon color
+                const randomColor = balloonColors[Math.floor(Math.random() * balloonColors.length)];
+                balloon.style.backgroundColor = randomColor;
+
+                gameArea.appendChild(balloon);
+
+                // Animate balloon drop
+                let topPosition = 0;
+                const dropInterval = setInterval(() => {
+                    topPosition += 5;
+                    balloon.style.top = topPosition + 'px';
+
+                    // Check for collision with flowers
+                    flowers.forEach(flowerObj => {
+                        const balloonRect = balloon.getBoundingClientRect();
+                        const flowerRect = flowerObj.element.getBoundingClientRect();
+
+                        if (balloonRect.bottom >= flowerRect.top &&
+                            balloonRect.left < flowerRect.right &&
+                            balloonRect.right > flowerRect.left) {
+                            
+                            // Balloon hits the flower
+                            clearInterval(dropInterval);
+
+                            // Replace balloon with water drop emoji
+                            balloon.classList.remove('balloon');
+                            balloon.classList.add('water-drop');
+                            balloon.style.top = topPosition + 'px';
+                            balloon.style.left = x + 'px';
+                            balloon.innerText = '💧'; // Water drop emoji
+
+                            // **Fix: Set background color to transparent**
+                            balloon.style.backgroundColor = 'transparent';
+
+                            // Remove water drop after animation
+                            setTimeout(() => {
+                                gameArea.removeChild(balloon);
+                            }, 500);
+
+                            // Increase flower size and color intensity with maximum limit
+                            flowerObj.size = Math.min(maxFlowerSize, flowerObj.size + 0.1); // Grow more slowly
+                            flowerObj.colorIntensity = Math.min(flowerObj.colorIntensity + 10, 100);
+                            flowerObj.element.style.transform = `scale(${flowerObj.size})`;
+                            flowerObj.element.style.filter = `grayscale(${100 - flowerObj.colorIntensity}%)`;
+
+                        }
+                    });
+
+                    // Remove balloon if it reaches the bottom
+                    if (topPosition >= gameArea.clientHeight) {
+                        clearInterval(dropInterval);
+                        gameArea.removeChild(balloon);
+                    }
+
+                }, 30);
+            };
+
+            gameArea.addEventListener('click', handleInteraction);
+            gameArea.addEventListener('touchstart', handleInteraction);
+
+            // Flowers shrink and turn gray over time
+            setInterval(() => {
+                flowers.forEach(flowerObj => {
+                    flowerObj.size = Math.max(0.5, flowerObj.size - 0.005);
+                    flowerObj.colorIntensity = Math.max(0, flowerObj.colorIntensity - 0.5);
+                    flowerObj.element.style.transform = `scale(${flowerObj.size})`;
+                    flowerObj.element.style.filter = `grayscale(${100 - flowerObj.colorIntensity}%)`;
+                });
+            }, 100);
+        });
+    </script>
+</body>
+</html>

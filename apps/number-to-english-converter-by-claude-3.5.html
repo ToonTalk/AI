@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number to English Words (Corrected Large Number Naming)</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #result { margin-top: 10px; white-space: pre-wrap; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h2>Number to English Words Converter (Corrected Large Number Naming)</h2>
+    <input type="text" id="numberInput" placeholder="Enter a number">
+    <button onclick="convertToEnglish()">Convert</button>
+    <div id="result"></div>
+    <script>
+        function convertToEnglish() {
+            const numberInput = document.getElementById('numberInput');
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                const cleanInput = numberInput.value.replace(/[, ]/g, '');
+                const number = BigInt(cleanInput);
+                
+                if (number < 0n) {
+                    throw new Error('Please enter a non-negative integer.');
+                }
+                
+                resultDiv.innerHTML = numberToEnglish(number);
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+                console.error(error);
+            }
+        }
+
+        function numberToEnglish(num) {
+            if (num === 0n) return 'zero';
+
+            const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+            const teens = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+            const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+            const scales = ['', 'thousand', 'million', 'billion', 'trillion', 'quadrillion', 'quintillion', 'sextillion', 'septillion', 'octillion', 'nonillion', 'decillion'];
+
+            function generateScales(n) {
+                const prefixes = ['', 'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'];
+                const suffixes = ['decillion', 'vigintillion', 'trigintillion', 'quadragintillion', 'quinquagintillion', 'sexagintillion', 'septuagintillion', 'octogintillion', 'nonagintillion', 'centillion'];
+                
+                let result = scales.slice();
+                for (let i = 0; i < suffixes.length; i++) {
+                    for (let j = 0; j < prefixes.length; j++) {
+                        if (i === 0 && j === 0) continue;
+                        result.push(prefixes[j] + suffixes[i]);
+                        if (result.length > n) return result;
+                    }
+                }
+                return result;
+            }
+
+            function convertThreeDigits(n) {
+                let words = [];
+                if (n >= 100n) {
+                    words.push(ones[Number(n / 100n)] + ' hundred');
+                    n %= 100n;
+                    if (n !== 0n) words.push('and');
+                }
+                if (n >= 20n) {
+                    words.push(tens[Number(n / 10n)]);
+                    if (n % 10n !== 0n) words.push(ones[Number(n % 10n)]);
+                } else if (n >= 10n) {
+                    words.push(teens[Number(n - 10n)]);
+                } else if (n > 0n) {
+                    words.push(ones[Number(n)]);
+                }
+                return words.join(' ');
+            }
+
+            const allScales = generateScales(Math.floor(num.toString().length / 3));
+            let parts = [];
+            let scaleIndex = 0;
+
+            while (num > 0n) {
+                const remainder = num % 1000n;
+                if (remainder !== 0n) {
+                    const words = convertThreeDigits(remainder);
+                    if (scaleIndex > 0) {
+                        parts.unshift(words + ' ' + allScales[scaleIndex]);
+                    } else {
+                        parts.unshift(words);
+                    }
+                }
+                num = num / 1000n;
+                scaleIndex++;
+            }
+
+            return parts.join(', ');
+        }
+    </script>
+</body>
+</html>

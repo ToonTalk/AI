@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC 2-Player Box Clicking Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #game-info, #connection-info, #instructions {
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        #box-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 800px;
+        }
+        .box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            margin: 1px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .box.player1 { background-color: #ff9999; }
+        .box.player2 { background-color: #99ccff; }
+        #connection-controls, #game-controls { margin-bottom: 20px; }
+        #game-controls, #offer-sdp, #answer-sdp { display: none; }
+        .button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-bottom: 10px;
+        }
+        #error-message {
+            color: red;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        <h2>How to Play:</h2>
+        <p>1. First player: Click "Create Offer" and share the generated offer.</p>
+        <p>2. Second player: Paste the offer, click "Set Offer & Create Answer", and share the generated answer.</p>
+        <p>3. First player: Paste the answer and click "Set Answer".</p>
+        <p>4. Take turns clicking boxes. Most boxes wins!</p>
+    </div>
+    <div id="connection-info">Status: Disconnected</div>
+    <div id="connection-controls">
+        <button id="create-offer-btn" class="button">Create Offer</button>
+        <div id="offer-sdp">
+            <textarea id="offer-sdp-text" placeholder="Paste offer SDP here"></textarea>
+            <button id="set-offer-btn" class="button">Set Offer & Create Answer</button>
+        </div>
+        <div id="answer-sdp">
+            <textarea id="answer-sdp-text" placeholder="Paste answer SDP here"></textarea>
+            <button id="set-answer-btn" class="button">Set Answer</button>
+        </div>
+    </div>
+    <div id="game-controls">
+        <button id="reset-btn" class="button">Reset Game</button>
+    </div>
+    <div id="game-info"></div>
+    <div id="box-container"></div>
+    <div id="error-message"></div>
+
+    <script>
+        let peerConnection;
+        let dataChannel;
+        let isHost = false;
+        let currentPlayer = 1;
+        let scores = { 1: 0, 2: 0 };
+        let gameActive = false;
+
+        const connectionInfo = document.getElementById('connection-info');
+        const gameInfo = document.getElementById('game-info');
+        const boxContainer = document.getElementById('box-container');
+        const createOfferBtn = document.getElementById('create-offer-btn');
+        const offerSdpDiv = document.getElementById('offer-sdp');
+        const offerSdpText = document.getElementById('offer-sdp-text');
+        const setOfferBtn = document.getElementById('set-offer-btn');
+        const answerSdpDiv = document.getElementById('answer-sdp');
+        const answerSdpText = document.getElementById('answer-sdp-text');
+        const setAnswerBtn = document.getElementById('set-answer-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const connectionControls = document.getElementById('connection-controls');
+        const gameControls = document.getElementById('game-controls');
+        const errorMessage = document.getElementById('error-message');
+
+        function updateGameInfo() {
+            gameInfo.textContent = `Player 1: ${scores[1]} | Player 2: ${scores[2]} | Current Player: ${currentPlayer}`;
+        }
+
+        function createBoxes() {
+            boxContainer.innerHTML = '';
+            for (let i = 0; i < 400; i++) {
+                const box = document.createElement('div');
+                box.className = 'box';
+                box.dataset.id = i;
+                box.addEventListener('click', handleBoxClick);
+                boxContainer.appendChild(box);
+            }
+        }
+
+        function handleBoxClick(event) {
+            if (!gameActive || (isHost && currentPlayer !== 1) || (!isHost && currentPlayer !== 2)) return;
+            const boxId = event.target.dataset.id;
+            makeMove(boxId);
+            if (dataChannel && dataChannel.readyState === 'open') {
+                dataChannel.send(JSON.stringify({ type: 'move', boxId }));
+            }
+        }
+
+        function makeMove(boxId) {
+            const box = document.querySelector(`.box[data-id="${boxId}"]`);
+            if (!box.classList.contains('player1') && !box.classList.contains('player2')) {
+                box.classList.add(`player${currentPlayer}`);
+                scores[currentPlayer]++;
+                currentPlayer = currentPlayer === 1 ? 2 : 1;
+                updateGameInfo();
+            }
+        }
+
+        function resetGame() {
+            currentPlayer = 1;
+            scores = { 1: 0, 2: 0 };
+            createBoxes();
+            updateGameInfo();
+            if (dataChannel && dataChannel.readyState === 'open') {
+                dataChannel.send(JSON.stringify({ type: 'reset' }));
+            }
+        }
+
+        createOfferBtn.addEventListener('click', createOffer);
+        setOfferBtn.addEventListener('click', setOfferAndCreateAnswer);
+        setAnswerBtn.addEventListener('click', setAnswer);
+        resetBtn.addEventListener('click', resetGame);
+
+        async function createOffer() {
+            isHost = true;
+            setupPeerConnection();
+            
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                offerSdpText.value = JSON.stringify(peerConnection.localDescription);
+                connectionInfo.textContent = 'Status: Offer created. Share this offer with the other player.';
+                offerSdpDiv.style.display = 'none';
+                answerSdpDiv.style.display = 'block';
+            } catch (error) {
+                console.error('Error creating offer:', error);
+                errorMessage.textContent = `Error creating offer: ${error.message}`;
+            }
+        }
+
+        async function setOfferAndCreateAnswer() {
+            isHost = false;
+            setupPeerConnection();
+            
+            try {
+                const offer = JSON.parse(offerSdpText.value);
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                answerSdpText.value = JSON.stringify(peerConnection.localDescription);
+                connectionInfo.textContent = 'Status: Answer created. Share this answer with the other player.';
+                offerSdpDiv.style.display = 'none';
+                answerSdpDiv.style.display = 'none';
+            } catch (error) {
+                console.error('Error setting offer and creating answer:', error);
+                errorMessage.textContent = `Error setting offer and creating answer: ${error.message}`;
+            }
+        }
+
+        async function setAnswer() {
+            try {
+                const answer = JSON.parse(answerSdpText.value);
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                connectionInfo.textContent = 'Status: Connection established. Waiting for data channel to open.';
+                answerSdpDiv.style.display = 'none';
+            } catch (error) {
+                console.error('Error setting answer:', error);
+                errorMessage.textContent = `Error setting answer: ${error.message}`;
+            }
+        }
+
+        function setupPeerConnection() {
+            peerConnection = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    console.log('New ICE candidate:', event.candidate);
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                console.log('Connection state:', peerConnection.connectionState);
+                connectionInfo.textContent = `Status: ${peerConnection.connectionState}`;
+            };
+
+            if (isHost) {
+                dataChannel = peerConnection.createDataChannel('gameChannel');
+                setupDataChannel();
+            } else {
+                peerConnection.ondatachannel = event => {
+                    dataChannel = event.channel;
+                    setupDataChannel();
+                };
+            }
+        }
+
+        function setupDataChannel() {
+            dataChannel.onopen = () => {
+                console.log('Data channel is open');
+                connectionInfo.textContent = 'Status: Connected! Game starting...';
+                connectionControls.style.display = 'none';
+                gameControls.style.display = 'block';
+                gameActive = true;
+                createBoxes();
+                updateGameInfo();
+            };
+
+            dataChannel.onmessage = event => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'move') {
+                    makeMove(data.boxId);
+                } else if (data.type === 'reset') {
+                    resetGame();
+                }
+            };
+
+            dataChannel.onerror = error => {
+                console.error('Data channel error:', error);
+                errorMessage.textContent = `Data channel error: ${error.message}`;
+            };
+        }
+
+        createBoxes();
+        updateGameInfo();
+    </script>
+</body>
+</html>

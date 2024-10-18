@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Water Balloon Game</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.1/howler.min.js"></script>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <input type="range" id="volumeControl" min="0" max="1" step="0.1" value="1" style="position: absolute; top: 50px; left: 10px;">
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const balloons = [];
+        const flowers = [];
+        let lastTimestamp = 0;
+        let score = 0;
+        let combo = 0;
+        let highScore = localStorage.getItem('highScore') || 0;
+        let multiplier = 1;
+        let lastScoreTime = Date.now();
+
+        const scoreDisplay = document.createElement("div");
+        scoreDisplay.style.position = "absolute";
+        scoreDisplay.style.top = "10px";
+        scoreDisplay.style.left = "10px";
+        scoreDisplay.style.fontSize = "24px";
+        scoreDisplay.style.color = "black";
+        document.body.appendChild(scoreDisplay);
+
+        function updateScoreDisplay() {
+            scoreDisplay.textContent = `Score: ${score} | Combo: ${combo}x | High Score: ${highScore}`;
+        }
+
+        function increaseScore(points) {
+            updateMultiplier();
+            score += Math.floor(points * multiplier);
+            updateScoreDisplay();
+            updateHighScore();
+        }
+
+        function resetCombo() {
+            combo = 0;
+            updateScoreDisplay();
+        }
+
+        function updateHighScore() {
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('highScore', highScore);
+            }
+        }
+
+        function updateMultiplier() {
+            const currentTime = Date.now();
+            if (currentTime - lastScoreTime < 2000) { // 2 seconds window
+                multiplier = Math.min(multiplier + 0.1, 2); // Cap at 2x
+            } else {
+                multiplier = 1;
+            }
+            lastScoreTime = currentTime;
+        }
+
+        const balloonDropSound = new Howl({ src: ['balloon_drop.wav'] });
+        const balloonHitSound = new Howl({ src: ['balloon_hit.wav'] });
+        const flowerGrowSound = new Howl({ src: ['flower_grow.wav'] });
+
+        class Balloon {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 10;
+                this.speed = 300;
+                balloonDropSound.play(); // Play balloon drop sound
+            }
+
+            draw() {
+                ctx.fillStyle = "blue";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            update(deltaTime) {
+                this.y += this.speed * deltaTime * 0.001;
+            }
+        }
+
+        class Flower {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = 1;
+            }
+
+            draw() {
+                ctx.fillStyle = "red";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 20, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            update(deltaTime) {
+                // Flower update logic
+            }
+        }
+
+        function checkCollisions() {
+            for (let i = balloons.length - 1; i >= 0; i--) {
+                const balloon = balloons[i];
+                let hit = false;
+                for (const flower of flowers) {
+                    const dx = balloon.x - flower.x;
+                    const dy = balloon.y - (flower.y + flower.size * 20);
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < balloon.radius + flower.size * 10) {
+                        const oldSize = flower.size;
+                        flower.size = Math.min(2, flower.size + 0.5);
+
+                        combo++;
+                        const points = calculateScore(flower, oldSize);
+                        increaseScore(points);
+
+                        balloonHitSound.play(); // Play balloon hit sound
+                        if (oldSize < 2 && flower.size === 2) {
+                            flowerGrowSound.play(); // Play flower growth sound
+                        }
+
+                        balloons.splice(i, 1);
+                        hit = true;
+                        break;
+                    }
+                }
+                if (!hit && balloon.y > canvas.height) {
+                    score = Math.max(0, score - 5); // Penalty for missed balloon
+                    resetCombo();
+                    balloons.splice(i, 1);
+                }
+            }
+        }
+
+        function calculateScore(flower, oldSize) {
+            let points = 10; // Base points for hitting a flower
+            points += combo * 5; // Combo bonus
+            if (oldSize < 2 && flower.size === 2) {
+                points += 50; // Growth bonus
+            }
+            return points;
+        }
+
+        function updateFlowerScore(deltaTime) {
+            for (const flower of flowers) {
+                if (flower.size === 2) {
+                    score += Math.floor(deltaTime * 0.001); // 1 point per second
+                }
+            }
+            updateScoreDisplay();
+        }
+
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (const flower of flowers) {
+                flower.update(deltaTime);
+                flower.draw();
+            }
+
+            for (const balloon of balloons) {
+                balloon.update(deltaTime);
+                balloon.draw();
+            }
+
+            checkCollisions();
+            updateFlowerScore(deltaTime);
+            updateScoreDisplay();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function onClick(event) {
+            const x = event.clientX - canvas.offsetLeft;
+            const y = event.clientY - canvas.offsetTop;
+
+            if (y < canvas.height / 3) {
+                balloons.push(new Balloon(x, y));
+            }
+        }
+
+        canvas.addEventListener('click', onClick);
+        document.getElementById('volumeControl').addEventListener('input', function() {
+            Howler.volume(parseFloat(this.value));
+        });
+
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

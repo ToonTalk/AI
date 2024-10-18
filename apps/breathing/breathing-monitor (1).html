@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Permissions-Policy" content="accelerometer=(), gyroscope=()">
+    <title>Breathing Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        #breathRate { font-size: 2em; margin: 20px 0; }
+        #status, #advice { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Breathing Monitor</h1>
+    <div id="status">Monitoring active. Place your phone in your shirt pocket and breathe normally.</div>
+    <div id="breathRate">Calculating...</div>
+    <div id="advice"></div>
+
+    <script>
+        let breathTimes = [];
+        let lastPeak = 0;
+        let threshold = 10.2;
+        const breathRateDiv = document.getElementById('breathRate');
+        const adviceDiv = document.getElementById('advice');
+
+        function handleMotion(event) {
+            const { x, y, z } = event.accelerationIncludingGravity;
+            const magnitude = Math.sqrt(x*x + y*y + z*z);
+            const currentTime = new Date().getTime();
+
+            if (magnitude > threshold && currentTime - lastPeak > 1000) {
+                breathTimes.push(currentTime);
+                lastPeak = currentTime;
+                
+                if (breathTimes.length > 5) {
+                    breathTimes.shift();
+                }
+                
+                if (breathTimes.length >= 2) {
+                    const duration = (breathTimes[breathTimes.length - 1] - breathTimes[0]) / 1000;
+                    const rate = ((breathTimes.length - 1) / duration * 60).toFixed(1);
+                    breathRateDiv.textContent = `${rate} breaths/min`;
+                    provideAdvice(parseFloat(rate));
+                }
+            }
+
+            // Dynamically adjust threshold
+            threshold = magnitude * 0.98;
+        }
+
+        function provideAdvice(rate) {
+            let advice = '';
+            if (rate < 12) {
+                advice = 'Your breathing is slow. Try taking deeper breaths.';
+            } else if (rate > 20) {
+                advice = 'Your breathing is fast. Try to relax and slow down your breathing.';
+            } else {
+                advice = 'Your breathing rate is normal. Keep breathing steadily.';
+            }
+            adviceDiv.textContent = advice;
+        }
+
+        window.addEventListener('devicemotion', handleMotion, false);
+    </script>
+</body>
+</html>

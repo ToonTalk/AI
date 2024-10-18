@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minsky's Agents Simulation</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        textarea, input, button { width: 100%; margin-bottom: 10px; }
+        #output { white-space: pre-wrap; background-color: #f0f0f0; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Minsky's Agents Simulation</h1>
+    <textarea id="problem" rows="3" placeholder="Enter your problem here..."></textarea>
+    <input type="number" id="maxIterations" value="10" min="1" max="20">
+    <button onclick="runSimulation()">Run Simulation</button>
+    <div id="output"></div>
+
+    <script>
+        // Utility function to create an agent
+        async function createAgent(role, systemPrompt) {
+            const session = await ai.assistant.create({
+                systemPrompt: `You are a ${role} agent in Minsky's Society of Mind. ${systemPrompt}`
+            });
+            return { role, session, messages: [] };
+        }
+
+        // Create agents
+        let agents = [];
+
+        async function initializeAgents() {
+            const kline = await createAgent('K-line', 'Your role is to store and retrieve specific memories or knowledge. When asked a question, provide relevant information from your knowledge base. If you don\'t have specific information, say so.');
+            const recognizer = await createAgent('Recognizer', 'Your job is to identify patterns, concepts, or relevant information in any input you receive. Analyze the input and describe any patterns or important elements you recognize.');
+            const differenceEngine = await createAgent('Difference-engine', 'Your task is to compare the current state of a situation to the desired state and suggest actions to bridge the gap. Analyze the situation presented to you, identify discrepancies, and propose solutions.');
+
+            agents = [kline, recognizer, differenceEngine];
+        }
+
+        // Function to get a random agent excluding the current one
+        function getRandomAgent(currentAgent) {
+            const otherAgents = agents.filter(agent => agent !== currentAgent);
+            return otherAgents[Math.floor(Math.random() * otherAgents.length)];
+        }
+
+        // Function to process a message through an agent
+        async function processMessage(agent, message) {
+            agent.messages.push(message);
+            const fullPrompt = agent.messages.join('\n');
+            const response = await agent.session.prompt(fullPrompt);
+            agent.messages.push(response);
+            return response;
+        }
+
+        // Main function to run the decentralized system
+        async function runDecentralizedSystem(initialPrompt, maxIterations = 10) {
+            let currentAgent = agents[Math.floor(Math.random() * agents.length)];
+            let currentPrompt = initialPrompt;
+            let output = '';
+
+            for (let i = 0; i < maxIterations; i++) {
+                output += `\nIteration ${i + 1}:\n`;
+                output += `${currentAgent.role} processing: ${currentPrompt}\n`;
+                
+                const response = await processMessage(currentAgent, currentPrompt);
+                output += `${currentAgent.role} response: ${response}\n`;
+                
+                // Decide whether to continue or return the final result
+                if (response.toLowerCase().includes('final solution') || response.toLowerCase().includes('task completed')) {
+                    return output + '\nFinal result: ' + response;
+                }
+                
+                // Choose the next agent and prepare the next prompt
+                currentAgent = getRandomAgent(currentAgent);
+                currentPrompt = `Previous agent said: ${response}\nYour task: ${currentAgent.role === 'K-line' ? 'Provide relevant information' : currentAgent.role === 'Recognizer' ? 'Identify patterns or concepts' : 'Suggest actions to improve the situation'}`;
+            }
+
+            return output + "\nMax iterations reached without a final solution.";
+        }
+
+        async function runSimulation() {
+            const problem = document.getElementById('problem').value;
+            const maxIterations = parseInt(document.getElementById('maxIterations').value);
+            const outputDiv = document.getElementById('output');
+
+            outputDiv.textContent = 'Initializing agents...';
+            
+            if (agents.length === 0) {
+                await initializeAgents();
+            }
+
+            outputDiv.textContent = 'Running simulation...';
+
+            try {
+                const result = await runDecentralizedSystem(problem, maxIterations);
+                outputDiv.textContent = result;
+            } catch (error) {
+                outputDiv.textContent = 'An error occurred: ' + error.message;
+            }
+        }
+
+        // Initialize agents when the page loads
+        initializeAgents().then(() => {
+            console.log('Agents initialized');
+        }).catch(error => {
+            console.error('Error initializing agents:', error);
+        });
+    </script>
+</body>
+</html>

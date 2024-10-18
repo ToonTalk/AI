@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repeating LLM Prompter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 10px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        select, textarea, button, input {
+            width: 100%;
+            margin: 10px 0;
+            padding: 8px;
+        }
+        .responses {
+            margin-top: 20px;
+        }
+        .response-item {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .response-display {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            min-height: 60px;
+        }
+        .popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 80%;
+            height: 60%;
+            overflow-y: auto;
+            background-color: white;
+            border: 1px solid black;
+            padding: 20px;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        .popup-close {
+            margin-top: 10px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/12.3.2/markdown-it.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Repeating LLM Prompter</h1>
+        <select id="llmSelect">
+            <option value="geminiNano">Gemini Nano</option>
+            <option value="gemini">Gemini Flash</option>
+            <option value="cohere">Cohere.ai</option>
+            <option value="gpt4">ChatGPT-4o-mini</option>
+        </select>
+
+        <input type="password" id="apiKeyInput" placeholder="Enter API key" style="display: none;">
+        
+        <textarea id="text1" rows="3" placeholder="Enter first part of the prompt"></textarea>
+        <textarea id="text2" rows="3" placeholder="Enter second part of the prompt"></textarea>
+
+        <button id="submitBtn">Submit Prompt</button>
+        <button id="showAllResponsesBtn">Show All Responses</button>
+
+        <div id="responseDisplay" class="response-display">Response will also appear here...</div>
+
+        <div class="responses" id="responses"></div>
+
+        <div id="popup" class="popup">
+            <h2>All Responses (Starting with Initial Prompt)</h2>
+            <div id="allResponses"></div>
+            <button class="popup-close" onclick="closePopup()">Close</button>
+        </div>
+    </div>
+
+    <script src="api.js"></script>
+    <script>
+        const md = window.markdownit();
+        let initialPrompt = '';
+        let allResponsesList = [];
+
+        document.getElementById('llmSelect').addEventListener('change', function() {
+            const llmType = this.value;
+            const apiKeyInput = document.getElementById('apiKeyInput');
+            if (llmType === 'geminiNano') {
+                apiKeyInput.style.display = 'none';
+            } else {
+                apiKeyInput.style.display = 'block';
+            }
+        });
+
+        async function handleSubmit() {
+            const llmType = document.getElementById('llmSelect').value;
+            const apiKey = document.getElementById('apiKeyInput').value;
+            const text1 = document.getElementById('text1').value;
+            const text2 = document.getElementById('text2').value;
+            const fullPrompt = text1 + " " + text2;
+
+            // Save the initial prompt only once
+            if (!initialPrompt) {
+                initialPrompt = fullPrompt;
+            }
+
+            const agent = {
+                role: 'user', // This can be changed if needed
+                llmType: llmType,
+                apiKey: apiKey,  // Pass the API key to the agent
+                messages: [],
+                session: null  // Adding session initialization for geminiNano
+            };
+
+            if (llmType === 'geminiNano') {
+                // For Gemini Nano, we must create a session
+                agent.session = await ai.assistant.create({
+                    systemPrompt: `You are a ${agent.role} agent.`
+                });
+            }
+
+            try {
+                let response = await processMessage(agent, fullPrompt);
+
+                // Record the full response
+                allResponsesList.push(response);
+
+                // Remove content between <ignore> and </ignore> for the text area update
+                const cleanedResponse = response.replace(/<ignore>.*?<\/ignore>/gs, '');
+
+                // Update the second text area with the cleaned response
+                document.getElementById('text2').value = cleanedResponse;
+
+                // Render the full response in the display area as markdown
+                const renderedResponse = md.render(response);
+                document.getElementById('responseDisplay').innerHTML = renderedResponse;
+
+            } catch (error) {
+                console.error("Error processing the prompt:", error);
+            }
+        }
+
+        function showAllResponses() {
+            const allResponsesDiv = document.getElementById('allResponses');
+            allResponsesDiv.innerHTML = `<p><strong>Initial Prompt:</strong> ${md.render(initialPrompt)}</p>` +
+                allResponsesList.map(response => `<p><strong>Response:</strong> ${md.render(response)}</p>`).join('');
+            document.getElementById('popup').style.display = 'block';
+        }
+
+        function closePopup() {
+            document.getElementById('popup').style.display = 'none';
+        }
+
+        document.getElementById('submitBtn').addEventListener('click', handleSubmit);
+        document.getElementById('showAllResponsesBtn').addEventListener('click', showAllResponses);
+    </script>
+</body>
+</html>

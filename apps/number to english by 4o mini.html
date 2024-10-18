@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number to Words Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        input, button {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Number to Words Converter</h1>
+    <input type="text" id="numberInput" placeholder="Enter a number">
+    <button onclick="convertNumber()">Convert</button>
+    <p id="result"></p>
+
+    <script>
+        function numberToWords(num) {
+            if (num === 0) return 'zero';
+
+            const belowTwenty = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+                                'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+            const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+            const thousands = ['', 'thousand', 'million', 'billion', 'trillion', 'quadrillion', 'quintillion', 
+                                'sextillion', 'septillion', 'octillion', 'nonillion', 'decillion', 'undecillion', 
+                                'duodecillion', 'tredecillion', 'quattuordecillion', 'quindecillion', 'sexdecillion', 
+                                'septendecillion', 'octodecillion', 'novemdecillion', 'vigintillion'];
+
+            function convertHundreds(num) {
+                let str = '';
+                if (num > 99) {
+                    str += belowTwenty[Math.floor(num / 100)] + ' hundred';
+                    num %= 100;
+                    if (num > 0) str += ' and ';
+                }
+                if (num > 19) {
+                    str += tens[Math.floor(num / 10)];
+                    num %= 10;
+                    if (num > 0) str += '-' + belowTwenty[num];
+                } else if (num > 0) {
+                    str += belowTwenty[num];
+                }
+                return str;
+            }
+
+            let result = [];
+            let i = 0;
+            while (num > 0) {
+                const chunk = Number(num % 1000n);
+                if (chunk !== 0) {
+                    const chunkWords = convertHundreds(chunk);
+                    result.unshift(chunkWords + (thousands[i] ? ' ' + thousands[i] : ''));
+                }
+                num = num / 1000n;
+                i++;
+            }
+
+            return result.join(', ').replace(/,([^,]*)$/, ' and$1'); // Join with commas and handle the last "and"
+        }
+
+        function convertNumber() {
+            try {
+                const input = document.getElementById('numberInput').value;
+                const num = BigInt(input);
+                const result = numberToWords(num);
+                document.getElementById('result').textContent = result;
+            } catch (e) {
+                document.getElementById('result').textContent = 'Invalid number';
+            }
+        }
+    </script>
+</body>
+</html>

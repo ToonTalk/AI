@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spanish Flu Worldwide Simulation (1918-1919)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #simulation-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="simulation-container">
+        <h2>Spanish Flu Worldwide Simulation (1918-1919)</h2>
+        <div>
+            <button id="startBtn">Start</button>
+            <button id="stopBtn">Stop</button>
+            <button id="resetBtn">Reset</button>
+        </div>
+        <div id="monthDisplay">Month: 0</div>
+        <canvas id="chart" width="800" height="400"></canvas>
+    </div>
+
+    <script>
+        const initialPopulation = 1800000000;
+        const totalInfected = 500000000;
+        const totalDeaths = 50000000;
+
+        const monthlyData = [
+            { newCases: 20000000, newDeaths: 1000000 },
+            { newCases: 30000000, newDeaths: 1500000 },
+            { newCases: 40000000, newDeaths: 2000000 },
+            { newCases: 10000000, newDeaths: 500000 },
+            { newCases: 5000000, newDeaths: 250000 },
+            { newCases: 60000000, newDeaths: 6000000 },
+            { newCases: 120000000, newDeaths: 12000000 },
+            { newCases: 100000000, newDeaths: 10000000 },
+            { newCases: 60000000, newDeaths: 6000000 },
+            { newCases: 30000000, newDeaths: 3000000 },
+            { newCases: 15000000, newDeaths: 1500000 },
+            { newCases: 7000000, newDeaths: 700000 },
+            { newCases: 3000000, newDeaths: 300000 },
+        ];
+
+        let data = [];
+        let month = 0;
+        let isRunning = false;
+        let simulationInterval;
+
+        const ctx = document.getElementById('chart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Susceptible', data: [], borderColor: 'rgb(136, 132, 216)', fill: false },
+                    { label: 'Infected', data: [], borderColor: 'rgb(130, 202, 157)', fill: false },
+                    { label: 'Recovered', data: [], borderColor: 'rgb(255, 198, 88)', fill: false },
+                    { label: 'Deceased', data: [], borderColor: 'rgb(255, 115, 0)', fill: false }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { title: { display: true, text: 'Month' } },
+                    y: { title: { display: true, text: 'Population' } }
+                }
+            }
+        });
+
+        function updateSimulation() {
+            if (month >= monthlyData.length) {
+                stopSimulation();
+                return;
+            }
+
+            const lastData = data[data.length - 1] || { susceptible: initialPopulation, infected: 0, recovered: 0, deceased: 0 };
+            const monthData = monthlyData[month];
+
+            const newInfected = Math.min(monthData.newCases, lastData.susceptible);
+            const newDeceased = monthData.newDeaths;
+            const newRecovered = newInfected - newDeceased;
+
+            const updatedData = {
+                susceptible: Math.max(0, lastData.susceptible - newInfected),
+                infected: lastData.infected + newInfected - newRecovered - newDeceased,
+                recovered: lastData.recovered + newRecovered,
+                deceased: lastData.deceased + newDeceased
+            };
+
+            data.push(updatedData);
+            month++;
+
+            updateChart();
+            document.getElementById('monthDisplay').textContent = `Month: ${month}`;
+        }
+
+        function updateChart() {
+            chart.data.labels.push(month);
+            chart.data.datasets[0].data.push(data[data.length - 1].susceptible);
+            chart.data.datasets[1].data.push(data[data.length - 1].infected);
+            chart.data.datasets[2].data.push(data[data.length - 1].recovered);
+            chart.data.datasets[3].data.push(data[data.length - 1].deceased);
+            chart.update();
+        }
+
+        function startSimulation() {
+            if (!isRunning) {
+                isRunning = true;
+                if (data.length === 0) {
+                    data.push({ susceptible: initialPopulation, infected: 0, recovered: 0, deceased: 0 });
+                    updateChart();
+                }
+                simulationInterval = setInterval(updateSimulation, 1000);
+            }
+        }
+
+        function stopSimulation() {
+            isRunning = false;
+            clearInterval(simulationInterval);
+        }
+
+        function resetSimulation() {
+            stopSimulation();
+            month = 0;
+            data = [];
+            chart.data.labels = [];
+            chart.data.datasets.forEach((dataset) => {
+                dataset.data = [];
+            });
+            chart.update();
+            document.getElementById('monthDisplay').textContent = 'Month: 0';
+        }
+
+        document.getElementById('startBtn').addEventListener('click', startSimulation);
+        document.getElementById('stopBtn').addEventListener('click', stopSimulation);
+        document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+    </script>
+</body>
+</html>

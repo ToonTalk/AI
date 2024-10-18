@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number to English Words</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #result { margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<h2>Number to English Words Converter</h2>
+
+<input type="number" id="numberInput" placeholder="Enter a number">
+<button onclick="convertToEnglish()">Convert</button>
+
+<div id="result"></div>
+
+<script>
+function convertToEnglish() {
+    const numberInput = document.getElementById('numberInput');
+    const number = BigInt(numberInput.value);
+    const resultDiv = document.getElementById('result');
+
+    if (number < 0) {
+        resultDiv.innerText = 'Please enter a non-negative integer.';
+        return;
+    }
+
+    const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+    const teens = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+    const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    const thousands = ['', 'thousand', 'million', 'billion', 'trillion', 'quadrillion', 'quintillion', 'sextillion', 'septillion', 'octillion', 'nonillion', 'decillion'];
+
+    function helper(num) {
+        if (num === 0n) return '';
+        if (num < 10n) return ones[num];
+        if (num < 20n) return teens[num - 10n];
+        if (num < 100n) return tens[num / 10n] + (num % 10n !== 0n ? ' ' + ones[num % 10n] : '');
+        if (num < 1000n) return ones[num / 100n] + ' hundred' + (num % 100n !== 0n ? ' ' + helper(num % 100n) : '');
+        let i = 0;
+        let originalNum = num;
+        while (num >= 1000n) {
+            num /= 1000n;
+            i++;
+        }
+        let result = '';
+        if (num >= 100n) {
+            result += ones[num / 100n] + ' hundred';
+            num %= 100n;
+            if (num !== 0n) result += ' ';
+        }
+        if (num >= 20n) {
+            result += tens[num / 10n];
+            num %= 10n;
+            if (num !== 0n) result += ' ';
+        }
+        if (num >= 10n) {
+            result += teens[num - 10n];
+            num = 0n;
+        }
+        if (num !== 0n) result += ones[num];
+        result += ' ' + thousands[i];
+        if (originalNum % BigInt(Math.pow(1000, i)) !== 0n) {
+            result += ' ' + helper(originalNum % BigInt(Math.pow(1000, i)));
+        }
+        return result;
+    }
+
+    resultDiv.innerText = helper(number);
+}
+</script>
+
+</body>
+</html>

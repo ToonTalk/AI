@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peer-to-Peer Multiplayer Colorful Toggleable Checkboxes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        #checkboxes {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            width: 100%;
+            max-width: 600px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            padding: 5px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            max-height: calc(100vh - 250px);
+        }
+        .checkbox {
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            width: 28px;
+            height: 28px;
+            border: 2px solid;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+        .checkbox::before {
+            content: '✓';
+        }
+        .checkbox.unchecked {
+            color: transparent !important;
+            border-color: #aaa !important;
+            background-color: #f0f0f0;
+        }
+        #counter, #status, #connectionInfo {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Peer-to-Peer Multiplayer Colorful Toggleable Checkboxes</h1>
+    <div id="connectionInfo">Room ID: <span id="roomId"></span></div>
+    <div id="status">Waiting for peer connection...</div>
+    <div id="counter">Checked: 0 / 10000</div>
+    <div id="checkboxes"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <script>
+        const checkboxesContainer = document.getElementById('checkboxes');
+        const counterElement = document.getElementById('counter');
+        const statusElement = document.getElementById('status');
+        const roomIdElement = document.getElementById('roomId');
+        const totalCheckboxes = 10000;
+        let checkedCount = 0;
+        let peer, conn;
+        const roomId = 'checkbox-room-' + Math.floor(Math.random() * 1000000);
+        roomIdElement.textContent = roomId;
+
+        function updateCounter() {
+            counterElement.textContent = `Checked: ${checkedCount} / ${totalCheckboxes}`;
+        }
+        
+        function getRandomColor() {
+            const hue = Math.floor(Math.random() * 360);
+            return `hsl(${hue}, 70%, 50%)`;
+        }
+        
+        const colors = Array(totalCheckboxes).fill().map(() => getRandomColor());
+        
+        for (let i = 0; i < totalCheckboxes; i++) {
+            const checkbox = document.createElement('div');
+            checkbox.className = 'checkbox unchecked';
+            checkbox.style.color = colors[i];
+            checkbox.style.borderColor = colors[i];
+            checkbox.dataset.index = i;
+            checkboxesContainer.appendChild(checkbox);
+        }
+
+        peer = new Peer(roomId);
+
+        peer.on('open', (id) => {
+            statusElement.textContent = 'Waiting for peer to join...';
+            checkboxesContainer.addEventListener('click', handleCheckboxClick);
+        });
+
+        peer.on('connection', (connection) => {
+            conn = connection;
+            setupConnection();
+        });
+
+        function connectToPeer() {
+            if (conn) {
+                conn.close();
+            }
+            conn = peer.connect(roomId);
+            setupConnection();
+        }
+
+        function setupConnection() {
+            conn.on('open', () => {
+                statusElement.textContent = 'Connected to peer';
+                sendFullState();
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'toggle') {
+                    toggleCheckbox(data.index, false);
+                } else if (data.type === 'fullState') {
+                    data.checked.forEach(index => toggleCheckbox(index, false));
+                }
+            });
+        }
+
+        function handleCheckboxClick(event) {
+            const checkbox = event.target.closest('.checkbox');
+            if (checkbox) {
+                const index = parseInt(checkbox.dataset.index);
+                toggleCheckbox(index, true);
+            }
+        }
+        
+        function toggleCheckbox(index, send = true) {
+            const checkbox = checkboxesContainer.children[index];
+            checkbox.classList.toggle('unchecked');
+            checkedCount += checkbox.classList.contains('unchecked') ? -1 : 1;
+            updateCounter();
+            if (send && conn && conn.open) {
+                conn.send({ type: 'toggle', index: index });
+            }
+        }
+
+        function sendFullState() {
+            const checkedIndexes = Array.from(checkboxesContainer.children)
+                .map((checkbox, index) => ({ checkbox, index }))
+                .filter(({ checkbox }) => !checkbox.classList.contains('unchecked'))
+                .map(({ index }) => index);
+            conn.send({ type: 'fullState', checked: checkedIndexes });
+        }
+
+        // Try to connect immediately, and every 5 seconds if it fails
+        connectToPeer();
+        setInterval(() => {
+            if (!conn || !conn.open) {
+                connectToPeer();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

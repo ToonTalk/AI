@@ -1,0 +1,139 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Balloon Flower Game</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #e0f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            border: 2px solid #004d40;
+            background: #a7ffeb;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Flower class
+        class Flower {
+            constructor(x, y, size, color) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.color = color;
+                this.growthRate = 0.05;
+                this.grayness = 0;
+            }
+
+            grow() {
+                this.size += this.growthRate;
+                this.grayness = Math.max(0, this.grayness - 5);
+            }
+
+            shrink() {
+                this.size = Math.max(10, this.size - 0.01);
+                this.grayness = Math.min(255, this.grayness + 2);
+            }
+
+            draw() {
+                const gradient = ctx.createRadialGradient(this.x, this.y, this.size / 10, this.x, this.y, this.size);
+                gradient.addColorStop(0, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, 1)`);
+                gradient.addColorStop(1, `rgba(${this.grayness}, ${this.grayness}, ${this.grayness}, 0.5)`);
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Balloon class
+        class Balloon {
+            constructor(x, y, radius, color) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.color = color;
+                this.speed = 4;
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            hasHit(flower) {
+                const dist = Math.sqrt((this.x - flower.x) ** 2 + (this.y - flower.y) ** 2);
+                return dist < this.radius + flower.size;
+            }
+        }
+
+        // Setup game variables
+        const flowers = [];
+        const balloons = [];
+
+        // Create some flowers
+        for (let i = 0; i < 5; i++) {
+            flowers.push(new Flower(Math.random() * canvas.width, Math.random() * canvas.height, 20, {r: 255, g: 0, b: 0}));
+        }
+
+        // Handle mouse clicks to drop balloons
+        canvas.addEventListener('click', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            const color = `rgb(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)})`;
+            balloons.push(new Balloon(x, y, 10, color));
+        });
+
+        // Animation loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update and draw flowers
+            flowers.forEach(flower => {
+                const hit = balloons.some(balloon => balloon.hasHit(flower));
+                if (hit) {
+                    flower.grow();
+                } else {
+                    flower.shrink();
+                }
+                flower.draw();
+            });
+
+            // Update and draw balloons
+            for (let i = balloons.length - 1; i >= 0; i--) {
+                balloons[i].update();
+                balloons[i].draw();
+
+                // Remove balloons that fall out of the canvas
+                if (balloons[i].y > canvas.height) {
+                    balloons.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

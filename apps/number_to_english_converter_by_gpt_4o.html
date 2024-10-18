@@ -1,0 +1,100 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number to English Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .converter {
+            text-align: center;
+        }
+        input, button {
+            font-size: 16px;
+            padding: 10px;
+            margin: 10px;
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="converter">
+        <h1>Number to English Converter</h1>
+        <input type="text" id="numberInput" placeholder="Enter a number">
+        <button onclick="convertToWords()">Convert</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function convertToWords() {
+            const num = BigInt(document.getElementById('numberInput').value);
+            const words = numberToWords(num);
+            document.getElementById('result').innerText = words.toLowerCase();
+        }
+
+        function numberToWords(num) {
+            const belowTwenty = [
+                'Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+                'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'
+            ];
+            const tens = [
+                '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'
+            ];
+            let suffixes = [
+                '', 'Thousand', 'Million', 'Billion', 'Trillion', 'Quadrillion', 'Quintillion', 'Sextillion',
+                'Septillion', 'Octillion', 'Nonillion', 'Decillion', 'Undecillion', 'Duodecillion', 'Tredecillion',
+                'Quattuordecillion', 'Quindecillion', 'Sexdecillion', 'Septendecillion', 'Octodecillion', 'Novemdecillion',
+                'Vigintillion'
+            ];
+
+            // Generate suffixes dynamically if needed
+            function generateSuffixes() {
+                const prefixes = ["", "Un", "Duo", "Tre", "Quattuor", "Quin", "Sex", "Septen", "Octo", "Novem"];
+                const bases = ["", "Deci", "Viginti", "Triginta", "Quadraginta", "Quinquaginta", "Sexaginta", "Septuaginta", "Octoginta", "Nonaginta"];
+                let count = suffixes.length;
+                while (count <= 10000) {  // Arbitrary large number to ensure all suffixes are covered
+                    let prefixIndex = count % 10;
+                    let baseIndex = Math.floor(count / 10) % 10;
+                    let name = (prefixes[prefixIndex] || "") + (bases[baseIndex] || "") + "llion";
+                    suffixes.push(name);
+                    count++;
+                }
+            }
+            generateSuffixes();
+
+            if (num === 0n) return 'zero';
+            let word = '';
+            let i = 0;
+
+            while (num > 0) {
+                const chunk = Number(num % 1000n);
+                if (chunk > 0) {
+                    word = `${convertChunk(chunk)} ${suffixes[i]} ${word}`.trim();
+                }
+                num = num / 1000n;
+                i++;
+            }
+
+            return word.trim();
+
+            function convertChunk(num) {
+                if (num === 0) return ''; // Ignore zero chunks
+                if (num < 20) return belowTwenty[num];
+                if (num < 100) return `${tens[Math.floor(num / 10)]} ${belowTwenty[num % 10]}`.trim();
+                return `${belowTwenty[Math.floor(num / 100)]} Hundred ${convertChunk(num % 100)}`.trim();
+            }
+        }
+    </script>
+</body>
+</html>

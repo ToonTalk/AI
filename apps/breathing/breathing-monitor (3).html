@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Breathing Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        #breathRate, #heartRate { font-size: 1.5em; margin: 15px 0; }
+        #status, #advice { margin: 15px 0; }
+        button { font-size: 1.2em; padding: 10px 20px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Advanced Breathing Monitor</h1>
+    <div id="status">Click Start to begin monitoring.</div>
+    <button id="startButton">Start Monitoring</button>
+    <div id="breathRate">Breathing: -- breaths/min</div>
+    <div id="heartRate">Heart Rate: -- bpm</div>
+    <div id="advice"></div>
+
+    <script>
+        let audioContext, analyser, microphone, dataArray;
+        let accelerationData = [];
+        let isMonitoring = false;
+        const breathRateDiv = document.getElementById('breathRate');
+        const heartRateDiv = document.getElementById('heartRate');
+        const adviceDiv = document.getElementById('advice');
+        const startButton = document.getElementById('startButton');
+        const statusDiv = document.getElementById('status');
+
+        startButton.addEventListener('click', startMonitoring);
+
+        async function startMonitoring() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                analyser.fftSize = 2048;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                window.addEventListener('devicemotion', handleMotion);
+                
+                isMonitoring = true;
+                statusDiv.textContent = 'Monitoring active. Place phone near your chest.';
+                startButton.style.display = 'none';
+                
+                updateRates();
+            } catch (err) {
+                statusDiv.textContent = 'Error accessing microphone: ' + err.message;
+            }
+        }
+
+        function handleMotion(event) {
+            const { x, y, z } = event.accelerationIncludingGravity;
+            accelerationData.push(Math.sqrt(x*x + y*y + z*z));
+            if (accelerationData.length > 600) accelerationData.shift(); // Keep last 10 seconds at 60Hz
+        }
+
+        function updateRates() {
+            if (!isMonitoring) return;
+
+            analyser.getByteTimeDomainData(dataArray);
+            const breathAmplitude = getAmplitude(dataArray);
+            const breathRate = estimateRate(breathAmplitude, 0.1, 0.5); // 6-30 breaths per minute
+
+            const heartRate = estimateHeartRate(accelerationData);
+
+            breathRateDiv.textContent = `Breathing: ${breathRate.toFixed(1)} breaths/min`;
+            heartRateDiv.textContent = `Heart Rate: ${heartRate.toFixed(1)} bpm`;
+
+            provideAdvice(breathRate);
+
+            requestAnimationFrame(updateRates);
+        }
+
+        function getAmplitude(dataArray) {
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += Math.abs(dataArray[i] - 128);
+            }
+            return sum / dataArray.length;
+        }
+
+        function estimateRate(signal, minFreq, maxFreq) {
+            // Simple zero-crossing rate estimation
+            let crossings = 0;
+            for (let i = 1; i < signal.length; i++) {
+                if ((signal[i] > 128 && signal[i-1] <= 128) || (signal[i] <= 128 && signal[i-1] > 128)) {
+                    crossings++;
+                }
+            }
+            const rate = (crossings / 2) * (60 / (signal.length / audioContext.sampleRate));
+            return Math.max(minFreq * 60, Math.min(maxFreq * 60, rate));
+        }
+
+        function estimateHeartRate(accelerationData) {
+            // Simple peak detection for heart rate
+            let peaks = 0;
+            for (let i = 1; i < accelerationData.length - 1; i++) {
+                if (accelerationData[i] > accelerationData[i-1] && accelerationData[i] > accelerationData[i+1]) {
+                    peaks++;
+                }
+            }
+            return (peaks / (accelerationData.length / 60)) * 60; // Convert to bpm
+        }
+
+        function provideAdvice(rate) {
+            let advice = '';
+            if (rate < 12) {
+                advice = 'Your breathing is slow. Try taking deeper breaths.';
+            } else if (rate > 20) {
+                advice = 'Your breathing is fast. Try to relax and slow down your breathing.';
+            } else {
+                advice = 'Your breathing rate is normal. Keep breathing steadily.';
+            }
+            adviceDiv.textContent = advice;
+        }
+    </script>
+</body>
+</html>

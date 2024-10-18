@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Text Input and Clipboard Assembly</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"], textarea {
+            width: calc(100% - 10px);
+            padding: 5px;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            padding: 5px 10px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        #status-message {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+        #model-inputs {
+            margin-bottom: 15px;
+        }
+        .model-input {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .model-input input {
+            flex-grow: 1;
+            margin-right: 5px;
+        }
+        #result-container {
+            position: relative;
+            margin-top: 20px;
+        }
+        #result-area {
+            width: 100%;
+            height: 200px;
+            resize: vertical;
+            padding-right: 50px; /* Make room for the copy button */
+        }
+        #copy-button {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-time Text Input and Clipboard Assembly</h1>
+    <div class="input-group">
+        <label for="name">Name:</label>
+        <input type="text" id="name" placeholder="Enter name">
+    </div>
+    <div class="input-group">
+        <label for="message">Message:</label>
+        <textarea id="message" placeholder="Enter message"></textarea>
+    </div>
+    <div id="model-inputs">
+        <div class="model-input">
+            <input type="text" id="model-name-1" placeholder="Enter model name">
+            <button class="paste-button" data-index="1">Paste</button>
+        </div>
+    </div>
+    <button id="add-model-button">Add Another Model</button>
+    <div id="status-message"></div>
+    <div id="result-container">
+        <textarea id="result-area" readonly></textarea>
+        <button id="copy-button">Copy</button>
+    </div>
+
+    <script>
+        let modelCount = 1;
+        let pastedContents = {};
+
+        function showMessage(message) {
+            const statusMessage = document.getElementById('status-message');
+            statusMessage.textContent = message;
+            setTimeout(() => { statusMessage.textContent = ''; }, 3000);
+        }
+
+        function updateAssembledString() {
+            const name = document.getElementById('name').value;
+            const message = document.getElementById('message').value;
+
+            let assembledString = `${name}: ${message}\n---------------\n`;
+
+            for (let i = 1; i <= modelCount; i++) {
+                const modelName = document.getElementById(`model-name-${i}`).value;
+                const pastedContent = pastedContents[i] || '<no clipboard content>';
+                assembledString += `${modelName}: ${pastedContent}\n---------------\n`;
+            }
+
+            document.getElementById('result-area').value = assembledString;
+        }
+
+        document.getElementById('add-model-button').addEventListener('click', function() {
+            modelCount++;
+            const modelInputs = document.getElementById('model-inputs');
+            const newInput = document.createElement('div');
+            newInput.className = 'model-input';
+            newInput.innerHTML = `
+                <input type="text" id="model-name-${modelCount}" placeholder="Enter model name">
+                <button class="paste-button" data-index="${modelCount}">Paste</button>
+            `;
+            modelInputs.appendChild(newInput);
+            newInput.querySelector('input').addEventListener('input', updateAssembledString);
+            updateAssembledString();
+        });
+
+        document.body.addEventListener('click', async function(event) {
+            if (event.target.classList.contains('paste-button')) {
+                const index = event.target.getAttribute('data-index');
+                try {
+                    const clipboardContent = await navigator.clipboard.readText();
+                    pastedContents[index] = clipboardContent;
+                    showMessage('Clipboard content saved for this model.');
+                    updateAssembledString();
+                } catch (err) {
+                    console.error('Failed to read clipboard: ', err);
+                    showMessage('Error reading from clipboard. Please make sure you have granted clipboard permissions.');
+                }
+            }
+        });
+
+        document.getElementById('copy-button').addEventListener('click', async function() {
+            try {
+                await navigator.clipboard.writeText(document.getElementById('result-area').value);
+                showMessage('Assembled string has been copied to clipboard!');
+            } catch (err) {
+                console.error('Failed to write to clipboard: ', err);
+                showMessage('Error copying to clipboard. Please manually copy the text from the result area.');
+            }
+        });
+
+        // Add event listeners for real-time updates
+        document.getElementById('name').addEventListener('input', updateAssembledString);
+        document.getElementById('message').addEventListener('input', updateAssembledString);
+        document.getElementById('model-name-1').addEventListener('input', updateAssembledString);
+
+        // Initial assembly
+        updateAssembledString();
+    </script>
+</body>
+</html>
