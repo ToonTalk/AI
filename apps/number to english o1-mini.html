@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Number to English Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px 30px 30px 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 20px;
+            margin: 8px 0 20px 0;
+            box-sizing: border-box;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            min-height: 50px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Number to English Converter</h2>
+        <input type="text" id="numberInput" placeholder="Enter a number" />
+        <button onclick="convertNumber()">Convert to English</button>
+        <div class="output" id="output"></div>
+    </div>
+
+    <script>
+        const smallNumbers = [
+            '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven',
+            'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen',
+            'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'
+        ];
+
+        const tens = [
+            '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty',
+            'Sixty', 'Seventy', 'Eighty', 'Ninety'
+        ];
+
+        // Function to dynamically generate scale names based on group index
+        function getScaleName(index) {
+            if (index === 0) return '';
+            if (index === 1) return 'Thousand';
+            if (index === 2) return 'Million';
+            if (index === 3) return 'Billion';
+            if (index === 4) return 'Trillion';
+            // For indexes beyond predefined scales, generate dynamically
+            // Following the short scale naming convention
+
+            // Latin prefixes for units and tens
+            const units = ['', 'Un', 'Duo', 'Tre', 'Quattuor', 'Quin', 'Sex', 'Septen', 'Octo', 'Novem'];
+            const tensPrefixes = ['', 'Deca', 'Vigint', 'Trigint', 'Quadragint', 'Quinquagint', 'Sexagint', 'Septuagint', 'Octogint', 'Nonagint'];
+            const hundredsPrefixes = ['', 'Cent', 'Ducent', 'Trecent', 'Quadringent', 'Quingent', 'Sexcent', 'Septingent', 'Octingent', 'Nongent'];
+
+            // Calculate the scale group
+            // Each scale name corresponds to a group index starting from Million (2)
+            // For example, Million is index 2, Billion is 3, etc.
+
+            let n = index - 1; // Adjust because Thousand is index 1
+
+            let name = '';
+            let hundreds = Math.floor(n / 100);
+            let tens = Math.floor((n % 100) / 10);
+            let unitsDigit = n % 10;
+
+            if (hundreds > 0) {
+                name += hundredsPrefixes[hundreds];
+            }
+
+            if (tens > 0) {
+                name += tensPrefixes[tens];
+            }
+
+            if (unitsDigit > 0) {
+                name += units[unitsDigit];
+            }
+
+            if (name === '') {
+                return ''; // For index 0
+            }
+
+            return name + 'illion';
+        }
+
+        function convertNumber() {
+            let numStr = document.getElementById('numberInput').value.trim();
+
+            if (numStr === "") {
+                document.getElementById('output').innerText = "Please enter a number.";
+                return;
+            }
+
+            // Handle negative numbers
+            let isNegative = false;
+            if (numStr.startsWith('-')) {
+                isNegative = true;
+                numStr = numStr.slice(1);
+            }
+
+            // Validate input
+            if (!/^\d+$/.test(numStr)) {
+                document.getElementById('output').innerText = "Invalid input. Please enter a valid integer number.";
+                return;
+            }
+
+            // Remove leading zeros
+            numStr = numStr.replace(/^0+/, '');
+            if (numStr === '') {
+                document.getElementById('output').innerText = "Zero";
+                return;
+            }
+
+            let groups = [];
+            while (numStr.length > 0) {
+                groups.unshift(numStr.slice(-3));
+                numStr = numStr.slice(0, -3);
+            }
+
+            let word = '';
+            for (let i = 0; i < groups.length; i++) {
+                let groupNum = parseInt(groups[i]);
+                if (groupNum === 0) continue;
+
+                let groupWord = convertTriplet(groups[i]);
+                let scale = getScaleName(groups.length - i -1);
+                if (scale) {
+                    groupWord += ' ' + scale;
+                }
+
+                if (word) {
+                    word += ' ';
+                }
+                word += groupWord;
+            }
+
+            if (isNegative) {
+                word = "Negative " + word;
+            }
+
+            document.getElementById('output').innerText = word;
+        }
+
+        function convertTriplet(triplet) {
+            let num = parseInt(triplet);
+            let words = '';
+
+            if (num >= 100) {
+                words += smallNumbers[Math.floor(num / 100)] + ' Hundred';
+                num = num % 100;
+                if (num !== 0) {
+                    words += ' ';
+                }
+            }
+
+            if (num >= 20) {
+                words += tens[Math.floor(num / 10)];
+                num = num % 10;
+                if (num !== 0) {
+                    words += ' ' + smallNumbers[num];
+                }
+            } else if (num > 0) {
+                words += smallNumbers[num];
+            }
+
+            return words;
+        }
+    </script>
+</body>
+</html>
