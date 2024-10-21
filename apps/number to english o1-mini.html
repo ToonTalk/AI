@@ -43,6 +43,7 @@
             border-radius: 4px;
             min-height: 50px;
             font-size: 18px;
+            word-wrap: break-word;
         }
     </style>
 </head>
@@ -66,49 +67,68 @@
             'Sixty', 'Seventy', 'Eighty', 'Ninety'
         ];
 
+        // Latin prefixes for scale name construction
+        const unitsPrefixes = ['', 'Un', 'Duo', 'Tre', 'Quattuor', 'Quin', 'Sex', 'Septen', 'Octo', 'Novem'];
+        const tensPrefixes = ['', 'Deca', 'Vigint', 'Trigint', 'Quadragint', 'Quinquagint', 'Sexagint', 'Septuagint', 'Octogint', 'Nonagint'];
+        const hundredsPrefixes = ['', 'Cent', 'Ducent', 'Trecent', 'Quadringent', 'Quingent', 'Sexcent', 'Septingent', 'Octingent', 'Nongent'];
+
+        // Predefined scales up to Decillion for reference
+        const predefinedScales = [
+            '', 'Thousand', 'Million', 'Billion', 'Trillion',
+            'Quadrillion', 'Quintillion', 'Sextillion', 'Septillion',
+            'Octillion', 'Nonillion', 'Decillion'
+            // Extend as needed
+        ];
+
         // Function to dynamically generate scale names based on group index
         function getScaleName(index) {
             if (index === 0) return '';
-            if (index === 1) return 'Thousand';
-            if (index === 2) return 'Million';
-            if (index === 3) return 'Billion';
-            if (index === 4) return 'Trillion';
-            // For indexes beyond predefined scales, generate dynamically
-            // Following the short scale naming convention
+            if (index < predefinedScales.length) return predefinedScales[index];
 
-            // Latin prefixes for units and tens
-            const units = ['', 'Un', 'Duo', 'Tre', 'Quattuor', 'Quin', 'Sex', 'Septen', 'Octo', 'Novem'];
-            const tensPrefixes = ['', 'Deca', 'Vigint', 'Trigint', 'Quadragint', 'Quinquagint', 'Sexagint', 'Septuagint', 'Octogint', 'Nonagint'];
-            const hundredsPrefixes = ['', 'Cent', 'Ducent', 'Trecent', 'Quadringent', 'Quingent', 'Sexcent', 'Septingent', 'Octingent', 'Nongent'];
-
-            // Calculate the scale group
-            // Each scale name corresponds to a group index starting from Million (2)
-            // For example, Million is index 2, Billion is 3, etc.
-
-            let n = index - 1; // Adjust because Thousand is index 1
+            // Calculate how many steps beyond predefinedScales we are
+            let n = index - predefinedScales.length;
 
             let name = '';
+
+            // Calculate hundreds, tens, and units
             let hundreds = Math.floor(n / 100);
-            let tens = Math.floor((n % 100) / 10);
+            let tensIndex = Math.floor((n % 100) / 10);
             let unitsDigit = n % 10;
 
+            // Append hundreds prefix if applicable
             if (hundreds > 0) {
-                name += hundredsPrefixes[hundreds];
+                if (hundreds < hundredsPrefixes.length) {
+                    name += hundredsPrefixes[hundreds];
+                } else {
+                    // Handle cases where hundreds exceed predefined prefixes
+                    name += 'Cent'; // Fallback or custom handling
+                }
             }
 
-            if (tens > 0) {
-                name += tensPrefixes[tens];
+            // Append tens prefix if applicable
+            if (tensIndex > 0) {
+                if (tensIndex < tensPrefixes.length) {
+                    name += tensPrefixes[tensIndex];
+                } else {
+                    // Handle cases where tens exceed predefined prefixes
+                    name += 'Deca'; // Fallback or custom handling
+                }
             }
 
+            // Append units prefix if applicable
             if (unitsDigit > 0) {
-                name += units[unitsDigit];
+                if (unitsDigit < unitsPrefixes.length) {
+                    name += unitsPrefixes[unitsDigit];
+                } else {
+                    // Handle cases where units exceed predefined prefixes
+                    name += 'Un'; // Fallback or custom handling
+                }
             }
 
-            if (name === '') {
-                return ''; // For index 0
-            }
+            // Append 'illion' suffix
+            name += 'illion';
 
-            return name + 'illion';
+            return name;
         }
 
         function convertNumber() {
@@ -147,11 +167,11 @@
 
             let word = '';
             for (let i = 0; i < groups.length; i++) {
-                let groupNum = parseInt(groups[i]);
+                let groupNum = parseInt(groups[i], 10);
                 if (groupNum === 0) continue;
 
                 let groupWord = convertTriplet(groups[i]);
-                let scale = getScaleName(groups.length - i -1);
+                let scale = getScaleName(groups.length - i - 1);
                 if (scale) {
                     groupWord += ' ' + scale;
                 }
@@ -170,7 +190,7 @@
         }
 
         function convertTriplet(triplet) {
-            let num = parseInt(triplet);
+            let num = parseInt(triplet, 10);
             let words = '';
 
             if (num >= 100) {
