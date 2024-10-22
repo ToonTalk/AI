@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Shannon Text Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        input[type="file"], input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        label {
+            font-weight: bold;
+            color: #555;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #output {
+            white-space: pre-wrap;
+            border: 1px solid #ccc;
+            padding: 20px;
+            height: 300px;
+            overflow-y: scroll;
+            margin-top: 20px;
+            background-color: #fafafa;
+            border-radius: 4px;
+        }
+        #progress {
+            margin-top: 10px;
+            color: #007bff;
+            font-weight: bold;
+        }
+        /* Modal Styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.5); /* Black w/ opacity */
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; /* 5% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%; /* Could be more or less, depending on screen size */
+            max-width: 800px;
+            border-radius: 8px;
+            position: relative;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            right: 20px;
+            top: 10px;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+        }
+        #wordSearchInput {
+            width: 80%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #searchButton {
+            width: 18%;
+            padding: 9px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #searchButton:hover {
+            background-color: #0056b3;
+        }
+        #wordResults {
+            max-height: 400px;
+            overflow-y: auto;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        @media (max-width: 600px) {
+            body {
+                margin: 20px;
+            }
+            .container {
+                padding: 20px;
+            }
+            #wordSearchInput {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+            #searchButton {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Shannon Text Generator</h1>
+        
+        <label for="fileInput">Upload a Text File:</label>
+        <input type="file" id="fileInput" accept=".txt">
+        
+        <label for="startWord">Start with a Specific Word (optional):</label>
+        <input type="text" id="startWord" placeholder="Enter your starting word">
+        
+        <label for="pageSize">Words per Page:</label>
+        <input type="number" id="pageSize" value="500" min="100" max="10000">
+        
+        <label for="outputLength">Number of Words to Generate:</label>
+        <input type="number" id="outputLength" value="100" min="10" max="10000">
+        
+        <button id="generateBtn">Generate Text</button>
+        <button id="viewWordMapBtn">View Word Map</button>
+        
+        <div id="progress"></div>
+        <div id="output"></div>
+    </div>
+
+    <!-- Modal for Word Map -->
+    <div id="wordMapModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Word Map</h2>
+            <p>Search for a word to see where it appears in the text:</p>
+            <input type="text" id="wordSearchInput" placeholder="Enter a word to search">
+            <button id="searchButton">Search</button>
+            <div id="wordResults"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('generateBtn').addEventListener('click', generateText);
+        document.getElementById('viewWordMapBtn').addEventListener('click', openWordMapModal);
+        document.querySelector('.close').addEventListener('click', closeWordMapModal);
+        document.getElementById('searchButton').addEventListener('click', searchWordMap);
+        document.getElementById('wordSearchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchWordMap();
+            }
+        });
+
+        let pages = [];
+        let wordIndex = {};
+
+        function generateText() {
+            const fileInput = document.getElementById('fileInput');
+            const pageSize = parseInt(document.getElementById('pageSize').value, 10);
+            const outputLength = parseInt(document.getElementById('outputLength').value, 10);
+            const startWordInput = document.getElementById('startWord').value.trim();
+            const outputDiv = document.getElementById('output');
+            const progressDiv = document.getElementById('progress');
+
+            outputDiv.textContent = '';
+            progressDiv.textContent = '';
+
+            if (fileInput.files.length === 0) {
+                alert('Please upload a text file.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                progressDiv.textContent = 'Processing file...';
+                setTimeout(() => { // Allow UI to update
+                    const text = e.target.result;
+                    const words = text.split(/\s+/).filter(word => word.length > 0);
+                    createPages(words, pageSize);
+                    buildWordIndex();
+                    
+                    let generated;
+                    if (startWordInput) {
+                        if (wordIndex[startWordInput.toLowerCase()]) {
+                            generated = runShannonAlgorithm(outputLength, startWordInput);
+                            progressDiv.textContent = 'Generation complete.';
+                        } else {
+                            alert(`The word "${startWordInput}" was not found in the text. Please try another word.`);
+                            progressDiv.textContent = '';
+                            return;
+                        }
+                    } else {
+                        generated = runShannonAlgorithm(outputLength);
+                        progressDiv.textContent = 'Generation complete.';
+                    }
+
+                    outputDiv.textContent = generated.join(' ');
+                }, 100);
+            };
+
+            reader.onerror = function() {
+                alert('Error reading file');
+            };
+
+            reader.readAsText(file);
+        }
+
+        function createPages(words, pageSize) {
+            pages = [];
+            for (let i = 0; i < words.length; i += pageSize) {
+                const page = words.slice(i, i + pageSize);
+                pages.push(page);
+            }
+        }
+
+        function buildWordIndex() {
+            wordIndex = {};
+            pages.forEach((page, pageNum) => {
+                page.forEach((word, wordNum) => {
+                    const cleanedWord = cleanWord(word);
+                    if (!cleanedWord) return;
+                    const lowerWord = cleanedWord.toLowerCase();
+                    if (!wordIndex[lowerWord]) {
+                        wordIndex[lowerWord] = [];
+                    }
+
+                    let nextWord = null;
+                    if (wordNum + 1 < page.length) {
+                        nextWord = cleanWord(page[wordNum + 1]);
+                    }
+
+                    wordIndex[lowerWord].push({
+                        page: pageNum + 1, // Pages start at 1
+                        word: wordNum + 1,  // Words start at 1
+                        nextWord: nextWord || '---' // '---' indicates no next word
+                    });
+                });
+            });
+        }
+
+        function cleanWord(word) {
+            // Remove punctuation and non-alphanumeric characters except apostrophes
+            return word.replace(/[^a-zA-Z0-9']/g, '');
+        }
+
+        function runShannonAlgorithm(length, startingWord = null) {
+            if (pages.length === 0) return [];
+
+            let currentWord;
+            if (startingWord) {
+                currentWord = startingWord;
+            } else {
+                const allWords = Object.keys(wordIndex);
+                if (allWords.length === 0) return [];
+                currentWord = allWords[Math.floor(Math.random() * allWords.length)];
+            }
+
+            const output = [currentWord];
+            let currentPage = null; // Track the current page
+
+            for (let i = 1; i < length; i++) {
+                const occurrences = wordIndex[currentWord.toLowerCase()];
+                if (!occurrences || occurrences.length === 0) {
+                    break; // No further words can be generated
+                }
+
+                // Filter out occurrences from the current page
+                const filteredOccurrences = currentPage !== null 
+                    ? occurrences.filter(occ => occ.page !== currentPage)
+                    : occurrences;
+
+                if (filteredOccurrences.length === 0) {
+                    break; // No occurrences outside the current page
+                }
+
+                // Select a random occurrence from the filtered list
+                const occurrence = filteredOccurrences[Math.floor(Math.random() * filteredOccurrences.length)];
+                const page = pages[occurrence.page - 1];
+                const wordPosition = occurrence.word - 1;
+
+                currentPage = occurrence.page; // Update the current page
+
+                if (wordPosition + 1 < page.length) {
+                    const nextWord = page[wordPosition + 1];
+                    const cleanedNextWord = cleanWord(nextWord);
+                    if (!cleanedNextWord) {
+                        i--; // Retry without incrementing
+                        continue;
+                    }
+                    output.push(cleanedNextWord);
+                    currentWord = cleanedNextWord;
+                } else {
+                    // If the word is the last on the page, pick another occurrence
+                    let retries = 10;
+                    let found = false;
+                    while (retries > 0 && !found) {
+                        const newOccurrence = filteredOccurrences[Math.floor(Math.random() * filteredOccurrences.length)];
+                        const newPage = pages[newOccurrence.page - 1];
+                        const newPos = newOccurrence.word - 1;
+                        if (newPos + 1 < newPage.length) {
+                            const newNextWord = newPage[newPos + 1];
+                            const cleanedNewNextWord = cleanWord(newNextWord);
+                            if (cleanedNewNextWord) {
+                                output.push(cleanedNewNextWord);
+                                currentWord = cleanedNewNextWord;
+                                currentPage = newOccurrence.page;
+                                found = true;
+                            }
+                        }
+                        retries--;
+                    }
+                    if (!found) {
+                        break;
+                    }
+                }
+            }
+
+            return output;
+        }
+
+        // Modal functionality
+        const modal = document.getElementById('wordMapModal');
+
+        function openWordMapModal() {
+            if (Object.keys(wordIndex).length === 0) {
+                alert('Please upload and process a text file first.');
+                return;
+            }
+            modal.style.display = 'block';
+            document.getElementById('wordSearchInput').focus();
+        }
+
+        function closeWordMapModal() {
+            modal.style.display = 'none';
+            document.getElementById('wordResults').innerHTML = '';
+            document.getElementById('wordSearchInput').value = '';
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                closeWordMapModal();
+            }
+        }
+
+        function searchWordMap() {
+            const searchInput = document.getElementById('wordSearchInput').value.trim().toLowerCase();
+            const resultsDiv = document.getElementById('wordResults');
+            resultsDiv.innerHTML = '';
+
+            if (!searchInput) {
+                alert('Please enter a word to search.');
+                return;
+            }
+
+            if (!wordIndex[searchInput]) {
+                resultsDiv.innerHTML = `<p>The word "<strong>${searchInput}</strong>" was not found in the text.</p>`;
+                return;
+            }
+
+            const occurrences = wordIndex[searchInput];
+            let html = `<p>The word "<strong>${searchInput}</strong>" appears <strong>${occurrences.length}</strong> time(s):</p>`;
+            html += `<table>
+                        <tr>
+                            <th>Occurrence</th>
+                            <th>Page Number</th>
+                            <th>Word Position</th>
+                            <th>Next Word</th>
+                        </tr>`;
+            occurrences.forEach((occ, index) => {
+                html += `<tr>
+                            <td>${index + 1}</td>
+                            <td>${occ.page}</td>
+                            <td>${occ.word}</td>
+                            <td>${occ.nextWord}</td>
+                         </tr>`;
+            });
+            html += `</table>`;
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
