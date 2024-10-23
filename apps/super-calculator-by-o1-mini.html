@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Advanced Calculator</title>
+  <style>
+    /* Basic styles for the calculator */
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding-top: 50px;
+      background-color: #f0f0f0;
+    }
+    #calculator {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 340px;
+    }
+    #display {
+      width: 100%;
+      height: 50px;
+      font-size: 1.5em;
+      text-align: right;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    #buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    #buttons button {
+      padding: 20px;
+      font-size: 1em;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #e0e0e0;
+      transition: background-color 0.2s;
+    }
+    #buttons button:hover {
+      background-color: #d5d5d5;
+    }
+    #buttons button.operator {
+      background-color: #f9a825;
+      color: #fff;
+    }
+    #buttons button.operator:hover {
+      background-color: #f57f17;
+    }
+    #buttons button.exponent {
+      background-color: #ab47bc;
+      color: #fff;
+    }
+    #buttons button.exponent:hover {
+      background-color: #8e24aa;
+    }
+    #formats {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+    #formats button {
+      padding: 10px;
+      font-size: 0.9em;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #90caf9;
+      color: #fff;
+      flex: 1 1 45%;
+      margin: 5px 2px;
+      transition: background-color 0.2s;
+    }
+    #formats button:hover {
+      background-color: #64b5f6;
+    }
+    #result {
+      margin-top: 20px;
+      min-height: 40px;
+      border-top: 1px solid #ccc;
+      padding-top: 10px;
+      font-size: 1.2em;
+      word-wrap: break-word;
+    }
+    /* Responsive Design */
+    @media (max-width: 400px) {
+      #calculator {
+        width: 90%;
+      }
+      #buttons button, #formats button {
+        padding: 15px;
+        font-size: 0.9em;
+      }
+    }
+    /* Instructions Section */
+    #instructions {
+      margin-top: 10px;
+      font-size: 0.9em;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div id="calculator">
+    <div id="display" readonly></div>
+    <div id="buttons">
+      <button onclick="append('7')" aria-label="Seven">7</button>
+      <button onclick="append('8')" aria-label="Eight">8</button>
+      <button onclick="append('9')" aria-label="Nine">9</button>
+      <button class="operator" onclick="append('/')" aria-label="Divide">/</button>
+      
+      <button onclick="append('4')" aria-label="Four">4</button>
+      <button onclick="append('5')" aria-label="Five">5</button>
+      <button onclick="append('6')" aria-label="Six">6</button>
+      <button class="operator" onclick="append('*')" aria-label="Multiply">*</button>
+      
+      <button onclick="append('1')" aria-label="One">1</button>
+      <button onclick="append('2')" aria-label="Two">2</button>
+      <button onclick="append('3')" aria-label="Three">3</button>
+      <button class="operator" onclick="append('-')" aria-label="Subtract">-</button>
+      
+      <button onclick="append('0')" aria-label="Zero">0</button>
+      <button onclick="append('.')" aria-label="Decimal Point">.</button>
+      <button onclick="calculate()" aria-label="Equals">=</button>
+      <button class="operator" onclick="append('+')" aria-label="Add">+</button>
+      
+      <button onclick="append('(')" aria-label="Left Parenthesis">(</button>
+      <button onclick="append(')')" aria-label="Right Parenthesis">)</button>
+      <button class="exponent" onclick="append('^')" aria-label="Exponent">^</button>
+      <button onclick="clearDisplay()" style="grid-column: span 4; background-color: #e57373; color: #fff;" aria-label="Clear">C</button>
+    </div>
+    <div id="formats">
+      <button onclick="setFormat('fraction')">Fraction</button>
+      <button onclick="setFormat('mixed')">Mixed</button>
+      <button onclick="setFormat('decimal')">Decimal</button>
+      <button onclick="setFormat('scientific')">Scientific</button>
+      <button onclick="setFormat('english')">English</button>
+    </div>
+    <div id="result"></div>
+    <div id="instructions">
+      <p><strong>Instructions:</strong></p>
+      <ul>
+        <li>Use <strong>^</strong> for exponentiation (e.g., 2^3).</li>
+        <li>Exponentiation is limited to integer exponents.</li>
+        <li>Select the desired output format using the buttons below.</li>
+        <li>Press "C" to clear the expression.</li>
+        <li>English conversion supports numbers up to "centillion". Larger numbers will display a message indicating they are too large.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Include math.js for parsing expressions -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.5.0/math.min.js"></script>
+  
+  <script>
+    // Custom Fraction class using BigInt
+    class Fraction {
+      constructor(numerator, denominator = 1n) {
+        if (denominator === 0n) {
+          throw new Error("Denominator cannot be zero.");
+        }
+        // Ensure denominator is positive
+        if (denominator < 0n) {
+          numerator = -numerator;
+          denominator = -denominator;
+        }
+        this.numerator = BigInt(numerator);
+        this.denominator = BigInt(denominator);
+        this.reduce();
+      }
+
+      // Reduce the fraction to its simplest form
+      reduce() {
+        const gcd = Fraction.gcd(this.numerator < 0n ? -this.numerator : this.numerator, this.denominator);
+        this.numerator /= gcd;
+        this.denominator /= gcd;
+      }
+
+      // Static method to compute GCD using Euclidean algorithm
+      static gcd(a, b) {
+        while (b !== 0n) {
+          const temp = b;
+          b = a % b;
+          a = temp;
+        }
+        return a;
+      }
+
+      // Add another fraction
+      add(other) {
+        const numerator = this.numerator * other.denominator + other.numerator * this.denominator;
+        const denominator = this.denominator * other.denominator;
+        return new Fraction(numerator, denominator);
+      }
+
+      // Subtract another fraction
+      subtract(other) {
+        const numerator = this.numerator * other.denominator - other.numerator * this.denominator;
+        const denominator = this.denominator * other.denominator;
+        return new Fraction(numerator, denominator);
+      }
+
+      // Multiply by another fraction
+      multiply(other) {
+        const numerator = this.numerator * other.numerator;
+        const denominator = this.denominator * other.denominator;
+        return new Fraction(numerator, denominator);
+      }
+
+      // Divide by another fraction
+      divide(other) {
+        if (other.numerator === 0n) {
+          throw new Error("Division by zero.");
+        }
+        const numerator = this.numerator * other.denominator;
+        const denominator = this.denominator * other.numerator;
+        return new Fraction(numerator, denominator);
+      }
+
+      // Exponentiation with integer exponents
+      pow(exponent) {
+        if (exponent === 0n) {
+          return new Fraction(1n, 1n);
+        } else if (exponent > 0n) {
+          const numerator = this.numerator ** exponent;
+          const denominator = this.denominator ** exponent;
+          return new Fraction(numerator, denominator);
+        } else {
+          const posExp = -exponent;
+          const numerator = this.denominator ** posExp;
+          const denominator = this.numerator ** posExp;
+          if (denominator === 0n) {
+            throw new Error("Division by zero in negative exponentiation.");
+          }
+          return new Fraction(numerator, denominator);
+        }
+      }
+
+      // Convert to decimal string with repeating parts
+      toDecimal() {
+        let numerator = this.numerator;
+        let denominator = this.denominator;
+        let sign = '';
+        
+        if (numerator < 0n) {
+          sign = '-';
+          numerator = -numerator;
+        }
+
+        const integerPart = numerator / denominator;
+        let remainder = numerator % denominator;
+
+        if (remainder === 0n) {
+          return sign + integerPart.toString();
+        }
+
+        let decimals = '';
+        const remainders = {};
+        let repeatingStart = -1;
+
+        while (remainder !== 0n) {
+          if (remainders.hasOwnProperty(remainder)) {
+            repeatingStart = remainders[remainder];
+            break;
+          }
+          remainders[remainder] = decimals.length;
+          remainder *= 10n;
+          const digit = remainder / denominator;
+          decimals += digit.toString();
+          remainder %= denominator;
+        }
+
+        if (repeatingStart !== -1) {
+          const nonRepeating = decimals.substring(0, repeatingStart);
+          const repeating = decimals.substring(repeatingStart);
+          // Use HTML to style repeating part with overline
+          return `${sign}${integerPart}.${nonRepeating}<span style="text-decoration: overline;">${repeating}</span>`;
+        } else {
+          return `${sign}${integerPart}.${decimals}`;
+        }
+      }
+
+      // Convert to fraction string
+      toFraction() {
+        return `${this.numerator.toString()}/${this.denominator.toString()}`;
+      }
+
+      // Convert to mixed number string
+      toMixed() {
+        const whole = this.numerator / this.denominator;
+        const remainder = this.numerator % this.denominator;
+        if (remainder === 0n) {
+          return whole.toString();
+        }
+        if (whole !== 0n) {
+          return `${whole.toString()} ${remainder.toString()}/${this.denominator.toString()}`;
+        }
+        return `${remainder.toString()}/${this.denominator.toString()}`;
+      }
+
+      // Convert to exact scientific notation string with superscript exponent
+      toScientific() {
+        let numerator = this.numerator;
+        let denominator = this.denominator;
+        let sign = '';
+
+        if (numerator < 0n) {
+          sign = '-';
+          numerator = -numerator;
+        }
+
+        if (numerator === 0n) {
+          return '0 × 10<sup>0</sup>';
+        }
+
+        let exponent = 0n;
+
+        // Normalize the fraction to have numerator between 1 and 10 (exactly)
+        while (numerator >= 10n * denominator) {
+          denominator *= 10n;
+          exponent += 1n;
+        }
+        while (numerator < denominator && numerator !== 0n) {
+          numerator *= 10n;
+          exponent -= 1n;
+        }
+
+        // Helper function to check if a number is a power of ten
+        function isPowerOfTen(n) {
+          if (n < 1n) return false;
+          while (n % 10n === 0n) {
+            n /= 10n;
+          }
+          return n === 1n;
+        }
+
+        if (isPowerOfTen(denominator)) {
+          // Determine the number of decimal places based on the denominator
+          const denominatorStr = denominator.toString();
+          const decimalPlaces = denominatorStr.length - 1;
+
+          // Convert numerator to string and pad with leading zeros if necessary
+          let numeratorStr = numerator.toString();
+          while (numeratorStr.length <= decimalPlaces) {
+            numeratorStr = '0' + numeratorStr;
+          }
+
+          // Insert decimal point at the correct position
+          const integerPart = numeratorStr.slice(0, numeratorStr.length - decimalPlaces);
+          const fractionalPart = numeratorStr.slice(numeratorStr.length - decimalPlaces);
+          let decimalCoefficient = integerPart + '.' + fractionalPart;
+
+          // Remove trailing zeros and unnecessary decimal points
+          decimalCoefficient = decimalCoefficient.replace(/\.?0+$/, '');
+
+          // Format exponent with superscript
+          return `${sign}${decimalCoefficient} × 10<sup>${exponent}</sup>`;
+        } else {
+          // Coefficient as a fraction if denominator is not a power of ten
+          let coefficient = '';
+          if (denominator === 1n) {
+            coefficient = numerator.toString();
+          } else {
+            coefficient = `${numerator}/${denominator}`;
+          }
+
+          // Format exponent with superscript
+          return `${sign}${coefficient} × 10<sup>${exponent}</sup>`;
+        }
+      }
+    }
+
+    // Initialize variables
+    let expression = '';
+    let currentFormat = 'fraction';
+    let lastResult = null;
+
+    // Append characters to the expression
+    function append(char) {
+      const operators = ['+', '-', '*', '/', '^'];
+      const lastChar = expression.slice(-1);
+      
+      // Prevent multiple consecutive operators
+      if (operators.includes(char) && operators.includes(lastChar)) {
+        // Replace the last operator with the new one
+        expression = expression.slice(0, -1) + char;
+      } else {
+        expression += char;
+      }
+      document.getElementById('display').innerText = expression;
+    }
+
+    // Clear the display and expression
+    function clearDisplay() {
+      expression = '';
+      lastResult = null;
+      document.getElementById('display').innerText = '';
+      document.getElementById('result').innerHTML = '';
+    }
+
+    // Set the desired output format
+    function setFormat(format) {
+      currentFormat = format;
+      if (lastResult !== null) {
+        displayResult(lastResult);
+      }
+    }
+
+    // Calculate the expression
+    function calculate() {
+      try {
+        // Parse and evaluate the expression into a Fraction
+        const parsedFraction = parseExpression(expression);
+        if (!parsedFraction) {
+          throw new Error("Invalid Expression");
+        }
+        lastResult = parsedFraction;
+
+        // Display the result in the selected format
+        displayResult(parsedFraction);
+      } catch (error) {
+        // Display detailed error message in the result area
+        document.getElementById('result').innerText = `Error: ${error.message}`;
+        console.error(error);
+      }
+    }
+
+    // Function to parse and evaluate the expression into a Fraction
+    function parseExpression(expr) {
+      // Tokenize the expression
+      const tokens = expr.match(/(\d+\/\d+|\d+|\^|\+|\-|\*|\/|\(|\))/g);
+      if (!tokens) return null;
+
+      // Shunting Yard Algorithm to convert to Reverse Polish Notation (RPN)
+      const outputQueue = [];
+      const operatorStack = [];
+      const precedence = {
+        '^': 4,
+        '*': 3,
+        '/': 3,
+        '+': 2,
+        '-': 2
+      };
+      const associativity = {
+        '^': 'Right',
+        '*': 'Left',
+        '/': 'Left',
+        '+': 'Left',
+        '-': 'Left'
+      };
+
+      tokens.forEach(token => {
+        if (/^\d+\/\d+$/.test(token) || /^\d+$/.test(token)) {
+          outputQueue.push(token);
+        } else if (['+', '-', '*', '/', '^'].includes(token)) {
+          while (operatorStack.length > 0) {
+            const top = operatorStack[operatorStack.length - 1];
+            if (['+', '-', '*', '/', '^'].includes(top) &&
+                ((associativity[token] === 'Left' && precedence[token] <= precedence[top]) ||
+                 (associativity[token] === 'Right' && precedence[token] < precedence[top]))) {
+              outputQueue.push(operatorStack.pop());
+            } else {
+              break;
+            }
+          }
+          operatorStack.push(token);
+        } else if (token === '(') {
+          operatorStack.push(token);
+        } else if (token === ')') {
+          while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1] !== '(') {
+            outputQueue.push(operatorStack.pop());
+          }
+          operatorStack.pop(); // Remove '('
+        }
+      });
+
+      while (operatorStack.length > 0) {
+        outputQueue.push(operatorStack.pop());
+      }
+
+      // Evaluate RPN
+      const stack = [];
+      outputQueue.forEach(token => {
+        if (/^\d+\/\d+$/.test(token)) {
+          const [n, d] = token.split('/').map(x => BigInt(x));
+          stack.push(new Fraction(n, d));
+        } else if (/^\d+$/.test(token)) {
+          stack.push(new Fraction(BigInt(token), 1n));
+        } else if (['+', '-', '*', '/', '^'].includes(token)) {
+          if (token === '^') {
+            const exponent = stack.pop();
+            const base = stack.pop();
+            if (!base || !exponent) throw new Error("Invalid Expression");
+            if (exponent.denominator !== 1n) {
+              throw new Error("Exponent must be an integer.");
+            }
+            const exp = exponent.numerator;
+            const result = base.pow(exp);
+            stack.push(result);
+          } else {
+            const b = stack.pop();
+            const a = stack.pop();
+            if (!a || !b) throw new Error("Invalid Expression");
+            let result;
+            switch(token) {
+              case '+':
+                result = a.add(b);
+                break;
+              case '-':
+                result = a.subtract(b);
+                break;
+              case '*':
+                result = a.multiply(b);
+                break;
+              case '/':
+                result = a.divide(b);
+                break;
+            }
+            stack.push(result);
+          }
+        }
+      });
+
+      if (stack.length !== 1) {
+        throw new Error("Invalid Expression");
+      }
+
+      return stack[0];
+    }
+
+    // Display the result based on the selected format
+    function displayResult(frac) {
+      let output = '';
+
+      switch(currentFormat) {
+        case 'fraction':
+          output = frac.toFraction();
+          break;
+        case 'mixed':
+          output = frac.toMixed();
+          break;
+        case 'decimal':
+          output = frac.toDecimal();
+          break;
+        case 'scientific':
+          output = frac.toScientific();
+          break;
+        case 'english':
+          output = toEnglish(frac);
+          break;
+        default:
+          output = frac.toFraction();
+      }
+
+      document.getElementById('result').innerHTML = output;
+    }
+
+    // Convert number to English words using custom function
+    function toEnglish(frac) {
+      const numerator = frac.numerator;
+      const denominator = frac.denominator;
+
+      let sign = '';
+      let absNumerator = numerator;
+      if (numerator < 0n) {
+        sign = 'minus ';
+        absNumerator = -numerator;
+      }
+
+      if (denominator === 1n) {
+        return sign + numberToWords(absNumerator);
+      } else if (absNumerator > denominator) {
+        const whole = absNumerator / denominator;
+        const remainder = absNumerator % denominator;
+        const wholeWords = numberToWords(whole);
+        const remainderWords = numberToWords(remainder);
+        const denominatorWords = numberToWords(denominator);
+
+        if (wholeWords === 'Number is too large to convert to words.') {
+          return wholeWords;
+        }
+
+        return `${sign}${wholeWords} and ${remainderWords} over ${denominatorWords}`;
+      } else {
+        const numeratorWords = numberToWords(absNumerator);
+        const denominatorWords = numberToWords(denominator);
+
+        if (numeratorWords === 'Number is too large to convert to words.' ||
+            denominatorWords === 'Number is too large to convert to words.') {
+          return 'Number is too large to convert to words.';
+        }
+
+        return `${sign}${numeratorWords} over ${denominatorWords}`;
+      }
+    }
+
+    // Custom number to words function for integers
+    function numberToWords(number) {
+      const a = [
+        '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven',
+        'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen',
+        'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen',
+        'nineteen'
+      ];
+      const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty',
+        'seventy', 'eighty', 'ninety'];
+      const units = [
+        '', 'thousand', 'million', 'billion', 'trillion',
+        'quadrillion', 'quintillion', 'sextillion',
+        'septillion', 'octillion', 'nonillion', 'decillion',
+        'undecillion', 'duodecillion', 'tredecillion',
+        'quattuordecillion', 'quindecillion', 'sexdecillion',
+        'septendecillion', 'octodecillion', 'novemdecillion',
+        'vigintillion', 'unvigintillion', 'duovigintillion',
+        'trevigintillion', 'quattuorvigintillion', 'quinvigintillion',
+        'sexvigintillion', 'septenvigintillion', 'octovigintillion',
+        'novemvigintillion', 'trigintillion', 'untrigintillion',
+        'duotrigintillion', 'tretrigintillion', 'quattuortrigintillion',
+        'quintrigintillion', 'sextrigintillion', 'septentrigintillion',
+        'octotrigintillion', 'novemtrigintillion', 'quadragintillion',
+        'unquadragintillion', 'duoquadragintillion', 'trequadragintillion',
+        'quattuorquadragintillion', 'quinquadragintillion', 'sexquadragintillion',
+        'septenquadragintillion', 'octoquadragintillion', 'novemquadragintillion',
+        'quinquagintillion', 'unquinquagintillion', 'duoquinquagintillion',
+        'trequinquagintillion', 'quattuorquinquagintillion', 'quinquinquagintillion',
+        'sexquinquagintillion', 'septenquinquagintillion', 'octoquinquagintillion',
+        'novemquinquagintillion', 'sexagintillion', 'unsexagintillion',
+        'duosexagintillion', 'tresexagintillion', 'quattuorsexagintillion',
+        'quinsexagintillion', 'sexsexagintillion', 'septensexagintillion',
+        'octosexagintillion', 'novemsexagintillion', 'septuagintillion',
+        'unseptuagintillion', 'duoseptuagintillion', 'treseptuagintillion',
+        'quattuorseptuagintillion', 'quinseptuagintillion', 'sexseptuagintillion',
+        'septenseptuagintillion', 'octoseptuagintillion', 'novemseptuagintillion',
+        'octogintillion', 'unoctogintillion', 'duooctogintillion',
+        'treoctogintillion', 'quattuoroctogintillion', 'quinoctogintillion',
+        'sexoctogintillion', 'septenoctogintillion', 'octooctogintillion',
+        'novemoctogintillion', 'nonagintillion', 'unnonagintillion',
+        'duononagintillion', 'trenonagintillion', 'quattuornonagintillion',
+        'quinnonagintillion', 'sexnonagintillion', 'septennonagintillion',
+        'octononagintillion', 'novemnonagintillion', 'centillion'
+      ];
+
+      const MAX_UNIT_INDEX = 100; // Maximum unit index for conversion
+
+      if (number === 0n) return 'zero';
+      if (number < 0n) return 'minus ' + numberToWords(-number);
+
+      let words = '';
+      let unitIndex = 0;
+
+      while (number > 0n) {
+        const chunk = number % 1000n;
+        if (chunk !== 0n) {
+          let chunkWords = '';
+          const hundreds = chunk / 100n;
+          const remainder = chunk % 100n;
+
+          if (hundreds > 0n) {
+            chunkWords += a[Number(hundreds)] + ' hundred ';
+          }
+
+          if (remainder > 0n) {
+            if (remainder < 20n) {
+              chunkWords += a[Number(remainder)] + ' ';
+            } else {
+              const tens = remainder / 10n;
+              const unitsDigit = remainder % 10n;
+              chunkWords += b[Number(tens)] + ' ';
+              if (unitsDigit > 0n) {
+                chunkWords += a[Number(unitsDigit)] + ' ';
+              }
+            }
+          }
+
+          if (unitIndex < units.length) {
+            chunkWords += units[unitIndex] + ' ';
+          }
+
+          words = chunkWords + words;
+        }
+        number = number / 1000n;
+        unitIndex++;
+      }
+
+      // Handle units beyond the predefined array
+      if (unitIndex > units.length) {
+        const extraUnits = unitIndex - units.length;
+        if (extraUnits > 100) { // Adjust MAX_UNIT_INDEX as needed
+          return 'Number is too large to convert to words.';
+        }
+        words = getUnitName(extraUnits) + ' ' + words;
+      }
+
+      return words.trim();
+    }
+
+    // Helper function to dynamically generate unit names beyond 'centillion'
+    function getUnitName(extraUnits) {
+      const prefixes = [
+        'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'
+      ];
+
+      let name = '';
+      let remaining = extraUnits;
+
+      while (remaining > 0) {
+        const index = (remaining - 1) % prefixes.length;
+        name = prefixes[index] + 'centillion ' + name;
+        remaining = Math.floor((remaining - 1) / prefixes.length);
+      }
+
+      return name.trim();
+    }
+
+    // Optional: Keyboard support
+    document.addEventListener('keydown', function(event) {
+      const key = event.key;
+      const validKeys = ['0','1','2','3','4','5','6','7','8','9','+','-','*','/','^','(',')','.','Enter','Backspace'];
+
+      if (validKeys.includes(key)) {
+        event.preventDefault();
+        if (key === 'Enter') {
+          calculate();
+        } else if (key === 'Backspace') {
+          expression = expression.slice(0, -1);
+          document.getElementById('display').innerText = expression;
+        } else {
+          append(key);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
