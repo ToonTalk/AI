@@ -108,6 +108,20 @@
       font-size: 0.9em;
       color: #555;
     }
+    /* Credit Section */
+    #credit {
+      margin-top: 20px;
+      font-size: 0.8em;
+      color: #777;
+      text-align: center;
+    }
+    #credit a {
+      color: #555;
+      text-decoration: none;
+    }
+    #credit a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -155,7 +169,12 @@
         <li>Select the desired output format using the buttons below.</li>
         <li>Press "C" to clear the expression.</li>
         <li>English conversion supports numbers up to "centillion". Larger numbers will display a message indicating they are too large.</li>
+        <li>Decimal numbers (e.g., 2.5) are supported and converted to exact fractions.</li>
       </ul>
+    </div>
+    <!-- Credit Section -->
+    <div id="credit">
+      <p>This app was created by conversing with <a href="https://chatgpt.com/share/6718b690-9cdc-800e-9bef-d155dbc11937" target="_blank" rel="noopener noreferrer">ChatGPT o1-mini</a>.</p>
     </div>
   </div>
 
@@ -335,35 +354,10 @@
           exponent -= 1n;
         }
 
-        // Helper function to check if a number is a power of ten
-        function isPowerOfTen(n) {
-          if (n < 1n) return false;
-          while (n % 10n === 0n) {
-            n /= 10n;
-          }
-          return n === 1n;
-        }
-
-        if (isPowerOfTen(denominator)) {
-          // Determine the number of decimal places based on the denominator
-          const denominatorStr = denominator.toString();
-          const decimalPlaces = denominatorStr.length - 1;
-
-          // Convert numerator to string and pad with leading zeros if necessary
-          let numeratorStr = numerator.toString();
-          while (numeratorStr.length <= decimalPlaces) {
-            numeratorStr = '0' + numeratorStr;
-          }
-
-          // Insert decimal point at the correct position
-          const integerPart = numeratorStr.slice(0, numeratorStr.length - decimalPlaces);
-          const fractionalPart = numeratorStr.slice(numeratorStr.length - decimalPlaces);
-          let decimalCoefficient = integerPart + '.' + fractionalPart;
-
-          // Remove trailing zeros and unnecessary decimal points
-          decimalCoefficient = decimalCoefficient.replace(/\.?0+$/, '');
-
-          // Format exponent with superscript
+        // Check if denominator has only 2 and/or 5 as prime factors
+        if (hasOnly2And5Factors(denominator)) {
+          // Convert to decimal coefficient
+          const decimalCoefficient = convertToDecimalCoefficient(numerator, denominator);
           return `${sign}${decimalCoefficient} × 10<sup>${exponent}</sup>`;
         } else {
           // Coefficient as a fraction if denominator is not a power of ten
@@ -378,6 +372,57 @@
           return `${sign}${coefficient} × 10<sup>${exponent}</sup>`;
         }
       }
+    }
+
+    // Helper function to check if a number has only 2 and/or 5 as prime factors
+    function hasOnly2And5Factors(n) {
+      while (n % 2n === 0n) {
+        n /= 2n;
+      }
+      while (n % 5n === 0n) {
+        n /= 5n;
+      }
+      return n === 1n;
+    }
+
+    // Helper function to convert fraction to decimal string
+    function convertToDecimalCoefficient(numerator, denominator) {
+      let coefficient = '';
+
+      // Perform exact division
+      const integerPart = numerator / denominator;
+      let remainder = numerator % denominator;
+
+      if (remainder === 0n) {
+        return integerPart.toString();
+      }
+
+      let decimals = '';
+      const remainders = {};
+      let repeatingStart = -1;
+
+      while (remainder !== 0n) {
+        if (remainders.hasOwnProperty(remainder)) {
+          repeatingStart = remainders[remainder];
+          break;
+        }
+        remainders[remainder] = decimals.length;
+        remainder *= 10n;
+        const digit = remainder / denominator;
+        decimals += digit.toString();
+        remainder %= denominator;
+      }
+
+      if (repeatingStart !== -1) {
+        const nonRepeating = decimals.substring(0, repeatingStart);
+        const repeating = decimals.substring(repeatingStart);
+        // Use HTML to style repeating part with overline
+        coefficient = `${integerPart}.${nonRepeating}<span style="text-decoration: overline;">${repeating}</span>`;
+      } else {
+        coefficient = `${integerPart}.${decimals}`;
+      }
+
+      return coefficient;
     }
 
     // Initialize variables
@@ -435,10 +480,23 @@
       }
     }
 
+    // Function to convert decimal string to Fraction
+    function decimalToFraction(decimalStr) {
+      const parts = decimalStr.split('.');
+      const integerPart = parts[0];
+      const fractionalPart = parts[1] || '';
+      const decimalPlaces = fractionalPart.length;
+
+      const numerator = BigInt(integerPart + fractionalPart);
+      const denominator = BigInt(10 ** decimalPlaces);
+
+      return new Fraction(numerator, denominator);
+    }
+
     // Function to parse and evaluate the expression into a Fraction
     function parseExpression(expr) {
       // Tokenize the expression
-      const tokens = expr.match(/(\d+\/\d+|\d+|\^|\+|\-|\*|\/|\(|\))/g);
+      const tokens = expr.match(/(\d+\.\d+|\d+\/\d+|\d+|\^|\+|\-|\*|\/|\(|\))/g);
       if (!tokens) return null;
 
       // Shunting Yard Algorithm to convert to Reverse Polish Notation (RPN)
@@ -460,7 +518,11 @@
       };
 
       tokens.forEach(token => {
-        if (/^\d+\/\d+$/.test(token) || /^\d+$/.test(token)) {
+        if (/^\d+\.\d+$/.test(token)) {
+          // Decimal number
+          outputQueue.push(token);
+        } else if (/^\d+\/\d+$/.test(token) || /^\d+$/.test(token)) {
+          // Fraction or integer
           outputQueue.push(token);
         } else if (['+', '-', '*', '/', '^'].includes(token)) {
           while (operatorStack.length > 0) {
@@ -491,10 +553,16 @@
       // Evaluate RPN
       const stack = [];
       outputQueue.forEach(token => {
-        if (/^\d+\/\d+$/.test(token)) {
+        if (/^\d+\.\d+$/.test(token)) {
+          // Decimal number
+          const frac = decimalToFraction(token);
+          stack.push(frac);
+        } else if (/^\d+\/\d+$/.test(token)) {
+          // Fraction
           const [n, d] = token.split('/').map(x => BigInt(x));
           stack.push(new Fraction(n, d));
         } else if (/^\d+$/.test(token)) {
+          // Integer
           stack.push(new Fraction(BigInt(token), 1n));
         } else if (['+', '-', '*', '/', '^'].includes(token)) {
           if (token === '^') {
@@ -695,10 +763,11 @@
       // Handle units beyond the predefined array
       if (unitIndex > units.length) {
         const extraUnits = unitIndex - units.length;
-        if (extraUnits > 100) { // Adjust MAX_UNIT_INDEX as needed
-          return 'Number is too large to convert to words.';
+        const unitName = getUnitName(extraUnits);
+        if (unitName === 'Number is too large to convert to words.') {
+          return unitName;
         }
-        words = getUnitName(extraUnits) + ' ' + words;
+        words = unitName + ' ' + words;
       }
 
       return words.trim();
@@ -709,6 +778,12 @@
       const prefixes = [
         'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'
       ];
+
+      const MAX_EXTRA_UNITS = 10; // Adjust as needed to prevent excessively large names
+
+      if (extraUnits > MAX_EXTRA_UNITS) {
+        return 'Number is too large to convert to words.';
+      }
 
       let name = '';
       let remaining = extraUnits;
