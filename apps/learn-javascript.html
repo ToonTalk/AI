@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Turtle Graphics for 8th Graders</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    #editor {
+      width: 100%;
+      height: 200px;
+    }
+    #runButton {
+      margin-top: 10px;
+      padding: 10px 20px;
+    }
+    #errorContainer {
+      margin-top: 20px;
+      color: red;
+    }
+    #copyButton {
+      margin-left: 10px;
+      padding: 5px 10px;
+    }
+    #canvas {
+      border: 1px solid #000;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Welcome to Turtle Graphics Programming!</h1>
+  <p>What shape would you like to program today?</p>
+
+  <textarea id="editor" placeholder="Enter your JavaScript code here..."></textarea><br>
+  <button id="runButton">Run Code</button>
+
+  <div id="errorContainer"></div>
+
+  <canvas id="canvas" width="500" height="500"></canvas>
+
+  <script>
+    // Simple Turtle Graphics Implementation
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let turtle = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      angle: 0,
+      penDown: true,
+      color: '#000',
+      move: function(distance) {
+        const rad = this.angle * Math.PI / 180;
+        const newX = this.x + distance * Math.cos(rad);
+        const newY = this.y + distance * Math.sin(rad);
+        if (this.penDown) {
+          ctx.beginPath();
+          ctx.moveTo(this.x, this.y);
+          ctx.lineTo(newX, newY);
+          ctx.strokeStyle = this.color;
+          ctx.stroke();
+        }
+        this.x = newX;
+        this.y = newY;
+      },
+      turn: function(angle) {
+        this.angle = (this.angle + angle) % 360;
+      },
+      penUp: function() {
+        this.penDown = false;
+      },
+      penDownFunc: function() {
+        this.penDown = true;
+      },
+      setColor: function(color) {
+        this.color = color;
+      },
+      reset: function() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.angle = 0;
+        this.penDown = true;
+        this.color = '#000';
+      }
+    };
+
+    // Expose turtle functions to the student
+    function forward(distance) {
+      turtle.move(distance);
+    }
+
+    function turn(angle) {
+      turtle.turn(angle);
+    }
+
+    function penUp() {
+      turtle.penUp();
+    }
+
+    function penDown() {
+      turtle.penDownFunc();
+    }
+
+    function setColor(color) {
+      turtle.setColor(color);
+    }
+
+    function reset() {
+      turtle.reset();
+    }
+
+    // Handle Run Code Button
+    document.getElementById('runButton').addEventListener('click', () => {
+      // Clear previous errors
+      const errorContainer = document.getElementById('errorContainer');
+      errorContainer.innerHTML = '';
+      // Reset turtle graphics
+      turtle.reset();
+      // Get user code
+      const userCode = document.getElementById('editor').value;
+      try {
+        // Use Function constructor to execute user code safely
+        const func = new Function(userCode);
+        func();
+      } catch (error) {
+        displayError(error.message);
+      }
+    });
+
+    // Display Error with Copy Button
+    function displayError(message) {
+      const errorContainer = document.getElementById('errorContainer');
+      const errorMsg = document.createElement('span');
+      errorMsg.textContent = `Error: ${message}`;
+      const copyButton = document.createElement('button');
+      copyButton.textContent = 'Paste this error message into the chat for help';
+      copyButton.id = 'copyButton';
+      copyButton.addEventListener('click', () => {
+        navigator.clipboard.writeText(message).then(() => {
+          alert('Error message copied to clipboard!');
+        }).catch(err => {
+          alert('Failed to copy!');
+        });
+      });
+      errorContainer.appendChild(errorMsg);
+      errorContainer.appendChild(copyButton);
+    }
+
+    // Initial Welcome Interaction
+    alert('Welcome! Let\'s start by programming a simple shape. What shape would you like to create?');
+
+  </script>
+
+</body>
+</html>
