@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fireworks Display</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function createFirework(x, y) {
+            const particles = [];
+            const particleCount = 100;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    angle: Math.random() * 2 * Math.PI,
+                    speed: Math.random() * 5 + 2,
+                    radius: Math.random() * 3 + 2,
+                    alpha: 1
+                });
+            }
+
+            return particles;
+        }
+
+        function updateFireworks(fireworks) {
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                const firework = fireworks[i];
+                for (let j = firework.length - 1; j >= 0;  j--) {
+                    const particle = firework[j];
+                    particle.x += Math.cos(particle.angle) * particle.speed;
+                    particle.y += Math.sin(particle.angle) * particle.speed;
+                    particle.alpha -= 0.01;
+
+                    if (particle.alpha <= 0) {
+                        firework.splice(j, 1);
+                    }
+                }
+
+                if (firework.length === 0) {
+                    fireworks.splice(i, 1);
+                }
+            }
+        }
+
+        function drawFireworks(fireworks) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            fireworks.forEach(firework => {
+                firework.forEach(particle => {
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${particle.alpha})`;
+                    ctx.fill();
+                });
+            });
+        }
+
+        const fireworks = [];
+        window.addEventListener('click', (e) => {
+            fireworks.push(createFirework(e.clientX, e.clientY));
+        });
+
+        function animate() {
+            updateFireworks(fireworks);
+            drawFireworks(fireworks);
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

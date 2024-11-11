@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fireworks Display</title>
+    <!-- Style to make the canvas fill the entire window -->
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        #fireworksCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas element where the fireworks will be drawn -->
+    <canvas id="fireworksCanvas"></canvas>
+
+    <!-- Script containing the fireworks logic -->
+    <script>
+        // Get the canvas element and its drawing context
+        const canvas = document.getElementById('fireworksCanvas');
+        const context = canvas.getContext('2d');
+
+        // Resize the canvas to fill the window
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Array to store the particles (sparks of the fireworks)
+        let particles = [];
+
+        // Function to create a firework explosion at (x, y)
+        function createFirework(x, y) {
+            // Generate multiple particles to simulate an explosion
+            for (let i = 0; i < 50; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    // Random speed and direction
+                    speed: Math.random() * 5 + 1,
+                    angle: Math.random() * 2 * Math.PI,
+                    // Random color
+                    color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+                    life: 100  // Lifespan of the particle
+                });
+            }
+        }
+
+        // Function to update particle positions
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                // Move particle based on its speed and angle
+                p.x += Math.cos(p.angle) * p.speed;
+                p.y += Math.sin(p.angle) * p.speed;
+                // Gravity effect
+                p.speed *= 0.98;  // Simulate friction/air resistance
+                p.life--;  // Decrease life
+                // Remove particle if life is over
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // Function to draw particles
+        function drawParticles() {
+            // Clear the canvas
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw each particle
+            particles.forEach(p => {
+                context.beginPath();
+                context.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                context.fillStyle = p.color;
+                context.fill();
+            });
+        }
+
+        // Main animation loop
+        function animate() {
+            updateParticles();
+            drawParticles();
+            requestAnimationFrame(animate);  // Continue the loop
+        }
+
+        // Event listener for mouse clicks to trigger fireworks
+        canvas.addEventListener('click', function(event) {
+            let rect = canvas.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+            createFirework(x, y);
+        });
+
+        // Start the animation
+        animate();
+
+        // Update canvas size if the window is resized
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
