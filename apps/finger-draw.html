@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- Previous head section and style remains exactly the same -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finger Drawing App</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@3.18.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@3.18.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@3.18.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7"></script>
+    <style>
+        /* Previous styles remain exactly the same */
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #app-container {
+            position: relative;
+            margin: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+
+        #webcam {
+            position: absolute;
+            transform: scaleX(-1);
+        }
+
+        #canvas {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            position: absolute;
+            transform: scaleX(-1);
+        }
+
+        #instructions {
+            margin: 20px;
+            margin-top: 540px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 600px;
+        }
+
+        #status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 2000;
+        }
+
+        h2 {
+            color: #333;
+            margin-top: 0;
+        }
+
+        ol {
+            padding-left: 20px;
+            line-height: 1.6;
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 2000;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Status: Initializing...</div>
+    <div id="loading">Loading HandPose model...</div>
+    
+    <div id="app-container">
+        <div id="overlay">
+            <span id="last-spoken">Last spoken: </span>
+            <br>
+            <span id="current-color">Current color: black</span>
+        </div>
+        <video id="webcam" width="640" height="480" playsinline autoplay></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
+    </div>
+
+    <div id="instructions">
+        <h2>Instructions</h2>
+        <ol>
+            <li>Allow access to your webcam when prompted</li>
+            <li>Point your index finger upwards to start drawing on the canvas</li>
+            <li>Speak a color (red, green, blue, yellow, orange, purple, black, white) to change the drawing color</li>
+        </ol>
+    </div>
+
+    <script>
+        let videoStream = null;
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const loadingElement = document.getElementById('loading');
+        const statusElement = document.getElementById('status');
+        let currentColor = 'black';
+        let drawing = false;
+
+        function updateStatus(message) {
+            statusElement.textContent = 'Status: ' + message;
+            console.log('Status:', message);
+        }
+
+        async function init() {
+            try {
+                updateStatus('Initializing TensorFlow.js...');
+                await tf.setBackend('webgl');
+                await tf.ready();
+                console.log('TensorFlow.js backend initialized:', tf.getBackend());
+                updateStatus('TensorFlow.js initialized');
+            } catch (err) {
+                updateStatus('Failed to initialize TensorFlow.js');
+                console.error('Error initializing TensorFlow.js backend:', err);
+                throw err;
+            }
+        }
+
+        async function setupWebcam() {
+            if (videoStream) {
+                return Promise.resolve(videoStream);
+            }
+
+            try {
+                updateStatus('Requesting camera access...');
+                const constraints = { 
+                    video: { 
+                        width: 640, 
+                        height: 480,
+                        facingMode: 'user'
+                    } 
+                };
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = videoStream;
+                
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        updateStatus('Camera ready');
+                        video.play();
+                        resolve(videoStream);
+                    };
+                });
+            } catch (err) {
+                updateStatus('Camera access failed');
+                console.error('Webcam setup error:', err);
+                throw err;
+            }
+        }
+
+        async function loadHandposeModel() {
+            try {
+                updateStatus('Loading HandPose model...');
+                loadingElement.style.display = 'block';
+                const model = await handpose.load();
+                loadingElement.style.display = 'none';
+                updateStatus('HandPose model loaded');
+                return model;
+            } catch (err) {
+                loadingElement.style.display = 'none';
+                updateStatus('Failed to load HandPose model');
+                console.error('Error loading handpose model:', err);
+                throw err;
+            }
+        }
+
+        async function detectFingerDirection(predictions) {
+            if (predictions.length > 0) {
+                const keypoints = predictions[0].landmarks;
+                const indexFingerTip = keypoints[8];
+                const indexFingerBase = keypoints[5];
+
+                const directionVector = {
+                    x: indexFingerTip[0] - indexFingerBase[0],
+                    y: indexFingerTip[1] - indexFingerBase[1],
+                };
+
+                return directionVector;
+            }
+            return null;
+        }
+
+        function draw(x, y, color) {
+            if (!drawing) return;
+
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = color;
+
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function setupSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.error('Speech recognition not supported in this browser.');
+                return null;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            return recognition;
+        }
+
+        function extractColor(transcript) {
+            const colors = ['red', 'green', 'blue', 'yellow', 'orange', 'purple', 'black', 'white'];
+            const words = transcript.toLowerCase().split(' ');
+            for (const word of words) {
+                if (colors.includes(word)) {
+                    return word;
+                }
+            }
+            return null;
+        }
+
+        async function mainLoop(model) {
+            if (!video.srcObject) {
+                console.error('Video stream not available');
+                updateStatus('Video stream lost');
+                return;
+            }
+
+            try {
+                const predictions = await model.estimateHands(video);
+                const directionVector = await detectFingerDirection(predictions);
+
+                if (directionVector && predictions.length > 0) {
+                    const indexFingerTip = predictions[0].landmarks[8];
+                    const x = indexFingerTip[0];
+                    const y = indexFingerTip[1];
+
+                    if (directionVector.y < 0) {
+                        drawing = true;
+                        draw(x, y, currentColor);
+                    } else {
+                        drawing = false;
+                        ctx.beginPath();
+                    }
+                }
+
+                requestAnimationFrame(() => mainLoop(model));
+            } catch (error) {
+                console.error('Error in main loop:', error);
+                updateStatus('Error in hand detection');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await init();
+                await setupWebcam();
+                const model = await loadHandposeModel();
+                
+                const recognition = setupSpeechRecognition();
+                if (recognition) {
+                    recognition.onresult = (event) => {
+                        const transcript = event.results[event.results.length - 1][0].transcript;
+                        const extractedColor = extractColor(transcript);
+                    
+                        if (extractedColor) {
+                            currentColor = extractedColor;
+                        }
+                    
+                        document.getElementById('last-spoken').textContent = `Last spoken: ${transcript}`;
+                        document.getElementById('current-color').textContent = `Current color: ${currentColor}`;
+                    };
+                    recognition.start();
+                    updateStatus('Speech recognition ready');
+                }
+                
+                updateStatus('Running hand detection');
+                mainLoop(model);
+            } catch (error) {
+                console.error('Setup failed:', error);
+                updateStatus('Setup failed: ' + error.message);
+                alert('Failed to initialize the application. Please make sure you\'re using a modern browser with webcam access.');
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+        });
+    </script>
+</body>
+</html>
