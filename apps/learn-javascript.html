@@ -2,54 +2,100 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Turtle Graphics for 8th Graders</title>
+  <title>Learning JavaScript</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 20px;
+      margin: 20px auto;
+      width: 520px;
+      text-align: center;
     }
     #editor {
       width: 100%;
       height: 200px;
+      font-size: 16px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
     }
-    #runButton {
+    #run-button {
       margin-top: 10px;
       padding: 10px 20px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
     }
-    #errorContainer {
+    #run-button:hover {
+      background-color: #45a049;
+    }
+    #error-container {
       margin-top: 20px;
-      color: red;
+      color: #D8000C;
+      background-color: #FFBABA;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 16px;
     }
-    #copyButton {
-      margin-left: 10px;
-      padding: 5px 10px;
+    #copy-button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 14px;
+      background-color: #008CBA;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #copy-button:hover {
+      background-color: #007B9E;
+    }
+    #canvas-container {
+      position: relative;
+      margin-top: 20px;
     }
     #canvas {
       border: 1px solid #000;
-      margin-top: 20px;
+      background-color: #f9f9f9;
+    }
+    #turtle-svg {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      transform-origin: 50% 75%; /* Rotate around the center of the base of the triangle */
+      transition: transform 0.2s linear;
     }
   </style>
 </head>
 <body>
 
-  <h1>Welcome to Turtle Graphics Programming!</h1>
-  <!-- <p>Enter your program here:</p> -->
+  <h1>A JavaScript Playground</h1>
+  
+  <textarea id="editor" placeholder="Enter your JavaScript code here..." spellcheck="false"></textarea><br>
+  <button id="run-button">Run Code</button>
 
-  <textarea id="editor" placeholder="Enter your JavaScript code here..."></textarea><br>
-  <button id="runButton">Run Code</button>
+  <div id="error-container"></div>
 
-  <div id="errorContainer"></div>
-
-  <canvas id="canvas" width="500" height="500"></canvas>
+  <div id="canvas-container">
+    <canvas id="canvas" width="500" height="500"></canvas>
+    <!-- Simple Turtle SVG -->
+    <svg id="turtle-svg" viewBox="0 0 100 100">
+      <!-- Triangle pointing upward by default -->
+      <polygon points="50,15 85,85 15,85" fill="green" />
+    </svg>
+  </div>
 
   <script>
     // Simple Turtle Graphics Implementation
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const turtleSVG = document.getElementById('turtle-svg');
     let turtle = {
       x: canvas.width / 2,
       y: canvas.height / 2,
-      angle: 0,
+      angle: 270,  // Start facing north (upwards)
       penDown: true,
       color: '#000',
       move: function(distance) {
@@ -65,48 +111,62 @@
         }
         this.x = newX;
         this.y = newY;
+        updateTurtlePosition();
       },
       turn: function(angle) {
         this.angle = (this.angle + angle) % 360;
+        updateTurtlePosition();
       },
-      penUp: function() {
+      penup: function() {
         this.penDown = false;
       },
-      penDownFunc: function() {
+      pendown: function() {
         this.penDown = true;
       },
-      setColor: function(color) {
+      setcolor: function(color) {
         this.color = color;
       },
       reset: function() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.x = canvas.width / 2;
         this.y = canvas.height / 2;
-        this.angle = 0;
+        this.angle = 270;  // Reset to facing north (upwards)
         this.penDown = true;
         this.color = '#000';
+        updateTurtlePosition();
       }
     };
+
+    // Update turtle SVG position and rotation around its base
+    function updateTurtlePosition() {
+      turtleSVG.style.left = `${turtle.x}px`; // Offset to align the base of the triangle
+      turtleSVG.style.top = `${turtle.y - 15}px`;  // Offset to align the base of the triangle
+      turtleSVG.style.transform = `rotate(${turtle.angle + 90}deg)`; // Offset by 90 degrees to match north orientation
+    }
 
     // Expose turtle functions to the student
     function forward(distance) {
       turtle.move(distance);
     }
 
-    function turn(angle) {
+    function right(angle) {
       turtle.turn(angle);
     }
 
-    function penUp() {
-      turtle.penUp();
+    function left(angle) {
+      turtle.turn(-angle);
     }
 
-    function penDown() {
-      turtle.penDownFunc();
+    function penup() {
+      turtle.penup();
     }
 
-    function setColor(color) {
-      turtle.setColor(color);
+    function pendown() {
+      turtle.pendown();
+    }
+
+    function setcolor(color) {
+      turtle.setcolor(color);
     }
 
     function reset() {
@@ -114,9 +174,9 @@
     }
 
     // Handle Run Code Button
-    document.getElementById('runButton').addEventListener('click', () => {
+    document.getElementById('run-button').addEventListener('click', () => {
       // Clear previous errors
-      const errorContainer = document.getElementById('errorContainer');
+      const errorContainer = document.getElementById('error-container');
       errorContainer.innerHTML = '';
       // Reset turtle graphics
       turtle.reset();
@@ -131,33 +191,36 @@
       }
     });
 
-// Display Error with Copy Button
-function displayError(message) {
-  const errorContainer = document.getElementById('errorContainer');
-  const errorMsg = document.createElement('span');
-  errorMsg.textContent = `Error: ${message}`;
-  const copyButton = document.createElement('button');
-  copyButton.textContent = 'Paste this error message into the chat for help';
-  copyButton.id = 'copyButton';
+    // Display Error with Copy Button
+    function displayError(message) {
+      const errorContainer = document.getElementById('error-container');
+      errorContainer.innerHTML = '';  // Clear previous error message if any
 
-  // Get the current user code to include in the clipboard
-  const userCode = document.getElementById('editor').value;
-  const fullMessage = `Error: ${message}\n\nUser Program:\n${userCode}`;
+      const errorMsg = document.createElement('span');
+      errorMsg.textContent = `Error: ${message}`;
+      
+      const copyButton = document.createElement('button');
+      copyButton.textContent = 'Click this to copy the error message. Then paste it into the chat.';
+      copyButton.id = 'copy-button';
 
-  copyButton.addEventListener('click', () => {
-    navigator.clipboard.writeText(fullMessage).then(() => {
-      alert('Error message and code copied to clipboard!');
-    }).catch(err => {
-      alert('Failed to copy!');
-    });
-  });
+      // Get the current user code to include in the clipboard
+      const userCode = document.getElementById('editor').value;
+      const fullMessage = `Error: ${message}\n\nUser Program:\n${userCode}`;
 
-  errorContainer.appendChild(errorMsg);
-  errorContainer.appendChild(copyButton);
-}
+      copyButton.addEventListener('click', () => {
+        navigator.clipboard.writeText(fullMessage).then(() => {
+          alert('Error message and code copied to clipboard!');
+        }).catch(err => {
+          alert('Failed to copy!');
+        });
+      });
 
-    // Initial Welcome Interaction
-    // alert('Welcome! Let\'s start by programming a simple shape. What shape would you like to create?');
+      errorContainer.appendChild(errorMsg);
+      errorContainer.appendChild(copyButton);
+    }
+
+    // Initial position update
+    updateTurtlePosition();
 
   </script>
 
