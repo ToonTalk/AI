@@ -4,8 +4,21 @@ let currentColor = 'black'; // Default color
 
 async function setupWebcam() {
     try {
-        const constraints = { video: { width: 640, height: 480 } };
-        video.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+        // First list available devices to help with debugging
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        console.log('Available video devices:', videoDevices);
+
+        const constraints = {
+            video: {
+                width: 640,
+                height: 480
+            }
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        
         return new Promise((resolve) => {
             video.onloadedmetadata = () => {
                 video.play();
@@ -13,7 +26,22 @@ async function setupWebcam() {
             };
         });
     } catch (err) {
-        console.error(err);
+        console.error('Webcam setup error:', err.name, err.message);
+        // Handle specific errors
+        switch (err.name) {
+            case 'NotAllowedError':
+                alert('Camera access was denied. Please check your browser permissions.');
+                break;
+            case 'NotFoundError':
+                alert('No camera device was found. Please check your camera connection.');
+                break;
+            case 'NotReadableError':
+                alert('Camera is in use by another application.');
+                break;
+            default:
+                alert('Error accessing camera: ' + err.message);
+        }
+        throw err;
     }
 }
 
