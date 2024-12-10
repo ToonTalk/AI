@@ -1,0 +1,174 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enhanced Histogram Comparison</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Enhanced Histogram Comparison</h1>
+    
+    <h2>Overlapped Layout</h2>
+    <canvas id="overlappedChart" width="400" height="200"></canvas>
+
+    <h2>Stacked Layout</h2>
+    <canvas id="stackedChart" width="400" height="200"></canvas>
+
+    <h2>Row Layout</h2>
+    <canvas id="rowChart1" width="400" height="200" style="display: inline-block;"></canvas>
+    <canvas id="rowChart2" width="400" height="200" style="display: inline-block;"></canvas>
+
+    <h2>Numerical Comparison</h2>
+    <div id="results"></div>
+
+    <script>
+        // Histogram Data
+        const histogram1 = [10, 20, 30, 40, 50];
+        const histogram2 = [15, 25, 35, 45, 55];
+        const labels = ['Bin 1', 'Bin 2', 'Bin 3', 'Bin 4', 'Bin 5'];
+
+        // Overlapped Layout
+        const overlappedCtx = document.getElementById('overlappedChart').getContext('2d');
+        new Chart(overlappedCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Histogram 1',
+                        data: histogram1,
+                        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                    },
+                    {
+                        label: 'Histogram 2',
+                        data: histogram2,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    x: {
+                        stacked: false
+                    },
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Stacked Layout
+        const stackedCtx = document.getElementById('stackedChart').getContext('2d');
+        new Chart(stackedCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Histogram 1',
+                        data: histogram1,
+                        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                    },
+                    {
+                        label: 'Histogram 2',
+                        data: histogram2,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    x: {
+                        stacked: true
+                    },
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Row Layout
+        const rowCtx1 = document.getElementById('rowChart1').getContext('2d');
+        const rowCtx2 = document.getElementById('rowChart2').getContext('2d');
+        new Chart(rowCtx1, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Histogram 1',
+                    data: histogram1,
+                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        new Chart(rowCtx2, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Histogram 2',
+                    data: histogram2,
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Euclidean Distance Function
+        function euclideanDistance(hist1, hist2) {
+            if (hist1.length !== hist2.length) {
+                throw new Error("Histograms must have the same number of bins.");
+            }
+            return Math.sqrt(hist1.reduce((sum, value, index) => {
+                return sum + Math.pow(value - hist2[index], 2);
+            }, 0));
+        }
+
+        // Pearson Correlation Coefficient Function
+        function pearsonCorrelation(hist1, hist2) {
+            if (hist1.length !== hist2.length) {
+                throw new Error("Histograms must have the same number of bins.");
+            }
+
+            const mean1 = hist1.reduce((sum, val) => sum + val, 0) / hist1.length;
+            const mean2 = hist2.reduce((sum, val) => sum + val, 0) / hist2.length;
+
+            let numerator = 0;
+            let denom1 = 0;
+            let denom2 = 0;
+
+            for (let i = 0; i < hist1.length; i++) {
+                numerator += (hist1[i] - mean1) * (hist2[i] - mean2);
+                denom1 += Math.pow(hist1[i] - mean1, 2);
+                denom2 += Math.pow(hist2[i] - mean2, 2);
+            }
+
+            return numerator / Math.sqrt(denom1 * denom2);
+        }
+
+        // Calculating and Displaying Results
+        const euclidean = euclideanDistance(histogram1, histogram2);
+        const correlation = pearsonCorrelation(histogram1, histogram2);
+
+        document.getElementById('results').innerHTML = `
+            <p><strong>Euclidean Distance:</strong> ${euclidean.toFixed(2)}</p>
+            <p><strong>Correlation Coefficient:</strong> ${correlation.toFixed(2)}</p>
+        `;
+    </script>
+</body>
+</html>

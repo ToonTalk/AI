@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Replacement</title>
+    <style>
+        body {
+            margin: 0;
+            background: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+            color: #fff;
+            height: 100vh;
+        }
+        #video, #overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        #status {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Loading models...</div>
+    <video id="video" autoplay muted playsinline width="720" height="560" style="display:none;"></video>
+    <canvas id="overlay" width="720" height="560"></canvas>
+
+    <!-- Load face-api.js first -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+    <script>
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const context = overlay.getContext('2d');
+        const statusEl = document.getElementById('status');
+
+        // Load models (make sure these paths are correct and accessible)
+        Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights/tiny_face_detector_model-weights_manifest.json')
+        ]).then(startVideo).catch(e => console.error('Model loading error:', e));
+
+        function startVideo() {
+            statusEl.textContent = 'Starting video...';
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then((stream) => {
+                    video.srcObject = stream;
+                    video.style.display = 'block';
+                    statusEl.textContent = 'Detecting faces...';
+                })
+                .catch((err) => {
+                    statusEl.textContent = 'Could not access camera.';
+                    console.error(err);
+                });
+        }
+
+        video.addEventListener('playing', () => {
+            faceapi.matchDimensions(overlay, { width: video.width, height: video.height });
+            detectFaces();
+        });
+
+        async function detectFaces() {
+            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+            context.clearRect(0, 0, overlay.width, overlay.height);
+
+            detections.forEach(detection => {
+                const box = detection.box;
+                context.strokeStyle = '#00FF00';
+                context.lineWidth = 3;
+                context.strokeRect(box.x, box.y, box.width, box.height);
+            });
+
+            requestAnimationFrame(detectFaces);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Head Detection</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #videoContainer {
+            position: relative;
+            margin: 20px;
+        }
+        #video {
+            transform: scaleX(-1);
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: scaleX(-1);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background: #0056b3;
+        }
+        .status {
+            margin: 10px;
+            padding: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Camera Head Detection</h1>
+    <div id="videoContainer">
+        <video id="video" width="640" height="480" autoplay muted></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
+    </div>
+    <button id="startButton" disabled>Loading models...</button>
+    <div class="status" id="status">Initializing face detection...</div>
+
+    <script>
+        // Initialize variables
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        const statusElement = document.getElementById('status');
+        let isRunning = false;
+        let faceapi = null;
+
+        // Load face-api.js script
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        // Initialize face detection
+        async function initFaceDetection() {
+            try {
+                // Load face-api.js
+                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js');
+                
+                // Ensure face-api is loaded
+                if (typeof faceapi === 'undefined') {
+                    throw new Error('face-api.js failed to load properly');
+                }
+
+                // Load the face detection model
+                await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/');
+                
+                // Enable the start button
+                startButton.disabled = false;
+                startButton.textContent = 'Start Camera';
+                statusElement.textContent = 'Models loaded. Click "Start Camera" to begin';
+            } catch (error) {
+                console.error('Error initializing face detection:', error);
+                statusElement.textContent = 'Error loading face detection models. Please refresh the page.';
+            }
+        }
+
+        // Handle start/stop button
+        startButton.addEventListener('click', async () => {
+            if (isRunning) {
+                // Stop the camera
+                const stream = video.srcObject;
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+                video.srcObject = null;
+                isRunning = false;
+                startButton.textContent = 'Start Camera';
+                statusElement.textContent = 'Camera stopped';
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            } else {
+                try {
+                    // Start the camera
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            width: 640,
+                            height: 480
+                        } 
+                    });
+                    video.srcObject = stream;
+                    isRunning = true;
+                    startButton.textContent = 'Stop Camera';
+                    statusElement.textContent = 'Camera is running. Detecting heads...';
+                    detectFaces();
+                } catch (err) {
+                    console.error('Error accessing camera:', err);
+                    statusElement.textContent = 'Error accessing camera. Please make sure you have granted camera permissions.';
+                }
+            }
+        });
+
+        // Face detection loop
+        async function detectFaces() {
+            if (!isRunning) return;
+
+            try {
+                const detections = await faceapi.detectAllFaces(
+                    video,
+                    new faceapi.TinyFaceDetectorOptions()
+                );
+
+                // Clear previous drawings
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw rectangles for each detected face
+                detections.forEach(detection => {
+                    const { x, y, width, height } = detection.box;
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, width, height);
+                    
+                    // Fill rectangle with semi-transparent color
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                    ctx.fillRect(x, y, width, height);
+                });
+
+                // Continue detection
+                requestAnimationFrame(detectFaces);
+            } catch (error) {
+                console.error('Error in face detection:', error);
+                statusElement.textContent = 'Error in face detection. Please refresh the page.';
+                isRunning = false;
+            }
+        }
+
+        // Start initialization
+        initFaceDetection();
+    </script>
+</body>
+</html>
