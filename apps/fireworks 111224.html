@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fireworks Display</title>
+    <style>
+        body {
+            margin: 0;
+            background: black;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="fireworksCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        class Firework {
+            constructor(x, y, colors) {
+                this.x = x;
+                this.y = y;
+                this.colors = colors;
+                this.particles = [];
+                this.gravity = 0.1; // Added gravity
+
+                for (let i = 0; i < 100; i++) {
+                    this.particles.push({
+                        x: x,
+                        y: y,
+                        angle: Math.random() * 2 * Math.PI,
+                        speed: Math.random() * 5 + 2,
+                        radius: Math.random() * 3 + 1,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        opacity: 1,
+                        velocityY: 0 // Vertical velocity affected by gravity
+                    });
+                }
+            }
+
+            update() {
+                for (const particle of this.particles) {
+                    particle.x += Math.cos(particle.angle) * particle.speed;
+                    particle.y += Math.sin(particle.angle) * particle.speed + particle.velocityY;
+                    particle.velocityY += this.gravity; // Apply gravity
+                    particle.opacity -= 0.02;
+                }
+
+                this.particles = this.particles.filter(p => p.opacity > 0);
+            }
+
+            draw() {
+                for (const particle of this.particles) {
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${particle.color}, ${particle.opacity})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        const fireworks = [];
+        const colors = [
+            "255, 99, 71",   // Red
+            "135, 206, 250", // Light Blue
+            "255, 215, 0",   // Gold
+            "124, 252, 0",   // Lime Green
+            "75, 0, 130"      // Indigo
+        ];
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (Math.random() < 0.05) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height / 2;
+                fireworks.push(new Firework(x, y, colors));
+            }
+
+            for (const firework of fireworks) {
+                firework.update();
+                firework.draw();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
