@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riddling Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f8ff;
+        }
+        .game-container {
+            text-align: center;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            max-width: 400px;
+            position: relative;
+            z-index: 2;
+        }
+        .riddle {
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        .input-container {
+            margin-bottom: 15px;
+        }
+        .input-container input {
+            padding: 10px;
+            font-size: 16px;
+            width: calc(100% - 22px);
+        }
+        .button-container button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: #007BFF;
+            color: white;
+        }
+        .button-container button:hover {
+            background: #0056b3;
+        }
+        .result {
+            font-size: 16px;
+            color: green;
+            margin-top: 10px;
+        }
+        .result.wrong {
+            color: red;
+        }
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Riddling Game</h1>
+        <div class="riddle" id="riddle">I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?</div>
+        <div class="input-container">
+            <input type="text" id="answer" placeholder="Enter your answer here">
+        </div>
+        <div class="button-container">
+            <button onclick="checkAnswer()">Submit</button>
+            <button onclick="resetGame()">Reset</button>
+            <button onclick="speakRiddle()">Hear Riddle</button>
+        </div>
+        <div class="result" id="result"></div>
+    </div>
+    <canvas id="fireworksCanvas"></canvas>
+    <script>
+        const riddles = [
+            { question: "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?", answer: "echo" },
+            { question: "I have keys but no locks. I have a space but no room. You can enter, but you can’t go outside. What am I?", answer: "keyboard" },
+            { question: "The more of this you take, the more you leave behind. What is it?", answer: "footsteps" },
+            { question: "What has to be broken before you can use it?", answer: "egg" },
+            { question: "What has many hearts but no other organs?", answer: "deck of cards" }
+        ];
+
+        let currentRiddleIndex = 0;
+
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        class Firework {
+            constructor(x, y, colors) {
+                this.x = x;
+                this.y = y;
+                this.colors = colors;
+                this.particles = [];
+                this.gravity = 0.1;
+
+                for (let i = 0; i < 100; i++) {
+                    this.particles.push({
+                        x: x,
+                        y: y,
+                        angle: Math.random() * 2 * Math.PI,
+                        speed: Math.random() * 5 + 2,
+                        radius: Math.random() * 3 + 1,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        opacity: 1,
+                        velocityY: 0
+                    });
+                }
+            }
+
+            update() {
+                for (const particle of this.particles) {
+                    particle.x += Math.cos(particle.angle) * particle.speed;
+                    particle.y += Math.sin(particle.angle) * particle.speed + particle.velocityY;
+                    particle.velocityY += this.gravity;
+                    particle.opacity -= 0.02;
+                }
+
+                this.particles = this.particles.filter(p => p.opacity > 0);
+            }
+
+            draw() {
+                for (const particle of this.particles) {
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${particle.color}, ${particle.opacity})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        const fireworks = [];
+        const colors = [
+            "255, 99, 71",
+            "135, 206, 250",
+            "255, 215, 0",
+            "124, 252, 0",
+            "75, 0, 130"
+        ];
+
+        function triggerFireworks() {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height / 2;
+            fireworks.push(new Firework(x, y, colors));
+        }
+
+        function animateFireworks() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (const firework of fireworks) {
+                firework.update();
+                firework.draw();
+            }
+
+            requestAnimationFrame(animateFireworks);
+        }
+
+        animateFireworks();
+
+        function loadRiddle() {
+            const riddleElement = document.getElementById("riddle");
+            riddleElement.textContent = riddles[currentRiddleIndex].question;
+        }
+
+        function checkAnswer() {
+            const userAnswer = document.getElementById("answer").value.trim().toLowerCase();
+            const resultElement = document.getElementById("result");
+
+            if (userAnswer === riddles[currentRiddleIndex].answer) {
+                resultElement.textContent = "Correct! Well done!";
+                resultElement.className = "result";
+                triggerFireworks();
+                currentRiddleIndex = (currentRiddleIndex + 1) % riddles.length;
+                setTimeout(() => {
+                    resetGame();
+                    loadRiddle();
+                }, 2000);
+            } else {
+                resultElement.textContent = "Incorrect. Try again!";
+                resultElement.className = "result wrong";
+            }
+        }
+
+        function resetGame() {
+            document.getElementById("answer").value = "";
+            document.getElementById("result").textContent = "";
+        }
+
+        function speakRiddle() {
+            const riddleText = document.getElementById("riddle").textContent;
+            const speech = new SpeechSynthesisUtterance(riddleText);
+            speech.lang = "en-US";
+            window.speechSynthesis.speak(speech);
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        window.onload = loadRiddle;
+    </script>
+</body>
+</html>
