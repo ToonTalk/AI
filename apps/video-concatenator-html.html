@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Concatenator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-4xl mx-auto p-6">
+        <h1 class="text-3xl font-bold mb-4">Video Concatenator</h1>
+        
+        <!-- Upload Area -->
+        <div 
+            id="dropZone"
+            class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-gray-400 transition-colors mb-6">
+            <input type="file" id="fileInput" multiple accept="video/mp4,video/webm" class="hidden">
+            <p class="text-gray-600 mb-2">Drop videos here or click to select</p>
+            <p class="text-sm text-gray-500">Videos will be joined in order of selection with transitions</p>
+        </div>
+
+        <!-- File List -->
+        <div id="fileList" class="mb-6"></div>
+
+        <!-- Progress -->
+        <div id="progressContainer" class="mb-6 hidden">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="progressText" class="text-center mt-2 text-gray-600">Processing: 0%</p>
+        </div>
+
+        <!-- Output Video -->
+        <div id="outputContainer" class="mb-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">Output Video</h2>
+            <video id="outputVideo" controls class="w-full rounded-lg mb-4"></video>
+            <a id="downloadButton" class="inline-block bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                Download Video
+            </a>
+        </div>
+
+        <!-- Process Button -->
+        <button 
+            id="processButton" 
+            class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-colors hidden">
+            Join Videos
+        </button>
+    </div>
+
+    <script>
+        const selectedFiles = [];
+        let isProcessing = false;
+        
+        // DOM Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const outputContainer = document.getElementById('outputContainer');
+        const outputVideo = document.getElementById('outputVideo');
+        const downloadButton = document.getElementById('downloadButton');
+        const processButton = document.getElementById('processButton');
+
+        // Event Listeners
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', e => e.preventDefault());
+        dropZone.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+        processButton.addEventListener('click', processVideos);
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const files = Array.from(e.dataTransfer.files).filter(file => 
+                file.type === 'video/mp4' || file.type === 'video/webm'
+            );
+            addFiles(files);
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files).filter(file => 
+                file.type === 'video/mp4' || file.type === 'video/webm'
+            );
+            addFiles(files);
+        }
+
+        function addFiles(files) {
+            files.forEach(file => selectedFiles.push(file));
+            updateFileList();
+            updateProcessButton();
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateFileList();
+            updateProcessButton();
+        }
+
+        function updateFileList() {
+            fileList.innerHTML = selectedFiles.map((file, index) => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg mb-2">
+                    <span class="text-gray-700">${file.name}</span>
+                    <button 
+                        onclick="removeFile(${index})"
+                        class="text-red-500 hover:text-red-700">
+                        Remove
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function updateProcessButton() {
+            processButton.classList.toggle('hidden', selectedFiles.length === 0);
+        }
+
+        function updateProgress(percent) {
+            progressBar.style.width = `${percent}%`;
+            progressText.textContent = `Processing: ${Math.round(percent)}%`;
+        }
+
+        function createVideoElement(file) {
+            return new Promise((resolve) => {
+                const video = document.createElement('video');
+                video.src = URL.createObjectURL(file);
+                video.onloadedmetadata = () => resolve(video);
+            });
+        }
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        async function processVideos() {
+            if (selectedFiles.length === 0 || isProcessing) return;
+            
+            isProcessing = true;
+            progressContainer.classList.remove('hidden');
+            processButton.disabled = true;
+            updateProgress(0);
+
+            try {
+                // Setup canvas
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Get dimensions from first video
+                const firstVideo = await createVideoElement(selectedFiles[0]);
+                canvas.width = firstVideo.videoWidth;
+                canvas.height = firstVideo.videoHeight;
+
+                // Setup recording
+                const stream = canvas.captureStream(30);
+                const mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp9',
+                    videoBitsPerSecond: 5000000
+                });
+
+                const chunks = [];
+                mediaRecorder.ondataavailable = e => {
+                    if (e.data && e.data.size > 0) {
+                        chunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    outputVideo.src = url;
+                    downloadButton.href = url;
+                    downloadButton.download = 'concatenated.webm';
+                    
+                    outputContainer.classList.remove('hidden');
+                    progressContainer.classList.add('hidden');
+                    processButton.disabled = false;
+                    isProcessing = false;
+                };
+
+                mediaRecorder.start();
+
+                // Process each video
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const video = await createVideoElement(selectedFiles[i]);
+                    video.currentTime = 0;
+
+                    await new Promise(resolve => {
+                        video.oncanplay = resolve;
+                        video.play();
+                    });
+
+                    while (video.currentTime < video.duration) {
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        video.currentTime += 1/30;
+                        updateProgress((i / selectedFiles.length * 100) + 
+                            (video.currentTime / video.duration * (100 / selectedFiles.length)));
+                        await sleep(33); // ~30fps
+                    }
+
+                    // Add black frame transition (except for last video)
+                    if (i < selectedFiles.length - 1) {
+                        ctx.fillStyle = '#000000';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        await sleep(500); // 0.5 second transition
+                    }
+
+                    URL.revokeObjectURL(video.src);
+                }
+
+                mediaRecorder.stop();
+
+            } catch (error) {
+                console.error('Error processing videos:', error);
+                alert('Error processing videos. Please try again.');
+                progressContainer.classList.add('hidden');
+                processButton.disabled = false;
+                isProcessing = false;
+            }
+        }
+    </script>
+</body>
+</html>
