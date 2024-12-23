@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catch the Falling Stars Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #2a2a2a;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            height: 100vh;
+            padding: 20px;
+            background-image: url('https://source.unsplash.com/1600x900/?stars'); /* Starry sky image */
+            background-size: cover;
+            background-position: center;
+        }
+
+        .game-container {
+            text-align: center;
+            flex-grow: 1;
+        }
+
+        .game-area {
+            width: 500px;
+            height: 500px;
+            background-color: rgba(17, 17, 17, 0.8); /* Dark semi-transparent background */
+            border: 2px solid #fff;
+            position: relative;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+
+        .player {
+            width: 50px;
+            height: 50px;
+            background-color: #ff0; /* Yellow */
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .star {
+            width: 30px;
+            height: 30px;
+            background-color: #ffecb3; /* Light yellow */
+            position: absolute;
+            top: 0;
+
+            /* Create the star shape */
+            clip-path: polygon(
+                50% 0%, 
+                61% 35%, 
+                98% 35%, 
+                68% 57%, 
+                79% 91%, 
+                50% 70%, 
+                21% 91%, 
+                32% 57%, 
+                2% 35%, 
+                39% 35%
+            );
+        }
+
+        .score {
+            font-size: 20px;
+        }
+
+        .game-over {
+            display: none;
+            color: red;
+        }
+
+        .high-score {
+            margin-top: 10px;
+            font-size: 18px;
+        }
+
+        .reset-section {
+            width: 200px;
+            background-color: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            margin-left: 20px;
+            color: #fff;
+        }
+
+        .reset-section h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .reset-section button {
+            background-color: #ff4444;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .reset-section ul {
+            list-style: none;
+            padding: 0;
+            font-size: 14px;
+            overflow-y: auto;
+            max-height: 150px;
+        }
+
+        .reset-section li {
+            margin-bottom: 5px;
+        }
+
+        /* Fireworks styles */
+        .firework {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: yellow;
+            animation: firework 1.5s ease-out infinite;
+        }
+
+        @keyframes firework {
+            0% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.5) rotate(180deg);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(2) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Firework burst */
+        .firework::before,
+        .firework::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 5px;
+            height: 10px;
+            background-color: white;
+            transform-origin: 50%;
+        }
+
+        .firework::before {
+            transform: rotate(45deg);
+            animation: burst 1.5s ease-out infinite;
+        }
+
+        .firework::after {
+            transform: rotate(-45deg);
+            animation: burst 1.5s ease-out infinite;
+            animation-delay: 0.5s;
+        }
+
+        @keyframes burst {
+            0% {
+                width: 5px;
+                height: 10px;
+                opacity: 1;
+            }
+            100% {
+                width: 80px;
+                height: 80px;
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Catch the Falling Stars!</h1>
+        <div class="score">Current Score: <span id="score">0</span></div>
+        <div id="highScore" class="high-score">High Score: <span id="highScoreValue">0</span></div>
+        <div id="gameArea" class="game-area">
+            <div id="player" class="player"></div>
+        </div>
+        <div id="gameOver" class="game-over">
+            <h2>Game Over</h2>
+            <p>Your Final Score: <span id="finalScore">0</span></p>
+            <button onclick="startGame()">Restart</button>
+        </div>
+    </div>
+
+    <div class="reset-section">
+        <h3>High Score Tracker</h3>
+        <button onclick="resetHighScore()">Reset High Score</button>
+        <ul id="resetLog"></ul>
+    </div>
+
+    <!-- Audio for High Score -->
+    <audio id="clapSound" src="clap.mp3"></audio>
+
+    <script>
+        let score = 0;
+        let isGameOver = false;
+
+        // Retrieve high score and reset log from localStorage
+        let highScore = localStorage.getItem('highScore') || 0;
+        let resetLog = JSON.parse(localStorage.getItem('resetLog')) || [];
+
+        function updateResetLog() {
+            const logList = document.getElementById('resetLog');
+            logList.innerHTML = '';
+            resetLog.forEach((entry) => {
+                const li = document.createElement('li');
+                li.textContent = entry;
+                logList.appendChild(li);
+            });
+        }
+
+        function resetHighScore() {
+            if (highScore > 0) {
+                resetLog.push(`Reset at ${new Date().toLocaleString()} (High Score: ${highScore})`);
+                localStorage.setItem('resetLog', JSON.stringify(resetLog));
+            }
+            highScore = 0;
+            localStorage.setItem('highScore', highScore);
+            document.getElementById('highScoreValue').textContent = highScore;
+            updateResetLog();
+        }
+
+        function startGame() {
+            score = 0;
+            document.getElementById('score').textContent = score;
+            document.getElementById('highScoreValue').textContent = highScore;
+            document.getElementById('gameOver').style.display = 'none';
+            const gameArea = document.getElementById('gameArea');
+            gameArea.innerHTML = `<div id="player" class="player"></div>`;
+            isGameOver = false;
+            spawnStars();
+        }
+
+        function spawnStars() {
+            if (isGameOver) return;
+
+            const gameArea = document.getElementById('gameArea');
+            const star = document.createElement('div');
+            star.classList.add('star');
+            star.style.left = `${Math.random() * (gameArea.clientWidth - 30)}px`;
+            star.style.top = `0px`;
+            gameArea.appendChild(star);
+
+            let starFall = setInterval(() => {
+                if (isGameOver) {
+                    clearInterval(starFall);
+                    return;
+                }
+
+                const currentTop = parseInt(star.style.top);
+                star.style.top = `${currentTop + 5}px`;
+
+                const starPos = star.getBoundingClientRect();
+                const player = document.getElementById('player');
+                const playerPos = player.getBoundingClientRect();
+
+                if (currentTop > gameArea.offsetHeight) {
+                    clearInterval(starFall);
+                    gameArea.removeChild(star);
+                    endGame(); // End game if star is missed
+                }
+
+                if (
+                    starPos.bottom >= playerPos.top &&
+                    starPos.left < playerPos.right &&
+                    starPos.right > playerPos.left
+                ) {
+                    score += 10;
+                    document.getElementById('score').textContent = score;
+                    clearInterval(starFall);
+                    gameArea.removeChild(star); // Remove the star if caught
+                }
+            }, 30);
+
+            setTimeout(spawnStars, 1000);
+        }
+
+        function endGame() {
+            isGameOver = true;
+            document.getElementById('gameOver').style.display = 'block';
+            document.getElementById('finalScore').textContent = score;
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('highScore', highScore);
+                document.getElementById('highScoreValue').textContent = highScore;
+                document.getElementById('clapSound').play();
+                triggerFireworks();  // Trigger fireworks on high score
+            }
+        }
+
+        function triggerFireworks() {
+            const gameArea = document.getElementById('gameArea');
+            for (let i = 0; i < 10; i++) {
+                const firework = document.createElement('div');
+                firework.classList.add('firework');
+                firework.style.left = `${Math.random() * gameArea.offsetWidth}px`;
+                firework.style.top = `${Math.random() * gameArea.offsetHeight}px`;
+                gameArea.appendChild(firework);
+                setTimeout(() => {
+                    firework.remove();
+                }, 1500); // Remove fireworks after animation
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const player = document.getElementById('player');
+            const gameArea = document.getElementById('gameArea');
+            const gameAreaWidth = gameArea.offsetWidth;
+
+            const currentLeft = parseInt(window.getComputedStyle(player).left);
+
+            if (e.key === 'ArrowLeft' && currentLeft > 0) {
+                player.style.left = `${currentLeft - 15}px`;
+            }
+            if (e.key === 'ArrowRight' && currentLeft < gameAreaWidth - player.offsetWidth) {
+                player.style.left = `${currentLeft + 15}px`;
+            }
+        });
+
+        // Initialize high score and reset log
+        document.getElementById('highScoreValue').textContent = highScore;
+        updateResetLog();
+
+        startGame();
+    </script>
+</body>
+</html>
