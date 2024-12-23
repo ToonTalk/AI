@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riddling Game with Fireworks</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0b0c10;
+            color: #c5c6c7;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1; /* Behind the container */
+            pointer-events: none; /* Ensures interactions pass through */
+        }
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            background: #1f2833;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+            position: relative;
+            z-index: 10;
+        }
+        h1 {
+            color: #66fcf1;
+        }
+        .riddle {
+            font-size: 1.2em;
+            margin: 20px 0;
+            color: #c5c6c7;
+        }
+        input[type="text"] {
+            width: 80%;
+            padding: 10px;
+            font-size: 1em;
+            margin-bottom: 20px;
+            border: 1px solid #45a29e;
+            border-radius: 5px;
+            background-color: #0b0c10;
+            color: #c5c6c7;
+        }
+        button {
+            background-color: #45a29e;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #66fcf1;
+            color: #0b0c10;
+        }
+        .feedback {
+            margin: 15px 0;
+            font-size: 1.1em;
+            color: #66fcf1;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="fireworksCanvas"></canvas>
+    <div class="container">
+        <h1>Intergalactic Riddling Game</h1>
+        <div class="riddle" id="riddle">Loading...</div>
+        <input type="text" id="answer" placeholder="Type your answer here...">
+        <br>
+        <button onclick="checkAnswer()">Submit</button>
+        <button onclick="giveHint()">Give Hint</button>
+        <button onclick="giveUp()">Give Up</button>
+        <button onclick="nextRiddle()">Next Riddle</button>
+        <button onclick="createFirework(window.innerWidth / 2, window.innerHeight / 2)">Test Fireworks</button>
+        <div class="feedback" id="feedback"></div>
+    </div>
+    <script>
+        const riddles = [
+            { question: "I orbit a star and might host life, but I am not a star myself. What am I?", answer: "planet", hint: "It's something you can find in the solar system." },
+            { question: "I have no air, no sound, and no light, yet travelers come to explore my infinite expanse. What am I?", answer: "space", hint: "It's vast, dark, and full of stars." },
+            { question: "I am the fastest traveler known, but you cannot catch or hold me. What am I?", answer: "light", hint: "Think of what travels at 300,000 km/s." },
+            { question: "I carry humans to the stars, breaking free from Earth's gravity. What am I?", answer: "rocket", hint: "It launches into space from Earth." },
+            { question: "I protect you from solar storms and cosmic radiation, though I am invisible. What am I?", answer: "magnetosphere", hint: "It's Earth's protective shield against solar winds." },
+        ];
+
+        let currentRiddleIndex = 0;
+        const canvas = document.getElementById("fireworksCanvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const colors = ["#ff5f6d", "#ffc371", "#7bed9f", "#70a1ff", "#5352ed"];
+        const particles = [];
+        const gravity = 0.05;
+
+        function createFirework(x, y) {
+            const numParticles = 50;
+            for (let i = 0; i < numParticles; i++) {
+                const angle = (Math.PI * 2 * i) / numParticles;
+                const speed = Math.random() * 4 + 1;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                particles.push({
+                    x,
+                    y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    alpha: 1,
+                    color,
+                });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.vy += gravity;
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.01;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function drawParticles() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (const p of particles) {
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function loop() {
+            updateParticles();
+            drawParticles();
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener("resize", () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        function loadRiddle() {
+            document.getElementById('riddle').textContent = riddles[currentRiddleIndex].question;
+            document.getElementById('feedback').textContent = '';
+            document.getElementById('answer').value = '';
+        }
+
+        function checkAnswer() {
+            const userAnswer = document.getElementById('answer').value.trim().toLowerCase();
+            const correctAnswer = riddles[currentRiddleIndex].answer;
+
+            if (isSimilarAnswer(userAnswer, correctAnswer)) {
+                document.getElementById('feedback').textContent = 'Correct! ??';
+                document.getElementById('feedback').style.color = '#66fcf1';
+                createFirework(window.innerWidth / 2, window.innerHeight / 2);
+            } else {
+                document.getElementById('feedback').textContent = 'Incorrect. Try again!';
+                document.getElementById('feedback').style.color = '#ff4c4c';
+            }
+        }
+
+        function isSimilarAnswer(userAnswer, correctAnswer) {
+            const normalizedAnswer = correctAnswer.toLowerCase();
+            const variations = [
+                normalizedAnswer,
+                `${normalizedAnswer}s`,
+                `an ${normalizedAnswer}`,
+                `a ${normalizedAnswer}`,
+                `${normalizedAnswer}.`,
+                `${normalizedAnswer}!`,
+                `${normalizedAnswer}?`
+            ];
+            return variations.some(variation => userAnswer === variation || userAnswer.includes(normalizedAnswer));
+        }
+
+        function giveHint() {
+            document.getElementById('feedback').textContent = `Hint: ${riddles[currentRiddleIndex].hint}`;
+            document.getElementById('feedback').style.color = '#f1c40f';
+        }
+
+        function giveUp() {
+            document.getElementById('feedback').textContent = `The answer is: ${riddles[currentRiddleIndex].answer}`;
+            document.getElementById('feedback').style.color = '#ff4c4c';
+        }
+
+        function nextRiddle() {
+            currentRiddleIndex = (currentRiddleIndex + 1) % riddles.length;
+            loadRiddle();
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            loadRiddle();
+            loop();
+        });
+    </script>
+</body>
+</html>

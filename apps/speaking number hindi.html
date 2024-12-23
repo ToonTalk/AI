@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>बोलकर संख्या बताएं</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
+      color: #333;
+    }
+
+    header {
+      background-color: #6200ea;
+      color: white;
+      padding: 1rem;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+    }
+
+    #last-spoken {
+      font-size: 1.5rem;
+      margin-top: 10px;
+    }
+
+    #numbers {
+      font-size: 2rem;
+      margin-top: 20px;
+    }
+
+    #ball-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .ball {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      margin: 5px;
+    }
+
+    button {
+      background-color: #6200ea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      border-radius: 5px;
+      margin-top: 20px;
+    }
+
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>बोलकर संख्या बताएं</h1>
+  </header>
+  <main>
+    <p>नीचे दिए गए बटन पर क्लिक करें और बोलना शुरू करें। जो संख्या आप कहेंगे वह यहां दिखाई देगी:</p>
+    <div id="last-spoken">आखिरी बार कहा गया: कुछ नहीं</div>
+    <div id="numbers">आखिरी संख्या: अभी तक कोई संख्या नहीं</div>
+    <div id="ball-container"></div>
+    <button id="start-btn">सुनना शुरू करें</button>
+  </main>
+  <script>
+    const startButton = document.getElementById('start-btn');
+    const lastSpokenDiv = document.getElementById('last-spoken');
+    const numbersDiv = document.getElementById('numbers');
+    const ballContainer = document.getElementById('ball-container');
+
+    const numberWords = {
+      "एक": 1,
+      "दो": 2,
+      "तीन": 3,
+      "चार": 4,
+      "पाँच": 5,
+      "छह": 6,
+      "सात": 7,
+      "आठ": 8,
+      "नौ": 9,
+      "दस": 10
+    };
+
+    let ballCounts = [];
+    let lastProcessedResult = ""; // Store last processed result to avoid duplicates
+    let isRecognitionStopped = false;
+    let isAnswerPhase = false; // Toggle to differentiate between normal and answer phases
+
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+
+      recognition.lang = 'hi-IN'; // Set language to Hindi
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      let isListening = false;
+
+      startButton.addEventListener('click', () => {
+        if (isListening) {
+          recognition.stop();
+          startButton.textContent = 'सुनना शुरू करें';
+          isListening = false;
+        } else {
+          try {
+            lastProcessedResult = ""; // Reset processed result tracking
+            recognition.start();
+            startButton.textContent = 'सुन रहे हैं... रोकने के लिए क्लिक करें';
+            isListening = true;
+          } catch (error) {
+            console.error('Error starting recognition:', error);
+            alert('कृपया माइक्रोफोन की अनुमति दें और पृष्ठ को पुनः लोड करें।');
+          }
+        }
+      });
+
+      recognition.onresult = (event) => {
+        let interimTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          const transcript = result[0].transcript.trim();
+
+          // Update "Last spoken" regardless of phase
+          updateLastSpoken(transcript, result.isFinal);
+
+          if (result.isFinal) {
+            // Handle either normal or answer phase
+            if (!isAnswerPhase) {
+              if (transcript !== lastProcessedResult) {
+                lastProcessedResult = transcript; // Prevent duplicates
+                processTranscript(transcript);
+              }
+            } else {
+              handleAnswer(transcript);
+            }
+          }
+        }
+      };
+
+      function updateLastSpoken(text, isFinal) {
+        const prefix = isFinal ? "आखिरी बार कहा गया" : "आखिरी बार कहा गया (आस्थायी)";
+        lastSpokenDiv.textContent = `${prefix}: ${text}`;
+      }
+
+      function processTranscript(transcript) {
+        // Convert Hindi number words to digits
+        transcript = transcript.replace(/\b(एक|दो|तीन|चार|पाँच|छह|सात|आठ|नौ|दस)\b/g, (match) => {
+          return numberWords[match];
+        });
+
+        const matches = transcript.match(/\b\d+\b/g);
+
+        if (matches) {
+          const latestNumber = matches[matches.length - 1];
+          numbersDiv.textContent = `आखिरी संख्या: ${latestNumber}`;
+          const count = parseInt(latestNumber);
+
+          if (!isNaN(count) && count > 0 && ballCounts.length < 2) {
+            ballCounts.push(count);
+            addBalls(count);
+
+            if (ballCounts.length === 2) {
+              setTimeout(() => askQuestion(), 500);
+            }
+          }
+        }
+      }
+
+      function addBalls(count) {
+        const colors = ['#ff5733', '#33ff57', '#3357ff', '#ff33a8', '#a833ff', '#33fff3', '#ffa733'];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+
+        for (let i = 0; i < count; i++) {
+          const ball = document.createElement('div');
+          ball.className = 'ball';
+          ball.style.backgroundColor = color;
+          ballContainer.appendChild(ball);
+        }
+      }
+
+      function askQuestion() {
+        const total = ballCounts.reduce((a, b) => a + b, 0);
+        const question = `कुल गेंदें कितनी हैं?`;
+
+        const synth = window.speechSynthesis;
+        const utterance = new SpeechSynthesisUtterance(question);
+
+        isAnswerPhase = true; // Enter answer phase
+        isRecognitionStopped = true;
+        recognition.stop();
+        synth.speak(utterance);
+
+        utterance.onend = () => {
+          isRecognitionStopped = false;
+          recognition.start();
+        };
+      }
+
+      function handleAnswer(transcript) {
+        const total = ballCounts.reduce((a, b) => a + b, 0);
+        const answer = parseInt(transcript);
+        const synth = window.speechSynthesis;
+
+        if (!isNaN(answer)) {
+          if (answer === total) {
+            const congrats = `शाबाश! आपने सही पहचाना कि ${ballCounts[0]} और ${ballCounts[1]} का योग ${total} है।`;
+            const congratsUtterance = new SpeechSynthesisUtterance(congrats);
+            synth.speak(congratsUtterance);
+            congratsUtterance.onend = () => {
+              resetToListeningMode();
+            };
+          } else {
+            const hint = `गलत! एक सुझाव: ${ballCounts[0]} और ${ballCounts[1]} का योग क्या है?`;
+            const hintUtterance = new SpeechSynthesisUtterance(hint);
+            synth.speak(hintUtterance);
+          }
+        }
+      }
+
+      function resetToListeningMode() {
+        ballCounts = [];
+        isAnswerPhase = false;
+        lastProcessedResult = ""; // Reset processed results
+      }
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        alert('स्पीच मान्यता में त्रुटि। कृपया पृष्ठ को पुनः लोड करें।');
+        isListening = false;
+        startButton.textContent = 'सुनना शुरू करें';
+      };
+
+      recognition.onend = () => {
+        if (isListening && !isRecognitionStopped) {
+          recognition.start();
+        } else {
+          startButton.textContent = 'सुनना शुरू करें';
+        }
+      };
+    } else {
+      alert('माफ़ कीजिये, आपका ब्राउज़र वेब स्पीच API का समर्थन नहीं करता। कृपया Chrome या Edge का उपयोग करें।');
+      startButton.disabled = true;
+    }
+  </script>
+</body>
+</html>
