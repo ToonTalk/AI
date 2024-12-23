@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe Game</title>
+    <style>
+        /* Basic Styles for Tic-Tac-Toe board */
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #f2f2f2;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #fafafa;
+            border: 2px solid #ccc;
+            font-size: 2em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .cell:hover {
+            background-color: #f0f0f0;
+        }
+
+        .score-board {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+
+        .score {
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #e0e0e0;
+            color: #333;
+        }
+
+        .confetti {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Tic-Tac-Toe Game</h1>
+    <div class="score-board">
+        <div class="score">Player X: <span id="scoreX">0</span></div>
+        <div class="score">Player O: <span id="scoreO">0</span></div>
+    </div>
+
+    <div class="board" id="board">
+        <div class="cell" data-cell="0"></div>
+        <div class="cell" data-cell="1"></div>
+        <div class="cell" data-cell="2"></div>
+        <div class="cell" data-cell="3"></div>
+        <div class="cell" data-cell="4"></div>
+        <div class="cell" data-cell="5"></div>
+        <div class="cell" data-cell="6"></div>
+        <div class="cell" data-cell="7"></div>
+        <div class="cell" data-cell="8"></div>
+    </div>
+
+    <div id="confetti" class="confetti"></div>
+
+    <script>
+        const cells = document.querySelectorAll('.cell');
+        let currentPlayer = 'X';
+        let gameBoard = ['', '', '', '', '', '', '', '', ''];
+        let scoreX = 0;
+        let scoreO = 0;
+
+        const winPatterns = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+            [0, 4, 8], [2, 4, 6]  // diagonals
+        ];
+
+        function startNewGame() {
+            gameBoard = ['', '', '', '', '', '', '', '', ''];
+            cells.forEach(cell => cell.textContent = '');
+            currentPlayer = 'X';
+        }
+
+        function checkWinner() {
+            for (const pattern of winPatterns) {
+                const [a, b, c] = pattern;
+                if (gameBoard[a] && gameBoard[a] === gameBoard[b] && gameBoard[a] === gameBoard[c]) {
+                    setTimeout(() => announceWinner(gameBoard[a]), 200);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function announceWinner(winner) {
+            if (winner === 'X') {
+                scoreX++;
+                document.getElementById('scoreX').textContent = scoreX;
+            } else {
+                scoreO++;
+                document.getElementById('scoreO').textContent = scoreO;
+            }
+            triggerConfetti();
+            setTimeout(startNewGame, 2000); // Start a new game after a winner is declared
+        }
+
+        function triggerConfetti() {
+            const confettiContainer = document.getElementById('confetti');
+            const confetti = document.createElement('div');
+            confetti.style.position = 'absolute';
+            confetti.style.width = '5px';
+            confetti.style.height = '5px';
+            confetti.style.backgroundColor = '#ff5733';
+            confetti.style.animation = 'confettiFall 1s infinite';
+            confettiContainer.appendChild(confetti);
+
+            // Random positioning of confetti
+            const xPos = Math.random() * window.innerWidth;
+            const yPos = Math.random() * window.innerHeight;
+            confetti.style.left = `${xPos}px`;
+            confetti.style.top = `${yPos}px`;
+
+            setTimeout(() => confetti.remove(), 3000);
+        }
+
+        // Cell click handler
+        cells.forEach(cell => {
+            cell.addEventListener('click', () => {
+                const index = cell.getAttribute('data-cell');
+                if (gameBoard[index] === '') {
+                    gameBoard[index] = currentPlayer;
+                    cell.textContent = currentPlayer;
+                    if (!checkWinner()) {
+                        currentPlayer = (currentPlayer === 'X') ? 'O' : 'X'; // Switch player
+                    }
+                }
+            });
+        });
+
+        // CSS Animation for confetti fall
+        const styleSheet = document.styleSheets[0];
+        styleSheet.insertRule(`
+            @keyframes confettiFall {
+                0% { transform: translateY(0) scale(1); opacity: 1; }
+                100% { transform: translateY(200px) scale(0.5); opacity: 0; }
+            }
+        `, styleSheet.cssRules.length);
+
+        // Start a new game initially
+        startNewGame();
+
+    </script>
+
+</body>
+</html>
+
+

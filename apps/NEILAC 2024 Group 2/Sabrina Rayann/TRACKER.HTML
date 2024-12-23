@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habit Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to bottom right, #fdfbfb, #ebedee, #dfe9f3);
+            color: #333;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 90%;
+            max-width: 600px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #5a67d8;
+        }
+        input[type="text"], button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #5a67d8;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #434190;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .delete {
+            color: red;
+            cursor: pointer;
+        }
+        .flower {
+            position: absolute;
+            color: #ff69b4;
+            font-size: 20px;
+            animation: fall 3s linear forwards;
+        }
+        @keyframes fall {
+            0% {
+                transform: translateY(-10vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Habit Tracker</h1>
+        <input type="text" id="habitInput" placeholder="Enter a new habit (e.g. ☕ Drink Water)">
+        <button onclick="addHabit()">Add Habit</button>
+        <ul id="habitList"></ul>
+    </div>
+
+    <script>
+        const habitList = document.getElementById("habitList");
+        let habits = JSON.parse(localStorage.getItem("habits")) || [];
+
+        function renderHabits() {
+            habitList.innerHTML = "";
+            habits.forEach((habit, index) => {
+                const li = document.createElement("li");
+                li.innerHTML = `
+                    <span>${habit}</span>
+                    <span class="delete" onclick="deleteHabit(${index})">&times;</span>
+                `;
+                habitList.appendChild(li);
+            });
+        }
+
+        function addHabit() {
+            const habitInput = document.getElementById("habitInput");
+            const habit = habitInput.value.trim();
+            if (habit) {
+                const emojiHabit = addEmoji(habit);
+                habits.push(emojiHabit);
+                localStorage.setItem("habits", JSON.stringify(habits));
+                renderHabits();
+                habitInput.value = "";
+                createFlowers();
+            }
+        }
+
+        function deleteHabit(index) {
+            habits.splice(index, 1);
+            localStorage.setItem("habits", JSON.stringify(habits));
+            renderHabits();
+        }
+
+        function addEmoji(habit) {
+            const keywords = [
+                { keyword: "water", emoji: "☕" },
+                { keyword: "exercise", emoji: "🏋️" },
+                { keyword: "read", emoji: "📖" },
+                { keyword: "meditate", emoji: "🦊" },
+                { keyword: "sleep", emoji: "💤" },
+            ];
+            for (const { keyword, emoji } of keywords) {
+                if (habit.toLowerCase().includes(keyword)) {
+                    return `${emoji} ${habit}`;
+                }
+            }
+            return `🌟 ${habit}`; // Default emoji if no keyword matches
+        }
+
+        function createFlowers() {
+            for (let i = 0; i < 10; i++) {
+                const flower = document.createElement("div");
+                flower.textContent = "🌸";
+                flower.classList.add("flower");
+                flower.style.left = Math.random() * 100 + "vw";
+                flower.style.animationDuration = Math.random() * 2 + 2 + "s";
+                document.body.appendChild(flower);
+
+                // Remove the flower after animation ends
+                flower.addEventListener("animationend", () => {
+                    flower.remove();
+                });
+            }
+        }
+
+        window.onload = renderHabits;
+    </script>
+</body>
+</html>

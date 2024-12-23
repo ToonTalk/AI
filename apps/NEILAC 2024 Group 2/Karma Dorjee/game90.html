@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Man Riding Bicycle Game with Sound, Scoring, Levels, and Realistic Man</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+        }
+        canvas {
+            display: block;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="score"></div>
+
+    <!-- Audio files -->
+    <audio id="bgMusic" loop>
+        <source src="your-background-music.mp3" type="audio/mp3">
+        Your browser does not support the audio element.
+    </audio>
+    <audio id="collisionSound">
+        <source src="collision-sound.mp3" type="audio/mp3">
+        Your browser does not support the audio element.
+    </audio>
+    <audio id="scoreSound">
+        <source src="score-sound.mp3" type="audio/mp3">
+        Your browser does not support the audio element.
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set the canvas dimensions
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Bicycle and Man object
+        const bicycle = {
+            x: canvas.width / 2,
+            y: canvas.height - 150,
+            width: 60,
+            height: 20,
+            speed: 5,
+            dx: 0,
+            dy: 0,
+            color: '#FF4500',
+        };
+
+        const man = {
+            x: bicycle.x + 10,
+            y: bicycle.y - 40,
+            width: 20,
+            height: 40,
+            color: 'black'
+        };
+
+        // Road properties
+        const road = {
+            width: canvas.width,
+            height: 200,
+            top: canvas.height - 200,
+            color: '#2F4F4F'
+        };
+
+        // Obstacles
+        const obstacles = [];
+        let obstacleSpeed = 3;
+        const obstacleWidth = 30;
+        const obstacleHeight = 30;
+
+        // Controls
+        let keys = {};
+
+        // Score and Level
+        let score = 0;
+        let level = 1;
+        let levelThreshold = 100; // Increase level every 100 points
+
+        // Get audio elements
+        const bgMusic = document.getElementById('bgMusic');
+        const collisionSound = document.getElementById('collisionSound');
+        const scoreSound = document.getElementById('scoreSound');
+
+        // Play background music
+        bgMusic.play();
+
+        // Handle keydown and keyup events
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Update position based on key input
+        function updatePosition() {
+            if (keys['ArrowLeft']) {
+                bicycle.dx = -bicycle.speed;
+                man.x = bicycle.x + 10;  // Sync man with the bicycle
+            } else if (keys['ArrowRight']) {
+                bicycle.dx = bicycle.speed;
+                man.x = bicycle.x + 10;  // Sync man with the bicycle
+            } else {
+                bicycle.dx = 0;
+            }
+
+            // Update bicycle position
+            bicycle.x += bicycle.dx;
+
+            // Prevent bicycle from going out of bounds
+            if (bicycle.x < 0) bicycle.x = 0;
+            if (bicycle.x + bicycle.width > canvas.width) bicycle.x = canvas.width - bicycle.width;
+        }
+
+        // Generate random obstacles
+        function createObstacle() {
+            const x = Math.random() * (canvas.width - obstacleWidth); // Random x position
+            obstacles.push({
+                x: x,
+                y: -obstacleHeight, // Start off-screen
+                width: obstacleWidth,
+                height: obstacleHeight,
+                color: 'red'
+            });
+        }
+
+        // Update the position of obstacles
+        function updateObstacles() {
+            for (let i = 0; i < obstacles.length; i++) {
+                obstacles[i].y += obstacleSpeed;
+                // Remove obstacles that have passed the bottom of the screen
+                if (obstacles[i].y > canvas.height) {
+                    obstacles.splice(i, 1);
+                    score += 10; // Increase score as obstacles pass
+                    scoreSound.play(); // Play score sound
+                    i--;
+                }
+            }
+        }
+
+        // Check for collisions between the bicycle and obstacles
+        function checkCollisions() {
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                if (
+                    bicycle.x < obs.x + obs.width &&
+                    bicycle.x + bicycle.width > obs.x &&
+                    bicycle.y < obs.y + obs.height &&
+                    bicycle.y + bicycle.height > obs.y
+                ) {
+                    collisionSound.play(); // Play collision sound
+                    alert(`Game Over! Your score was: ${score}`);
+                    resetGame();
+                }
+            }
+        }
+
+        // Draw the background elements (sun/moon and trees)
+        function drawBackground() {
+            // Sky (light blue)
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw the Sun (daytime) or Moon (nighttime)
+            const isDaytime = true; // Set to false for moon
+            if (isDaytime) {
+                ctx.fillStyle = '#FFD700'; // Sun
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, 100, 50, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = '#F0F8FF'; // Moon
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, 100, 50, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw Trees in the background
+            for (let i = 0; i < 5; i++) {
+                const treeX = Math.random() * canvas.width;
+                const treeY = canvas.height - 150 - Math.random() * 100;
+                drawTree(treeX, treeY);
+            }
+        }
+
+        // Draw a tree
+        function drawTree(x, y) {
+            // Tree trunk
+            ctx.fillStyle = '#8B4513'; // Brown trunk
+            ctx.fillRect(x, y, 20, 50);
+
+            // Tree leaves
+            ctx.fillStyle = '#228B22'; // Green leaves
+            ctx.beginPath();
+            ctx.arc(x + 10, y, 30, 0, Math.PI * 2); // Tree foliage
+            ctx.fill();
+        }
+
+        // Draw the road
+        function drawRoad() {
+            ctx.fillStyle = road.color;
+            ctx.fillRect(0, road.top, road.width, road.height);
+        }
+
+        // Draw the man riding the bicycle (stick figure for now)
+        function drawMan() {
+            ctx.fillStyle = 'black';
+
+            // Man's body (stick figure)
+            ctx.beginPath();
+            ctx.moveTo(man.x + 10, man.y); // Body starting point
+            ctx.lineTo(man.x + 10, man.y + 20); // Body length
+            ctx.stroke();
+
+            // Man's arms (stick figure)
+            ctx.beginPath();
+            ctx.moveTo(man.x, man.y + 10);
+            ctx.lineTo(man.x + 20, man.y + 10); // Arms
+            ctx.stroke();
+
+            // Man's legs (stick figure)
+            ctx.beginPath();
+            ctx.moveTo(man.x + 10, man.y + 20); // Left leg
+            ctx.lineTo(man.x, man.y + 30);
+            ctx.moveTo(man.x + 10, man.y + 20); // Right leg
+            ctx.lineTo(man.x + 20, man.y + 30);
+            ctx.stroke();
+
+            // Man's head (circle)
+            ctx.beginPath();
+            ctx.arc(man.x + 10, man.y - 10, 10, 0, Math.PI * 2); // Head
+            ctx.fill();
+        }
+
+        // Draw the bicycle
+        function drawBicycle() {
+            ctx.fillStyle = bicycle.color;
+            ctx.fillRect(bicycle.x, bicycle.y, bicycle.width, bicycle.height);
+        }
+
+        // Draw obstacles
+        function drawObstacles() {
+            for (let i = 0; i < obstacles.length; i++) {
+                ctx.fillStyle = obstacles[i].color;
+                ctx.fillRect(obstacles[i].x, obstacles[i].y, obstacles[i].width, obstacles[i].height);
+            }
+        }
+
+        // Draw score and level
+        function drawScoreAndLevel() {
+            ctx.font = '20px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+            ctx.fillText(`Level: ${level}`, canvas.width - 100, 30);
+        }
+
+        // Reset the game after collision
+        function resetGame() {
+            bicycle.x = canvas.width / 2;
+            man.x = bicycle.x + 10;
+            obstacles.length = 0; // Clear obstacles
+            score = 0; // Reset score
+            level = 1; // Reset level
+            obstacleSpeed = 3; // Reset obstacle speed
+        }
+
+        // Update level based on score
+        function updateLevel() {
+            if (score >= levelThreshold) {
+                level++;
+                obstacleSpeed += 1; // Increase obstacle speed as level increases
+                levelThreshold += 100; // Increase level threshold
+            }
+        }
+
+        // Main game loop
+        function gameLoop() {
+            updatePosition();
+            updateObstacles();
+            checkCollisions();
+            updateLevel();
+            drawBackground();
+            drawRoad();
+            drawBicycle();
+            drawMan();
+            drawObstacles();
+            drawScoreAndLevel();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        setInterval(createObstacle, 2000); // Create a new obstacle every 2 seconds
+        gameLoop();
+    </script>
+</body>
+</html>

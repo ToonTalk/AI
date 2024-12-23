@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: black;
+            color: white;
+            text-align: center;
+            overflow: hidden;
+        }
+        h1 {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        input, button {
+            padding: 10px;
+            font-size: 1em;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+        }
+        input {
+            width: 60%;
+        }
+        button {
+            cursor: pointer;
+            background-color: white;
+            color: black;
+        }
+        button:hover {
+            background-color: #f0f0f0;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .task {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px auto;
+            background-color: #222;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 600px;
+        }
+        .task.completed span {
+            text-decoration: line-through;
+            color: gray;
+        }
+        .well-done {
+            color: gold;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .priority {
+            background-color: #ffcccb; /* Light red for priority */
+        }
+        p {
+            margin: 20px;
+            font-size: 1.2em;
+        }
+
+        /* Fireworks CSS */
+        .firework {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: gold;
+            border-radius: 50%;
+            animation: explode 1.5s ease-out forwards;
+        }
+
+        @keyframes explode {
+            0% {
+                opacity: 1;
+                transform: translate(0, 0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--x), var(--y)) scale(3);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>📝 To-Do List</h1>
+
+    <div>
+        <input type="text" id="taskInput" placeholder="✍️ Add a new task" />
+        <button onclick="addTask()">➕ Add Task</button>
+    </div>
+
+    <p id="taskCounter">Tasks: 0 | Completed: 0</p>
+
+    <ul id="taskList"></ul>
+
+    <script>
+        function addTask() {
+            const taskInput = document.getElementById('taskInput');
+            const taskText = taskInput.value.trim();
+
+            if (taskText === '') {
+                alert('Task cannot be empty!');
+                return;
+            }
+
+            const taskList = document.getElementById('taskList');
+            const li = document.createElement('li');
+            li.className = 'task';
+            li.innerHTML = `
+                <span>${taskText}</span>
+                <div>
+                    <button onclick="editTask(this)">✏️ Edit</button>
+                    <button onclick="markCompleted(this)">✅ Done</button>
+                    <button onclick="prioritizeTask(this)">⚡ Priority</button>
+                    <button onclick="deleteTask(this)">🗑️ Delete</button>
+                </div>
+            `;
+            taskList.appendChild(li);
+
+            taskInput.value = '';
+            updateCounter();
+        }
+
+        function editTask(button) {
+            const task = button.parentElement.previousElementSibling;
+            const newText = prompt('Edit your task:', task.innerText);
+            if (newText) task.innerText = newText.trim();
+        }
+
+        function markCompleted(button) {
+            const task = button.parentElement.parentElement;
+            task.classList.toggle('completed');
+
+            if (task.classList.contains('completed')) {
+                addWellDone(task);
+                launchFireworks();
+            } else {
+                removeWellDone(task);
+            }
+
+            updateCounter();
+        }
+
+        function addWellDone(task) {
+            let wellDoneSpan = task.querySelector('.well-done');
+            if (!wellDoneSpan) {
+                const span = document.createElement('span');
+                span.className = 'well-done';
+                span.innerText = '🎉 WELL DONE!';
+                task.appendChild(span);
+            }
+        }
+
+        function removeWellDone(task) {
+            const wellDoneSpan = task.querySelector('.well-done');
+            if (wellDoneSpan) wellDoneSpan.remove();
+        }
+
+        function prioritizeTask(button) {
+            const task = button.parentElement.parentElement;
+            task.classList.toggle('priority');
+        }
+
+        function deleteTask(button) {
+            button.parentElement.parentElement.remove();
+            updateCounter();
+        }
+
+        function updateCounter() {
+            const tasks = document.querySelectorAll('.task').length;
+            const completedTasks = document.querySelectorAll('.task.completed').length;
+            document.getElementById('taskCounter').innerText = `Tasks: ${tasks} | Completed: ${completedTasks}`;
+        }
+
+        function launchFireworks() {
+            for (let i = 0; i < 20; i++) {
+                const firework = document.createElement('div');
+                firework.className = 'firework';
+                firework.style.left = `${Math.random() * 100}vw`;
+                firework.style.top = `${Math.random() * 100}vh`;
+
+                const x = `${Math.random() * 200 - 100}px`;
+                const y = `${Math.random() * 200 - 100}px`;
+
+                firework.style.setProperty('--x', x);
+                firework.style.setProperty('--y', y);
+
+                document.body.appendChild(firework);
+
+                setTimeout(() => {
+                    firework.remove();
+                }, 1500);
+            }
+        }
+    </script>
+</body>
+</html>

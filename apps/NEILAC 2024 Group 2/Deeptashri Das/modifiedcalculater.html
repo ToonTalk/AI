@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech to Numbers</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(90deg, #f3ec78, #af4261);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .display {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 5px solid #fff;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            text-align: center;
+            min-width: 300px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 20px;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        #startBtn {
+            background: #28a745;
+            color: #fff;
+        }
+
+        #startBtn:hover {
+            background: #218838;
+        }
+
+        #stopBtn {
+            background: #dc3545;
+            color: #fff;
+        }
+
+        #stopBtn:hover {
+            background: #c82333;
+        }
+
+        #stopBtn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="display" id="numberDisplay">Listening...</div>
+    <div class="controls">
+        <button id="startBtn">Start</button>
+        <button id="stopBtn" disabled>Stop</button>
+    </div>
+
+    <script>
+        const numberDisplay = document.getElementById('numberDisplay');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+
+        let recognition;
+        let isListening = false;
+
+        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[event.results.length - 1][0].transcript;
+                const number = transcript.match(/\d+/g);
+                if (number) {
+                    numberDisplay.textContent = number.join(' ');
+                } else {
+                    numberDisplay.textContent = 'No numbers detected';
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                numberDisplay.textContent = 'Error occurred: ' + event.error;
+            };
+        } else {
+            numberDisplay.textContent = 'Speech Recognition not supported in this browser.';
+            startBtn.disabled = true;
+            stopBtn.disabled = true;
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (isListening) return;
+
+            recognition.start();
+            isListening = true;
+            numberDisplay.textContent = 'Listening...';
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (!isListening) return;
+
+            recognition.stop();
+            isListening = false;
+            numberDisplay.textContent = 'Stopped';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        });
+    </script>
+</body>
+</html>

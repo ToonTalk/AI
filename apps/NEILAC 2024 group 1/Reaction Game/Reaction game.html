@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Timing Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            background: url('F1.webp') no-repeat center center fixed;
+            background-size: cover;
+            color: white;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        #start-button, #click-area, #reset-button {
+            display: block;
+            margin: 20px auto;
+            padding: 15px 30px;
+            font-size: 24px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+        }
+        #start-button {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #click-area {
+            width: 300px;
+            height: 200px;
+            background-color: #007BFF;
+            color: white;
+            line-height: 200px;
+            display: none;
+        }
+        #result {
+            font-size: 20px;
+            margin-top: 20px;
+        }
+        .chart-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 600px;
+            height: 300px;
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .info-container {
+            position: absolute;
+            top: 340px;
+            right: 20px;
+            width: 400px;
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .info-container h2 {
+            margin: 0 0 10px;
+            font-size: 20px;
+            color: black;
+        }
+        .log {
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: rgba(51, 51, 51, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .log p {
+            margin: 5px 0;
+            color: black;
+        }
+        .light-container {
+            position: absolute;
+            top: 50%;
+            left: 20px;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 10px;
+            background-color: black; /* Opaque black background */
+            border-radius: 10px;
+        }
+        .light {
+            width: 80px; /* Increased size */
+            height: 80px; /* Increased size */
+            border-radius: 50%;
+            background-color: gray;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+        .light1 { background-color: red; }
+        .light2 { background-color: red; }
+        .light3 { background-color: red; }
+        .light4 { background-color: red; }
+        .light5 { background-color: red; }
+
+        .green {
+            background-color: green;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Reaction Timing Game</h1>
+        <button id="start-button">Start</button>
+        <div id="click-area">Click me!</div>
+        <div id="result"></div>
+        <button id="reset-button">Reset Best Score</button>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="reactionChart"></canvas>
+    </div>
+
+    <div class="info-container">
+        <h2>Best Score</h2>
+        <div id="best-score">No best score yet</div>
+        <h2>Reaction Log</h2>
+        <div class="log" id="reaction-log"></div>
+    </div>
+
+    <div class="light-container" id="light-container">
+        <div class="light light1"></div>
+        <div class="light light2"></div>
+        <div class="light light3"></div>
+        <div class="light light4"></div>
+        <div class="light light5"></div>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('start-button');
+        const clickArea = document.getElementById('click-area');
+        const result = document.getElementById('result');
+        const bestScoreDisplay = document.getElementById('best-score');
+        const reactionLog = document.getElementById('reaction-log');
+        const resetButton = document.getElementById('reset-button');
+        const lightContainer = document.getElementById('light-container');
+        const lights = lightContainer.getElementsByClassName('light');
+        const ctx = document.getElementById('reactionChart').getContext('2d');
+
+        let startTime;
+        let timeout;
+        let reactionTimes = [];
+        let labels = [];
+        let bestScore = null;
+
+        // Initialize Chart.js
+        const reactionChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Reaction Time (ms)',
+                    data: reactionTimes,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 2,
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Attempt Number',
+                            color: 'black',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        ticks: {
+                            color: 'black'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Reaction Time (ms)',
+                            color: 'black',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        ticks: {
+                            color: 'black'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: 'black'
+                        }
+                    }
+                }
+            }
+        });
+
+        startButton.addEventListener('click', () => {
+            result.textContent = '';
+            clickArea.style.display = 'none';
+            startButton.textContent = 'Wait for it...';
+            startButton.disabled = true;
+            resetLights();
+
+            const delay = Math.random() * 3000 + 2000;
+
+            let lightIndex = 0;
+
+            const redInterval = setInterval(() => {
+                if (lightIndex < lights.length) {
+                    lights[lightIndex].style.opacity = '1'; // Light becomes visible
+                    lightIndex++;
+                } else {
+                    clearInterval(redInterval);
+                    setTimeout(() => {
+                        startButton.style.backgroundColor = 'red';
+                        setLightsToGreen();
+                        startButton.style.display = 'none';
+                        clickArea.style.display = 'block';
+                        startTime = Date.now();
+                    }, 500);
+                }
+            }, 500);
+        });
+
+        clickArea.addEventListener('click', () => {
+            const reactionTime = Date.now() - startTime;
+            result.textContent = `Your reaction time is ${reactionTime} ms.`;
+
+            reactionTimes.push(reactionTime);
+            labels.push(reactionTimes.length);
+            reactionChart.update();
+
+            if (bestScore === null || reactionTime < bestScore) {
+                bestScore = reactionTime;
+                bestScoreDisplay.textContent = `${bestScore} ms`;
+            }
+
+            const timestamp = new Date().toLocaleString();
+            const logEntry = document.createElement('p');
+            logEntry.textContent = `${timestamp}: ${reactionTime} ms`;
+            reactionLog.appendChild(logEntry);
+
+            clickArea.style.display = 'none';
+            startButton.style.display = 'block';
+            startButton.style.backgroundColor = '#4CAF50';
+            startButton.textContent = 'Start';
+            startButton.disabled = false;
+        });
+
+        resetButton.addEventListener('click', () => {
+            bestScore = null;
+            bestScoreDisplay.textContent = 'No best score yet';
+        });
+
+        function resetLights() {
+            Array.from(lights).forEach(light => {
+                light.style.opacity = '0.5';
+                light.style.backgroundColor = 'red';
+            });
+        }
+
+        function setLightsToGreen() {
+            Array.from(lights).forEach(light => {
+                light.style.backgroundColor = 'green';
+            });
+        }
+    </script>
+</body>
+</html>

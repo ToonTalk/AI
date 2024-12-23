@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mystery Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            overflow: auto; /* Allow scrolling */
+            height: 100%; /* Ensure body takes full height */
+        }
+        h1 {
+            margin-top: 50px;
+        }
+        h2 {
+            margin-top: 30px;
+        }
+        .options {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        .option {
+            width: 150px;
+            height: 150px;
+            margin: 15px;
+            background-color: #4CAF50;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.3s;
+            position: relative;
+            text-align: center;
+        }
+        .option:hover {
+            transform: scale(1.1);
+        }
+        .selected {
+            background-color: #2196F3;
+        }
+        .selected .option-text {
+            font-size: 16px;
+            color: white;
+        }
+        .selected .points {
+            font-size: 12px;
+            color: white;
+        }
+
+        /* Fireworks style */
+        @keyframes explode {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(5);
+                opacity: 0;
+            }
+        }
+
+        /* Ensure fireworks are contained */
+        .firework {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+            pointer-events: none;
+        }
+    </style>
+    <script>
+        // Fireworks trigger function
+        function triggerFireworks() {
+            const numFireworks = 5;
+            for (let i = 0; i < numFireworks; i++) {
+                const firework = document.createElement('div');
+                firework.style.position = 'absolute';
+                firework.style.top = `${Math.random() * 100}%`;
+                firework.style.left = `${Math.random() * 100}%`;
+                firework.style.width = '10px';
+                firework.style.height = '10px';
+                firework.style.borderRadius = '50%';
+                firework.style.backgroundColor = 'red';
+                firework.style.animation = 'explode 1s ease-out forwards';
+                firework.classList.add('firework');
+                document.body.appendChild(firework);
+
+                setTimeout(() => {
+                    firework.remove();
+                }, 1000);
+            }
+        }
+
+        const options = {
+            car: [
+                { name: "Ferrari", score: 100 },
+                { name: "Tesla Model S", score: 80 },
+                { name: "BMW", score: 60 },
+                { name: "Lamborghini", score: 120 },
+                { name: "Porsche", score: 110 }
+            ],
+            job: [
+                { name: "Tech Entrepreneur", score: 100 },
+                { name: "Software Developer", score: 80 },
+                { name: "Investment Banker", score: 60 },
+                { name: "Data Scientist", score: 110 },
+                { name: "Architect", score: 90 }
+            ],
+            luxuryBrand: [
+                { name: "Gucci", score: 100 },
+                { name: "Louis Vuitton", score: 80 },
+                { name: "Prada", score: 60 },
+                { name: "Chanel", score: 120 },
+                { name: "Rolex", score: 110 }
+            ],
+            city: [
+                { name: "New York", score: 100 },
+                { name: "Paris", score: 80 },
+                { name: "Tokyo", score: 60 },
+                { name: "London", score: 110 },
+                { name: "Sydney", score: 90 }
+            ],
+            color: [
+                { name: "Red", score: 100 },
+                { name: "Blue", score: 80 },
+                { name: "Green", score: 60 },
+                { name: "Yellow", score: 110 },
+                { name: "Black", score: 90 }
+            ],
+            pet: [
+                { name: "Dog", score: 100 },
+                { name: "Cat", score: 80 },
+                { name: "Rabbit", score: 60 },
+                { name: "Bird", score: 110 },
+                { name: "Hamster", score: 90 }
+            ],
+            smartphone: [
+                { name: "iPhone", score: 100 },
+                { name: "Samsung Galaxy", score: 80 },
+                { name: "Google Pixel", score: 60 },
+                { name: "OnePlus", score: 110 },
+                { name: "Xiaomi", score: 90 }
+            ]
+        };
+
+        let totalScore = 0;
+        let choices = {
+            car: null,
+            job: null,
+            luxuryBrand: null,
+            city: null,
+            color: null,
+            pet: null,
+            smartphone: null
+        };
+
+        function choose(category, option) {
+            const choice = options[category][option - 1];
+            choices[category] = choice;
+            totalScore += choice.score;
+
+            // Update the selected option with the choice and score
+            updateOption(category, option, choice);
+
+            // Trigger fireworks
+            triggerFireworks();
+
+            // Check if all categories are chosen
+            if (Object.values(choices).every(choice => choice !== null)) {
+                displayFinalResults();
+            }
+        }
+
+        function updateOption(category, option, choice) {
+            const selectedDiv = document.querySelector(`#${category}-option-${option}`);
+            selectedDiv.classList.add('selected');
+            const optionText = selectedDiv.querySelector('.option-text');
+            optionText.innerHTML = `${choice.name}<br><span class="points">Points: ${choice.score}</span>`;
+        }
+
+        function displayFinalResults() {
+            const resultDiv = document.getElementById("result");
+            resultDiv.innerHTML = `
+                <p><strong>Total Score:</strong> ${totalScore}</p>
+            `;
+        }
+    </script>
+</head>
+<body>
+    <h1>Choose Your Mystery Options!</h1>
+
+    <!-- Car Options -->
+    <h2>Choose a Car</h2>
+    <div class="options">
+        <div class="option" id="car-option-1" onclick="choose('car', 1)">
+            <div class="option-text">Option 1</div>
+        </div>
+        <div class="option" id="car-option-2" onclick="choose('car', 2)">
+            <div class="option-text">Option 2</div>
+        </div>
+        <div class="option" id="car-option-3" onclick="choose('car', 3)">
+            <div class="option-text">Option 3</div>
+        </div>
+        <div class="option" id="car-option-4" onclick="choose('car', 4)">
+            <div class="option-text">Option 4</div>
+        </div>
+        <div class="option" id="car-option-5" onclick="choose('car', 5)">
+            <div class="option-text">Option 5</div>
+        </div>
+    </div>
+
+    <!-- Job Options -->
+    <h2>Choose a Job</h2>
+    <div class="options">
+        <div class="option" id="job-option-1" onclick="choose('job', 1)">
+            <div class="option-text">Option 1</div>
+        </div>
+        <div class="option" id="job-option-2" onclick="choose('job', 2)">
+            <div class="option-text">Option 2</div>
+        </div>
+        <div class="option" id="job-option-3" onclick="choose('job', 3)">
+            <div class="option-text">Option 3</div>
+        </div>
+        <div class="option" id="job-option-4" onclick="choose('job', 4)">
+            <div class="option-text">Option 4</div>
+        </div>
+        <div class="option" id="job-option-5" onclick="choose('job', 5)">
+            <div class="option-text">Option 5</div>
+        </div>
+    </div>
+
+    <!-- Luxury Brand Options -->
+    <h2>Choose a Luxury Brand</h2>
+    <div class="options">
+        <div class="option" id="luxuryBrand-option-1" onclick="choose('luxuryBrand', 1)">
+            <div class="option-text">Option 1</div>
+        </div>
+        <div class="option" id="luxuryBrand-option-2" onclick="choose('luxuryBrand', 2)">
+            <div class="option-text">Option 2</div>
+        </div>
+        <div class="option" id="luxuryBrand-option-3" onclick="choose('luxuryBrand', 3)">
+            <div class="option-text">Option 3</div>
+        </div>
+        <div class="option" id="luxuryBrand-option-4" onclick="choose('luxuryBrand', 4)">
+            <div class="option-text">Option 4</div>
+        </div>
+        <div class="option" id="luxuryBrand-option-5" onclick="choose('luxuryBrand', 5)">
+            <div class="option-text">Option 5</div>
+        </div>
+    </div>
+
+    <!-- City Options -->
+    <h2>Choose a City</h2>
+    <div class="options">
+        <div class="option" id="city-option-1" onclick="choose('city', 1)">
+            <div class="option-text">Option 1</div>
+        </div>
+        <div class="option" id="city-option-2" onclick="choose('city', 2)">
+            <div class="option-text">Option 2</div>
+        </div>
+        <div class="option" id="city-option-3" onclick="choose('city', 3)">
+            <div class="option-text">Option 3</div>
+        </div>
+        <div class="option" id="city-option-4" onclick="choose('city', 4)">
+            <div class="option-text">Option 4</div>
+        </div>
+        <div class="option" id="city-option-5" onclick="choose('city', 5)">
+            <div class="option-text">Option 5</div>
+        </div>
+    </div>
+
+    <!-- Color Options -->
+    <h2>Choose a Color</h2>
+    <div class="options">
+        <div class="option" id="color-option-1" onclick="choose('color', 1)">
+            <div class="option-text">Option 1</div>
+        </div>
+        <div class="option" id="color-option-2" onclick="choose('color', 2)">
+            <div class="option-text">Option 2</div>
+        </div>
+        <div class="option" id="color-option-3" onclick="choose('color', 3)">
+            <div class="option-text">Option 3</div>
+        </div>
+        <div class="option" id="color-option-4" onclick="choose('color', 4)">
+            <div class="option-text">Option 4</div>
+        </div>
+        <div class="option" id="color-option-5" onclick="choose('color', 5)">
+            <div class="option-text">Option 5</div>
+        </div>
+    </div>
+
+    <!-- Pet Options -->
+    <h2>Choose a Pet</h2>
+    <div class="options">
+        <div class="option" id="pet-option-1" onclick="choose('pet', 1)">
+            <div class="option-text">Option 1</div>
+        </div>
+        <div class="option" id="pet-option-2" onclick="choose('pet', 2)">
+            <div class="option-text">Option 2</div>
+        </div>
+        <div class="option" id="pet-option-3" onclick="choose('pet', 3)">
+            <div class="option-text">Option 3</div>
+        </div>
+        <div class="option" id="pet-option-4" onclick="choose('pet', 4)">
+            <div class="option-text">Option 4</div>
+        </div>
+        <div class="option" id="pet-option-5" onclick="choose('pet', 5)">
+            <div class="option-text">Option 5</div>
+        </div>
+    </div>
+
+    <!-- Smartphone Options -->
+    <h2>Choose a Smartphone</h2>
+    <div class="options">
+        <div class="option" id="smartphone-option-1" onclick="choose('smartphone', 1)">
+            <div class="option-text">Option 1</div>
+        </div>
+        <div class="option" id="smartphone-option-2" onclick="choose('smartphone', 2)">
+            <div class="option-text">Option 2</div>
+        </div>
+        <div class="option" id="smartphone-option-3" onclick="choose('smartphone', 3)">
+            <div class="option-text">Option 3</div>
+        </div>
+        <div class="option" id="smartphone-option-4" onclick="choose('smartphone', 4)">
+            <div class="option-text">Option 4</div>
+        </div>
+        <div class="option" id="smartphone-option-5" onclick="choose('smartphone', 5)">
+            <div class="option-text">Option 5</div>
+        </div>
+    </div>
+
+    <!-- Final Results -->
+    <div id="result" style="margin-top: 50px;"></div>
+</body>
+</html>

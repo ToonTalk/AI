@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(120deg, #6a11cb, #2575fc);
+            color: #333;
+        }
+        .assistant-container {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            width: 450px;
+            max-width: 95%;
+            padding: 20px;
+            position: relative;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 5px;
+            font-size: 2em;
+            color: #4a4a4a;
+            font-weight: bold;
+        }
+        .sub-header {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            color: #666;
+            font-weight: normal;
+        }
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: #f7f7f7;
+        }
+        .messages .message {
+            margin: 5px 0;
+        }
+        .messages .user {
+            text-align: right;
+            color: #007bff;
+        }
+        .messages .bot {
+            text-align: left;
+            color: #28a745;
+        }
+        input[type="text"] {
+            width: calc(100% - 65px);
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-right: 5px;
+            font-size: 1em;
+        }
+        button {
+            padding: 12px 20px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: space-evenly;
+        }
+        .quick-actions button {
+            flex: 1 1 calc(45% - 10px);
+            max-width: 150px;
+            padding: 10px;
+            background-color: #17a2b8;
+            color: white;
+            font-size: 0.9em;
+            font-weight: bold;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .quick-actions button:hover {
+            background-color: #117a8b;
+        }
+        .theme-toggle {
+            margin-top: 10px;
+            text-align: center;
+        }
+        .theme-toggle button {
+            background-color: #6c757d;
+        }
+        .theme-toggle button:hover {
+            background-color: #495057;
+        }
+        .speed-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            gap: 10px;
+        }
+        .speed-controls button {
+            flex: 1;
+            background-color: #ffc107;
+            padding: 10px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .speed-controls button:hover {
+            background-color: #e0a800;
+        }
+    </style>
+</head>
+<body>
+
+<div class="assistant-container">
+    <div class="header">AI Assistant</div>
+    <div class="sub-header">FRIDAY by SAMPRIT GAUTAM</div>
+    <div class="messages" id="messages"></div>
+    <div class="quick-actions">
+        <button onclick="sendQuickMessage('joke')">Joke</button>
+        <button onclick="sendQuickMessage('riddle')">Riddle</button>
+        <button onclick="sendQuickMessage('motivational quote')">Motivation</button>
+        <button onclick="sendQuickMessage('trivia')">Trivia</button>
+        <button onclick="sendQuickMessage('Friday vs ChatGPT')">Friday vs ChatGPT</button>
+        <button onclick="playSpotifyTrack()">Play Music on Spotify</button>
+    </div>
+    <div>
+        <input type="text" id="userInput" placeholder="Type your message here...">
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="startListening()">🎤</button>
+    </div>
+    <div class="theme-toggle">
+        <button onclick="toggleTheme()">Toggle Theme</button>
+        <button onclick="changeBackgroundColor()">Change Background</button>
+    </div>
+    <div class="speed-controls">
+        <button onclick="increaseSpeed()">Increase Speed</button>
+        <button onclick="decreaseSpeed()">Decrease Speed</button>
+        <button onclick="pauseSpeaking()">Pause</button>
+        <button onclick="resumeSpeaking()">Resume</button>
+        <button onclick="stopSpeaking()">Stop</button>
+    </div>
+</div>
+
+<script>
+    const messagesDiv = document.getElementById('messages');
+    let isDarkTheme = false;
+    let speechRate = 1;
+    let currentUtterance = null;
+
+    function addMessage(content, sender) {
+        const message = document.createElement('div');
+        message.className = `message ${sender}`;
+        message.textContent = content;
+        messagesDiv.appendChild(message);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function speakResponse(response) {
+        if (currentUtterance) {
+            window.speechSynthesis.cancel();
+        }
+        currentUtterance = new SpeechSynthesisUtterance(response);
+        currentUtterance.rate = speechRate;
+        window.speechSynthesis.speak(currentUtterance);
+    }
+
+    function increaseSpeed() {
+        speechRate = Math.min(speechRate + 0.1, 2);
+        alert(`Speech speed increased to ${speechRate.toFixed(1)}`);
+    }
+
+    function decreaseSpeed() {
+        speechRate = Math.max(speechRate - 0.1, 0.5);
+        alert(`Speech speed decreased to ${speechRate.toFixed(1)}`);
+    }
+
+    function pauseSpeaking() {
+        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+            window.speechSynthesis.pause();
+            alert("Speech paused.");
+        } else {
+            alert("No speech is currently active to pause.");
+        }
+    }
+
+    function resumeSpeaking() {
+        if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+            alert("Speech resumed.");
+        } else if (!window.speechSynthesis.speaking) {
+            alert("No speech is currently paused to resume.");
+        } else {
+            alert("Speech is already ongoing.");
+        }
+    }
+
+    function stopSpeaking() {
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            alert("Speech stopped.");
+        } else {
+            alert("No speech is currently active to stop.");
+        }
+    }
+
+    function changeBackgroundColor() {
+        const color = prompt("Enter a background color (e.g., red, #ff0000, rgb(255, 0, 0)):");
+        if (color) {
+            document.body.style.background = color;
+        }
+    }
+
+    async function botResponse(input) {
+        let response = "I'm not sure how to respond to that.";
+        if (input.toLowerCase().includes("hello")) {
+            response = "Hello! How can I assist you today?";
+        } else if (input.toLowerCase().includes("joke")) {
+            response = await getJoke();
+        } else if (input.toLowerCase().includes("time")) {
+            response = `The current time is ${new Date().toLocaleTimeString()}.`;
+        } else if (input.toLowerCase().includes("bye")) {
+            response = "Goodbye! Have a great day!";
+        } else if (input.toLowerCase().includes("riddle")) {
+            response = getRiddle();
+        } else if (input.toLowerCase().includes("tell me about")) {
+            const topic = input.replace(/tell me about/i, "").trim();
+            response = await getWikiSummary(topic);
+        } else if (input.toLowerCase().includes("motivational quote")) {
+            response = getMotivationalQuote();
+        } else if (input.toLowerCase().includes("fun fact") || input.toLowerCase().includes("trivia")) {
+            response = getTrivia();
+        } else if (input.toLowerCase().includes("what is my name")) {
+            response = "Your name is Samprit.";
+        } else if (input.toLowerCase().includes("what is your name")) {
+            response = "My name is Friday.";
+        } else if (input.toLowerCase().includes("where do i live")) {
+            response = "You live in Guwahati.";
+        } else if (input.toLowerCase().includes("who's better, chatgpt or friday")) {
+            response = "Friday, of course, because it's made by you!";
+        }
+
+        addMessage(response, 'bot');
+        speakResponse(response);
+    }
+
+    function sendMessage() {
+        const userInput = document.getElementById('userInput').value;
+        if (userInput.trim() === '') return;
+        addMessage(userInput, 'user');
+        botResponse(userInput);
+        document.getElementById('userInput').value = '';
+    }
+
+    function sendQuickMessage(keyword) {
+        let predefinedMessage = '';
+        switch(keyword) {
+            case 'joke':
+                predefinedMessage = 'Tell me a joke';
+                break;
+            case 'riddle':
+                predefinedMessage = 'Tell me a riddle';
+                break;
+            case 'motivational quote':
+                predefinedMessage = 'Give me a motivational quote';
+                break;
+            case 'trivia':
+                predefinedMessage = 'Give me some trivia';
+                break;
+            case 'Friday vs ChatGPT':
+                predefinedMessage = "Who's better, ChatGPT or Friday?";
+                break;
+        }
+        if (predefinedMessage) {
+            addMessage(predefinedMessage, 'user');
+            botResponse(predefinedMessage);
+        }
+    }
+
+    function toggleTheme() {
+        isDarkTheme = !isDarkTheme;
+        document.body.style.background = isDarkTheme ? '#333' : 'linear-gradient(120deg, #6a11cb, #2575fc)';
+        document.body.style.color = isDarkTheme ? '#fff' : '#000';
+        const container = document.querySelector('.assistant-container');
+        container.style.background = isDarkTheme ? '#444' : 'white';
+        container.style.color = isDarkTheme ? '#fff' : '#333';
+    }
+
+    function startListening() {
+        if (!('webkitSpeechRecognition' in window)) {
+            alert("Sorry, your browser doesn't support speech recognition.");
+            return;
+        }
+
+        const recognition = new webkitSpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.start();
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            addMessage(transcript, 'user');
+            botResponse(transcript);
+        };
+
+        recognition.onerror = function(event) {
+            alert("There was an error with speech recognition. Please try again.");
+        };
+    }
+
+    function playSpotifyTrack() {
+        const trackUrl = "https://open.spotify.com/track/6habFhsOp2NvshLv26DqMb"; // Example track URL
+        window.open(trackUrl, '_blank');
+    }
+
+    // Placeholder functions for missing features
+    async function getJoke() {
+        return "Why don’t skeletons fight each other? They don’t have the guts.";
+    }
+
+    function getRiddle() {
+        return "What has to be broken before you can use it? An egg.";
+    }
+
+    function getMotivationalQuote() {
+        return "The only way to do great work is to love what you do. - Steve Jobs";
+    }
+
+    function getTrivia() {
+        return "Did you know? Honey never spoils. Archaeologists have found pots of honey in ancient Egyptian tombs that are over 3,000 years old and still perfectly edible.";
+    }
+
+    async function getWikiSummary(topic) {
+        try {
+            const response = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`);
+            if (!response.ok) throw new Error('Topic not found');
+            const data = await response.json();
+            return data.extract || "I couldn't find information on that topic.";
+        } catch (error) {
+            return "Sorry, I couldn't fetch information from Wikipedia.";
+        }
+    }
+</script>
+
+</body>
+</html>

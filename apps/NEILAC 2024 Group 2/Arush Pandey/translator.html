@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice-Assisted Translator</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: Arial, sans-serif;
+      }
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: linear-gradient(135deg, #f06, #4a90e2, #50e3c2); /* Gradient Background */
+        background-size: 300% 300%;
+        animation: gradientAnimation 10s ease infinite; /* Subtle animation for gradient */
+        color: #fff; /* Text color for better readability */
+        position: relative;
+        overflow: hidden;
+      }
+      @keyframes gradientAnimation {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+
+      .container {
+        background: rgba(255, 255, 255, 0.9); /* Semi-transparent background */
+        width: 400px;
+        border-radius: 8px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        padding: 20px;
+        z-index: 1;
+        position: relative;
+      }
+      h2 {
+        text-align: center;
+        margin-bottom: 20px;
+        color: #333; /* Dark color for the heading */
+      }
+      textarea {
+        resize: none;
+        width: 100%;
+        height: 120px;
+        padding: 10px;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 1rem;
+        color: #333;
+        background-color: #f8f9fa;
+      }
+      select,
+      button {
+        width: 100%;
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ddd;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      button {
+        background-color: #28a745;
+        color: white;
+        border: none;
+      }
+      button:hover {
+        background-color: #218838;
+      }
+      .speak-now {
+        background-color: #007bff;
+      }
+      .speak-now:hover {
+        background-color: #0056b3;
+      }
+      .listen {
+        background-color: #ffc107;
+      }
+      .listen:hover {
+        background-color: #e0a800;
+      }
+      .new-translation {
+        background-color: #dc3545;
+      }
+      .new-translation:hover {
+        background-color: #c82333;
+      }
+
+      /* Floating Letters Styling */
+      .floating-letter {
+        position: absolute;
+        font-size: 2rem;
+        opacity: 0.7;
+        animation: floatAnimation 10s linear infinite;
+        pointer-events: none;
+      }
+      @keyframes floatAnimation {
+        0% {
+          transform: translateY(0) translateX(0);
+          opacity: 0.7;
+        }
+        50% {
+          transform: translateY(-100vh) translateX(50vw);
+          opacity: 1;
+        }
+        100% {
+          transform: translateY(100vh) translateX(-50vw);
+          opacity: 0.7;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Voice-Assisted Translator</h2>
+      <textarea class="text-area" placeholder="Speak or type here..."></textarea>
+      <select class="from-lang"></select>
+      <select class="to-lang"></select>
+      <button class="translate-btn">Translate</button>
+      <button class="speak-now">Speak Now</button>
+      <button class="listen">Listen</button>
+      <button class="new-translation">New Translation</button>
+    </div>
+
+    <script>
+      const languages = {
+        "en-GB": "English",
+        "es-ES": "Spanish",
+        "fr-FR": "French",
+        "de-DE": "German",
+        "hi-IN": "Hindi",
+        "ar-SA": "Arabic",
+        "zh-CN": "Chinese",
+        "ja-JP": "Japanese",
+        "ko-KR": "Korean",
+      };
+
+      const textArea = document.querySelector(".text-area"),
+        fromLangSelect = document.querySelector(".from-lang"),
+        toLangSelect = document.querySelector(".to-lang"),
+        translateBtn = document.querySelector(".translate-btn"),
+        speakNowBtn = document.querySelector(".speak-now"),
+        listenBtn = document.querySelector(".listen"),
+        newTranslationBtn = document.querySelector(".new-translation");
+
+      // Populate language dropdowns
+      const populateLanguages = () => {
+        for (let code in languages) {
+          const optionFrom = document.createElement("option");
+          const optionTo = document.createElement("option");
+          optionFrom.value = optionTo.value = code;
+          optionFrom.textContent = optionTo.textContent = languages[code];
+
+          if (code === "en-GB") optionFrom.selected = true;
+          if (code === "es-ES") optionTo.selected = true;
+
+          fromLangSelect.appendChild(optionFrom);
+          toLangSelect.appendChild(optionTo);
+        }
+      };
+
+      populateLanguages();
+
+      // Translate text
+      translateBtn.addEventListener("click", () => {
+        const text = textArea.value.trim(),
+          fromLang = fromLangSelect.value,
+          toLang = toLangSelect.value;
+
+        if (!text) return;
+
+        textArea.placeholder = "Translating...";
+
+        const apiUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+          text
+        )}&langpair=${fromLang}|${toLang}`;
+
+        fetch(apiUrl)
+          .then((res) => res.json())
+          .then((data) => {
+            textArea.value = data.responseData.translatedText;
+            textArea.placeholder = "Translation completed!";
+          })
+          .catch(() => {
+            textArea.placeholder = "Error in translation!";
+          });
+      });
+
+      // Speech Recognition (Single Instance)
+      const recognition = new (window.SpeechRecognition ||
+        window.webkitSpeechRecognition)();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      speakNowBtn.addEventListener("click", () => {
+        recognition.lang = fromLangSelect.value; // Set the language for recognition
+        speakNowBtn.textContent = "Listening...";
+        recognition.start();
+      });
+
+      recognition.addEventListener("result", (event) => {
+        textArea.value = event.results[0][0].transcript;
+      });
+
+      recognition.addEventListener("end", () => {
+        speakNowBtn.textContent = "Speak Now";
+      });
+
+      // Text-to-Speech
+      listenBtn.addEventListener("click", () => {
+        const textToSpeak = textArea.value;
+        if (!textToSpeak) return;
+
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = toLangSelect.value; // Set the target language
+        speechSynthesis.cancel(); // Stop any ongoing speech
+        speechSynthesis.speak(utterance);
+      });
+
+      // New Translation - Resets everything
+      newTranslationBtn.addEventListener("click", () => {
+        textArea.value = "";
+        textArea.placeholder = "Speak or type here...";
+        fromLangSelect.value = "en-GB"; // Default to English
+        toLangSelect.value = "es-ES"; // Default to Spanish
+        speechSynthesis.cancel(); // Stop ongoing speech
+      });
+
+      // Function to generate random floating letters (including Japanese and Chinese characters)
+      const generateFloatingLetters = () => {
+        const randomLanguages = [
+          "English", "Spanish", "French", "German", "Hindi", "Arabic", "Chinese", "Japanese", "Korean"
+        ];
+        const randomEnglishLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"; // English Letters
+        const randomChineseCharacters = "你我他她它我我们你们他们"; // Some basic Chinese characters
+        const randomJapaneseCharacters = "ありがとうこんにちは世界愛美子"; // Some basic Japanese characters
+        const numberOfLetters = 30; // Total number of floating letters
+
+        for (let i = 0; i < numberOfLetters; i++) {
+          const letterElement = document.createElement("div");
+          const randomLangChoice = Math.random();
+          let randomLetter = "";
+
+          // Randomly choose between English, Chinese, or Japanese characters
+          if (randomLangChoice < 0.33) {
+            randomLetter = randomEnglishLetters[Math.floor(Math.random() * randomEnglishLetters.length)];
+          } else if (randomLangChoice < 0.66) {
+            randomLetter = randomChineseCharacters[Math.floor(Math.random() * randomChineseCharacters.length)];
+          } else {
+            randomLetter = randomJapaneseCharacters[Math.floor(Math.random() * randomJapaneseCharacters.length)];
+          }
+
+          letterElement.textContent = randomLetter; // Random letter
+          letterElement.classList.add("floating-letter");
+
+          // Random position and size
+          letterElement.style.fontSize = `${Math.random() * 20 + 15}px`; // Random size between 15px and 35px
+          letterElement.style.left = `${Math.random() * 100}vw`; // Random horizontal position
+          letterElement.style.top = `${Math.random() * 100}vh`; // Random vertical position
+          letterElement.style.animationDuration = `${Math.random() * 5 + 5}s`; // Random animation duration
+
+          document.body.appendChild(letterElement);
+        }
+      };
+
+      // Call the function to generate floating letters
+      generateFloatingLetters();
+    </script>
+  </body>
+</html>

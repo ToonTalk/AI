@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+            margin: 0;
+            overflow: hidden;
+        }
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 36px;
+            background-color: #fff;
+            border: 2px solid #333;
+            cursor: pointer;
+            text-align: center;
+        }
+        .cell:active {
+            background-color: #f0f0f0;
+        }
+        .message {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .reset-btn {
+            padding: 10px 20px;
+            background-color: #3182ce;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .reset-btn:hover {
+            background-color: #2b6cb0;
+        }
+
+        /* Sparkle effect */
+        .sparkle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            background-color: gold;
+            border-radius: 50%;
+            animation: sparkle-animation 1s ease-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes sparkle-animation {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(2);
+                opacity: 0;
+            }
+        }
+
+        /* Sparkles container */
+        .sparkles-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+
+<div>
+    <div class="game-board" id="gameBoard"></div>
+    <div class="message" id="message"></div>
+    <button class="reset-btn" onclick="resetGame()">Reset Game</button>
+</div>
+
+<div class="sparkles-container" id="sparklesContainer"></div>
+
+<script>
+    let board = ['', '', '', '', '', '', '', '', '']; // Board state
+    let currentPlayer = 'X'; // Current player (X starts first)
+    let gameOver = false; // Flag to check if the game is over
+
+    const gameBoard = document.getElementById('gameBoard');
+    const message = document.getElementById('message');
+    const sparklesContainer = document.getElementById('sparklesContainer');
+
+    // Create the game board
+    function createBoard() {
+        gameBoard.innerHTML = ''; // Clear previous board if any
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            cell.setAttribute('data-index', i);
+            cell.addEventListener('click', handleClick);
+            gameBoard.appendChild(cell);
+        }
+        message.textContent = `${currentPlayer}'s turn`;
+    }
+
+    // Handle cell click
+    function handleClick(event) {
+        if (gameOver) return;
+        
+        const index = event.target.getAttribute('data-index');
+        
+        // If the cell is already filled, return
+        if (board[index] !== '') return;
+
+        // Update the board with the current player's symbol
+        board[index] = currentPlayer;
+        event.target.textContent = currentPlayer;
+        
+        // Check for winner or draw
+        if (checkWinner()) {
+            message.textContent = `${currentPlayer} wins!`;
+            gameOver = true;
+            triggerSparkles(); // Trigger sparkles when a player wins
+        } else if (board.every(cell => cell !== '')) {
+            message.textContent = "It's a draw!";
+            gameOver = true;
+        } else {
+            // Switch to the other player
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            message.textContent = `${currentPlayer}'s turn`;
+        }
+    }
+
+    // Check if there's a winner
+    function checkWinner() {
+        const winPatterns = [
+            [0, 1, 2],
+            [3, 4, 5],
+            [6, 7, 8],
+            [0, 3, 6],
+            [1, 4, 7],
+            [2, 5, 8],
+            [0, 4, 8],
+            [2, 4, 6]
+        ];
+        
+        for (let pattern of winPatterns) {
+            const [a, b, c] = pattern;
+            if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Trigger sparkle animation when a player wins
+    function triggerSparkles() {
+        // Create a few sparkles at random positions on the screen
+        for (let i = 0; i < 50; i++) {
+            const sparkle = document.createElement('div');
+            sparkle.classList.add('sparkle');
+            sparkle.style.left = `${Math.random() * 100}%`;
+            sparkle.style.top = `${Math.random() * 100}%`;
+            sparklesContainer.appendChild(sparkle);
+            
+            // Remove sparkle after animation is complete
+            setTimeout(() => {
+                sparkle.remove();
+            }, 1000); // Match the animation duration
+        }
+    }
+
+    // Reset the game
+    function resetGame() {
+        board = ['', '', '', '', '', '', '', '', ''];
+        currentPlayer = 'X';
+        gameOver = false;
+        createBoard();
+        message.textContent = `${currentPlayer}'s turn`;
+    }
+
+    // Initialize the board when the page loads
+    createBoard();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,160 @@
+
+ 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information about Countries</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #ff9a9e, #fad0c4, #fbc2eb, #a6c1ee);
+            background-size: 400% 400%;
+            animation: gradientAnimation 15s ease infinite;
+            color: #333;
+        }
+
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 3rem;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+        }
+
+        #search-section {
+            display: flex;
+            justify-content: center;
+            margin: 20px;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 5px;
+            margin-right: 10px;
+            outline: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            width: 250px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #6a89cc;
+            color: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        button:hover {
+            background-color: #4a69bd;
+        }
+
+        #result {
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+        }
+
+        #result img {
+            width: 100px;
+            height: auto;
+            margin: 10px 0;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+        }
+
+        .info-title {
+            font-weight: bold;
+            color: #4a69bd;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Information about Countries</h1>
+
+    <!-- Search Section -->
+    <div id="search-section">
+        <input type="text" id="country-name" placeholder="Enter country name..." />
+        <button onclick="showCountryInfo()">Go</button>
+    </div>
+
+    <!-- Result Display -->
+    <div id="result"></div>
+
+    <!-- Script Logic -->
+    <script>
+        async function showCountryInfo() {
+            const countryName = document.getElementById("country-name").value.trim();
+            const resultDiv = document.getElementById("result");
+
+            // Clear previous result
+            resultDiv.innerHTML = "";
+
+            if (!countryName) {
+                alert("Please enter a valid country name!");
+                return;
+            }
+
+            try {
+                // Fetch country data from REST Countries API
+                const response = await fetch(`https://restcountries.com/v3.1/name/${countryName}?fullText=true`);
+                const data = await response.json();
+
+                // Handle case where country is not found
+                if (!data || data.status === 404) {
+                    resultDiv.innerHTML = "<p style='color: red;'>Country not found! Please try another name.</p>";
+                    return;
+                }
+
+                // Extract country information
+                const country = data[0];
+                const flag = country.flags.png || "";
+                const name = country.name.common || "N/A";
+                const capital = country.capital ? country.capital[0] : "N/A";
+                const region = country.region || "N/A";
+                const population = country.population.toLocaleString() || "N/A";
+                const area = country.area.toLocaleString() || "N/A";
+
+                // Display the country information
+                resultDiv.innerHTML = `
+                    <h2>${name}</h2>
+                    <img src="${flag}" alt="Flag of ${name}">
+                    <p><span class="info-title">Capital:</span> ${capital}</p>
+                    <p><span class="info-title">Region:</span> ${region}</p>
+                    <p><span class="info-title">Population:</span> ${population}</p>
+                    <p><span class="info-title">Area:</span> ${area} km²</p>
+                `;
+            } catch (error) {
+                console.error("Error fetching country data:", error);
+                resultDiv.innerHTML = "<p style='color: red;'>Something went wrong. Please try again.</p>";
+            }
+        }
+    </script>
+
+</body>
+</html>

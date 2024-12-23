@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You Are a Hero! Quiz</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #d4edda;
+            color: #333;
+            padding: 20px;
+            line-height: 1.6;
+            display: flex;
+        }
+        .quiz-container {
+            flex: 3;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .scoreboard {
+            flex: 1;
+            margin-left: 20px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+        }
+        .question {
+            margin-top: 20px;
+        }
+        .options {
+            margin-top: 10px;
+        }
+        .options button {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            padding: 10px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .options button:hover {
+            background: #45a049;
+        }
+        .message {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 1.2em;
+            color: #4CAF50;
+        }
+        .fireworks {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .bonus {
+            margin-top: 20px;
+            padding: 10px;
+            border: 2px dashed #4CAF50;
+            background-color: #eaffea;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="quiz-container">
+        <h1>You Are a Hero! Quiz</h1>
+
+        <div id="quiz-content">
+            <!-- Quiz questions will be dynamically loaded here -->
+        </div>
+
+        <div class="message" id="message"></div>
+    </div>
+
+    <div class="scoreboard">
+        <h2>Scoreboard</h2>
+        <p>Score: <span id="score">0</span></p>
+    </div>
+
+    <canvas class="fireworks" id="fireworks"></canvas>
+
+    <script>
+        let score = 0;
+        const questions = [
+            {
+                text: "What makes you a hero?",
+                options: [
+                    "Being brave when things are tough",
+                    "Helping others with a smile",
+                    "Dreaming big and never giving up",
+                    "All of the above"
+                ],
+                correct: 3
+            },
+            {
+                text: "Which of these animals is known for its strength and courage?",
+                options: ["Lion 🦁", "Rabbit 🐇", "Butterfly 🦋", "Turtle 🐢"],
+                correct: 0
+            },
+            {
+                text: "What can help you feel strong every day?",
+                options: [
+                    "Smiling and laughing with friends or family",
+                    "Thinking about your favorite superhero",
+                    "Remembering how amazing you are",
+                    "All of the above"
+                ],
+                correct: 3
+            },
+            {
+                text: "What’s the best thing to do when you face a challenge?",
+                options: [
+                    "Take deep breaths and stay calm",
+                    "Talk to someone who cares about you",
+                    "Believe in yourself and your abilities",
+                    "All of the above"
+                ],
+                correct: 3
+            },
+            {
+                text: "Which color is often associated with happiness?",
+                options: ["Yellow", "Blue", "Red", "Green"],
+                correct: 0
+            },
+            {
+                text: "What helps plants grow strong and healthy?",
+                options: ["Sunlight", "Water", "Nutrients", "All of the above"],
+                correct: 3
+            },
+            {
+                text: "Who is someone you can talk to when you're feeling sad?",
+                options: ["A family member", "A friend", "A teacher", "All of the above"],
+                correct: 3
+            }
+        ];
+
+        let currentQuestion = 0;
+
+        function loadQuestion() {
+            const quizContent = document.getElementById('quiz-content');
+            quizContent.innerHTML = '';
+
+            if (currentQuestion < questions.length) {
+                const question = questions[currentQuestion];
+                const questionElement = document.createElement('div');
+                questionElement.classList.add('question');
+
+                const questionText = document.createElement('p');
+                questionText.innerHTML = `<strong>Question ${currentQuestion + 1}:</strong> ${question.text}`;
+                questionElement.appendChild(questionText);
+
+                const utterance = new SpeechSynthesisUtterance(question.text);
+                speechSynthesis.speak(utterance);
+
+                const optionsElement = document.createElement('div');
+                optionsElement.classList.add('options');
+
+                question.options.forEach((option, index) => {
+                    const button = document.createElement('button');
+                    button.innerText = option;
+                    button.onclick = () => handleAnswer(index === question.correct, question.text);
+                    optionsElement.appendChild(button);
+                });
+
+                questionElement.appendChild(optionsElement);
+                quizContent.appendChild(questionElement);
+            } else {
+                const message = document.createElement('p');
+                message.classList.add('message');
+                message.innerText = `Quiz completed! Your final score is ${score}.`;
+                quizContent.appendChild(message);
+
+                const bonusQuestion = document.createElement('div');
+                bonusQuestion.classList.add('bonus');
+                bonusQuestion.innerHTML = `<strong>Bonus Question:</strong> What is your personal superpower? Write it down or share it with someone who cares about you!`;
+                quizContent.appendChild(bonusQuestion);
+
+                const utterance = new SpeechSynthesisUtterance(`Quiz completed! Your final score is ${score}. Bonus question: What is your personal superpower?`);
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        function handleAnswer(isCorrect) {
+            const feedbackMessage = document.getElementById('message');
+            const message = isCorrect ? 'Correct! Great job!' : 'Oops! Try the next one.';
+            feedbackMessage.innerText = message;
+
+            const utterance = new SpeechSynthesisUtterance(message);
+            speechSynthesis.speak(utterance);
+
+            if (isCorrect) {
+                score++;
+                document.getElementById('score').innerText = score;
+                triggerFireworks();
+            }
+
+            currentQuestion++;
+            setTimeout(loadQuestion, 2000);
+        }
+
+        function triggerFireworks() {
+            const canvas = document.getElementById('fireworks');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+
+            function createParticles(x, y) {
+                for (let i = 0; i < 100; i++) {
+                    particles.push({
+                        x,
+                        y,
+                        vx: (Math.random() - 0.5) * 10,
+                        vy: (Math.random() - 0.5) * 10,
+                        alpha: 1
+                    });
+                }
+            }
+
+            function drawParticles() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach((p, i) => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.alpha -= 0.01;
+
+                    if (p.alpha <= 0) particles.splice(i, 1);
+
+                    ctx.fillStyle = `rgba(255, 165, 0, ${p.alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                if (particles.length > 0) requestAnimationFrame(drawParticles);
+            }
+
+            createParticles(canvas.width / 2, canvas.height / 2);
+            drawParticles();
+        }
+
+        window.onload = loadQuestion;
+    </script>
+</body>
+</html>

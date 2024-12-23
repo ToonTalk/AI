@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cricket Quiz</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            background-color: #fff;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            color: #fff;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            font-size: 1.2em;
+            margin-top: 20px;
+        }
+        #fireworks {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cricket Quiz</h1>
+        <p id="question"></p>
+        <div id="options"></div>
+        <div class="result" id="result"></div>
+    </div>
+
+    <audio id="correctSound" src="https://www.soundjay.com/button/beep-07.wav" preload="auto"></audio>
+
+    <canvas id="fireworks"></canvas>
+
+    <script>
+        const quiz = [
+            {
+                question: "Who has scored the most runs in international cricket?",
+                options: ["Virat Kohli", "Sachin Tendulkar", "Ricky Ponting", "Jacques Kallis"],
+                answer: "Sachin Tendulkar"
+            },
+            {
+                question: "Which country won the first Cricket World Cup in 1975?",
+                options: ["Australia", "India", "West Indies", "England"],
+                answer: "West Indies"
+            },
+            {
+                question: "Who holds the record for the fastest century in ODIs?",
+                options: ["AB de Villiers", "Shahid Afridi", "Virender Sehwag", "Chris Gayle"],
+                answer: "AB de Villiers"
+            },
+            {
+                question: "How many players are on a cricket team?",
+                options: ["9", "10", "11", "12"],
+                answer: "11"
+            },
+            {
+                question: "Which cricketer is known as 'The Wall'?",
+                options: ["Rahul Dravid", "Steve Smith", "Jacques Kallis", "Cheteshwar Pujara"],
+                answer: "Rahul Dravid"
+            },
+            {
+                question: "What is the highest individual score in an ODI?",
+                options: ["264", "237", "219", "232"],
+                answer: "264"
+            },
+            {
+                question: "Which team has won the most ICC Cricket World Cups?",
+                options: ["Australia", "India", "West Indies", "England"],
+                answer: "Australia"
+            },
+            {
+                question: "Who is known as 'Captain Cool'?",
+                options: ["Virat Kohli", "MS Dhoni", "Eoin Morgan", "Kane Williamson"],
+                answer: "MS Dhoni"
+            },
+            {
+                question: "Which bowler has taken the most wickets in Test cricket?",
+                options: ["Muttiah Muralitharan", "Shane Warne", "James Anderson", "Anil Kumble"],
+                answer: "Muttiah Muralitharan"
+            },
+            {
+                question: "Which country is known as the 'Black Caps'?",
+                options: ["New Zealand", "South Africa", "West Indies", "Sri Lanka"],
+                answer: "New Zealand"
+            },
+            // Add 10 more questions here...
+        ];
+
+        let currentQuestionIndex = 0;
+
+        function createFireworks() {
+            const canvas = document.getElementById('fireworks');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+
+            function createParticle(x, y) {
+                for (let i = 0; i < 50; i++) {
+                    particles.push({
+                        x: x,
+                        y: y,
+                        radius: Math.random() * 2 + 1,
+                        color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+                        velocityX: (Math.random() - 0.5) * 10,
+                        velocityY: (Math.random() - 0.5) * 10,
+                        alpha: 1
+                    });
+                }
+            }
+
+            function animateParticles() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.velocityX;
+                    p.y += p.velocityY;
+                    p.alpha -= 0.01;
+
+                    if (p.alpha <= 0) {
+                        particles.splice(i, 1);
+                        continue;
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${p.color},${p.alpha})`;
+                    ctx.fill();
+                }
+
+                requestAnimationFrame(animateParticles);
+            }
+
+            createParticle(canvas.width / 2, canvas.height / 2);
+            animateParticles();
+        }
+
+        function loadQuestion() {
+            const questionElement = document.getElementById('question');
+            const optionsElement = document.getElementById('options');
+            const resultElement = document.getElementById('result');
+
+            resultElement.textContent = '';
+
+            const currentQuestion = quiz[currentQuestionIndex];
+
+            questionElement.textContent = currentQuestion.question;
+            optionsElement.innerHTML = '';
+
+            currentQuestion.options.forEach(option => {
+                const button = document.createElement('button');
+                button.textContent = option;
+                button.onclick = () => checkAnswer(option);
+                optionsElement.appendChild(button);
+            });
+        }
+
+        function checkAnswer(selectedOption) {
+            const resultElement = document.getElementById('result');
+            const correctSound = document.getElementById('correctSound');
+
+            if (selectedOption === quiz[currentQuestionIndex].answer) {
+                resultElement.textContent = "Correct!";
+                resultElement.style.color = "green";
+                correctSound.play();
+                createFireworks();
+
+                // Voice feedback
+                const speech = new SpeechSynthesisUtterance("Correct Answer!");
+                window.speechSynthesis.speak(speech);
+            } else {
+                resultElement.textContent = "Wrong! The correct answer is " + quiz[currentQuestionIndex].answer + ".";
+                resultElement.style.color = "red";
+
+                // Voice feedback
+                const speech = new SpeechSynthesisUtterance("Wrong Answer!");
+                window.speechSynthesis.speak(speech);
+            }
+
+            // Load next question after a short delay
+            setTimeout(() => {
+                currentQuestionIndex = (currentQuestionIndex + 1) % quiz.length;
+                loadQuestion();
+            }, 3000);
+        }
+
+        loadQuestion();
+    </script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Solar System with 3D Planet Tours</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #solarSystemCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #threeJsCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: none; /* Initially hidden */
+        }
+
+        #exitButton {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: none;
+        }
+
+        #exitButton:hover {
+            background-color: rgba(255, 255, 255, 0.7);
+            color: black;
+        }
+
+        /* Subnote Box */
+        #subnote {
+            position: absolute;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 5px;
+            color: black;
+            display: none;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 2D Solar System Canvas -->
+    <canvas id="solarSystemCanvas"></canvas>
+
+    <!-- 3D Planet View Canvas -->
+    <canvas id="threeJsCanvas"></canvas>
+
+    <!-- Exit Button for 3D View -->
+    <button id="exitButton">Back to Solar System</button>
+
+    <!-- Subnote Display -->
+    <div id="subnote"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // 2D Solar System Setup
+        const canvas2D = document.getElementById('solarSystemCanvas');
+        const ctx = canvas2D.getContext('2d');
+        canvas2D.width = window.innerWidth;
+        canvas2D.height = window.innerHeight;
+
+        // 3D Scene Setup
+        const canvas3D = document.getElementById('threeJsCanvas');
+        const exitButton = document.getElementById('exitButton');
+        const subnote = document.getElementById('subnote');
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas3D });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        const planets = [
+            { name: "Mercury", distance: 80, speed: 0.02, radius: 10, angle: 0, color: "#6E6E6E", texture: "https://example.com/textures/mercury.jpg", sound: "sounds/mercury.mp3", info: "Mercury is the closest planet to the Sun and has no moons." },
+            { name: "Venus", distance: 140, speed: 0.015, radius: 15, angle: 0, color: "#E0C07B", texture: "https://example.com/textures/venus.jpg", sound: "sounds/venus.mp3", info: "Venus is known as Earth's twin but has a harsh, toxic atmosphere." },
+            { name: "Earth", distance: 200, speed: 0.01, radius: 20, angle: 0, color: "#1F77B4", texture: "https://example.com/textures/earth.jpg", sound: "sounds/earth.mp3", info: "Earth is the only known planet with life." },
+            { name: "Mars", distance: 270, speed: 0.008, radius: 18, angle: 0, color: "#D24B4A", texture: "https://example.com/textures/mars.jpg", sound: "sounds/mars.mp3", info: "Mars is a cold desert world, known for its red surface." },
+            { name: "Jupiter", distance: 350, speed: 0.004, radius: 30, angle: 0, color: "#D99E57", texture: "https://example.com/textures/jupiter.jpg", sound: "sounds/jupiter.mp3", info: "Jupiter is the largest planet in the solar system and has a massive storm called the Great Red Spot." },
+            { name: "Saturn", distance: 450, speed: 0.003, radius: 28, angle: 0, color: "#F1C27D", texture: "https://example.com/textures/saturn.jpg", sound: "sounds/saturn.mp3", info: "Saturn is famous for its stunning rings, made of ice and rock." },
+            { name: "Uranus", distance: 550, speed: 0.002, radius: 22, angle: 0, color: "#66B2B2", texture: "https://example.com/textures/uranus.jpg", sound: "sounds/uranus.mp3", info: "Uranus is tilted on its side and has a very cold atmosphere." },
+            { name: "Neptune", distance: 650, speed: 0.001, radius: 22, angle: 0, color: "#2F61A4", texture: "https://example.com/textures/neptune.jpg", sound: "sounds/neptune.mp3", info: "Neptune is the farthest planet from the Sun and has intense winds." }
+        ];
+
+        const sun = { x: canvas2D.width / 2, y: canvas2D.height / 2, color: "#FFD700" };
+        let isRotating = true;
+        let zoomedPlanet = null;
+
+        // Draw 2D Sun
+        function drawSun() {
+            ctx.beginPath();
+            ctx.arc(sun.x, sun.y, 60, 0, Math.PI * 2);
+            ctx.fillStyle = sun.color;
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = "yellow";
+            ctx.fill();
+            ctx.closePath();
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw 2D Planets
+        function drawPlanets() {
+            planets.forEach(planet => {
+                if (zoomedPlanet && zoomedPlanet.name !== planet.name) return;
+
+                const x = zoomedPlanet ? sun.x : sun.x + Math.cos(planet.angle) * planet.distance;
+                const y = zoomedPlanet ? sun.y : sun.y + Math.sin(planet.angle) * planet.distance;
+
+                // Draw planet orbit if not zoomed
+                if (!zoomedPlanet) {
+                    ctx.beginPath();
+                    ctx.arc(sun.x, sun.y, planet.distance, 0, Math.PI * 2);
+                    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+                    ctx.stroke();
+                    ctx.closePath();
+                }
+
+                // Draw the planet
+                ctx.beginPath();
+                ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
+                ctx.fillStyle = planet.color;
+                ctx.fill();
+                ctx.closePath();
+
+                // Update angle for rotation
+                if (isRotating && !zoomedPlanet) {
+                    planet.angle += planet.speed;
+                }
+
+                // Update position for interaction
+                planet.x = x;
+                planet.y = y;
+            });
+        }
+
+        // Function to play sound and voice
+        function playSoundAndVoice(planet) {
+            // Play sound
+            const audio = new Audio(planet.sound);
+            audio.play();
+
+            // Use SpeechSynthesis API to speak the planet name
+            const speech = new SpeechSynthesisUtterance(planet.name);
+            speech.lang = "en-US";  // You can change the language if desired
+            window.speechSynthesis.speak(speech);
+        }
+
+        function displaySubnote(planet) {
+            subnote.style.display = 'block';
+            subnote.innerHTML = planet.info;
+            subnote.style.left = `${planet.x + 10}px`;
+            subnote.style.top = `${planet.y + 10}px`;
+        }
+
+        function start3DView(planet) {
+            // Hide 2D canvas, show 3D
+            canvas2D.style.display = 'none';
+            canvas3D.style.display = 'block';
+            exitButton.style.display = 'block';
+
+            // Create 3D Scene
+            const scene = new THREE.Scene();
+
+            // Camera and Light
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 3;
+
+            const light = new THREE.PointLight(0xffffff, 1.5);
+            light.position.set(0, 0, 5);
+            scene.add(light);
+
+            // Planet Material
+            const textureLoader = new THREE.TextureLoader();
+            const planetTexture = textureLoader.load(planet.texture);
+            const material = new THREE.MeshStandardMaterial({ map: planetTexture });
+
+            // Planet Geometry
+            const geometry = new THREE.SphereGeometry(1, 32, 32);
+            const planetMesh = new THREE.Mesh(geometry, material);
+            scene.add(planetMesh);
+
+            // Controls
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+            function animate() {
+                requestAnimationFrame(animate);
+                planetMesh.rotation.y += 0.01; // Rotate planet
+                renderer.render(scene, camera);
+            }
+
+            animate();
+        }
+
+        exitButton.addEventListener('click', () => {
+            // Hide 3D canvas, show 2D
+            canvas3D.style.display = 'none';
+            canvas2D.style.display = 'block';
+            exitButton.style.display = 'none';
+            zoomedPlanet = null; // Reset zoomed planet
+        });
+
+        // 2D Animation Loop
+        function update() {
+            ctx.clearRect(0, 0, canvas2D.width, canvas2D.height);
+            drawSun();
+            drawPlanets();
+            requestAnimationFrame(update);
+        }
+
+        // Stop rotation when Space key is pressed
+        window.addEventListener('keydown', (event) => {
+            if (event.code === "Space") {
+                isRotating = !isRotating;
+            }
+        });
+
+        // Handle planet clicks
+        canvas2D.addEventListener('click', (event) => {
+            const clickX = event.clientX;
+            const clickY = event.clientY;
+
+            planets.forEach(planet => {
+                const distance = Math.sqrt(Math.pow(clickX - planet.x, 2) + Math.pow(clickY - planet.y, 2));
+                if (distance < planet.radius) {
+                    playSoundAndVoice(planet);  // Play sound and voice
+                    displaySubnote(planet);
+                }
+            });
+        });
+
+        // Handle double-click to zoom
+        canvas2D.addEventListener('dblclick', (event) => {
+            const clickX = event.clientX;
+            const clickY = event.clientY;
+
+            planets.forEach(planet => {
+                const distance = Math.sqrt(Math.pow(clickX - planet.x, 2) + Math.pow(clickY - planet.y, 2));
+                if (distance < planet.radius) {
+                    zoomedPlanet = planet;
+                    start3DView(planet);
+                }
+            });
+        });
+
+        update();
+    </script>
+</body>
+</html>

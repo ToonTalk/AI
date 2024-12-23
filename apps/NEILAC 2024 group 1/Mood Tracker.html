@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mood Tracker with Speech</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.5s ease;
+            color: #333;
+        }
+        header {
+            background-color: #4CAF50;
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+        .container {
+            width: 80%;
+            margin: 20px auto;
+        }
+        h2 {
+            color: #4CAF50;
+        }
+        .question-section {
+            display: none;
+            margin-top: 20px;
+        }
+        .question-section label {
+            margin-bottom: 10px;
+        }
+        .question-section input, .question-section select, .question-section textarea {
+            padding: 8px;
+            margin-top: 5px;
+            width: 100%;
+        }
+        #suggestions {
+            display: none;
+            background-color: #eaf0f5;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        footer {
+            text-align: center;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Welcome to Mood Tracker</h1>
+    <p>Track your mood and get personalized suggestions!</p>
+</header>
+
+<div class="container">
+    <section id="start-section">
+        <button id="start-button">Start Tracking Mood</button>
+    </section>
+
+    <section id="questions-section" class="question-section">
+        <h2 id="question-text">Let's start with a few questions</h2>
+        <div id="question-controls">
+            <!-- Dynamic questions and input will appear here -->
+        </div>
+        <button id="next-button">Next</button>
+    </section>
+
+    <section id="suggestions">
+        <h2>Your Personalized Activity Suggestions</h2>
+        <div class="suggestions">
+            <p id="suggestion-text">Answer the questions to get personalized suggestions.</p>
+        </div>
+    </section>
+</div>
+
+<footer>
+    <p>&copy; 2024 Mood Tracker</p>
+</footer>
+
+<script>
+    const startButton = document.getElementById('start-button');
+    const questionsSection = document.getElementById('questions-section');
+    const questionText = document.getElementById('question-text');
+    const questionControls = document.getElementById('question-controls');
+    const nextButton = document.getElementById('next-button');
+    const suggestionText = document.getElementById('suggestion-text');
+    const suggestionsSection = document.getElementById('suggestions');
+
+    const questions = [
+        { text: "How do you feel right now?", type: "select", options: ["Happy", "Neutral", "Sad", "Stressed", "Anxious", "Energized"] },
+        { text: "What is the main reason you're feeling this way?", type: "text" },
+        { text: "How much energy do you have right now?", type: "select", options: ["Low", "Medium", "High"] },
+        { text: "Do you feel connected with others today?", type: "select", options: ["Yes", "No", "A little"] },
+        { text: "What have you done today for yourself?", type: "text" },
+        { text: "Would you like to set a well-being goal for today?", type: "select", options: ["Yes", "No"] }
+    ];
+
+    let currentQuestionIndex = 0;
+    const responses = {};
+
+    function speak(text) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function displayQuestion(index) {
+        const question = questions[index];
+        questionText.textContent = question.text;
+        speak(question.text);
+
+        questionControls.innerHTML = "";
+
+        if (question.type === "select") {
+            const select = document.createElement('select');
+            select.id = `question-${index}`;
+            question.options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option.toLowerCase();
+                opt.textContent = option;
+                select.appendChild(opt);
+            });
+            questionControls.appendChild(select);
+        } else if (question.type === "text") {
+            const input = document.createElement('input');
+            input.type = "text";
+            input.id = `question-${index}`;
+            input.placeholder = "Type your answer here...";
+            questionControls.appendChild(input);
+        }
+    }
+
+    function handleNext() {
+        const currentInput = document.getElementById(`question-${currentQuestionIndex}`);
+        if (currentInput) {
+            responses[questions[currentQuestionIndex].text] = currentInput.value;
+        }
+
+        currentQuestionIndex++;
+
+        if (currentQuestionIndex < questions.length) {
+            displayQuestion(currentQuestionIndex);
+        } else {
+            showSuggestions();
+        }
+    }
+
+    function showSuggestions() {
+        questionsSection.style.display = 'none';
+        suggestionsSection.style.display = 'block';
+
+        const mood = responses["How do you feel right now?"].toLowerCase();
+
+        if (mood === "happy") {
+            suggestionText.textContent = "Keep spreading positivity! Maybe go for a walk or call a loved one.";
+        } else if (mood === "sad") {
+            suggestionText.textContent = "It’s okay to feel sad. Try journaling or listening to your favorite music.";
+        } else if (mood === "stressed") {
+            suggestionText.textContent = "Take deep breaths or do a 5-minute meditation to relax.";
+        } else if (mood === "anxious") {
+            suggestionText.textContent = "Try grounding exercises like focusing on your breath or a calming activity.";
+        } else if (mood === "energized") {
+            suggestionText.textContent = "Great energy! Use it to tackle a goal or start a fun activity.";
+        } else {
+            suggestionText.textContent = "Thank you for answering! Reflect on your responses and take steps to nurture yourself.";
+        }
+    }
+
+    startButton.addEventListener('click', () => {
+        startButton.style.display = 'none';
+        questionsSection.style.display = 'block';
+        displayQuestion(currentQuestionIndex);
+    });
+
+    nextButton.addEventListener('click', handleNext);
+</script>
+
+</body>
+</html>

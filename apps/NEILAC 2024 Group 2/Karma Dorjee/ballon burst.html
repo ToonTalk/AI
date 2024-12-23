@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shooting Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    .score {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 24px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="score">Score: <span id="score">0</span></div>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreDisplay = document.getElementById('score');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let score = 0;
+
+    const hitSound = new Audio('button-1.wav');
+
+    class Target {
+      constructor(x, y, radius, points) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.points = points;
+        this.color = `hsl(${Math.random() * 360}, 70%, 50%)`;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.closePath();
+      }
+    }
+
+    class Bullet {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 5;
+        this.speed = 10;
+      }
+
+      update() {
+        this.y -= this.speed;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'white';
+        ctx.fill();
+        ctx.closePath();
+      }
+    }
+
+    let targets = [];
+    let bullets = [];
+
+    function spawnTarget() {
+      const radius = Math.random() * 30 + 20;
+      const x = Math.random() * (canvas.width - 2 * radius) + radius;
+      const y = Math.random() * (canvas.height / 2);
+      const points = Math.floor(radius);
+      targets.push(new Target(x, y, radius, points));
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      bullets.forEach((bullet, bulletIndex) => {
+        bullet.update();
+        bullet.draw();
+
+        if (bullet.y < 0) {
+          bullets.splice(bulletIndex, 1);
+        }
+      });
+
+      targets.forEach((target, targetIndex) => {
+        target.draw();
+
+        bullets.forEach((bullet, bulletIndex) => {
+          const dist = Math.hypot(bullet.x - target.x, bullet.y - target.y);
+          if (dist - bullet.radius - target.radius < 1) {
+            score += target.points;
+            scoreDisplay.textContent = score;
+            hitSound.play();
+
+            targets.splice(targetIndex, 1);
+            bullets.splice(bulletIndex, 1);
+          }
+        });
+      });
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    canvas.addEventListener('click', (e) => {
+      const bullet = new Bullet(e.clientX, canvas.height - 20);
+      bullets.push(bullet);
+    });
+
+    setInterval(spawnTarget, 1000);
+    gameLoop();
+  </script>
+</body>
+</html>

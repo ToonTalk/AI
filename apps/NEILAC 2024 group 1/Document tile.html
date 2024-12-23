@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Library Puzzle Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #000;
+        }
+        #gameCanvas {
+            border: 2px solid white;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+        }
+        #controls {
+            text-align: center;
+            margin-top: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <canvas id="gameCanvas" width="800" height="800"></canvas>
+        <div id="controls">
+            <button id="shuffleButton">Shuffle</button>
+            <button id="solveButton">Solve</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const image = new Image();
+        image.src = 'image.png'; // Replace with the uploaded image path
+
+        const tileCount = 4; // 4x4 puzzle
+        const tileSize = canvas.width / tileCount;
+        let tiles = [];
+        let emptyTile = { row: tileCount - 1, col: tileCount - 1 };
+
+        function initializeTiles() {
+            tiles = [];
+            for (let row = 0; row < tileCount; row++) {
+                tiles[row] = [];
+                for (let col = 0; col < tileCount; col++) {
+                    tiles[row][col] = { row, col };
+                }
+            }
+            tiles[emptyTile.row][emptyTile.col] = null;
+        }
+
+        function shuffleTiles() {
+            for (let i = 0; i < 1000; i++) {
+                const moves = getValidMoves();
+                const move = moves[Math.floor(Math.random() * moves.length)];
+                moveTile(move);
+            }
+        }
+
+        function getValidMoves() {
+            const moves = [];
+            const { row, col } = emptyTile;
+            if (row > 0) moves.push({ row: row - 1, col });
+            if (row < tileCount - 1) moves.push({ row: row + 1, col });
+            if (col > 0) moves.push({ row, col: col - 1 });
+            if (col < tileCount - 1) moves.push({ row, col: col + 1 });
+            return moves;
+        }
+
+        function moveTile(tile) {
+            const temp = tiles[tile.row][tile.col];
+            tiles[tile.row][tile.col] = null;
+            tiles[emptyTile.row][emptyTile.col] = temp;
+            emptyTile = tile;
+        }
+
+        function isSolved() {
+            for (let row = 0; row < tileCount; row++) {
+                for (let col = 0; col < tileCount; col++) {
+                    if (!tiles[row][col]) continue;
+                    if (tiles[row][col].row !== row || tiles[row][col].col !== col) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function drawTiles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let row = 0; row < tileCount; row++) {
+                for (let col = 0; col < tileCount; col++) {
+                    if (!tiles[row][col]) continue;
+                    const { row: imgRow, col: imgCol } = tiles[row][col];
+                    ctx.drawImage(
+                        image,
+                        imgCol * tileSize,
+                        imgRow * tileSize,
+                        tileSize,
+                        tileSize,
+                        col * tileSize,
+                        row * tileSize,
+                        tileSize,
+                        tileSize
+                    );
+                }
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const col = Math.floor(x / tileSize);
+            const row = Math.floor(y / tileSize);
+
+            if (Math.abs(row - emptyTile.row) + Math.abs(col - emptyTile.col) === 1) {
+                moveTile({ row, col });
+                drawTiles();
+                if (isSolved()) alert('Puzzle solved!');
+            }
+        });
+
+        document.getElementById('shuffleButton').addEventListener('click', () => {
+            shuffleTiles();
+            drawTiles();
+        });
+
+        document.getElementById('solveButton').addEventListener('click', () => {
+            initializeTiles();
+            drawTiles();
+        });
+
+        image.onload = () => {
+            initializeTiles();
+            drawTiles();
+        };
+    </script>
+</body>
+</html>

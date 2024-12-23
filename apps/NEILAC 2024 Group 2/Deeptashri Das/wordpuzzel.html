@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Search Game</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f8ff;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #4CAF50;
+            margin-bottom: 20px;
+        }
+
+        #word-search-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 40px);
+            grid-template-rows: repeat(10, 40px);
+            gap: 2px;
+        }
+
+        .letter {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            font-size: 1.5em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .letter:hover {
+            background-color: #f0f8ff;
+        }
+
+        .highlighted {
+            background-color: #ffeb3b;
+            color: black;
+        }
+
+        #word-list {
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+
+        .word {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        #score-board {
+            margin-top: 10px;
+            font-size: 1.2em;
+            color: #333;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            font-size: 1.2em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Word Search Game</h1>
+    
+    <div id="word-search-grid"></div>
+    <div id="word-list"></div>
+    <div id="score-board">Score: <span id="score">0</span></div>
+    
+    <button onclick="startGame()">Start New Game</button>
+
+    <script>
+        const words = ['SANTA', 'GIFT', 'SNOW', 'REINDEER', 'TREE', 'STAR', 'JOLLY', 'BELLS'];
+        let grid = [];
+        let foundWords = [];
+        let score = 0;
+
+        function startGame() {
+            score = 0;
+            foundWords = [];
+            document.getElementById('score').textContent = score;
+            generateGrid();
+            displayWordList();
+        }
+
+        function generateGrid() {
+            grid = [];
+            let gridContainer = document.getElementById('word-search-grid');
+            gridContainer.innerHTML = '';
+
+            // Create 10x10 grid
+            for (let i = 0; i < 10; i++) {
+                let row = [];
+                for (let j = 0; j < 10; j++) {
+                    let letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+                    row.push(letter);
+                }
+                grid.push(row);
+            }
+
+            // Place words in grid
+            words.forEach(word => {
+                placeWord(word);
+            });
+
+            // Render the grid
+            for (let i = 0; i < 10; i++) {
+                for (let j = 0; j < 10; j++) {
+                    let cell = document.createElement('div');
+                    cell.classList.add('letter');
+                    cell.textContent = grid[i][j];
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    cell.addEventListener('click', onLetterClick);
+                    gridContainer.appendChild(cell);
+                }
+            }
+        }
+
+        function placeWord(word) {
+            let direction = Math.floor(Math.random() * 2); // 0 for horizontal, 1 for vertical
+            let startRow, startCol;
+
+            // Ensure word fits in grid
+            do {
+                startRow = Math.floor(Math.random() * 10);
+                startCol = Math.floor(Math.random() * 10);
+            } while (
+                direction === 0 && startCol + word.length > 10 ||
+                direction === 1 && startRow + word.length > 10
+            );
+
+            // Place the word in the grid
+            for (let i = 0; i < word.length; i++) {
+                if (direction === 0) {
+                    grid[startRow][startCol + i] = word[i];
+                } else {
+                    grid[startRow + i][startCol] = word[i];
+                }
+            }
+        }
+
+        function displayWordList() {
+            let wordListContainer = document.getElementById('word-list');
+            wordListContainer.innerHTML = '<strong>Find these words:</strong><br>';
+            words.forEach(word => {
+                let wordElement = document.createElement('span');
+                wordElement.classList.add('word');
+                wordElement.textContent = word;
+                wordListContainer.appendChild(wordElement);
+                wordListContainer.appendChild(document.createElement('br'));
+            });
+        }
+
+        function onLetterClick(event) {
+            let row = event.target.dataset.row;
+            let col = event.target.dataset.col;
+            let letter = event.target.textContent;
+            let selectedLetters = [];
+
+            // Highlight the letter
+            event.target.classList.add('highlighted');
+            selectedLetters.push({ row, col, letter });
+
+            // Check if the selected letters form a word
+            let selectedWord = selectedLetters.map(item => item.letter).join('');
+            if (words.includes(selectedWord) && !foundWords.includes(selectedWord)) {
+                score += selectedWord.length; // Increase score by length of the word
+                foundWords.push(selectedWord);
+                document.getElementById('score').textContent = score;
+                alert(`You found the word: ${selectedWord}`);
+            }
+        }
+
+        // Start the first game when the page loads
+        window.onload = startGame;
+    </script>
+
+</body>
+</html>
+

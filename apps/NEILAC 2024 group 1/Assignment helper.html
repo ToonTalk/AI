@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignment Helper</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+            overflow: hidden;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .task-list, .note-section {
+            margin-bottom: 20px;
+        }
+
+        .task-list input {
+            padding: 8px;
+            width: 60%;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .task-list .due-date {
+            padding: 8px;
+            width: 30%;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+
+        .task-list button {
+            padding: 8px 12px;
+            border: none;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .task-list ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .task-list ul li {
+            padding: 10px;
+            background: #f1f1f1;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .task-list ul li .status-buttons button {
+            margin-left: 5px;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .status-buttons .on-time {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .status-buttons .late {
+            background-color: #FFA500;
+            color: white;
+        }
+
+        .status-buttons .not-submitted {
+            background-color: #FF4D4D;
+            color: white;
+        }
+
+        .task-list ul li button {
+            background-color: #ff4d4d;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .note-section textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .word-count {
+            margin-top: 10px;
+            color: #555;
+        }
+
+        .file-input {
+            margin-left: 10px;
+        }
+
+        .file-link {
+            margin-left: 10px;
+            font-size: 14px;
+            color: #1a73e8;
+            text-decoration: none;
+        }
+
+        .open-file-button {
+            display: none;  /* Initially hidden */
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50; /* Green background */
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            margin-left: 10px;
+            text-decoration: none;
+        }
+
+        .open-file-button:hover {
+            background-color: #45a049;  /* Slightly darker green on hover */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Assignment Helper</h1>
+
+        <!-- Task List Section -->
+        <div class="task-list">
+            <h2>To-Do List</h2>
+            <input type="text" id="taskInput" placeholder="Enter a task...">
+            <input type="date" id="dueDateInput" class="due-date">
+            <button onclick="addTask()">Add Task</button>
+            <ul id="taskList"></ul>
+        </div>
+
+        <!-- Note Section -->
+        <div class="note-section">
+            <h2>Notes</h2>
+            <textarea id="noteArea" placeholder="Write your notes here..." oninput="updateWordCount()"></textarea>
+            <p class="word-count">Word Count: <span id="wordCount">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Load saved data (tasks and notes) from localStorage
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTasks = JSON.parse(localStorage.getItem('tasks')) || [];
+            const savedNotes = localStorage.getItem('notes') || '';
+            savedTasks.forEach(task => {
+                renderTask(task.task, task.assignedDate, task.dueDate, task.status, task.document);
+            });
+            document.getElementById('noteArea').value = savedNotes;
+            updateWordCount();
+        });
+
+        // Save tasks and notes when the page is unloaded (before closing or refreshing)
+        window.addEventListener('beforeunload', () => {
+            saveTasks();
+            saveNotes();
+        });
+
+        function saveTasks() {
+            const taskList = document.getElementById('taskList');
+            const tasks = Array.from(taskList.children).map(taskItem => {
+                const taskInfo = taskItem.querySelector('div');
+                const [taskLine, assignedLine, dueLine] = taskInfo.innerText.split('\n');
+                const statusButton = taskItem.querySelector('.status-buttons button[style="display: inline-block;"]');
+                const fileLink = taskItem.querySelector('.file-link');
+
+                return {
+                    task: taskLine.replace('Task: ', ''),
+                    assignedDate: assignedLine.replace('Assigned Date: ', ''),
+                    dueDate: dueLine.replace('Due Date: ', ''),
+                    status: statusButton ? statusButton.innerText : 'not completed',
+                    document: fileLink ? fileLink.href : null
+                };
+            });
+
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+
+        function saveNotes() {
+            const noteArea = document.getElementById('noteArea');
+            localStorage.setItem('notes', noteArea.value);
+        }
+
+        function addTask() {
+            const taskInput = document.getElementById('taskInput');
+            const dueDateInput = document.getElementById('dueDateInput');
+
+            if (taskInput.value.trim() !== '' && dueDateInput.value) {
+                const assignedDate = new Date().toLocaleDateString();
+                const dueDate = new Date(dueDateInput.value).toLocaleDateString();
+
+                // Validate if due date is before the assigned date
+                const assignedDateObj = new Date(assignedDate);
+                const dueDateObj = new Date(dueDateInput.value);
+
+                if (dueDateObj < assignedDateObj) {
+                    alert('Due date cannot be earlier than the assigned date.');
+                    return;
+                }
+
+                renderTask(taskInput.value, assignedDate, dueDate);
+                saveTasks();
+                taskInput.value = '';
+                dueDateInput.value = '';
+            } else {
+                alert('Please enter both a task and a due date.');
+            }
+        }
+
+        function renderTask(task, assignedDate, dueDate, status = 'not completed', documentUrl = '') {
+            const taskList = document.getElementById('taskList');
+
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div>
+                    <strong>Task:</strong> ${task}<br>
+                    <strong>Assigned Date:</strong> ${assignedDate}<br>
+                    <strong>Due Date:</strong> ${dueDate}
+                </div>
+                <div class="status-buttons">
+                    <button class="on-time" onclick="markStatus(this, 'on time')">On Time</button>
+                    <button class="late" onclick="markStatus(this, 'late')">Late</button>
+                    <button class="not-submitted" onclick="markStatus(this, 'not submitted')">Not Submitted</button>
+                </div>
+                <button onclick="removeTask(this)">Remove</button>
+                <input type="file" class="file-input" onchange="assignDocument(this, '${task}')">
+                <a href="${documentUrl}" class="file-link" style="display: ${documentUrl ? 'inline-block' : 'none'}" target="_blank" rel="noopener">Download Document</a>
+                <button class="open-file-button" style="display: ${documentUrl ? 'inline-block' : 'none'}" onclick="window.open('${documentUrl}', '_blank')">Open File</button>
+            `;
+            taskList.appendChild(li);
+        }
+
+        function markStatus(button, status) {
+            const buttons = button.parentElement.querySelectorAll('button');
+            buttons.forEach(btn => {
+                btn.style.display = btn === button ? 'inline-block' : 'none';
+            });
+
+            if (status === 'on time') {
+                alert('Great job! Task marked as On Time!');
+            }
+
+            saveTasks();
+        }
+
+        function removeTask(button) {
+            const taskItem = button.parentElement;
+            taskItem.remove();
+            saveTasks();
+        }
+
+        function updateWordCount() {
+            const noteArea = document.getElementById('noteArea');
+            const wordCount = document.getElementById('wordCount');
+            const words = noteArea.value.trim().split(/\s+/).filter(word => word.length > 0);
+            wordCount.textContent = words.length;
+        }
+
+        function assignDocument(input, task) {
+            const file = input.files[0];
+            if (file) {
+                const fileUrl = URL.createObjectURL(file); // Create a URL for the file
+                saveTasks();
+                // Update task with document link
+                const taskList = document.getElementById('taskList');
+                const taskItem = Array.from(taskList.children).find(item => item.querySelector('div').innerText.includes(task));
+                if (taskItem) {
+                    taskItem.querySelector('.file-link').href = fileUrl;
+                    taskItem.querySelector('.file-link').style.display = 'inline-block'; // Show the link
+                    taskItem.querySelector('.open-file-button').style.display = 'inline-block'; // Show the Open File button
+                }
+            }
+        }
+    </script>
+</body>
+</html>

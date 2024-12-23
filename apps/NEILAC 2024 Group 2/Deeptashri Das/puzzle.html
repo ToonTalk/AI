@@ -1,0 +1,296 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Picture Puzzle Game</title>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', sans-serif;
+      text-align: center;
+      margin: 20px;
+      background: linear-gradient(120deg, #f6d365, #fda085);
+      color: #333;
+    }
+    h1 {
+      font-size: 2.5em;
+      color: #fff;
+      text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+    }
+    p {
+      color: #fff;
+      font-size: 1.2em;
+      margin-bottom: 20px;
+    }
+    .score {
+      font-size: 1.5em;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .puzzle-container {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 5px;
+      margin: 20px auto;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+    .puzzle-piece {
+      width: 100px;
+      height: 100px;
+      background-size: 300px 300px;
+      cursor: grab;
+      border: 2px solid #fff;
+      border-radius: 5px;
+      transition: transform 0.2s;
+    }
+    .puzzle-piece:hover {
+      transform: scale(1.05);
+    }
+    .drop-zone {
+      width: 100px;
+      height: 100px;
+      border: 2px dashed #333;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.6);
+      transition: background 0.2s;
+    }
+    .drop-zone:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    .solve-button {
+      padding: 10px 20px;
+      font-size: 1.2em;
+      color: #fff;
+      background: #4caf50;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: background 0.3s;
+    }
+    .solve-button:hover {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <h1>Picture Puzzle Game</h1>
+  <p>Drag and drop the pieces to solve the puzzle!</p>
+  <div class="score" id="scoreBoard">Moves: 0</div>
+
+  <div class="puzzle-container" id="puzzleContainer">
+    <!-- Puzzle pieces will be dynamically added here -->
+  </div>
+
+  <button class="solve-button" id="solveButton">Solve Puzzle</button>
+
+  <script>
+    const imageSrc = 'https://via.placeholder.com/300x300.png?text=Teddy+Bear'; // Replace with your teddy bear image URL
+    const container = document.getElementById('puzzleContainer');
+    const scoreBoard = document.getElementById('scoreBoard');
+    const solveButton = document.getElementById('solveButton');
+    let moves = 0;
+
+    // Create shuffled puzzle pieces
+    const positions = Array.from({ length: 9 }, (_, i) => i);
+    positions.sort(() => Math.random() - 0.5); // Shuffle
+
+    positions.forEach((pos, index) => {
+      // Create a piece
+      const piece = document.createElement('div');
+      piece.classList.add('puzzle-piece');
+      piece.style.backgroundImage = `url(${imageSrc})`;
+      piece.style.backgroundPosition = `-${(pos % 3) * 100}px -${Math.floor(pos / 3) * 100}px`;
+      piece.draggable = true;
+      piece.dataset.correctPosition = pos;
+
+      // Create a drop zone
+      const dropZone = document.createElement('div');
+      dropZone.classList.add('drop-zone');
+      dropZone.dataset.currentPosition = index;
+
+      // Add drag and drop events
+      piece.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', e.target.dataset.correctPosition);
+      });
+
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const draggedPos = e.dataTransfer.getData('text');
+        const draggedPiece = document.querySelector(`.puzzle-piece[data-correct-position="${draggedPos}"]`);
+
+        // Swap pieces
+        if (dropZone.firstChild) {
+          const existingPiece = dropZone.firstChild;
+          container.children[draggedPiece.parentElement.dataset.currentPosition].appendChild(existingPiece);
+        }
+        dropZone.appendChild(draggedPiece);
+
+        // Increment moves and update scoreboard
+        moves++;
+        scoreBoard.textContent = `Moves: ${moves}`;
+
+        // Check if puzzle is solved
+        checkPuzzleSolved();
+      });
+
+      // Add pieces to the container
+      container.appendChild(dropZone);
+    });
+
+    function checkPuzzleSolved() {
+      const zones = document.querySelectorAll('.drop-zone');
+      let solved = true;
+      zones.forEach((zone) => {
+        if (
+          zone.firstChild &&
+          zone.firstChild.dataset.correctPosition != zone.dataset.currentPosition
+        ) {
+          solved = false;
+        }
+      });
+
+      if (solved) {
+        alert(`Congratulations! You solved the puzzle in ${moves} moves!`);
+      }
+    }
+
+    // Solve the puzzle with animation
+    solveButton.addEventListener('click', () => {
+      const zones = document.querySelectorAll('.drop-zone');
+      zones.forEach((zone, index) => {
+        const correctPiece = document.querySelector(`.puzzle-piece[data-correct-position="${index}"]`);
+        setTimeout(() => {
+          zone.appendChild(correctPiece);
+        }, index * 300); // Add delay for animation effect
+      });
+
+      setTimeout(() => {
+        alert('The puzzle has been solved automatically!');
+      }, zones.length * 300);
+    });
+  </script>
+</body>
+</html>
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sliding Puzzle</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        #puzzle {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-gap: 10px;
+        }
+
+        .tile {
+            width: 100px;
+            height: 100px;
+            background-color: #3498db;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: pointer;
+            border-radius: 8px;
+            user-select: none;
+        }
+
+        .empty {
+            background-color: #ecf0f1;
+        }
+
+        .tile:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div id="puzzle">
+        <div class="tile" data-id="1">1</div>
+        <div class="tile" data-id="2">2</div>
+        <div class="tile" data-id="3">3</div>
+        <div class="tile" data-id="4">4</div>
+        <div class="tile" data-id="5">5</div>
+        <div class="tile" data-id="6">6</div>
+        <div class="tile" data-id="7">7</div>
+        <div class="tile" data-id="8">8</div>
+        <div class="tile empty"></div>
+    </div>
+
+    <script>
+        const tiles = Array.from(document.querySelectorAll('.tile'));
+        const puzzle = document.getElementById('puzzle');
+        
+        // Shuffle function to randomize the initial layout
+        function shuffleTiles() {
+            const positions = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+            positions.sort(() => Math.random() - 0.5);
+            tiles.forEach((tile, index) => {
+                if (positions[index] !== 8) { // Skip the empty space (index 8)
+                    tile.textContent = positions[index] + 1;
+                    tile.classList.remove('empty');
+                } else {
+                    tile.classList.add('empty');
+                    tile.textContent = '';
+                }
+            });
+        }
+
+        // Move tile function
+        function moveTile(tile) {
+            const emptyTile = document.querySelector('.empty');
+            const tileIndex = tiles.indexOf(tile);
+            const emptyIndex = tiles.indexOf(emptyTile);
+
+            const isAdjacent = [1, -1, 3, -3].some(offset => tileIndex + offset === emptyIndex);
+
+            if (isAdjacent) {
+                // Swap positions with the empty tile
+                emptyTile.textContent = tile.textContent;
+                tile.textContent = '';
+                emptyTile.classList.remove('empty');
+                tile.classList.add('empty');
+            }
+        }
+
+        // Add event listeners to each tile
+        tiles.forEach(tile => {
+            tile.addEventListener('click', () => {
+                if (!tile.classList.contains('empty')) {
+                    moveTile(tile);
+                }
+            });
+        });
+
+        // Initialize the puzzle with a shuffled layout
+        shuffleTiles();
+    </script>
+</body>
+</html>

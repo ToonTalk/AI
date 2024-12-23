@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sword Thrower Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game variables
+        const player = { x: 50, y: canvas.height / 2, width: 20, height: 40 };
+        const swords = [];
+        const targets = [];
+        const fireworks = [];
+        let score = 0;
+
+        // Create targets
+        setInterval(() => {
+            const size = Math.random() * 30 + 20;
+            targets.push({
+                x: canvas.width,
+                y: Math.random() * (canvas.height - size),
+                width: size,
+                height: size,
+                speed: Math.random() * 3 + 2
+            });
+        }, 1000);
+
+        // Player movement
+        window.addEventListener('mousemove', (e) => {
+            player.y = e.clientY - player.height / 2;
+        });
+
+        // Throw sword
+        window.addEventListener('click', () => {
+            swords.push({ x: player.x + player.width, y: player.y + player.height / 2, speed: 7 });
+        });
+
+        // Fireworks effect
+        function createFirework(x, y) {
+            for (let i = 0; i < 20; i++) {
+                fireworks.push({
+                    x,
+                    y,
+                    radius: Math.random() * 3 + 2,
+                    speedX: (Math.random() - 0.5) * 4,
+                    speedY: (Math.random() - 0.5) * 4,
+                    alpha: 1
+                });
+            }
+        }
+
+        function updateFireworks() {
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                const f = fireworks[i];
+                f.x += f.speedX;
+                f.y += f.speedY;
+                f.alpha -= 0.02;
+
+                if (f.alpha <= 0) {
+                    fireworks.splice(i, 1);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 165, 0, ${f.alpha})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw player
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // Update and draw swords
+            for (let i = swords.length - 1; i >= 0; i--) {
+                swords[i].x += swords[i].speed;
+                ctx.fillStyle = 'gray';
+                ctx.fillRect(swords[i].x, swords[i].y, 10, 5);
+
+                // Remove off-screen swords
+                if (swords[i].x > canvas.width) swords.splice(i, 1);
+            }
+
+            // Update and draw targets
+            for (let i = targets.length - 1; i >= 0; i--) {
+                targets[i].x -= targets[i].speed;
+                ctx.fillStyle = 'red';
+                ctx.fillRect(targets[i].x, targets[i].y, targets[i].width, targets[i].height);
+
+                // Check for collision with swords
+                for (let j = swords.length - 1; j >= 0; j--) {
+                    if (
+                        swords[j].x < targets[i].x + targets[i].width &&
+                        swords[j].x + 10 > targets[i].x &&
+                        swords[j].y < targets[i].y + targets[i].height &&
+                        swords[j].y + 5 > targets[i].y
+                    ) {
+                        const hitX = targets[i].x + targets[i].width / 2;
+                        const hitY = targets[i].y + targets[i].height / 2;
+                        createFirework(hitX, hitY);
+
+                        swords.splice(j, 1);
+                        targets.splice(i, 1);
+                        score++;
+                        console.log(`Score updated! Current score: ${score}`);
+                        break;
+                    }
+                }
+
+                // Remove off-screen targets
+                if (targets[i] && targets[i].x + targets[i].width < 0) {
+                    targets.splice(i, 1);
+                    score--;
+                    console.log(`Missed a target! Current score: ${score}`);
+                }
+            }
+
+            // Update and draw fireworks
+            updateFireworks();
+
+            // Display score
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

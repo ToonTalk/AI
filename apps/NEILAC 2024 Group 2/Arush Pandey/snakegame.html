@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake Game</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: lightblue;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas {
+      border: 2px solid black;
+    }
+    #difficulty {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 24px;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      text-align: center;
+    }
+    button {
+      padding: 10px;
+      margin: 10px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    #gameOver {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 30px;
+      text-align: center;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    #score {
+      font-size: 24px;
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: black;
+    }
+  </style>
+</head>
+<body>
+  <div id="difficulty">
+    <h2>Select Difficulty</h2>
+    <button onclick="startGame('easy')">Easy</button>
+    <button onclick="startGame('medium')">Medium</button>
+    <button onclick="startGame('hard')">Hard</button>
+  </div>
+  <canvas id="gameCanvas" width="600" height="600" style="display:none;"></canvas>
+  
+  <div id="gameOver">
+    <h2>You Lost!</h2>
+    <button onclick="restartGame()">Restart</button>
+  </div>
+
+  <!-- Audio elements for background music and sound effects -->
+  <audio id="bgMusic" loop>
+    <source src="background-music.mp3" type="audio/mp3">
+    Your browser does not support the audio element.
+  </audio>
+  <audio id="eatSound">
+    <source src="eat-sound.mp3" type="audio/mp3">
+    Your browser does not support the audio element.
+  </audio>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scale = 20;  // size of each square
+    const rows = canvas.height / scale;  // number of rows based on canvas height
+    const columns = canvas.width / scale;  // number of columns based on canvas width
+
+    let snake;
+    let food;
+    let gameOver = false;
+    let speed;
+    let gameInterval;
+    let difficultyLevel = 'easy';
+    let score = 0;
+    let fireworks = [];  // To store the fireworks
+
+    // Play background music when the game starts
+    function playBackgroundMusic() {
+      const bgMusic = document.getElementById('bgMusic');
+      bgMusic.play();
+    }
+
+    // Play eating sound
+    function playEatSound() {
+      const eatSound = document.getElementById('eatSound');
+      eatSound.play();
+    }
+
+    function startGame(difficulty) {
+      document.getElementById('difficulty').style.display = 'none';
+      canvas.style.display = 'block';
+      difficultyLevel = difficulty;
+      if (difficultyLevel === 'easy') {
+        speed = 150; // Slow speed for easy
+      } else if (difficultyLevel === 'medium') {
+        speed = 100; // Moderate speed for medium
+      } else {
+        speed = 50; // Fast speed for hard
+      }
+      init();
+    }
+
+    function init() {
+      snake = new Snake();
+      food = new Food();
+      food.randomize();
+      score = 0;
+      gameOver = false;
+      fireworks = [];  // Reset fireworks
+      document.getElementById('gameOver').style.display = 'none'; // Hide game over screen
+      window.addEventListener('keydown', e => {
+        if (e.key === 'ArrowUp') snake.changeDirection('up');
+        if (e.key === 'ArrowDown') snake.changeDirection('down');
+        if (e.key === 'ArrowLeft') snake.changeDirection('left');
+        if (e.key === 'ArrowRight') snake.changeDirection('right');
+      });
+      playBackgroundMusic();  // Start background music
+      gameLoop();
+    }
+
+    function gameLoop() {
+      if (gameOver) {
+        displayGameOver();
+        return;
+      }
+
+      gameInterval = setTimeout(() => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw the light green background inside the border
+        ctx.fillStyle = 'lightgreen';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        snake.update();
+        snake.draw();
+
+        food.draw();
+
+        if (snake.eat(food)) {
+          food.randomize();
+          playEatSound();  // Play sound when snake eats food
+          score++;  // Increase score by 1
+          if (score === 5) {
+            showFireworks();  // Show fireworks when score reaches 5
+          }
+        }
+
+        if (snake.checkCollision()) {
+          gameOver = true;
+        }
+
+        drawScore(); // Draw score on the screen
+
+        gameLoop();
+      }, speed);
+    }
+
+    function displayGameOver() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      document.getElementById('gameOver').style.display = 'block';
+    }
+
+    function restartGame() {
+      document.getElementById('gameOver').style.display = 'none';
+      document.getElementById('difficulty').style.display = 'block';
+      canvas.style.display = 'none';
+      const bgMusic = document.getElementById('bgMusic');
+      bgMusic.pause();  // Stop background music
+      bgMusic.currentTime = 0;  // Reset music to the beginning
+    }
+
+    function drawScore() {
+      ctx.fillStyle = 'black';
+      ctx.font = '24px Arial';
+      ctx.fillText('Score: ' + score, 20, 30);
+    }
+
+    function showFireworks() {
+      // Create fireworks objects when the score reaches 5
+      for (let i = 0; i < 50; i++) {
+        fireworks.push(new Firework(Math.random() * canvas.width, Math.random() * canvas.height));
+      }
+    }
+
+    class Snake {
+      constructor() {
+        this.body = [{ x: 10, y: 10 }];
+        this.direction = 'right';
+        this.happyFace = false;
+      }
+
+      draw() {
+        ctx.fillStyle = 'blue'; // Snake color is blue
+        this.body.forEach((segment, index) => {
+          ctx.fillRect(segment.x * scale, segment.y * scale, scale, scale);
+          if (index === 0) { // Draw eyes on the snake's head
+            this.drawEyes(segment);
+            if (this.happyFace) {
+              this.drawHappyFace(segment);
+            }
+          }
+        });
+      }
+
+      update() {
+        const head = { ...this.body[0] };
+
+        if (this.direction === 'up') head.y -= 1;
+        if (this.direction === 'down') head.y += 1;
+        if (this.direction === 'left') head.x -= 1;
+        if (this.direction === 'right') head.x += 1;
+
+        this.body.unshift(head);
+        this.body.pop();
+      }
+
+      changeDirection(direction) {
+        if (direction === 'up' && this.direction !== 'down') this.direction = 'up';
+        if (direction === 'down' && this.direction !== 'up') this.direction = 'down';
+        if (direction === 'left' && this.direction !== 'right') this.direction = 'left';
+        if (direction === 'right' && this.direction !== 'left') this.direction = 'right';
+      }
+
+      eat(food) {
+        const head = this.body[0];
+        if (head.x === food.x && head.y === food.y) {
+          this.body.push({});
+          this.happyFace = true;  // Snake gets happy after eating
+          setTimeout(() => { this.happyFace = false; }, 500);  // Reset happiness
+          return true;
+        }
+        return false;
+      }
+
+      addHappyFace() {
+        this.happyFace = true;
+        setTimeout(() => this.happyFace = false, 500);  // Happy face disappears after a brief moment
+      }
+
+      drawEyes(segment) {
+        // Draw two eyes on the snake's head
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(segment.x * scale + 5, segment.y * scale + 5, 3, 0, Math.PI * 2, true); // Left eye
+        ctx.arc(segment.x * scale + 15, segment.y * scale + 5, 3, 0, Math.PI * 2, true); // Right eye
+        ctx.fill();
+      }
+
+      drawHappyFace(segment) {
+        // Draw a smiling mouth on the snake's face
+        ctx.beginPath();
+        ctx.arc(segment.x * scale + 10, segment.y * scale + 15, 5, 0, Math.PI, false);
+        ctx.stroke();
+      }
+
+      checkCollision() {
+        const head = this.body[0];
+        // Check if snake hits the wall
+        if (head.x < 0 || head.y < 0 || head.x >= columns || head.y >= rows) return true;
+        // Check if snake hits itself
+        for (let i = 1; i < this.body.length; i++) {
+          if (head.x === this.body[i].x && head.y === this.body[i].y) return true;
+        }
+        return false;
+      }
+    }
+
+    class Food {
+      constructor() {
+        this.x = 0;
+        this.y = 0;
+      }
+
+      randomize() {
+        this.x = Math.floor(Math.random() * columns);
+        this.y = Math.floor(Math.random() * rows);
+      }
+
+      draw() {
+        ctx.fillStyle = 'red';
+        ctx.fillRect(this.x * scale, this.y * scale, scale, scale);
+      }
+    }
+
+    class Firework {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = Math.random() * 5 + 5;
+        this.life = 100;
+        this.color = 'yellow';
+        this.speedX = (Math.random() - 0.5) * 5;
+        this.speedY = (Math.random() - 0.5) * 5;
+      }
+
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.size *= 0.98;  // Shrinking effect
+        this.life--;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+      }
+    }
+
+    function animateFireworks() {
+      fireworks.forEach((firework, index) => {
+        firework.update();
+        firework.draw();
+        if (firework.life <= 0) {
+          fireworks.splice(index, 1);  // Remove dead fireworks
+        }
+      });
+    }
+
+    // Make sure to call animateFireworks every frame
+    setInterval(animateFireworks, 30);
+  </script>
+</body>
+</html>
