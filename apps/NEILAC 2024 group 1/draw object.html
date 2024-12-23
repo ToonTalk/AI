@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draw the Object Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        #canvas {
+            border: 1px solid #000;
+            cursor: crosshair;
+        }
+        #game-info {
+            margin: 20px;
+        }
+        #next-btn, #clear-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 5px;
+        }
+        #color-picker {
+            margin: 10px;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Draw the Object Game</h1>
+<div id="game-info">
+    <p>Can you draw a <span id="object-name">tree</span>?</p>
+    <button id="next-btn">Next Object</button>
+    <button id="clear-btn">Clear Canvas</button>
+    <input type="color" id="color-picker" value="#000000">
+</div>
+
+<canvas id="canvas" width="500" height="500"></canvas>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const nextBtn = document.getElementById('next-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const objectName = document.getElementById('object-name');
+    const colorPicker = document.getElementById('color-picker');
+
+    let drawing = false;
+    let currentColor = '#000000';
+    let score = 0;
+    let drawnObjects = 0;
+
+    // Array of objects to be drawn
+    const objects = ["tree", "house", "car", "cat", "dog", "sun"];
+    let currentObjectIndex = 0;
+
+    // Set up the canvas for drawing
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseleave', stopDrawing);
+
+    colorPicker.addEventListener('input', (e) => {
+        currentColor = e.target.value;
+    });
+
+    function startDrawing(e) {
+        drawing = true;
+        draw(e);
+    }
+
+    function draw(e) {
+        if (!drawing) return;
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = currentColor;
+
+        ctx.lineTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+    }
+
+    function stopDrawing() {
+        drawing = false;
+        ctx.beginPath();
+    }
+
+    // Function to clear the canvas and reset drawing
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Function to draw hints for each object
+    function drawHint(object) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);  // Clear previous hint
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#aaa'; // Light color for hint
+
+        switch (object) {
+            case "tree":
+                // Simple tree hint (triangle for leaves and a rectangle for trunk)
+                ctx.beginPath();
+                ctx.moveTo(250, 100);
+                ctx.lineTo(150, 400);
+                ctx.lineTo(350, 400);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(240, 400);
+                ctx.lineTo(260, 400);
+                ctx.lineTo(260, 460);
+                ctx.lineTo(240, 460);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+            case "house":
+                // Simple house hint (square body and triangle roof)
+                ctx.beginPath();
+                ctx.moveTo(150, 350);
+                ctx.lineTo(150, 200);
+                ctx.lineTo(350, 200);
+                ctx.lineTo(350, 350);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(150, 200);
+                ctx.lineTo(250, 100);
+                ctx.lineTo(350, 200);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+            case "car":
+                // Simple car hint (rectangle with wheels)
+                ctx.beginPath();
+                ctx.rect(150, 300, 200, 50);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(175, 355, 20, 0, Math.PI * 2, false); // Left wheel
+                ctx.arc(325, 355, 20, 0, Math.PI * 2, false); // Right wheel
+                ctx.stroke();
+                break;
+            case "sun":
+                // Simple sun hint (circle with rays)
+                ctx.beginPath();
+                ctx.arc(250, 150, 50, 0, Math.PI * 2, false);
+                ctx.stroke();
+                for (let i = 0; i < 12; i++) {
+                    let angle = i * (Math.PI / 6);
+                    let startX = 250 + Math.cos(angle) * 50;
+                    let startY = 150 + Math.sin(angle) * 50;
+                    let endX = 250 + Math.cos(angle) * 70;
+                    let endY = 150 + Math.sin(angle) * 70;
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                }
+                break;
+        }
+    }
+
+    // Function to change the object prompt and check score
+    function nextObject() {
+        drawnObjects++;
+        if (drawnObjects >= objects.length) {
+            endGame(); // End the game after drawing all objects
+        } else {
+            currentObjectIndex = (currentObjectIndex + 1) % objects.length;
+            objectName.textContent = objects[currentObjectIndex];
+            drawHint(objects[currentObjectIndex]);  // Draw hint for new object
+        }
+    }
+
+    // Function to calculate and show the final score
+    function endGame() {
+        alert(`Game Over! Your final score is: ${score}`);
+        nextBtn.disabled = true;
+        clearBtn.disabled = true;
+        colorPicker.disabled = true;
+        canvas.removeEventListener('mousedown', startDrawing);
+        canvas.removeEventListener('mousemove', draw);
+        canvas.removeEventListener('mouseup', stopDrawing);
+        canvas.removeEventListener('mouseleave', stopDrawing);
+    }
+
+    // Event listeners
+    nextBtn.addEventListener('click', nextObject);
+    clearBtn.addEventListener('click', clearCanvas);
+
+    // Initial hint drawing
+    drawHint(objects[currentObjectIndex]);
+</script>
+
+</body>
+</html>
