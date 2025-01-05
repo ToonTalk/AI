@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Web Audio Whack-a-Mole (Very Different Sounds)</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      background: #fafafa;
+    }
+
+    #gameContainer {
+      position: relative;
+      margin: 0 auto;
+      width: 600px;
+      height: 400px;
+      background: #ddd;
+      overflow: hidden;
+      border: 2px solid #bbb;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .mole {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: none;
+      box-shadow: 0 0 5px rgba(0,0,0,0.5);
+      user-select: none;
+    }
+
+    #controls {
+      margin: 20px 0;
+    }
+
+    #score {
+      font-weight: bold;
+      color: #333;
+    }
+
+    button {
+      padding: 10px 15px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Web Audio Whack-a-Mole (Multiple Colors & Very Different Sounds)</h1>
+
+<div id="controls">
+  <button id="startButton">Start Game</button>
+  <button id="stopButton" disabled>Stop Game</button>
+  <p>Score: <span id="score">0</span></p>
+</div>
+
+<div id="gameContainer">
+  <!-- Moles will be placed here dynamically -->
+</div>
+
+<script>
+  // ------------------
+  // Game Variables
+  // ------------------
+  let score = 0;
+  let gameInterval = null;
+  let gameRunning = false;
+  const spawnRate = 1000;       // in milliseconds
+  const moleDisplayTime = 800;  // how long each mole stays visible
+
+  // DOM Elements
+  const startButton = document.getElementById('startButton');
+  const stopButton = document.getElementById('stopButton');
+  const scoreDisplay = document.getElementById('score');
+  const gameContainer = document.getElementById('gameContainer');
+
+  // Different "types" of moles, each with color
+  // We'll map each color to a unique sound effect.
+  const MOLE_TYPES = [
+    { color: 'red'    },
+    { color: 'green'  },
+    { color: 'blue'   },
+    { color: 'orange' },
+    { color: 'purple' }
+  ];
+
+  // ------------------
+  // Web Audio Setup
+  // ------------------
+  let audioContext;
+
+  // For our simple repeating "background music"
+  let bgMusicInterval = null;
+  let bgMusicIndex = 0;
+  // A simple array of frequencies for a looping "melody."
+  const melody = [220, 330, 440, 330];
+
+  // Create/init AudioContext on user interaction
+  async function initAudio() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+
+  // ------------------
+  // DISTINCT SOUND EFFECTS
+  // ------------------
+  function playMoleSound(color) {
+    switch (color) {
+      case 'red':
+        playLaserSweep();   
+        break;
+      case 'green':
+        playNoiseBurst();   
+        break;
+      case 'blue':
+        playChord();        
+        break;
+      case 'orange':
+        playBeepBeep();     
+        break;
+      case 'purple':
+        playBellLike();     
+        break;
+      default:
+        // Fallback if something unexpected
+        playBeepBeep();
+    }
+  }
+
+  // 1. Red: Quick “laser sweep”
+  function playLaserSweep() {
+    if (!audioContext) return;
+
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    // Start at a higher frequency, sweep down
+    osc.frequency.setValueAtTime(1200, audioContext.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(
+      200, 
+      audioContext.currentTime + 0.3
+    );
+
+    osc.type = 'sawtooth';
+    gain.gain.setValueAtTime(0.8, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+
+    osc.connect(gain).connect(audioContext.destination);
+    osc.start();
+    osc.stop(audioContext.currentTime + 0.3);
+  }
+
+  // 2. Green: A short burst of white noise (“hiss”)
+  function playNoiseBurst() {
+    if (!audioContext) return;
+
+    // Create a short buffer of noise
+    const bufferSize = audioContext.sampleRate * 0.2; // 0.2 seconds
+    const noiseBuffer = audioContext.createBuffer(
+      1,
+      bufferSize,
+      audioContext.sampleRate
+    );
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      // White noise: random values in [-1, 1]
+      output[i] = Math.random() * 2 - 1;
+    }
+
+    const noiseSource = audioContext.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+
+    const gain = audioContext.createGain();
+    // Quick fade out
+    gain.gain.setValueAtTime(0.7, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+
+    noiseSource.connect(gain).connect(audioContext.destination);
+
+    noiseSource.start();
+    noiseSource.stop(audioContext.currentTime + 0.2);
+  }
+
+  // 3. Blue: A 3-note chord
+  function playChord() {
+    if (!audioContext) return;
+    // We'll play a root, major third, and perfect fifth
+    const frequencies = [220, 275, 330]; // e.g. A, C#, E
+
+    frequencies.forEach(freq => {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+
+      // Fade in quickly and fade out
+      gain.gain.setValueAtTime(0, audioContext.currentTime);
+      gain.gain.linearRampToValueAtTime(0.4, audioContext.currentTime + 0.05);
+      gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.3);
+
+      osc.connect(gain).connect(audioContext.destination);
+
+      osc.start();
+      osc.stop(audioContext.currentTime + 0.3);
+    });
+  }
+
+  // 4. Orange: Two quick “beep-beep” pulses
+  function playBeepBeep() {
+    if (!audioContext) return;
+
+    const beep = (startTime) => {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      osc.frequency.value = 600;
+      osc.type = 'square';
+
+      // Quick envelope
+      gain.gain.setValueAtTime(0.0, startTime);
+      gain.gain.linearRampToValueAtTime(0.4, startTime + 0.01);
+      gain.gain.linearRampToValueAtTime(0.0, startTime + 0.1);
+
+      osc.connect(gain).connect(audioContext.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.1);
+    };
+
+    const now = audioContext.currentTime;
+    // First beep
+    beep(now);
+    // Second beep ~200ms later
+    beep(now + 0.2);
+  }
+
+  // 5. Purple: A short “bell-like” tone
+  // Using two sine oscillators at different frequencies (fundamental + overtone)
+  function playBellLike() {
+    if (!audioContext) return;
+
+    // Let's do an “A” (220 Hz) plus a higher partial
+    const frequencies = [220, 440];
+    frequencies.forEach((freq) => {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+
+      // Bell-like quick attack, slowish decay
+      gain.gain.setValueAtTime(0, audioContext.currentTime);
+      // Attack
+      gain.gain.linearRampToValueAtTime(0.4, audioContext.currentTime + 0.02);
+      // Decay
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+
+      osc.connect(gain).connect(audioContext.destination);
+
+      osc.start();
+      // Stop after half a second
+      osc.stop(audioContext.currentTime + 0.5);
+    });
+  }
+
+  // ------------------
+  // SIMPLE BACKGROUND TUNE
+  // ------------------
+  function startBackgroundMusic() {
+    if (!audioContext) return;
+    stopBackgroundMusic(); // just in case
+
+    bgMusicIndex = 0;
+    // We'll trigger a note every ~300ms
+    bgMusicInterval = setInterval(() => {
+      playNote(melody[bgMusicIndex], 0.25);
+      bgMusicIndex = (bgMusicIndex + 1) % melody.length;
+    }, 300);
+  }
+
+  function stopBackgroundMusic() {
+    if (bgMusicInterval) {
+      clearInterval(bgMusicInterval);
+      bgMusicInterval = null;
+    }
+  }
+
+  function playNote(frequency, duration) {
+    if (!audioContext) return;
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    
+    osc.frequency.value = frequency;
+    osc.type = 'triangle';
+
+    gain.gain.setValueAtTime(0, audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.05);
+    gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration);
+
+    osc.connect(gain).connect(audioContext.destination);
+
+    osc.start();
+    osc.stop(audioContext.currentTime + duration);
+  }
+
+  // ------------------
+  // GAME LOGIC
+  // ------------------
+  function startGame() {
+    gameRunning = true;
+    score = 0;
+    scoreDisplay.textContent = score;
+    startButton.disabled = true;
+    stopButton.disabled = false;
+
+    // Start the background tune
+    startBackgroundMusic();
+
+    // Start spawning moles
+    gameInterval = setInterval(spawnMole, spawnRate);
+  }
+
+  function stopGame() {
+    gameRunning = false;
+    startButton.disabled = false;
+    stopButton.disabled = true;
+    clearInterval(gameInterval);
+    stopBackgroundMusic();
+  }
+
+  function spawnMole() {
+    // Pick a random mole type
+    const randomType = MOLE_TYPES[Math.floor(Math.random() * MOLE_TYPES.length)];
+
+    // Create a new mole DOM element
+    const mole = document.createElement('div');
+    mole.classList.add('mole');
+    mole.style.backgroundColor = randomType.color;
+
+    // Position it at a random location within the game container
+    const containerRect = gameContainer.getBoundingClientRect();
+    const x = Math.floor(Math.random() * (containerRect.width - 50));
+    const y = Math.floor(Math.random() * (containerRect.height - 50));
+    mole.style.left = x + 'px';
+    mole.style.top = y + 'px';
+
+    // Show the mole
+    mole.style.display = 'block';
+
+    // Add click listener
+    mole.addEventListener('click', () => {
+      // Increase score
+      score++;
+      scoreDisplay.textContent = score;
+
+      // Play the color-specific sound
+      playMoleSound(randomType.color);
+
+      // Remove the mole
+      if (mole.parentNode) {
+        gameContainer.removeChild(mole);
+      }
+    });
+
+    // Add the mole to the container
+    gameContainer.appendChild(mole);
+
+    // Hide/remove the mole after a while
+    setTimeout(() => {
+      if (mole.parentNode) {
+        gameContainer.removeChild(mole);
+      }
+    }, moleDisplayTime);
+  }
+
+  // ------------------
+  // Event Listeners
+  // ------------------
+  startButton.addEventListener('click', async () => {
+    await initAudio(); // needed for modern browsers to allow audio
+    startGame();
+  });
+
+  stopButton.addEventListener('click', () => {
+    stopGame();
+  });
+</script>
+</body>
+</html>
