@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Confidence Classifier (All Updates)</title>
+
+  <!-- 1) TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
+  <!-- 2) Universal Sentence Encoder -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
+  <!-- 3) tfjs-vis for real-time training graph -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .section {
+      margin-bottom: 1em;
+    }
+    /* Initially hide the prediction UI until training finishes */
+    #predictionUI {
+      display: none;
+      margin-top: 1em;
+    }
+    /* For multi-line predictions */
+    #predictionResult {
+      white-space: pre;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Confidence Classifier (With Lowercasing & Bigger Network)</h1>
+
+<!-- 1) CSV Upload -->
+<div class="section">
+  <label>Select CSV File:</label>
+  <input type="file" id="csvFileInput" accept=".csv" />
+  <button id="loadCsvButton">Load CSV Data</button>
+</div>
+
+<!-- 2) Training Config -->
+<div class="section">
+  <label>Epochs:</label>
+  <input type="number" id="epochsInput" value="10" style="width: 60px;" />
+
+  <label>Validation Split (0..1):</label>
+  <input type="number" id="testSplitInput" step="0.1" value="0.2" style="width: 60px;" />
+
+  <button id="trainButton" disabled>Train Model</button>
+  <div id="trainingStatus"></div>
+</div>
+
+<!-- 3) Prediction UI -->
+<div id="predictionUI">
+  <h3>Predict on New Text</h3>
+  <input type="text" id="predictionInput" size="60" placeholder="Enter text..."/>
+  <button id="predictButton">Predict</button>
+  <div id="predictionResult"></div>
+</div>
+
+<script>
+// --------------------------------------------------------------------------------
+// 1) CSV LOADING & PARSING
+// --------------------------------------------------------------------------------
+let texts = [];
+let labels = []; // We'll map -1->0, 0->1, 1->2 internally
+
+function parseLine(line) {
+  const i = line.lastIndexOf(',');
+  if (i === -1) return null;
+  return [ line.slice(0,i).trim(), line.slice(i+1).trim() ];
+}
+
+function labelToIndex(str) {
+  const n = parseInt(str);
+  if (n === -1) return 0; // Not confident
+  if (n === 0)  return 1; // Neutral
+  if (n === 1)  return 2; // Confident
+  return null;
+}
+
+function shuffleInPlace(a, b) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+    [b[i], b[j]] = [b[j], b[i]];
+  }
+}
+
+document.getElementById('loadCsvButton').addEventListener('click', () => {
+  const file = document.getElementById('csvFileInput').files[0];
+  if (!file) {
+    alert('Please select a CSV file first.');
+    return;
+  }
+  texts = [];
+  labels = [];
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n');
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) continue;
+      const parsed = parseLine(line);
+      if (!parsed) continue;
+      const [txt, lblStr] = parsed;
+      const idx = labelToIndex(lblStr);
+      if (idx !== null) {
+        texts.push(txt);
+        labels.push(idx);
+      }
+    }
+    if (texts.length === 0) {
+      alert('No valid lines found. Expect lines like: "I think I can do this.,1"');
+      return;
+    }
+    shuffleInPlace(texts, labels);
+    document.getElementById('trainingStatus').innerText =
+      `Loaded ${texts.length} lines. Ready to train.`;
+    document.getElementById('trainButton').disabled = false;
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+// --------------------------------------------------------------------------------
+// 2) TRAINING THE MODEL
+// --------------------------------------------------------------------------------
+let useModel;
+let classifierModel;
+let trainXs, trainYs;
+
+async function loadUSE() {
+  if (!useModel) {
+    useModel = await use.load();
+  }
+  return useModel;
+}
+
+/**
+ * createBetterModel:
+ * - Larger network with two hidden layers + dropout
+ * - Lower learning rate than default
+ */
+function createBetterModel(inputDim) {
+  const model = tf.sequential();
+
+  // Hidden Layer 1: 64 units + dropout
+  model.add(tf.layers.dense({
+    units: 64,
+    activation: 'relu',
+    inputShape: [inputDim]
+  }));
+  model.add(tf.layers.dropout({ rate: 0.2 }));
+
+  // Hidden Layer 2: 32 units + dropout
+  model.add(tf.layers.dense({
+    units: 32,
+    activation: 'relu'
+  }));
+  model.add(tf.layers.dropout({ rate: 0.2 }));
+
+  // Output for 3 classes
+  model.add(tf.layers.dense({
+    units: 3,
+    activation: 'softmax'
+  }));
+
+  // We'll use a slightly lower LR e.g. 1e-3
+  model.compile({
+    optimizer: tf.train.adam(0.001),
+    loss: 'categoricalCrossentropy',
+    // 'acc' means logs.acc and logs.val_acc
+    metrics: ['acc']
+  });
+  return model;
+}
+
+document.getElementById('trainButton').addEventListener('click', async ()=>{
+  if (texts.length === 0) {
+    alert('No CSV data loaded!');
+    return;
+  }
+
+  const EPOCHS = parseInt(document.getElementById('epochsInput').value)||10;
+  let testSplit = parseFloat(document.getElementById('testSplitInput').value);
+  if (isNaN(testSplit)||testSplit<0||testSplit>1) testSplit=0.2;
+
+  document.getElementById('trainingStatus').innerText = 'Loading USE model...';
+  await loadUSE();
+
+  // 1) Lowercase all text before embedding
+  const lowercased = texts.map(t => t.toLowerCase());
+  document.getElementById('trainingStatus').innerText =
+    `Embedding ${lowercased.length} lines...`;
+
+  // 2) Embed
+  const eT = await useModel.embed(lowercased);
+  const embArr = await eT.array();
+  eT.dispose();
+
+  trainXs = tf.tensor2d(embArr);
+  const lblT = tf.tensor1d(labels,'int32');
+  trainYs = tf.oneHot(lblT,3);
+  lblT.dispose();
+
+  // 3) Create bigger model
+  classifierModel = createBetterModel(embArr[0].length);
+
+  // 4) Train/val split
+  const n = texts.length;
+  const nTrain = Math.floor(n*(1-testSplit));
+  const nVal = n - nTrain;
+  if (nTrain===0) {
+    alert(`No training samples. Lower your testSplit or add data.`);
+    return;
+  }
+
+  document.getElementById('trainingStatus').innerText =
+    `Training... (epochs=${EPOCHS}, train=${nTrain}, val=${nVal})`;
+
+  const [xTrain,xVal] = tf.split(trainXs,[nTrain,nVal]);
+  const [yTrain,yVal] = tf.split(trainYs,[nTrain,nVal]);
+
+  // If we have val data, we track val_loss & val_acc in the chart
+  let metrics = ['loss','acc'];
+  let valData = null;
+  if (nVal>0) {
+    metrics = ['loss','val_loss','acc','val_acc'];
+    valData = [xVal,yVal];
+  }
+
+  // Use only onEpochEnd so we skip the final onTrainEnd bug
+  await classifierModel.fit(xTrain, yTrain, {
+    batchSize:16,
+    epochs:EPOCHS,
+    validationData: valData,
+    shuffle:true,
+    callbacks: tfvis.show.fitCallbacks(
+      { name:'Training & Validation', tab:'Confidence Classifier' },
+      metrics,
+      // Only onEpochEnd, so we see each epoch but skip final bug
+      { callbacks:['onEpochEnd'] }
+    )
+  });
+
+  document.getElementById('trainingStatus').innerText = 'Training complete!';
+  // Show the prediction UI
+  document.getElementById('predictionUI').style.display = 'block';
+});
+
+// --------------------------------------------------------------------------------
+// 3) PREDICTION (Lowercase input & user-friendly display)
+// --------------------------------------------------------------------------------
+document.getElementById('predictButton').addEventListener('click', async ()=>{
+  if (!classifierModel) {
+    alert('Model not trained yet!');
+    return;
+  }
+  const rawText = document.getElementById('predictionInput').value.trim();
+  if (!rawText) {
+    alert('Enter some text to predict!');
+    return;
+  }
+
+  // Lowercase the text before embedding
+  const emb = await useModel.embed([rawText.toLowerCase()]);
+  const out = classifierModel.predict(emb);
+  const probs = (await out.array())[0]; // e.g. [p0, p1, p2]
+
+  // pick max index
+  const maxIdx = probs.indexOf(Math.max(...probs));
+
+  // map 0->-1,1->0,2->+1
+  const labelMap = {0:-1,1:0,2:1};
+  const labelNameMap = {
+    0:'Not Confident (-1)',
+    1:'Neutral (0)',
+    2:'Confident (+1)'
+  };
+
+  let msg = 'Confidence Classification\n';
+  msg += `  Predicted: ${labelNameMap[maxIdx]}\n`;
+  msg += '  Probabilities:\n';
+  for (let i=0; i<3; i++) {
+    msg += `    • ${labelNameMap[i]}: ${probs[i].toFixed(3)}\n`;
+  }
+
+  document.getElementById('predictionResult').textContent = msg;
+});
+</script>
+
+</body>
+</html>
