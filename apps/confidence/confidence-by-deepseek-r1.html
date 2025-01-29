@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Confidence Level Predictor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { margin: 20px 0; }
+        #status { color: #666; margin-top: 10px; }
+        #tfvis-container { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Confidence Level Prediction</h1>
+    
+    <div class="container">
+        <input type="file" id="csvInput" accept=".csv">
+        <button onclick="loadAndProcessData()">Load CSV</button>
+    </div>
+
+    <div class="container">
+        <button id="trainBtn" disabled>Train Model</button>
+        Epochs: <input type="number" id="epochs" value="50" style="width: 50px;">
+    </div>
+
+    <div id="status">Initializing...</div>
+    <div id="tfvis-container"></div>
+
+    <div class="container">
+        <input type="text" id="newText" placeholder="Enter text to analyze" style="width: 400px; padding: 5px;">
+        <button onclick="predictConfidence()">Predict</button>
+        <div id="predictionResult" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc;"></div>
+    </div>
+
+<script>
+// Global state
+let sentenceModel = null;
+let classifierModel = null;
+let embeddings = null;
+let labels = null;
+const classNames = [-1, 0, 1];
+
+// Initialize models and UI
+async function initialize() {
+    try {
+        // Load sentence encoder
+        sentenceModel = await use.load();
+        
+        // Enable train button after initialization
+        const trainBtn = document.getElementById('trainBtn');
+        trainBtn.disabled = false;
+        trainBtn.addEventListener('click', trainModel);
+        
+        updateStatus('Model initialized. Load CSV data to begin.');
+    } catch (error) {
+        handleError('Failed to load sentence encoder:', error);
+    }
+}
+
+// Handle data loading
+async function loadAndProcessData() {
+    try {
+        if (!sentenceModel) {
+            throw new Error('Sentence encoder not loaded yet');
+        }
+
+        const file = document.getElementById('csvInput').files[0];
+        if (!file) {
+            throw new Error('Please select a CSV file first');
+        }
+
+        updateStatus('Processing CSV file...');
+        
+        // Parse CSV
+        const results = await new Promise((resolve, reject) => {
+            Papa.parse(file, {
+                complete: resolve,
+                error: reject
+            });
+        });
+
+        // Process data
+        const data = results.data
+            .filter(row => row.length >= 2 && !isNaN(row[1]))
+            .map(row => ({
+                text: row[0].trim(),
+                label: parseInt(row[1])
+            }));
+
+        if (data.length === 0) {
+            throw new Error('No valid data found in CSV');
+        }
+
+        // Generate embeddings
+        const texts = data.map(d => d.text);
+        embeddings = await sentenceModel.embed(texts);
+        
+        // Process labels
+        labels = tf.oneHot(
+            tf.tensor1d(data.map(d => classNames.indexOf(d.label)), 'int32'),
+            3
+        );
+
+        updateStatus(`Loaded ${data.length} samples. Ready to train.`);
+    } catch (error) {
+        handleError('Error processing data:', error);
+    }
+}
+
+// Training function
+async function trainModel() {
+    try {
+        if (!embeddings || !labels) {
+            throw new Error('No data loaded - load CSV first');
+        }
+
+        const epochs = parseInt(document.getElementById('epochs').value);
+        classifierModel = createModel();
+        
+        // Training implementation
+        const split = 0.8;
+        const numSamples = embeddings.shape[0];
+        const indices = tf.util.createShuffledIndices(numSamples);
+        const numTrain = Math.floor(numSamples * split);
+
+        const trainData = {
+            embeddings: tf.gather(embeddings, indices.slice(0, numTrain)),
+            labels: tf.gather(labels, indices.slice(0, numTrain))
+        };
+        
+        const testData = {
+            embeddings: tf.gather(embeddings, indices.slice(numTrain)),
+            labels: tf.gather(labels, indices.slice(numTrain))
+        };
+
+        // Training callbacks
+        const history = { loss: [], val_loss: [], acc: [], val_acc: [] };
+        
+        await classifierModel.fit(trainData.embeddings, trainData.labels, {
+            epochs,
+            batchSize: 32,
+            validationData: [testData.embeddings, testData.labels],
+            callbacks: {
+                onEpochEnd: (epoch, logs) => {
+                    // Update training metrics
+                    history.loss.push(logs.loss);
+                    history.acc.push(logs.acc);
+                    history.val_loss.push(logs.val_loss);
+                    history.val_acc.push(logs.val_acc);
+                    
+                    // Update visualizations
+                    tfvis.render.linechart(
+                        { name: 'Loss', tab: 'Training' },
+                        { values: [history.loss, history.val_loss], series: ['Train', 'Validation'] },
+                        { xLabel: 'Epoch', yLabel: 'Loss' }
+                    );
+                    
+                    tfvis.render.linechart(
+                        { name: 'Accuracy', tab: 'Training' },
+                        { values: [history.acc, history.val_acc], series: ['Train', 'Validation'] },
+                        { xLabel: 'Epoch', yLabel: 'Accuracy', maxY: 1 }
+                    );
+                }
+            }
+        });
+
+        updateStatus('Training completed!');
+    } catch (error) {
+        handleError('Training error:', error);
+    }
+}
+
+// Model architecture
+function createModel() {
+    const model = tf.sequential({
+        layers: [
+            tf.layers.dense({
+                inputShape: [512],
+                units: 128,
+                activation: 'relu',
+                kernelRegularizer: tf.regularizers.l2({ l2: 0.001 })
+            }),
+            tf.layers.dropout(0.3),
+            tf.layers.dense({
+                units: 64,
+                activation: 'relu',
+                kernelRegularizer: tf.regularizers.l2({ l2: 0.001 })
+            }),
+            tf.layers.dropout(0.2),
+            tf.layers.dense({
+                units: 3,
+                activation: 'softmax'
+            })
+        ]
+    });
+
+    model.compile({
+        optimizer: tf.train.adam(0.0005),
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy']
+    });
+    
+    return model;
+}
+
+// Helper functions
+function updateStatus(message) {
+    const statusElement = document.getElementById('status');
+    if (statusElement) {
+        statusElement.innerHTML = message;
+    }
+}
+
+function handleError(message, error) {
+    console.error(message, error);
+    updateStatus(`Error: ${message} ${error.message}`);
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', initialize);
+</script>
+</body>
+</html>
