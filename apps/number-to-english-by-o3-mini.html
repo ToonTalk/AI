@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Number to English Converter</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2em;
+      max-width: 800px;
+    }
+    h1 {
+      text-align: center;
+    }
+    input[type="text"] {
+      width: 100%;
+      font-size: 1.2em;
+      padding: 0.5em;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 0.5em 1em;
+      font-size: 1.2em;
+      margin-top: 0.5em;
+    }
+    /* Wrap long lines nicely */
+    #result {
+      margin-top: 1em;
+      padding: 1em;
+      border: 1px solid #ccc;
+      background: #f8f8f8;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>Number to English Converter</h1>
+  <p>Enter an arithmetic expression (using integers) such as:</p>
+  <p><code>-123^5001</code> or <code>(-123)^5001</code></p>
+  <form id="calcForm">
+    <input type="text" id="expression" placeholder="Enter expression" required>
+    <button type="submit">Convert to English</button>
+  </form>
+  <div id="result"></div>
+
+  <script>
+    // When the form is submitted, evaluate the expression and display:
+    // 1. The number of digits (ignoring any sign)
+    // 2. The numeric result (as an integer string)
+    // 3. The English‑word conversion.
+    document.getElementById("calcForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const expr = document.getElementById("expression").value.trim();
+      const resultDiv = document.getElementById("result");
+      try {
+        const result = evaluateExpression(expr);
+        const numericStr = result.toString();
+        const numDigits = numericStr.replace(/^-/, "").length;
+        const english = numberToEnglish(numericStr);
+        resultDiv.textContent = 
+          "Number of digits: " + numDigits + "\n" +
+          numericStr + "\n\n" + english;
+      } catch (err) {
+        resultDiv.textContent = "Error: " + err.message;
+      }
+    });
+
+    // Evaluate an arithmetic expression using BigInt.
+    // Supports +, -, *, /, parentheses, and ^ for exponentiation.
+    // Before replacing '^' with '**', we look for cases like "-123^5001" and wrap the number in parentheses.
+    function evaluateExpression(expr) {
+      // Transform a leading negative number used as the base of an exponentiation.
+      // If the expression starts with - followed immediately by digits and then a caret, wrap the number.
+      expr = expr.replace(/^-(\d+)(?=\s*\^)/, '(-$1)');
+      // Also, if a negative number immediately follows an opening parenthesis and is used as a base,
+      // e.g. "(-123)^5001" is already fine, but in "(-123^5001" (missing parentheses) we want to catch it.
+      // (A more general solution would require a full parser.)
+      expr = expr.replace(/(\()\-(\d+)(?=\s*\^)/g, '$1(-$2)');
+
+      // Replace caret (^) with JavaScript’s exponentiation operator (**)
+      let processed = expr.replace(/\^/g, '**');
+      // Append "n" to every number literal (one or more digits) so that BigInt is used.
+      processed = processed.replace(/\b\d+\b/g, match => match + "n");
+      // Evaluate the processed expression.
+      // (Be cautious: using the Function constructor on untrusted input can be unsafe.)
+      const f = new Function("return " + processed + ";");
+      return f();
+    }
+
+    // Convert a (possibly huge) integer (as a string) to English words.
+    function numberToEnglish(numStr) {
+      let isNegative = false;
+      if (numStr[0] === '-') {
+        isNegative = true;
+        numStr = numStr.slice(1);
+      }
+      // Remove leading zeros.
+      numStr = numStr.replace(/^0+/, "");
+      if (numStr === "") return "zero";
+
+      // Split the number into groups of 3 digits (from right to left).
+      const groups = [];
+      while (numStr.length > 0) {
+        const end = numStr.length;
+        const start = Math.max(0, end - 3);
+        groups.push(numStr.slice(start, end));
+        numStr = numStr.slice(0, start);
+      }
+      // groups[0] is ones, groups[1] is thousands, groups[2] is millions, etc.
+      const words = [];
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const groupNum = parseInt(groups[i], 10);
+        if (groupNum === 0) continue;
+        let groupWords = convertHundreds(groupNum);
+        const scaleName = getScaleName(i);
+        if (scaleName) {
+          groupWords += " " + scaleName;
+        }
+        words.push(groupWords);
+      }
+      return (isNegative ? "minus " : "") + words.join(" ");
+    }
+
+    // Convert a number less than 1000 into English words.
+    function convertHundreds(num) {
+      const ones = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+      const teens = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+      const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+      const parts = [];
+      if (num >= 100) {
+        parts.push(ones[Math.floor(num / 100)] + " hundred");
+        num = num % 100;
+      }
+      if (num >= 20) {
+        const tenPart = tens[Math.floor(num / 10)];
+        const onePart = num % 10 ? "-" + ones[num % 10] : "";
+        parts.push(tenPart + onePart);
+      } else if (num >= 10) {
+        parts.push(teens[num - 10]);
+      } else if (num > 0) {
+        parts.push(ones[num]);
+      }
+      return parts.join(" ");
+    }
+
+    // Returns the scale name for a given group index.
+    // Group index 0: no name.
+    // Group index 1: "thousand".
+    // For index >= 2, if a common name exists we use it;
+    // otherwise we generate one using Latin numeral conventions.
+    function getScaleName(index) {
+      if (index === 0) return "";
+      if (index === 1) return "thousand";
+
+      const common = {
+        2: "million",
+        3: "billion",
+        4: "trillion",
+        5: "quadrillion",
+        6: "quintillion",
+        7: "sextillion",
+        8: "septillion",
+        9: "octillion",
+        10: "nonillion",
+        11: "decillion",
+        12: "undecillion",
+        13: "duodecillion",
+        14: "tredecillion",
+        15: "quattuordecillion",
+        16: "quindecillion",
+        17: "sexdecillion",
+        18: "septendecillion",
+        19: "octodecillion",
+        20: "novemdecillion",
+        21: "vigintillion"
+      };
+      if (common[index]) return common[index];
+      // For index >= 22, generate a name using a Latin numeral conversion.
+      // We use index-1 so that, for example, index 2 (million) remains unchanged.
+      return illionPrefix(index - 1) + "illion";
+    }
+
+    // Convert a positive integer (n) into a Latin numeral string.
+    // For n < 1000 we use fixed arrays; for larger numbers, we break n into groups of 3 digits.
+    function illionPrefix(n) {
+      // Arrays for numbers less than 10.
+      const onesLatin = ["", "un", "duo", "tre", "quattuor", "quin", "sex", "septen", "octo", "novem"];
+      const tensLatin = ["", "dec", "vigint", "trigint", "quadragint", "quinquagint", "sexagint", "septuagint", "octogint", "nonagint"];
+      const hundredsLatin = ["", "cent", "ducent", "trecent", "quadringent", "quingent", "sescent", "septingent", "octingent", "nongent"];
+
+      if (n < 10) {
+        return onesLatin[n];
+      }
+      if (n < 100) {
+        let tens = Math.floor(n / 10);
+        let ones = n % 10;
+        return onesLatin[ones] + tensLatin[tens];
+      }
+      if (n < 1000) {
+        let hundreds = Math.floor(n / 100);
+        let remainder = n % 100;
+        return hundredsLatin[hundreds] + (remainder ? illionPrefix(remainder) : "");
+      }
+      // For numbers 1000 or greater, break n into groups of three digits.
+      let nStr = n.toString();
+      let parts = [];
+      while (nStr.length > 0) {
+        let end = nStr.length;
+        let start = Math.max(0, end - 3);
+        parts.unshift(parseInt(nStr.slice(start, end), 10)); // unshift preserves order
+        nStr = nStr.slice(0, start);
+      }
+      // Convert each group (each is less than 1000) using the same function,
+      // and join them with "m" as a separator.
+      let result = parts.map(part => illionPrefix(part)).join("m");
+      return result;
+    }
+  </script>
+</body>
+</html>
