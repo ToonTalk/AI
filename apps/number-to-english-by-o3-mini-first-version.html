@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Number to English Converter</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2em;
+      max-width: 600px;
+    }
+    h1 {
+      text-align: center;
+    }
+    input[type="text"] {
+      width: 100%;
+      font-size: 1.2em;
+      padding: 0.5em;
+    }
+    button {
+      padding: 0.5em 1em;
+      font-size: 1.2em;
+      margin-top: 0.5em;
+    }
+    #result {
+      margin-top: 1em;
+      padding: 1em;
+      border: 1px solid #ccc;
+      background: #f8f8f8;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Number to English Converter</h1>
+  <p>Enter an arithmetic expression using integers (no decimals) such as:</p>
+  <p><code>12345678901234567890 + 98765432109876543210</code></p>
+  <form id="calcForm">
+    <input type="text" id="expression" placeholder="Enter expression" required>
+    <button type="submit">Convert to English</button>
+  </form>
+  <div id="result"></div>
+
+  <script>
+    // When the form is submitted, evaluate the expression and convert the result to English.
+    document.getElementById("calcForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const expr = document.getElementById("expression").value.trim();
+      const resultDiv = document.getElementById("result");
+      try {
+        // Evaluate the arithmetic expression using BigInt.
+        const result = evaluateExpression(expr);
+        // Convert the BigInt result (as a string) to English words.
+        const english = numberToEnglish(result.toString());
+        resultDiv.textContent = english;
+      } catch (err) {
+        resultDiv.textContent = "Error: " + err.message;
+      }
+    });
+
+    // Evaluate an arithmetic expression using BigInt.
+    // This simple implementation replaces every sequence of digits with a BigInt literal.
+    // (It supports +, -, *, /, and parentheses. Division is integer division.)
+    function evaluateExpression(expr) {
+      // Replace every number (one or more digits) with the BigInt literal version.
+      // For example, "123" becomes "123n".
+      const processed = expr.replace(/\b\d+\b/g, match => match + "n");
+      // Use the Function constructor to evaluate the expression.
+      // (Be cautious: using Function/eval on untrusted input is unsafe.)
+      const f = new Function("return " + processed + ";");
+      return f();
+    }
+
+    // Convert a (possibly huge) integer given as a string to English words.
+    function numberToEnglish(numStr) {
+      // Handle negative numbers.
+      let isNegative = false;
+      if (numStr[0] === '-') {
+        isNegative = true;
+        numStr = numStr.slice(1);
+      }
+      // Remove any leading zeros.
+      numStr = numStr.replace(/^0+/, "");
+      if (numStr === "") return "zero";
+
+      // Break the number into groups of 3 digits starting from the right.
+      const groups = [];
+      while (numStr.length > 0) {
+        const end = numStr.length;
+        const start = Math.max(0, end - 3);
+        groups.push(numStr.slice(start, end));
+        numStr = numStr.slice(0, start);
+      }
+      // Now groups[0] is the ones (least-significant) group,
+      // groups[1] is thousands, groups[2] is millions, etc.
+
+      const words = [];
+      // Process from the most-significant group to the least.
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const groupNum = parseInt(groups[i], 10);
+        if (groupNum === 0) continue; // Skip groups that are zero.
+        let groupWords = convertHundreds(groupNum);
+        const scaleName = getScaleName(i);
+        if (scaleName) {
+          groupWords += " " + scaleName;
+        }
+        words.push(groupWords);
+      }
+      return (isNegative ? "minus " : "") + words.join(" ");
+    }
+
+    // Convert a number less than 1000 into English words.
+    function convertHundreds(num) {
+      const ones = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+      const teens = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+      const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+      const parts = [];
+      if (num >= 100) {
+        parts.push(ones[Math.floor(num / 100)] + " hundred");
+        num = num % 100;
+      }
+      if (num >= 20) {
+        const tenPart = tens[Math.floor(num / 10)];
+        const onePart = num % 10 ? "-" + ones[num % 10] : "";
+        parts.push(tenPart + onePart);
+      } else if (num >= 10) {
+        parts.push(teens[num - 10]);
+      } else if (num > 0) {
+        parts.push(ones[num]);
+      }
+      return parts.join(" ");
+    }
+
+    // Returns the scale name for the given group index.
+    // For index 0 (the rightmost group), no scale is needed.
+    // For higher indices, we use common names (thousand, million, billion, etc.).
+    // If the index is beyond our predefined list, we fall back to a generic "10^(3*n)" notation.
+    const scales = [
+      "", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion",
+      "sextillion", "septillion", "octillion", "nonillion", "decillion", "undecillion",
+      "duodecillion", "tredecillion", "quattuordecillion", "quindecillion",
+      "sexdecillion", "septendecillion", "octodecillion", "novemdecillion", "vigintillion"
+    ];
+    function getScaleName(index) {
+      if (index < scales.length) {
+        return scales[index];
+      } else {
+        // For extremely large numbers, indicate the magnitude as a power of 10.
+        return "10^(" + (3 * index) + ")";
+      }
+    }
+  </script>
+</body>
+</html>
