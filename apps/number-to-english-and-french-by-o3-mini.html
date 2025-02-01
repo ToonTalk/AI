@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Number Converter (English &amp; French)</title>
+  <style>
+    body { font-family: sans-serif; margin: 2em; }
+    input, button { font-size: 1.2em; }
+    pre { background: #f8f8f8; padding: 1em; }
+    .result { margin-top: 1em; }
+    /* Allow long numbers to wrap in the code element */
+    code {
+      white-space: pre-wrap; /* Preserve whitespace and allow wrapping */
+      word-break: break-all;
+      background: #eef;
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Number Converter (English &amp; French)</h1>
+  <p>Enter an expression (using <code>^</code> for exponentiation):</p>
+  <input id="expr" type="text" size="50" value="2^100 + 3^50" />
+  <button id="calc">Calculate</button>
+
+  <div class="result" id="result"></div>
+
+  <script>
+  // --- Expression Evaluation with BigInts ---
+  // We allow the user to use ^ for exponentiation.
+  // We also convert every numeric literal to a BigInt literal.
+  function prepareExpression(expr) {
+    // Replace ^ with ** for exponentiation.
+    expr = expr.replace(/\^/g, "**");
+    // Replace every whole-number literal with a BigInt literal by appending an "n".
+    expr = expr.replace(/\b(\d+)\b/g, "$1n");
+    return expr;
+  }
+
+  function evaluateExpression(expr) {
+    try {
+      let prepared = prepareExpression(expr);
+      let f = new Function("return (" + prepared + ");");
+      let result = f();
+      if (typeof result !== "bigint") {
+        throw new Error("Result is not an integer.");
+      }
+      return result;
+    } catch (e) {
+      throw new Error("Error evaluating expression: " + e.message);
+    }
+  }
+
+  // --- English Conversion ---
+  function convertHundredsEN(n) {
+    n = Number(n);
+    const ones = ["", "one", "two", "three", "four", "five", "six",
+                  "seven", "eight", "nine", "ten", "eleven", "twelve",
+                  "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+                  "eighteen", "nineteen"];
+    const tens = ["", "", "twenty", "thirty", "forty", "fifty",
+                  "sixty", "seventy", "eighty", "ninety"];
+    let words = "";
+    if (n >= 100) {
+      let h = Math.floor(n / 100);
+      words += ones[h] + " hundred";
+      n %= 100;
+      if (n > 0) words += " ";
+    }
+    if (n >= 20) {
+      let t = Math.floor(n / 10);
+      words += tens[t];
+      n %= 10;
+      if (n > 0) words += "-" + ones[n];
+    } else if (n > 0) {
+      words += ones[n];
+    }
+    return words;
+  }
+
+  const scaleNamesEN = [
+    "", // group0: no name
+    "thousand",
+    "million",
+    "billion",
+    "trillion",
+    "quadrillion",
+    "quintillion",
+    "sextillion",
+    "septillion",
+    "octillion",
+    "nonillion",
+    "decillion",
+    "undecillion",
+    "duodecillion",
+    "tredecillion",
+    "quattuordecillion",
+    "quindecillion",
+    "sexdecillion",
+    "septendecillion",
+    "octodecillion",
+    "novemdecillion",
+    "vigintillion"
+  ];
+  const onesPrefixes = ["", "un", "duo", "tre", "quattuor", "quin", "sex", "septen", "octo", "novem"];
+  const tensPrefixes = ["", "", "vigint", "trigint", "quadragint", "quinquagint", "sexagint", "septuagint", "octogint", "nonagint"];
+
+  function generateIllionName(num) {
+    if (num === 0) return "";
+    let parts = [];
+    while(num > 0) {
+      let rem = num % 100;
+      num = Math.floor(num / 100);
+      let onesDigit = rem % 10;
+      let tensDigit = Math.floor(rem / 10);
+      let part = "";
+      if (tensDigit > 0) {
+        part += tensPrefixes[tensDigit] || "";
+      }
+      if (onesDigit > 0) {
+        part = onesPrefixes[onesDigit] + part;
+      }
+      parts.unshift(part);
+    }
+    return parts.join("");
+  }
+
+  function getScaleNameEN(index) {
+    if (index === 0) return "";
+    if (index < scaleNamesEN.length) return scaleNamesEN[index];
+    let m = index - 1;
+    return generateIllionName(m) + "illion";
+  }
+
+  function numberToEnglish(bigStr) {
+    if (bigStr === "0") return "zero";
+    let pad = (3 - (bigStr.length % 3)) % 3;
+    bigStr = "0".repeat(pad) + bigStr;
+    let groups = [];
+    for (let i = 0; i < bigStr.length; i += 3) {
+      groups.push(bigStr.slice(i, i+3));
+    }
+    let words = [];
+    let totalGroups = groups.length;
+    groups.forEach((grp, idx) => {
+      let num = parseInt(grp, 10);
+      if (num === 0) return;
+      let grpWords = convertHundredsEN(num);
+      let scaleName = getScaleNameEN(totalGroups - idx - 1);
+      if (scaleName) grpWords += " " + scaleName;
+      words.push(grpWords);
+    });
+    return words.join(" ");
+  }
+
+  // --- French Conversion ---
+  function convertHundredsFR(n) {
+    n = Number(n);
+    if (n === 0) return "";
+    const ones = ["", "un", "deux", "trois", "quatre", "cinq", "six",
+                  "sept", "huit", "neuf", "dix", "onze", "douze",
+                  "treize", "quatorze", "quinze", "seize", "dix-sept",
+                  "dix-huit", "dix-neuf"];
+    const tens = ["", "", "vingt", "trente", "quarante", "cinquante", "soixante"];
+    let words = "";
+    let hundred = Math.floor(n / 100);
+    let remainder = n % 100;
+    if (hundred > 0) {
+      words += (hundred === 1 ? "cent" : ones[hundred] + " cent");
+      if (remainder === 0 && hundred > 1) words += "s";
+      if (remainder > 0) words += " ";
+    }
+    if (remainder > 0) {
+      if (remainder < 20) {
+        words += ones[remainder];
+      } else if (remainder < 70) {
+        let t = Math.floor(remainder / 10);
+        let u = remainder % 10;
+        words += tens[t];
+        if (u === 1) {
+          words += " et un";
+        } else if (u > 0) {
+          words += "-" + ones[u];
+        }
+      } else if (remainder < 80) {
+        let u = remainder - 60;
+        words += "soixante";
+        if (u === 10) {
+          words += "-dix";
+        } else if (u === 11) {
+          words += " et onze";
+        } else {
+          words += "-" + ones[u + 10];
+        }
+      } else if (remainder < 100) {
+        let u = remainder - 80;
+        words += "quatre-vingt";
+        if (u === 0) {
+          words += "s";
+        } else if (u === 1) {
+          words += "-un";
+        } else if (u < 20) {
+          words += "-" + ones[u];
+        }
+      }
+    }
+    return words;
+  }
+
+  const predefinedFrIllions = [
+    null,
+    "million",
+    "billion",
+    "trillion",
+    "quadrillion",
+    "quintillion",
+    "sextillion",
+    "septillion",
+    "octillion",
+    "nonillion",
+    "decillion",
+    "undecillion",
+    "duodecillion",
+    "tredecillion",
+    "quattuordecillion",
+    "quindecillion",
+    "sexdecillion",
+    "septendecillion",
+    "octodecillion",
+    "novemdecillion",
+    "vigintillion"
+  ];
+
+  function getIllionNameFR(n) {
+    if (n < predefinedFrIllions.length) return predefinedFrIllions[n];
+    let m = n - 1;
+    return generateIllionName(m) + "illion";
+  }
+
+  function getScaleNameFR(groupIndex) {
+    if (groupIndex === 0) return "";
+    if (groupIndex === 1) return "mille";
+    if (groupIndex % 2 === 0) {
+      let half = groupIndex / 2;
+      return getIllionNameFR(half);
+    } else {
+      let half = (groupIndex - 1) / 2;
+      let base = getIllionNameFR(half);
+      return base.endsWith("ion") ? base.slice(0, -3) + "iard" : base + "iard";
+    }
+  }
+
+  function numberToFrench(bigStr) {
+    if (bigStr === "0") return "zéro";
+    let pad = (3 - (bigStr.length % 3)) % 3;
+    bigStr = "0".repeat(pad) + bigStr;
+    let groups = [];
+    for (let i = 0; i < bigStr.length; i += 3) {
+      groups.push(bigStr.slice(i, i+3));
+    }
+    let words = [];
+    let totalGroups = groups.length;
+    groups.forEach((grp, idx) => {
+      let num = parseInt(grp, 10);
+      if (num === 0) return;
+      let grpWords = convertHundredsFR(num);
+      let scale = getScaleNameFR(totalGroups - idx - 1);
+      if (scale) {
+        if (scale === "mille" && num === 1) {
+          grpWords = scale;
+        } else {
+          grpWords += " " + scale;
+          if (scale !== "mille") grpWords += "s";
+        }
+      }
+      words.push(grpWords);
+    });
+    return words.join(" ");
+  }
+
+  // --- Main Handler ---
+  document.getElementById("calc").addEventListener("click", function() {
+    const expr = document.getElementById("expr").value;
+    const output = document.getElementById("result");
+    try {
+      let resultBigInt = evaluateExpression(expr);
+      let sign = "";
+      if (resultBigInt < 0n) { sign = "-"; resultBigInt = -resultBigInt; }
+      let resultStr = resultBigInt.toString();
+      let digitCount = resultStr.length;
+      let englishWords = numberToEnglish(resultStr);
+      let frenchWords = numberToFrench(resultStr);
+      output.innerHTML = `<p><strong>Number of digits:</strong> ${digitCount}</p>
+                          <p><strong>Number:</strong> <code>${sign}${resultStr}</code></p>
+                          <p><strong>English:</strong> ${sign}${englishWords}</p>
+                          <p><strong>French:</strong> ${sign}${frenchWords}</p>`;
+    } catch (e) {
+      output.innerHTML = `<pre>${e.message}</pre>`;
+    }
+  });
+  </script>
+</body>
+</html>
