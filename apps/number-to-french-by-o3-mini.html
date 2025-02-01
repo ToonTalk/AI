@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Nombre en toutes lettres (Version Française)</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2em;
+      max-width: 800px;
+    }
+    h1 {
+      text-align: center;
+    }
+    input[type="text"] {
+      width: 100%;
+      font-size: 1.2em;
+      padding: 0.5em;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 0.5em 1em;
+      font-size: 1.2em;
+      margin-top: 0.5em;
+    }
+    /* Permettre l'enveloppement des lignes longues */
+    #result {
+      margin-top: 1em;
+      padding: 1em;
+      border: 1px solid #ccc;
+      background: #f8f8f8;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>Convertisseur de Nombre en Toutes Lettres (Français)</h1>
+  <p>Entrez une expression arithmétique (avec des entiers) telle que :</p>
+  <p><code>-123^5001</code> ou <code>(-123)^5001</code></p>
+  <form id="calcForm">
+    <input type="text" id="expression" placeholder="Entrez l'expression" required>
+    <button type="submit">Convertir</button>
+  </form>
+  <div id="result"></div>
+
+  <script>
+    // Lorsque le formulaire est soumis, on évalue l'expression et on affiche :
+    // 1. Le nombre de chiffres (sans le signe éventuel)
+    // 2. Le résultat numérique complet
+    // 3. Le résultat en toutes lettres (en français)
+    document.getElementById("calcForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const expr = document.getElementById("expression").value.trim();
+      const resultDiv = document.getElementById("result");
+      try {
+        const result = evaluateExpression(expr);
+        const numericStr = result.toString();
+        const numDigits = numericStr.replace(/^-/, "").length;
+        const frenchWords = numberToFrench(numericStr);
+        resultDiv.textContent =
+          "Nombre de chiffres : " + numDigits + "\n" +
+          numericStr + "\n\n" + frenchWords;
+      } catch (err) {
+        resultDiv.textContent = "Erreur : " + err.message;
+      }
+    });
+
+    // Évalue une expression arithmétique en utilisant BigInt.
+    // Supporte +, -, *, /, les parenthèses et ^ pour l'exponentiation.
+    // On enveloppe automatiquement une base négative si nécessaire.
+    function evaluateExpression(expr) {
+      // Envelopper un nombre négatif au début s'il est suivi d'un '^'
+      expr = expr.replace(/^-(\d+)(?=\s*\^)/, '(-$1)');
+      // De même, après une parenthèse ouvrante
+      expr = expr.replace(/(\()\-(\d+)(?=\s*\^)/g, '$1(-$2)');
+
+      // Remplacer '^' par l'opérateur d'exponentiation de JavaScript (**)
+      let processed = expr.replace(/\^/g, '**');
+      // Pour chaque littéral numérique, ajouter "n" pour utiliser BigInt
+      processed = processed.replace(/\b\d+\b/g, match => match + "n");
+      // Évaluer l'expression transformée.
+      // (Attention : l'utilisation de Function/eval sur des entrées non fiables est dangereuse.)
+      const f = new Function("return " + processed + ";");
+      return f();
+    }
+
+    // Convertit une chaîne représentant un entier (possiblement très grand)
+    // en sa forme en toutes lettres (en français).
+    function numberToFrench(numStr) {
+      let isNegative = false;
+      if (numStr[0] === '-') {
+        isNegative = true;
+        numStr = numStr.slice(1);
+      }
+      // Retirer les zéros non significatifs.
+      numStr = numStr.replace(/^0+/, "");
+      if (numStr === "") return "zéro";
+
+      // Découper le nombre en groupes de 3 chiffres (de droite à gauche)
+      const groups = [];
+      while (numStr.length > 0) {
+        const end = numStr.length;
+        const start = Math.max(0, end - 3);
+        groups.push(numStr.slice(start, end));
+        numStr = numStr.slice(0, start);
+      }
+      // groups[0] = unités, groups[1] = milliers, groups[2] = millions, etc.
+      const words = [];
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const groupNum = parseInt(groups[i], 10);
+        if (groupNum === 0) continue;
+        let groupWords = convertHundredsFrench(groupNum);
+        const scaleName = getScaleNameFrench(i);
+        if (scaleName) {
+          // Pour "mille" on ne préfixe pas "un" : 1000 se dit "mille" et non "un mille"
+          if (i === 1 && groupNum === 1) {
+            groupWords = scaleName;
+          } else {
+            groupWords += " " + scaleName;
+          }
+        }
+        words.push(groupWords);
+      }
+      return (isNegative ? "moins " : "") + words.join(" ");
+    }
+
+    // Convertit un entier strictement inférieur à 1000 en lettres (français).
+    function convertHundredsFrench(n) {
+      if (n < 100) return convertTensFrench(n);
+
+      const units = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"];
+      let centaines = Math.floor(n / 100);
+      let reste = n % 100;
+      let result = "";
+
+      if (centaines === 1) {
+        result = "cent";
+      } else {
+        result = units[centaines] + " cent";
+      }
+      // Ajout du "s" à "cent" s'il n'y a pas de reste et que le nombre est supérieur à 1 (ex. 200 → "deux cents")
+      if (reste === 0 && centaines > 1) {
+        result += "s";
+      } else if (reste > 0) {
+        result += " " + convertTensFrench(reste);
+      }
+      return result;
+    }
+
+    // Convertit un entier strictement inférieur à 100 en lettres (français).
+    function convertTensFrench(n) {
+      const units = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf",
+                     "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize"];
+      if (n < 17) {
+        return units[n];
+      }
+      if (n < 20) {
+        return "dix-" + units[n - 10];
+      }
+      if (n < 70) {
+        const tensNames = {20: "vingt", 30: "trente", 40: "quarante", 50: "cinquante", 60: "soixante"};
+        let dizaine = Math.floor(n / 10) * 10;
+        let reste = n % 10;
+        if (reste === 1) {
+          return tensNames[dizaine] + " et un";
+        } else if (reste > 0) {
+          return tensNames[dizaine] + "-" + units[reste];
+        } else {
+          return tensNames[dizaine];
+        }
+      }
+      if (n < 80) {
+        let reste = n - 60;
+        if (reste === 1) {
+          return "soixante et onze";
+        } else {
+          return "soixante-" + (reste < 17 ? units[reste] : convertTensFrench(reste));
+        }
+      }
+      if (n < 100) {
+        let reste = n - 80;
+        if (n === 80) {
+          return "quatre-vingts";
+        } else if (reste === 1) {
+          return "quatre-vingt-un";
+        } else {
+          return "quatre-vingt-" + (reste < 17 ? units[reste] : convertTensFrench(reste));
+        }
+      }
+      return "";
+    }
+
+    // Retourne le nom de l'échelle pour un groupe donné (index)
+    // groups[0] → aucune étiquette,
+    // groups[1] → "mille",
+    // groups[2] → "million",
+    // groups[3] → "milliard",
+    // groups[4] → "billion",
+    // groups[5] → "billiard", etc.
+    // Pour les indices au-delà d'une liste commune, on génère un nom à partir d'un préfixe latin
+    // et on ajoute soit "illion" (pour les indices pairs) soit "illiard" (pour les indices impairs).
+    function getScaleNameFrench(index) {
+      if (index === 0) return "";
+      if (index === 1) return "mille";
+
+      const common = {
+        2: "million",
+        3: "milliard",
+        4: "billion",
+        5: "billiard",
+        6: "trillion",
+        7: "trilliard",
+        8: "quadrillion",
+        9: "quadrilliard",
+        10: "quintillion",
+        11: "quintilliard",
+        12: "sextillion",
+        13: "sextilliard",
+        14: "septillion",
+        15: "septilliard",
+        16: "octillion",
+        17: "octilliard",
+        18: "nonillion",
+        19: "nonilliard",
+        20: "décillion",
+        21: "décilliard"
+      };
+      if (common[index]) return common[index];
+      
+      // Pour les indices supérieurs, on définit n = index - 2 (car groups[2] correspond à "million")
+      let n = index - 2;
+      // Génère un préfixe latin pour n
+      let prefix = illionPrefix(n);
+      // Choisit le suffixe selon que l'index soit pair (suffixe "illion") ou impair ("illiard")
+      let suffix = (index % 2 === 0) ? "illion" : "illiard";
+      return prefix + suffix;
+    }
+
+    // Convertit un entier positif (n) en une chaîne préfixe (latin) pour la formation des grands nombres.
+    // Pour n < 1000, on utilise des tableaux fixes ; pour des nombres plus grands, on découpe n en groupes.
+    function illionPrefix(n) {
+      const onesLatin = ["", "un", "duo", "tre", "quattuor", "quin", "sex", "septen", "octo", "novem"];
+      const tensLatin = ["", "dec", "vigint", "trigint", "quadragint", "quinquagint", "sexagint", "septuagint", "octogint", "nonagint"];
+      const hundredsLatin = ["", "cent", "ducent", "trecent", "quadringent", "quingent", "sescent", "septingent", "octingent", "nongent"];
+
+      if (n < 10) {
+        return onesLatin[n];
+      }
+      if (n < 100) {
+        let tens = Math.floor(n / 10);
+        let ones = n % 10;
+        return onesLatin[ones] + tensLatin[tens];
+      }
+      if (n < 1000) {
+        let hundreds = Math.floor(n / 100);
+        let remainder = n % 100;
+        return hundredsLatin[hundreds] + (remainder ? illionPrefix(remainder) : "");
+      }
+      // Pour n >= 1000, découpe n en groupes de 3 chiffres et les convertit récursivement,
+      // en joignant les parties par "m".
+      let nStr = n.toString();
+      let parts = [];
+      while(nStr.length > 0) {
+        let end = nStr.length;
+        let start = Math.max(0, end - 3);
+        parts.unshift(parseInt(nStr.slice(start, end), 10));
+        nStr = nStr.slice(0, start);
+      }
+      return parts.map(part => illionPrefix(part)).join("m");
+    }
+  </script>
+</body>
+</html>
