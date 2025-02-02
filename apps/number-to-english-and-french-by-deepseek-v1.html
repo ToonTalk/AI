@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Number Converter</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+        .container { margin-bottom: 20px; }
+        input { width: 300px; padding: 5px; }
+        button { padding: 5px 15px; }
+        .result { margin-top: 20px; padding: 10px; border: 1px solid #ccc; }
+        .number { font-weight: bold; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <input type="text" id="numberInput" placeholder="Enter expression (e.g., 123^4)">
+        <button onclick="convert()">Convert</button>
+    </div>
+    <div id="result" class="result"></div>
+
+    <script>
+        const scalesEn = ['', 'thousand', 'million', 'billion', 'trillion', 'quadrillion', 
+                        'quintillion', 'sextillion', 'septillion', 'octillion', 'nonillion', 'decillion'];
+        const scalesFr = ['', 'mille', 'million', 'milliard', 'billion', 'billiard', 
+                        'trillion', 'trilliard', 'quadrillion', 'quadrilliard'];
+
+        const onesEn = ['','one','two','three','four','five','six','seven','eight','nine'];
+        const teensEn = ['ten','eleven','twelve','thirteen','fourteen','fifteen',
+                       'sixteen','seventeen','eighteen','nineteen'];
+        const tensEn = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+
+        const onesFr = ['','un','deux','trois','quatre','cinq','six','sept','huit','neuf'];
+        const teensFr = ['dix','onze','douze','treize','quatorze','quinze',
+                       'seize','dix-sept','dix-huit','dix-neuf'];
+
+        function convertHundredsEn(n) {
+            if(n === 0) return '';
+            let res = '';
+            const hundreds = Math.floor(n / 100);
+            const remainder = n % 100;
+            
+            if(hundreds > 0) {
+                res += onesEn[hundreds] + ' hundred ';
+            }
+            if(remainder > 0) {
+                res += convertTensEn(remainder);
+            }
+            return res.trim();
+        }
+
+        function convertTensEn(n) {
+            if(n < 10) return onesEn[n];
+            if(n < 20) return teensEn[n - 10];
+            const ten = Math.floor(n / 10);
+            const unit = n % 10;
+            return tensEn[ten] + (unit > 0 ? '-' + onesEn[unit] : '');
+        }
+
+        function convertHundredsFr(n) {
+            if(n === 0) return '';
+            let res = '';
+            const hundreds = Math.floor(n / 100);
+            const remainder = n % 100;
+            
+            if(hundreds > 0) {
+                res += (hundreds === 1 ? 'cent' : onesFr[hundreds] + ' cent');
+                if(remainder === 0 && hundreds > 1) res += 's';
+                res += ' ';
+            }
+            if(remainder > 0) {
+                res += convertTensFr(remainder);
+            }
+            return res.trim();
+        }
+
+        function convertTensFr(n) {
+            if(n === 0) return '';
+            if(n === 1) return 'un';
+            if(n < 10) return onesFr[n];
+            if(n < 20) return teensFr[n - 10];
+            
+            const ten = Math.floor(n / 10);
+            const unit = n % 10;
+            
+            switch(ten) {
+                case 2: return handleVingt(n, unit);
+                case 7: return 'soixante-' + convertTensFr(10 + unit);
+                case 8: return handleQuatreVingt(n, unit);
+                case 9: return 'quatre-vingt-' + convertTensFr(10 + unit);
+                default:
+                    const base = ['','dix','vingt','trente','quarante','cinquante','soixante'][ten];
+                    if(unit === 0) return base;
+                    if(unit === 1 && ten !== 8) return base + ' et un';
+                    return base + '-' + onesFr[unit];
+            }
+        }
+
+        function handleVingt(n, unit) {
+            return 'vingt' + (unit === 0 ? '' : unit === 1 ? ' et un' : '-' + onesFr[unit]);
+        }
+
+        function handleQuatreVingt(n, unit) {
+            return 'quatre-vingt' + (unit === 0 ? 's' : '-' + onesFr[unit]);
+        }
+
+        function numberToWords(n, language) {
+            if(n === 0) return language === 'en' ? 'zero' : 'zéro';
+            let chunks = [];
+            let current = n;
+            
+            while(current > 0) {
+                chunks.push(current % 1000);
+                current = Math.floor(current / 1000);
+            }
+            
+            let result = [];
+            for(let i = chunks.length - 1; i >= 0; i--) {
+                if(chunks[i] === 0) continue;
+                let part = '';
+                if(language === 'en') {
+                    part = convertHundredsEn(chunks[i]) + 
+                          (scalesEn[i] ? ' ' + scalesEn[i] : '');
+                } else {
+                    part = (chunks[i] === 1 && i === 1 ? '' : convertHundredsFr(chunks[i]) + ' ') + 
+                           scalesFr[i];
+                    if(i === 1 && chunks[i] > 1) part = convertHundredsFr(chunks[i]) + ' ' + scalesFr[i];
+                }
+                result.push(part);
+            }
+            
+            return result.join(' ').replace(/\s+/g, ' ').trim();
+        }
+
+        function convert() {
+            const input = document.getElementById('numberInput').value;
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '';
+            
+            try {
+                const num = BigInt(eval(input.replace(/\^/g, '**')));
+                const numStr = num.toString();
+                const english = numberToWords(num, 'en');
+                const french = numberToWords(num, 'fr');
+                
+                resultDiv.innerHTML = `
+                    <div>Digits: ${numStr.length}</div>
+                    <div class="number">${numStr}</div>
+                    <div>English: ${english}</div>
+                    <div>French: ${french}</div>
+                `;
+            } catch (e) {
+                resultDiv.innerHTML = 'Error: Invalid expression';
+            }
+        }
+    </script>
+</body>
+</html>
