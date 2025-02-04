@@ -28,7 +28,7 @@
       border: none;
       border-radius: 10px;
       cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     }
     /* Main Experience Container */
     #experience {
@@ -39,7 +39,7 @@
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       position: relative;
-      display: none; /* Hidden until start button is clicked */
+      display: none; /* Hidden until the start button is clicked */
     }
     .page {
       display: none;
@@ -63,7 +63,7 @@
       padding: 0 10px;
       text-align: center;
       max-width: 600px;
-      cursor: pointer; /* Indicate that the text is tappable */
+      cursor: pointer; /* Indicates that the text is tappable/clickable */
     }
     /* Highlight style for spoken words */
     .highlight {
@@ -83,13 +83,13 @@
 <body>
   <!-- Start Screen -->
   <div id="start-screen">
-    <!-- Birthday themed start button with emojis -->
+    <!-- Birthday-themed start button with emojis -->
     <button id="play-button">🎉 Start Birthday Ride 🎂</button>
   </div>
 
   <!-- Main Experience Container (hidden until start) -->
   <div id="experience" class="container">
-    <!-- First page now includes an instructions message -->
+    <!-- First page includes an image and instructions -->
     <div class="page active">
       <img src="1.webp" alt="Title Page" />
       <p id="instructions" class="text"></p>
@@ -169,41 +169,77 @@
     // Detect mobile devices
     const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
-    // Set instructions on the first page depending on the device.
+    // Set instructions on the first page based on the device.
     window.addEventListener('load', () => {
       const instrElem = document.getElementById('instructions');
       if (isMobile) {
-        instrElem.textContent = "Swipe left/right to switch between pages.";
+        instrElem.textContent = "Swipe left/right to switch pages and tap text to have it read aloud.";
       } else {
-        instrElem.textContent = "Use arrow keys to switch between pages.";
+        instrElem.textContent = "Use arrow keys to switch pages and click text to have it read aloud.";
       }
     });
+
+    // GLOBAL VOICE SELECTION
+    let selectedVoice = null;
+    function loadVoices() {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length === 0) return;
+      
+      // 1. Look for a voice that is both British (en-GB) and has "female" in its name.
+      const femaleGBVoices = voices.filter(voice =>
+        voice.lang &&
+        voice.lang.toLowerCase().startsWith("en-gb") &&
+        /female/i.test(voice.name)
+      );
+      if (femaleGBVoices.length > 0) {
+        selectedVoice = femaleGBVoices[0];
+      } else {
+        // 2. Otherwise, look for any British voice.
+        const britishVoices = voices.filter(voice =>
+          voice.lang && voice.lang.toLowerCase().startsWith("en-gb")
+        );
+        if (britishVoices.length > 0) {
+          selectedVoice = britishVoices[0];
+        } else {
+          // 3. Otherwise, look for any female voice.
+          const femaleVoices = voices.filter(voice =>
+            /female/i.test(voice.name)
+          );
+          if (femaleVoices.length > 0) {
+            selectedVoice = femaleVoices[0];
+          } else {
+            // 4. Fallback: Use the first available voice.
+            selectedVoice = voices[0];
+          }
+        }
+      }
+      console.log("Selected voice:", selectedVoice);
+    }
+    // Load voices immediately and also when the voices list changes.
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
 
     // Navigation variables and functions
     let currentPage = 0;
     const pages = document.querySelectorAll('.page');
-    
     function showPage(index) {
       pages.forEach((page, i) => {
         page.classList.toggle('active', i === index);
       });
     }
-    
     function nextPage() {
       if (currentPage < pages.length - 1) {
         currentPage++;
         showPage(currentPage);
       }
     }
-    
     function prevPage() {
       if (currentPage > 0) {
         currentPage--;
         showPage(currentPage);
       }
     }
-    
-    // Keyboard navigation for desktop
+    // Keyboard navigation (desktop)
     document.addEventListener('keydown', (event) => {
       if (event.key === 'ArrowRight') {
         nextPage();
@@ -211,13 +247,11 @@
         prevPage();
       }
     });
-    
-    // Touch swipe navigation for mobile
+    // Touch swipe navigation (mobile)
     let xDown = null;
     document.addEventListener('touchstart', (event) => {
       xDown = event.touches[0].clientX;
     }, false);
-    
     document.addEventListener('touchmove', (event) => {
       if (!xDown) return;
       const xUp = event.touches[0].clientX;
@@ -229,21 +263,21 @@
       }
       xDown = null;
     }, false);
-    
+
     // Global flag to prevent overlapping speech synthesis
     let isReading = false;
-    
-    // Function to read aloud the text and highlight words as they’re spoken.
-    // "Sisi" is replaced in the utterance (for speech only) with "C C".
+
+    // Function to read aloud the text and highlight each word as it is spoken.
+    // In the utterance, occurrences of "Sisi" are replaced with "C C" (using a non‑breaking space).
     function readTextAloud(textElement) {
       if (isReading) return;
       isReading = true;
       
-      // Pause the background audio
+      // Pause background audio
       const bgAudio = document.getElementById('background-music');
       bgAudio.pause();
       
-      // Store the original text if not already stored.
+      // Store original text if not already stored
       if (!textElement.dataset.original) {
         textElement.dataset.original = textElement.textContent.trim();
       }
@@ -263,17 +297,20 @@
       const wordSpans = textElement.querySelectorAll('span.word');
       let currentWordIndex = 0;
       
-      // For speech synthesis, replace "Sisi" with "C C" (non‑breaking space) so it is pronounced correctly.
+      // For speech synthesis, replace "Sisi" with "C C" (non‑breaking space) so it’s pronounced correctly.
       const utteranceText = originalText.replace(/Sisi/g, 'C\u00A0C');
       const utterance = new SpeechSynthesisUtterance(utteranceText);
       utterance.lang = 'en-US';
       utterance.rate = 1;
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
       
-      // We'll use an array to store fallback timer IDs on mobile.
+      // Array for fallback timer IDs (used on mobile)
       let fallbackTimers = [];
       
       if (!isMobile) {
-        // On desktop, use the boundary event to highlight each word.
+        // On desktop, use the boundary event to highlight words as they are spoken.
         utterance.onboundary = (event) => {
           if (event.name === 'word') {
             if (currentWordIndex > 0 && currentWordIndex <= wordSpans.length) {
@@ -286,10 +323,9 @@
           }
         };
       } else {
-        // On mobile, use a fallback timer approach.
-        // (Adjust fallbackDelay if needed for better synchronization.)
+        // On mobile, use a fallback timer approach (approximate timing).
         utterance.onstart = () => {
-          const fallbackDelay = 400; // milliseconds per word (approximate)
+          const fallbackDelay = 400; // milliseconds per word (adjust as needed)
           wordSpans.forEach((span, i) => {
             let timer = setTimeout(() => {
               if (i > 0) wordSpans[i - 1].classList.remove('highlight');
@@ -300,7 +336,7 @@
         };
       }
       
-      // When speech ends, clear highlights, cancel any fallback timers, and resume background audio.
+      // When the speech ends, clear highlights, cancel any fallback timers, and resume the background audio.
       utterance.onend = () => {
         wordSpans.forEach(span => span.classList.remove('highlight'));
         if (isMobile) {
@@ -314,15 +350,14 @@
       window.speechSynthesis.speak(utterance);
     }
     
-    // Attach tap/click listeners to each text element.
+    // Attach click/tap listeners to each text element.
     document.querySelectorAll('.text').forEach(textElem => {
       textElem.addEventListener('click', function () {
         readTextAloud(this);
       });
     });
     
-    // Start Experience: when the start button is clicked,
-    // start the background audio and show the experience container.
+    // Start Experience: When the start button is clicked, start background audio and show the experience container.
     let musicStarted = false;
     const playButton = document.getElementById('play-button');
     playButton.addEventListener('click', () => {
