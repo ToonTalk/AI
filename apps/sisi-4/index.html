@@ -89,8 +89,10 @@
 
   <!-- Main Experience Container (hidden until start) -->
   <div id="experience" class="container">
+    <!-- First page now includes an instructions message -->
     <div class="page active">
       <img src="1.webp" alt="Title Page" />
+      <p id="instructions" class="text"></p>
     </div>
     <div class="page">
       <img src="2.webp" alt="Introduction" />
@@ -164,6 +166,19 @@
   <audio id="background-music" src="song.mp3" preload="auto"></audio>
 
   <script>
+    // Detect mobile devices
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+
+    // Set instructions on the first page depending on the device.
+    window.addEventListener('load', () => {
+      const instrElem = document.getElementById('instructions');
+      if (isMobile) {
+        instrElem.textContent = "Swipe left/right to switch between pages.";
+      } else {
+        instrElem.textContent = "Use arrow keys to switch between pages.";
+      }
+    });
+
     // Navigation variables and functions
     let currentPage = 0;
     const pages = document.querySelectorAll('.page');
@@ -188,7 +203,7 @@
       }
     }
     
-    // Keyboard navigation
+    // Keyboard navigation for desktop
     document.addEventListener('keydown', (event) => {
       if (event.key === 'ArrowRight') {
         nextPage();
@@ -197,16 +212,13 @@
       }
     });
     
-    // Touch swipe navigation
-    document.addEventListener('touchstart', handleTouchStart, false);
-    document.addEventListener('touchmove', handleTouchMove, false);
-    
+    // Touch swipe navigation for mobile
     let xDown = null;
-    function handleTouchStart(event) {
+    document.addEventListener('touchstart', (event) => {
       xDown = event.touches[0].clientX;
-    }
+    }, false);
     
-    function handleTouchMove(event) {
+    document.addEventListener('touchmove', (event) => {
       if (!xDown) return;
       const xUp = event.touches[0].clientX;
       const xDiff = xDown - xUp;
@@ -216,14 +228,13 @@
         prevPage();
       }
       xDown = null;
-    }
+    }, false);
     
-    // Global flag to avoid overlapping speech synthesis
+    // Global flag to prevent overlapping speech synthesis
     let isReading = false;
     
-    // Function to read aloud the text of a paragraph and highlight words.
-    // Here we replace "Sisi" with "C C" (using a non-breaking space)
-    // in the utterance text only so that it’s pronounced as desired.
+    // Function to read aloud the text and highlight words as they’re spoken.
+    // "Sisi" is replaced in the utterance (for speech only) with "C C".
     function readTextAloud(textElement) {
       if (isReading) return;
       isReading = true;
@@ -232,7 +243,7 @@
       const bgAudio = document.getElementById('background-music');
       bgAudio.pause();
       
-      // Save original text if not already saved
+      // Store the original text if not already stored.
       if (!textElement.dataset.original) {
         textElement.dataset.original = textElement.textContent.trim();
       }
@@ -252,30 +263,50 @@
       const wordSpans = textElement.querySelectorAll('span.word');
       let currentWordIndex = 0;
       
-      // Replace "Sisi" with "C C" (using a non-breaking space) for speech synthesis.
-      // This replacement is done only in the utterance text,
-      // while the visible text remains unchanged.
+      // For speech synthesis, replace "Sisi" with "C C" (non‑breaking space) so it is pronounced correctly.
       const utteranceText = originalText.replace(/Sisi/g, 'C\u00A0C');
       const utterance = new SpeechSynthesisUtterance(utteranceText);
       utterance.lang = 'en-US';
       utterance.rate = 1;
       
-      // Highlight words as they are spoken.
-      utterance.onboundary = (event) => {
-        if (event.name === 'word') {
-          if (currentWordIndex > 0 && currentWordIndex <= wordSpans.length) {
-            wordSpans[currentWordIndex - 1].classList.remove('highlight');
-          }
-          if (currentWordIndex < wordSpans.length) {
-            wordSpans[currentWordIndex].classList.add('highlight');
-          }
-          currentWordIndex++;
-        }
-      };
+      // We'll use an array to store fallback timer IDs on mobile.
+      let fallbackTimers = [];
       
-      // When speaking ends, clear highlights and resume audio.
+      if (!isMobile) {
+        // On desktop, use the boundary event to highlight each word.
+        utterance.onboundary = (event) => {
+          if (event.name === 'word') {
+            if (currentWordIndex > 0 && currentWordIndex <= wordSpans.length) {
+              wordSpans[currentWordIndex - 1].classList.remove('highlight');
+            }
+            if (currentWordIndex < wordSpans.length) {
+              wordSpans[currentWordIndex].classList.add('highlight');
+            }
+            currentWordIndex++;
+          }
+        };
+      } else {
+        // On mobile, use a fallback timer approach.
+        // (Adjust fallbackDelay if needed for better synchronization.)
+        utterance.onstart = () => {
+          const fallbackDelay = 400; // milliseconds per word (approximate)
+          wordSpans.forEach((span, i) => {
+            let timer = setTimeout(() => {
+              if (i > 0) wordSpans[i - 1].classList.remove('highlight');
+              span.classList.add('highlight');
+            }, i * fallbackDelay);
+            fallbackTimers.push(timer);
+          });
+        };
+      }
+      
+      // When speech ends, clear highlights, cancel any fallback timers, and resume background audio.
       utterance.onend = () => {
         wordSpans.forEach(span => span.classList.remove('highlight'));
+        if (isMobile) {
+          fallbackTimers.forEach(timer => clearTimeout(timer));
+          fallbackTimers = [];
+        }
         isReading = false;
         bgAudio.play().catch(error => console.log('Audio resume failed:', error));
       };
@@ -283,14 +314,15 @@
       window.speechSynthesis.speak(utterance);
     }
     
-    // Attach click listeners to text elements to trigger speech reading.
+    // Attach tap/click listeners to each text element.
     document.querySelectorAll('.text').forEach(textElem => {
       textElem.addEventListener('click', function () {
         readTextAloud(this);
       });
     });
     
-    // Start Experience: play audio and display the first page when the start button is clicked.
+    // Start Experience: when the start button is clicked,
+    // start the background audio and show the experience container.
     let musicStarted = false;
     const playButton = document.getElementById('play-button');
     playButton.addEventListener('click', () => {
