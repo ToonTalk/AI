@@ -12,7 +12,7 @@
       padding: 0;
       overflow: hidden;
     }
-    /* Start screen styling */
+    /* Start Screen Styling */
     #start-screen {
       display: flex;
       align-items: center;
@@ -21,16 +21,17 @@
       background-color: #f8f4e1;
     }
     #play-button {
-      padding: 15px 30px;
-      font-size: 24px;
-      background-color: #3498db;
+      padding: 20px 40px;
+      font-size: 28px;
+      background-color: #ff69b4;
       color: white;
       border: none;
       border-radius: 10px;
       cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
-    /* Main container for the experience */
-    .container {
+    /* Main Experience Container */
+    #experience {
       max-width: 100%;
       margin: 0 auto;
       background: white;
@@ -38,8 +39,7 @@
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       position: relative;
-      /* Hide the experience container until the user starts */
-      display: none;
+      display: none; /* Hidden until start button is clicked */
     }
     .page {
       display: none;
@@ -63,6 +63,11 @@
       padding: 0 10px;
       text-align: center;
       max-width: 600px;
+      cursor: pointer; /* Indicate that the text is tappable */
+    }
+    /* Highlight style for spoken words */
+    .highlight {
+      background-color: yellow;
     }
     @media (max-width: 768px) {
       .text {
@@ -76,12 +81,13 @@
   </style>
 </head>
 <body>
-  <!-- Start Screen: Only the button is visible initially -->
+  <!-- Start Screen -->
   <div id="start-screen">
-    <button id="play-button">Start Experience</button>
+    <!-- Birthday themed start button with emojis -->
+    <button id="play-button">🎉 Start Birthday Ride 🎂</button>
   </div>
 
-  <!-- Main Experience Container (hidden initially) -->
+  <!-- Main Experience Container (hidden until start) -->
   <div id="experience" class="container">
     <div class="page active">
       <img src="1.webp" alt="Title Page" />
@@ -154,33 +160,34 @@
     </div>
   </div>
 
-  <!-- Audio Element -->
+  <!-- Background Audio -->
   <audio id="background-music" src="song.mp3" preload="auto"></audio>
 
   <script>
+    // Navigation variables and functions
     let currentPage = 0;
     const pages = document.querySelectorAll('.page');
-
+    
     function showPage(index) {
       pages.forEach((page, i) => {
         page.classList.toggle('active', i === index);
       });
     }
-
+    
     function nextPage() {
       if (currentPage < pages.length - 1) {
         currentPage++;
         showPage(currentPage);
       }
     }
-
+    
     function prevPage() {
       if (currentPage > 0) {
         currentPage--;
         showPage(currentPage);
       }
     }
-
+    
     // Keyboard navigation
     document.addEventListener('keydown', (event) => {
       if (event.key === 'ArrowRight') {
@@ -189,16 +196,16 @@
         prevPage();
       }
     });
-
+    
     // Touch swipe navigation
     document.addEventListener('touchstart', handleTouchStart, false);
     document.addEventListener('touchmove', handleTouchMove, false);
-
+    
     let xDown = null;
     function handleTouchStart(event) {
       xDown = event.touches[0].clientX;
     }
-
+    
     function handleTouchMove(event) {
       if (!xDown) return;
       const xUp = event.touches[0].clientX;
@@ -210,12 +217,83 @@
       }
       xDown = null;
     }
-
-    // Start Experience: play audio and display first page
+    
+    // Global flag to avoid overlapping speech synthesis
+    let isReading = false;
+    
+    // Function to read aloud the text of a paragraph and highlight words.
+    // Here we replace "Sisi" with "C C" (using a non-breaking space)
+    // in the utterance text only so that it’s pronounced as desired.
+    function readTextAloud(textElement) {
+      if (isReading) return;
+      isReading = true;
+      
+      // Pause the background audio
+      const bgAudio = document.getElementById('background-music');
+      bgAudio.pause();
+      
+      // Save original text if not already saved
+      if (!textElement.dataset.original) {
+        textElement.dataset.original = textElement.textContent.trim();
+      }
+      const originalText = textElement.dataset.original;
+      
+      // Wrap each word in a span (preserving whitespace)
+      const tokens = originalText.split(/(\s+)/);
+      let wrappedHTML = "";
+      tokens.forEach(token => {
+        if (token.trim() === "") {
+          wrappedHTML += token;
+        } else {
+          wrappedHTML += `<span class="word">${token}</span>`;
+        }
+      });
+      textElement.innerHTML = wrappedHTML;
+      const wordSpans = textElement.querySelectorAll('span.word');
+      let currentWordIndex = 0;
+      
+      // Replace "Sisi" with "C C" (using a non-breaking space) for speech synthesis.
+      // This replacement is done only in the utterance text,
+      // while the visible text remains unchanged.
+      const utteranceText = originalText.replace(/Sisi/g, 'C\u00A0C');
+      const utterance = new SpeechSynthesisUtterance(utteranceText);
+      utterance.lang = 'en-US';
+      utterance.rate = 1;
+      
+      // Highlight words as they are spoken.
+      utterance.onboundary = (event) => {
+        if (event.name === 'word') {
+          if (currentWordIndex > 0 && currentWordIndex <= wordSpans.length) {
+            wordSpans[currentWordIndex - 1].classList.remove('highlight');
+          }
+          if (currentWordIndex < wordSpans.length) {
+            wordSpans[currentWordIndex].classList.add('highlight');
+          }
+          currentWordIndex++;
+        }
+      };
+      
+      // When speaking ends, clear highlights and resume audio.
+      utterance.onend = () => {
+        wordSpans.forEach(span => span.classList.remove('highlight'));
+        isReading = false;
+        bgAudio.play().catch(error => console.log('Audio resume failed:', error));
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
+    
+    // Attach click listeners to text elements to trigger speech reading.
+    document.querySelectorAll('.text').forEach(textElem => {
+      textElem.addEventListener('click', function () {
+        readTextAloud(this);
+      });
+    });
+    
+    // Start Experience: play audio and display the first page when the start button is clicked.
     let musicStarted = false;
     const playButton = document.getElementById('play-button');
     playButton.addEventListener('click', () => {
-      // Start audio playback
       if (!musicStarted) {
         const audio = document.getElementById('background-music');
         audio.muted = false;
@@ -224,10 +302,8 @@
           .catch(error => console.log('Audio play failed:', error));
         musicStarted = true;
       }
-      // Hide the start screen and show the experience container
       document.getElementById('start-screen').style.display = 'none';
       document.getElementById('experience').style.display = 'block';
-      // Ensure the first page is active
       showPage(0);
     });
   </script>
