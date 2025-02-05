@@ -56,7 +56,7 @@
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       position: relative;
-      display: none; /* Hidden until a mode is chosen */
+      display: none;
     }
     .page {
       display: none;
@@ -80,9 +80,8 @@
       padding: 0 10px;
       text-align: center;
       max-width: 600px;
-      cursor: pointer; /* Only active in reading mode */
+      cursor: pointer;
     }
-    /* Highlight style for spoken words */
     .highlight {
       background-color: yellow;
     }
@@ -224,7 +223,6 @@
     function startExperience() {
       const instrElem = document.getElementById('instructions');
       if (appMode === "reading") {
-        // In reading mode, display (and later read) the title.
         instrElem.textContent = "Welcome to Sisi's Equinox Birthday Ride!";
         bgAudio.pause();
       } else if (appMode === "music") {
@@ -238,58 +236,83 @@
     }
 
     /***********************
-     * Voice Selection (Preferred: Female British)
+     * Voice Selection (with Preferred Order)
      ***********************/
     function loadVoices() {
       const voices = window.speechSynthesis.getVoices();
-      if (voices.length === 0) return;
-      const femaleGBVoices = voices.filter(voice =>
+      if (!voices || voices.length === 0) return;
+
+      // Preferred: en-GB female
+      let candidate = voices.filter(voice =>
         voice.lang &&
         voice.lang.toLowerCase().startsWith("en-gb") &&
         /female/i.test(voice.name)
       );
-      if (femaleGBVoices.length > 0) {
-        selectedVoice = femaleGBVoices[0];
-      } else {
-        const britishVoices = voices.filter(voice =>
-          voice.lang && voice.lang.toLowerCase().startsWith("en-gb")
-        );
-        if (britishVoices.length > 0) {
-          selectedVoice = britishVoices[0];
-        } else {
-          const femaleVoices = voices.filter(voice =>
-            /female/i.test(voice.name)
-          );
-          if (femaleVoices.length > 0) {
-            selectedVoice = femaleVoices[0];
-          } else {
-            selectedVoice = voices[0];
-          }
-        }
+      if (candidate.length > 0) {
+        selectedVoice = candidate[0];
+        console.log("Selected voice (en-GB female):", selectedVoice);
+        return;
       }
-      console.log("Selected voice:", selectedVoice);
+
+      // Next: en-GB (any)
+      candidate = voices.filter(voice =>
+        voice.lang && voice.lang.toLowerCase().startsWith("en-gb")
+      );
+      if (candidate.length > 0) {
+        const femaleCandidates = candidate.filter(voice => /female/i.test(voice.name));
+        selectedVoice = (femaleCandidates.length > 0) ? femaleCandidates[0] : candidate[0];
+        console.log("Selected voice (en-GB any):", selectedVoice);
+        return;
+      }
+
+      // Next: en-US female
+      candidate = voices.filter(voice =>
+        voice.lang &&
+        voice.lang.toLowerCase().startsWith("en-us") &&
+        /female/i.test(voice.name)
+      );
+      if (candidate.length > 0) {
+        selectedVoice = candidate[0];
+        console.log("Selected voice (en-US female):", selectedVoice);
+        return;
+      }
+
+      // Next: en-US (any)
+      candidate = voices.filter(voice =>
+        voice.lang && voice.lang.toLowerCase().startsWith("en-us")
+      );
+      if (candidate.length > 0) {
+        const femaleCandidates = candidate.filter(voice => /female/i.test(voice.name));
+        selectedVoice = (femaleCandidates.length > 0) ? femaleCandidates[0] : candidate[0];
+        console.log("Selected voice (en-US any):", selectedVoice);
+        return;
+      }
+
+      // Next: any English voice (look for voices with "en" in the language code)
+      candidate = voices.filter(voice =>
+        voice.lang && voice.lang.toLowerCase().includes("en")
+      );
+      if (candidate.length > 0) {
+        const femaleCandidates = candidate.filter(voice => /female/i.test(voice.name));
+        selectedVoice = (femaleCandidates.length > 0) ? femaleCandidates[0] : candidate[0];
+        console.log("Selected voice (any English):", selectedVoice);
+        return;
+      }
+
+      // Fallback: use the very first voice.
+      selectedVoice = voices[0];
+      console.log("Selected fallback voice:", selectedVoice);
     }
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
 
     /***********************
-     * Helper: Clear Word Highlights
-     ***********************/
-    function clearHighlights() {
-      document.querySelectorAll('.word.highlight').forEach(span => {
-        span.classList.remove('highlight');
-      });
-    }
-
-    /***********************
      * Helper: Stop Speech
-     * @param {boolean} resumeAudio - If true, resume background audio (only in music mode).
      ***********************/
     function stopSpeech(resumeAudio) {
       window.speechSynthesis.cancel();
       isReading = false;
       autoReading = false;
-      clearHighlights();
       if (resumeAudio && appMode === "music") {
         bgAudio.play().catch(error => console.log('Audio resume failed:', error));
       }
@@ -299,13 +322,11 @@
      * Navigation Functions
      ***********************/
     function showPage(index) {
-      // Cancel any ongoing TTS when switching pages.
       stopSpeech(false);
       pages.forEach((page, i) => {
         page.classList.toggle('active', i === index);
       });
       currentPage = index;
-      // In reading mode, auto-read every page.
       if (appMode === "reading") {
         const activePage = pages[index];
         const textElem = activePage.querySelector('.text');
@@ -330,7 +351,6 @@
         showPage(currentPage - 1);
       }
     }
-    // Keyboard navigation (desktop)
     document.addEventListener('keydown', (event) => {
       if (event.key === 'ArrowRight') {
         nextPage();
@@ -338,7 +358,6 @@
         prevPage();
       }
     });
-    // Touch swipe navigation (mobile)
     let xDown = null;
     document.addEventListener('touchstart', (event) => {
       xDown = event.touches[0].clientX;
@@ -356,10 +375,11 @@
     }, false);
 
     /***********************
-     * Cancel TTS on User Interaction (Manual Halt)
+     * Cancel TTS on User Interaction
+     * (Disabled in auto-reading mode so that accidental touches/clicks do not cancel narration.)
      ***********************/
     function cancelTTS(e) {
-      if (isReading) {
+      if (!autoReading && isReading) {
         console.log("User interaction detected. Canceling TTS.");
         stopSpeech(true);
         e.stopPropagation();
@@ -370,16 +390,14 @@
     document.addEventListener('touchstart', cancelTTS, true);
 
     /***********************
-     * Text-to-Speech with Auto-Progression (Reading Mode Only)
+     * TTS with Word-by-Word Highlighting, Substitutions, and Chaining Workaround
      ***********************/
     function readTextAloud(textElement) {
-      if (appMode !== "reading" || isReading) return;
+      if (isReading) return;
       isReading = true;
       autoReading = true;
-      // This flag ensures we chain remaining text only once.
-      let chainedRemaining = false;
       
-      // Pause background audio (should be off in reading mode).
+      // Pause background audio.
       bgAudio.pause();
       
       // Save original text if not already stored.
@@ -393,18 +411,29 @@
       const tokens = originalText.split(/(\s+)/);
       let wrappedHTML = "";
       tokens.forEach(token => {
-        wrappedHTML += token.trim() ? `<span class="word">${token}</span>` : token;
+        if (token.trim() === "") {
+          wrappedHTML += token;
+        } else {
+          wrappedHTML += `<span class="word">${token}</span>`;
+        }
       });
       textElement.innerHTML = wrappedHTML;
       const wordSpans = textElement.querySelectorAll('span.word');
       let currentWordIndex = 0;
       
-      // Replace "Sisi" with "C C" (non-breaking space) for TTS.
-      let utteranceText = originalText.replace(/Sisi/g, 'C\u00A0C');
+      // Substitutions:
+      // Replace "Sisi's" with "see see's" and "Sisi" with "see see".
+      const utteranceText = originalText
+        .replace(/Sisi's/g, "see see's")
+        .replace(/Sisi/g, "see see");
       console.log("Utterance text:", utteranceText);
       
       const utterance = new SpeechSynthesisUtterance(utteranceText);
-      utterance.lang = selectedVoice && selectedVoice.lang ? selectedVoice.lang : 'en-US';
+      if (selectedVoice && selectedVoice.lang) {
+        utterance.lang = selectedVoice.lang;
+      } else {
+        utterance.lang = 'en-US';
+      }
       utterance.rate = 1;
       utterance.volume = 1;
       if (selectedVoice) {
@@ -417,109 +446,104 @@
       if (!isMobile) {
         let boundaryFired = false;
         utterance.onboundary = (event) => {
-          boundaryFired = true;
-          if (event.name === 'word') {
-            if (currentWordIndex > 0 && currentWordIndex < wordSpans.length) {
-              wordSpans[currentWordIndex - 1].classList.remove('highlight');
+          // Reduced delay (50ms) so that highlighting keeps up with speech.
+          setTimeout(() => {
+            boundaryFired = true;
+            if (event.name === 'word') {
+              if (currentWordIndex > 0 && currentWordIndex <= wordSpans.length) {
+                wordSpans[currentWordIndex - 1].classList.remove('highlight');
+              }
+              if (currentWordIndex < wordSpans.length) {
+                wordSpans[currentWordIndex].classList.add('highlight');
+              }
+              currentWordIndex++;
             }
-            if (currentWordIndex < wordSpans.length) {
-              wordSpans[currentWordIndex].classList.add('highlight');
-            }
-            currentWordIndex = event.charIndex ? currentWordIndex + 1 : currentWordIndex + 1;
-          }
+          }, 50);
         };
+        // If boundary events don’t fire, use fallback.
         setTimeout(() => {
           if (!boundaryFired) {
             console.log("Boundary events not firing; using fallback timer on desktop.");
-            let cumulativeDelay = 0;
-            const baseDelay = 300;  // base delay per word (in ms)
-            const extraDelay = 200; // extra delay after punctuation
+            const fallbackDelay = 370; // per word
             wordSpans.forEach((span, i) => {
-              cumulativeDelay += baseDelay;
-              if (/[.!?,;:]$/.test(span.innerText)) {
-                cumulativeDelay += extraDelay;
-              }
               let timer = setTimeout(() => {
                 if (i > 0) wordSpans[i - 1].classList.remove('highlight');
                 span.classList.add('highlight');
                 currentWordIndex = i + 1;
-              }, cumulativeDelay);
+              }, i * fallbackDelay);
               fallbackTimers.push(timer);
             });
           }
-        }, 200);
+        }, 100);
       } else {
         utterance.onstart = () => {
-          let cumulativeDelay = 0;
-          const baseDelay = 300;
-          const extraDelay = 200;
+          const fallbackDelay = 370;
           wordSpans.forEach((span, i) => {
-            cumulativeDelay += baseDelay;
-            if (/[.!?,;:]$/.test(span.innerText)) {
-              cumulativeDelay += extraDelay;
-            }
             let timer = setTimeout(() => {
               if (i > 0) wordSpans[i - 1].classList.remove('highlight');
               span.classList.add('highlight');
               currentWordIndex = i + 1;
-            }, cumulativeDelay);
+            }, i * fallbackDelay);
             fallbackTimers.push(timer);
           });
         };
       }
       
-      // When TTS ends, check if there is any unspoken remaining text.
-      utterance.onend = () => {
-        wordSpans.forEach(span => span.classList.remove('highlight'));
+      // Helper to clear timers and remove highlights.
+      function cleanupHighlights(){
         fallbackTimers.forEach(timer => clearTimeout(timer));
         fallbackTimers = [];
-        // If not all words were processed and we haven't chained a remaining utterance:
-        if (currentWordIndex < wordSpans.length && !chainedRemaining) {
+        wordSpans.forEach(span => span.classList.remove('highlight'));
+      }
+      
+      utterance.onend = () => {
+        // If not all words were spoken, chain the remaining text.
+        if (currentWordIndex < wordSpans.length) {
           const remainingText = Array.from(wordSpans)
-            .slice(currentWordIndex)
-            .map(span => span.textContent)
-            .join(" ");
-          if (remainingText.trim().length > 0) {
-            console.log("Resuming TTS for remaining text:", remainingText);
-            chainedRemaining = true;
-            const remainingUtterance = new SpeechSynthesisUtterance(remainingText);
-            remainingUtterance.lang = utterance.lang;
-            remainingUtterance.rate = utterance.rate;
-            remainingUtterance.volume = utterance.volume;
-            remainingUtterance.voice = utterance.voice;
-            remainingUtterance.onend = () => {
-              isReading = false;
-              console.log("Finished speaking remaining text.");
-              if (autoReading && currentPage < pages.length - 1) {
-                nextPage();
-                setTimeout(() => {
-                  const nextText = pages[currentPage].querySelector('.text');
-                  if (nextText) {
-                    readTextAloud(nextText);
-                  }
-                }, 500);
-              }
-            };
-            window.speechSynthesis.speak(remainingUtterance);
-            return;
-          }
-        }
-        isReading = false;
-        console.log("Finished speaking.");
-        if (autoReading && currentPage < pages.length - 1) {
-          nextPage();
-          setTimeout(() => {
-            const nextText = pages[currentPage].querySelector('.text');
-            if (nextText) {
-              readTextAloud(nextText);
+                                .slice(currentWordIndex)
+                                .map(span => span.textContent)
+                                .join("");
+          console.log("Chaining remaining text:", remainingText);
+          const remainingUtterance = new SpeechSynthesisUtterance(remainingText);
+          remainingUtterance.lang = utterance.lang;
+          remainingUtterance.rate = utterance.rate;
+          remainingUtterance.volume = utterance.volume;
+          remainingUtterance.voice = utterance.voice;
+          remainingUtterance.onend = () => {
+            cleanupHighlights();
+            isReading = false;
+            console.log("Finished speaking remaining text.");
+            if (autoReading && currentPage < pages.length - 1) {
+              nextPage();
+              setTimeout(() => {
+                let nextText = pages[currentPage].querySelector('.text');
+                if (nextText) {
+                  readTextAloud(nextText);
+                }
+              }, 500);
             }
-          }, 500);
+          };
+          window.speechSynthesis.speak(remainingUtterance);
+        } else {
+          cleanupHighlights();
+          isReading = false;
+          console.log("Finished speaking.");
+          if (autoReading && currentPage < pages.length - 1) {
+            nextPage();
+            setTimeout(() => {
+              let nextText = pages[currentPage].querySelector('.text');
+              if (nextText) {
+                readTextAloud(nextText);
+              }
+            }, 500);
+          }
         }
       };
       
       utterance.onerror = () => {
         console.log("TTS error encountered. Stopping speech.");
-        clearHighlights();
+        fallbackTimers.forEach(timer => clearTimeout(timer));
+        wordSpans.forEach(span => span.classList.remove('highlight'));
         isReading = false;
         autoReading = false;
         if (currentPage < pages.length - 1) {
