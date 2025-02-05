@@ -89,7 +89,7 @@
 
   <!-- Main Experience Container (hidden until start) -->
   <div id="experience" class="container">
-    <!-- Page 1: Title/Instructions -->
+    <!-- Page 1: Title/Instructions (do not auto-read this page) -->
     <div class="page active">
       <img src="1.webp" alt="Title Page" />
       <p id="instructions" class="text"></p>
@@ -163,26 +163,36 @@
   <audio id="background-music" src="song.mp3" preload="auto"></audio>
 
   <script>
-    // Detect mobile devices
+    /***********************
+     * Global Variables
+     ***********************/
     const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+    let currentPage = 0;
+    let isReading = false;    // True when TTS is active.
+    let autoReading = false;  // True when TTS is auto-started for auto-progression.
+    let selectedVoice = null;
+    const pages = document.querySelectorAll('.page');
+    const bgAudio = document.getElementById('background-music');
 
-    // Set instructions on the first page based on the device.
+    /***********************
+     * Device-Specific Instructions
+     ***********************/
     window.addEventListener('load', () => {
       const instrElem = document.getElementById('instructions');
       if (isMobile) {
-        instrElem.textContent = "Swipe left/right to switch pages and tap text to have it read aloud.";
+        instrElem.textContent = "Swipe left/right to switch pages and tap to stop reading.";
       } else {
-        instrElem.textContent = "Use arrow keys to switch pages and click text to have it read aloud.";
+        instrElem.textContent = "Use arrow keys to switch pages and click to stop reading.";
       }
     });
 
-    // GLOBAL VOICE SELECTION with preference for female British voices.
-    let selectedVoice = null;
+    /***********************
+     * Voice Selection (Preferred: Female British)
+     ***********************/
     function loadVoices() {
       const voices = window.speechSynthesis.getVoices();
       if (voices.length === 0) return;
       
-      // 1. Look for a voice that is both British (en-GB) and has "female" in its name.
       const femaleGBVoices = voices.filter(voice =>
         voice.lang &&
         voice.lang.toLowerCase().startsWith("en-gb") &&
@@ -191,46 +201,82 @@
       if (femaleGBVoices.length > 0) {
         selectedVoice = femaleGBVoices[0];
       } else {
-        // 2. Otherwise, look for any British voice.
         const britishVoices = voices.filter(voice =>
           voice.lang && voice.lang.toLowerCase().startsWith("en-gb")
         );
         if (britishVoices.length > 0) {
           selectedVoice = britishVoices[0];
         } else {
-          // 3. Otherwise, look for any female voice.
           const femaleVoices = voices.filter(voice =>
             /female/i.test(voice.name)
           );
           if (femaleVoices.length > 0) {
             selectedVoice = femaleVoices[0];
           } else {
-            // 4. Fallback: Use the first available voice.
             selectedVoice = voices[0];
           }
         }
       }
       console.log("Selected voice:", selectedVoice);
     }
-    // Load voices immediately and also when the voices list changes.
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
 
-    // Navigation variables and functions
-    let currentPage = 0;
-    const pages = document.querySelectorAll('.page');
+    /***********************
+     * Helper: Clear Word Highlights
+     ***********************/
+    function clearHighlights() {
+      document.querySelectorAll('.word.highlight').forEach(span => {
+        span.classList.remove('highlight');
+      });
+    }
+
+    /***********************
+     * Helper: Stop Speech
+     * @param {boolean} resumeAudio - If true, resume background audio.
+     ***********************/
+    function stopSpeech(resumeAudio) {
+      window.speechSynthesis.cancel();
+      isReading = false;
+      autoReading = false;
+      clearHighlights();
+      if (resumeAudio) {
+        bgAudio.play().catch(error => console.log('Audio resume failed:', error));
+      }
+    }
+
+    /***********************
+     * Navigation Functions
+     ***********************/
     function showPage(index) {
       pages.forEach((page, i) => {
         page.classList.toggle('active', i === index);
       });
+      // Do not auto-read the instructions page (index 0).
+      if (index === 0) return;
+      // Automatically start TTS for the active page (if text exists)
+      const activePage = pages[index];
+      const textElem = activePage.querySelector('.text');
+      if (textElem) {
+        // Delay briefly for page transition.
+        setTimeout(() => {
+          if (!isReading) {
+            readTextAloud(textElem);
+          }
+        }, 500);
+      }
     }
     function nextPage() {
+      // Cancel any ongoing TTS without resuming audio.
+      stopSpeech(false);
       if (currentPage < pages.length - 1) {
         currentPage++;
         showPage(currentPage);
       }
     }
     function prevPage() {
+      // Cancel any ongoing TTS without resuming audio.
+      stopSpeech(false);
       if (currentPage > 0) {
         currentPage--;
         showPage(currentPage);
@@ -261,29 +307,39 @@
       xDown = null;
     }, false);
 
-    // Global flag to prevent overlapping speech synthesis
-    let isReading = false;
+    /***********************
+     * Cancel TTS on User Interaction (Manual Halt)
+     ***********************/
+    function cancelTTS(e) {
+      if (isReading) {
+        console.log("User interaction detected. Canceling TTS.");
+        stopSpeech(true);
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }
+    document.addEventListener('click', cancelTTS, true);
+    document.addEventListener('touchstart', cancelTTS, true);
 
-    // Function to read aloud the text and highlight each word as it is spoken.
-    // Occurrences of "Sisi" are replaced with "C C" (using a non-breaking space).
+    /***********************
+     * Text-to-Speech with Auto-Progression
+     ***********************/
     function readTextAloud(textElement) {
       if (isReading) return;
       isReading = true;
+      autoReading = true;
       
-      // Pause background audio
-      const bgAudio = document.getElementById('background-music');
+      // Pause background audio.
       bgAudio.pause();
       
-      // Store original text if not already stored
+      // Save original text if not already stored.
       if (!textElement.dataset.original) {
         textElement.dataset.original = textElement.textContent.trim();
       }
       const originalText = textElement.dataset.original;
-      
-      // Debug logging
       console.log("Reading text:", originalText);
       
-      // Wrap each word in a span (preserving whitespace)
+      // Wrap each word in spans for highlighting.
       const tokens = originalText.split(/(\s+)/);
       let wrappedHTML = "";
       tokens.forEach(token => {
@@ -297,29 +353,27 @@
       const wordSpans = textElement.querySelectorAll('span.word');
       let currentWordIndex = 0;
       
-      // For speech synthesis, replace "Sisi" with "C C" (non-breaking space)
+      // For TTS, replace "Sisi" with "C C" (non‑breaking space).
       const utteranceText = originalText.replace(/Sisi/g, 'C\u00A0C');
       console.log("Utterance text:", utteranceText);
-      const utterance = new SpeechSynthesisUtterance(utteranceText);
       
-      // Set utterance language to the selected voice's language if available.
+      const utterance = new SpeechSynthesisUtterance(utteranceText);
+      // Use selected voice's language if available.
       if (selectedVoice && selectedVoice.lang) {
         utterance.lang = selectedVoice.lang;
       } else {
         utterance.lang = 'en-US';
       }
       utterance.rate = 1;
-      utterance.volume = 1; // Ensure maximum volume
+      utterance.volume = 1;
       if (selectedVoice) {
         utterance.voice = selectedVoice;
       }
       console.log("Using voice:", selectedVoice);
       
-      // Array for fallback timer IDs (used if boundary events don't fire)
       let fallbackTimers = [];
       
       if (!isMobile) {
-        // On desktop, try to use the boundary event.
         let boundaryFired = false;
         utterance.onboundary = (event) => {
           boundaryFired = true;
@@ -333,11 +387,10 @@
             currentWordIndex++;
           }
         };
-        // If no boundary event fires within 200ms, use a fallback timer.
         setTimeout(() => {
           if (!boundaryFired) {
             console.log("Boundary events not firing; using fallback timer on desktop.");
-            const fallbackDelay = 400; // milliseconds per word (adjust as needed)
+            const fallbackDelay = 400; // milliseconds per word
             wordSpans.forEach((span, i) => {
               let timer = setTimeout(() => {
                 if (i > 0) wordSpans[i - 1].classList.remove('highlight');
@@ -348,9 +401,8 @@
           }
         }, 200);
       } else {
-        // On mobile, always use the fallback timer approach.
         utterance.onstart = () => {
-          const fallbackDelay = 400; // milliseconds per word (adjust as needed)
+          const fallbackDelay = 400;
           wordSpans.forEach((span, i) => {
             let timer = setTimeout(() => {
               if (i > 0) wordSpans[i - 1].classList.remove('highlight');
@@ -361,34 +413,37 @@
         };
       }
       
-      // When the speech ends, clear highlights, cancel any fallback timers, and resume background audio.
+      // When TTS finishes naturally, clear highlights and (if auto-reading) advance pages.
       utterance.onend = () => {
         wordSpans.forEach(span => span.classList.remove('highlight'));
         fallbackTimers.forEach(timer => clearTimeout(timer));
         fallbackTimers = [];
         isReading = false;
-        bgAudio.play().catch(error => console.log('Audio resume failed:', error));
         console.log("Finished speaking.");
+        // Do NOT resume background audio during auto-progression.
+        if (autoReading && currentPage < pages.length - 1) {
+          nextPage();
+          setTimeout(() => {
+            let nextText = pages[currentPage].querySelector('.text');
+            if (nextText) {
+              readTextAloud(nextText);
+            }
+          }, 500);
+        }
       };
       
       window.speechSynthesis.speak(utterance);
     }
     
-    // Attach click/tap listeners to each text element.
-    document.querySelectorAll('.text').forEach(textElem => {
-      textElem.addEventListener('click', function () {
-        readTextAloud(this);
-      });
-    });
-    
-    // Start Experience: When the start button is clicked, start background audio and show the experience container.
+    /***********************
+     * Start Experience on Button Click
+     ***********************/
     let musicStarted = false;
     const playButton = document.getElementById('play-button');
     playButton.addEventListener('click', () => {
       if (!musicStarted) {
-        const audio = document.getElementById('background-music');
-        audio.muted = false;
-        audio.play()
+        bgAudio.muted = false;
+        bgAudio.play()
           .then(() => console.log('Audio started'))
           .catch(error => console.log('Audio play failed:', error));
         musicStarted = true;
