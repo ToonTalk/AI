@@ -123,7 +123,6 @@
     <!-- Page 0: Title/Instructions -->
     <div class="page active">
       <img src="1.webp" alt="Title Page" />
-      <!-- In Reading Mode, this text will be read aloud -->
       <p id="instructions" class="text"></p>
     </div>
     <!-- Page 1: Introduction -->
@@ -202,7 +201,7 @@
     const isMobile = /Mobi|Android/i.test(navigator.userAgent);
     let currentPage = 0;
     let isReading = false;    // True when TTS is active.
-    let autoReading = false;  // True when TTS auto-reading is in progress.
+    let autoReading = false;  // True when auto-reading is in progress.
     let selectedVoice = null;
     const pages = document.querySelectorAll('.page');
     const bgAudio = document.getElementById('background-music');
@@ -225,9 +224,8 @@
     function startExperience() {
       const instrElem = document.getElementById('instructions');
       if (appMode === "reading") {
-        // In reading mode, set the instructions page text to the story title.
+        // In reading mode, display (and later read) the title.
         instrElem.textContent = "Welcome to Sisi's Equinox Birthday Ride!";
-        // Ensure background music is off.
         bgAudio.pause();
       } else if (appMode === "music") {
         instrElem.textContent = "Music Mode: Enjoy the background music. Use arrow keys (desktop) or swipe (mobile) to switch pages.";
@@ -307,7 +305,7 @@
         page.classList.toggle('active', i === index);
       });
       currentPage = index;
-      // In reading mode, auto-read every page (including page 0) if TTS is enabled.
+      // In reading mode, auto-read every page.
       if (appMode === "reading") {
         const activePage = pages[index];
         const textElem = activePage.querySelector('.text');
@@ -378,6 +376,8 @@
       if (appMode !== "reading" || isReading) return;
       isReading = true;
       autoReading = true;
+      // This flag ensures we chain remaining text only once.
+      let chainedRemaining = false;
       
       // Pause background audio (should be off in reading mode).
       bgAudio.pause();
@@ -393,27 +393,18 @@
       const tokens = originalText.split(/(\s+)/);
       let wrappedHTML = "";
       tokens.forEach(token => {
-        if (token.trim() === "") {
-          wrappedHTML += token;
-        } else {
-          wrappedHTML += `<span class="word">${token}</span>`;
-        }
+        wrappedHTML += token.trim() ? `<span class="word">${token}</span>` : token;
       });
       textElement.innerHTML = wrappedHTML;
       const wordSpans = textElement.querySelectorAll('span.word');
       let currentWordIndex = 0;
       
       // Replace "Sisi" with "C C" (non-breaking space) for TTS.
-      const utteranceText = originalText.replace(/Sisi/g, 'C\u00A0C');
+      let utteranceText = originalText.replace(/Sisi/g, 'C\u00A0C');
       console.log("Utterance text:", utteranceText);
       
       const utterance = new SpeechSynthesisUtterance(utteranceText);
-      // Use selected voice's language if available.
-      if (selectedVoice && selectedVoice.lang) {
-        utterance.lang = selectedVoice.lang;
-      } else {
-        utterance.lang = 'en-US';
-      }
+      utterance.lang = selectedVoice && selectedVoice.lang ? selectedVoice.lang : 'en-US';
       utterance.rate = 1;
       utterance.volume = 1;
       if (selectedVoice) {
@@ -428,42 +419,104 @@
         utterance.onboundary = (event) => {
           boundaryFired = true;
           if (event.name === 'word') {
-            if (currentWordIndex > 0 && currentWordIndex <= wordSpans.length) {
+            if (currentWordIndex > 0 && currentWordIndex < wordSpans.length) {
               wordSpans[currentWordIndex - 1].classList.remove('highlight');
             }
             if (currentWordIndex < wordSpans.length) {
               wordSpans[currentWordIndex].classList.add('highlight');
             }
-            currentWordIndex++;
+            currentWordIndex = event.charIndex ? currentWordIndex + 1 : currentWordIndex + 1;
           }
         };
         setTimeout(() => {
           if (!boundaryFired) {
             console.log("Boundary events not firing; using fallback timer on desktop.");
-            const fallbackDelay = 300; // 300ms per word for improved sync
+            let cumulativeDelay = 0;
+            const baseDelay = 300;  // base delay per word (in ms)
+            const extraDelay = 200; // extra delay after punctuation
             wordSpans.forEach((span, i) => {
+              cumulativeDelay += baseDelay;
+              if (/[.!?,;:]$/.test(span.innerText)) {
+                cumulativeDelay += extraDelay;
+              }
               let timer = setTimeout(() => {
                 if (i > 0) wordSpans[i - 1].classList.remove('highlight');
                 span.classList.add('highlight');
-              }, i * fallbackDelay);
+                currentWordIndex = i + 1;
+              }, cumulativeDelay);
               fallbackTimers.push(timer);
             });
           }
         }, 200);
       } else {
         utterance.onstart = () => {
-          const fallbackDelay = 300;
+          let cumulativeDelay = 0;
+          const baseDelay = 300;
+          const extraDelay = 200;
           wordSpans.forEach((span, i) => {
+            cumulativeDelay += baseDelay;
+            if (/[.!?,;:]$/.test(span.innerText)) {
+              cumulativeDelay += extraDelay;
+            }
             let timer = setTimeout(() => {
               if (i > 0) wordSpans[i - 1].classList.remove('highlight');
               span.classList.add('highlight');
-            }, i * fallbackDelay);
+              currentWordIndex = i + 1;
+            }, cumulativeDelay);
             fallbackTimers.push(timer);
           });
         };
       }
       
-      // Handle errors: if TTS errors out, clear highlights and auto-advance.
+      // When TTS ends, check if there is any unspoken remaining text.
+      utterance.onend = () => {
+        wordSpans.forEach(span => span.classList.remove('highlight'));
+        fallbackTimers.forEach(timer => clearTimeout(timer));
+        fallbackTimers = [];
+        // If not all words were processed and we haven't chained a remaining utterance:
+        if (currentWordIndex < wordSpans.length && !chainedRemaining) {
+          const remainingText = Array.from(wordSpans)
+            .slice(currentWordIndex)
+            .map(span => span.textContent)
+            .join(" ");
+          if (remainingText.trim().length > 0) {
+            console.log("Resuming TTS for remaining text:", remainingText);
+            chainedRemaining = true;
+            const remainingUtterance = new SpeechSynthesisUtterance(remainingText);
+            remainingUtterance.lang = utterance.lang;
+            remainingUtterance.rate = utterance.rate;
+            remainingUtterance.volume = utterance.volume;
+            remainingUtterance.voice = utterance.voice;
+            remainingUtterance.onend = () => {
+              isReading = false;
+              console.log("Finished speaking remaining text.");
+              if (autoReading && currentPage < pages.length - 1) {
+                nextPage();
+                setTimeout(() => {
+                  const nextText = pages[currentPage].querySelector('.text');
+                  if (nextText) {
+                    readTextAloud(nextText);
+                  }
+                }, 500);
+              }
+            };
+            window.speechSynthesis.speak(remainingUtterance);
+            return;
+          }
+        }
+        isReading = false;
+        console.log("Finished speaking.");
+        if (autoReading && currentPage < pages.length - 1) {
+          nextPage();
+          setTimeout(() => {
+            const nextText = pages[currentPage].querySelector('.text');
+            if (nextText) {
+              readTextAloud(nextText);
+            }
+          }, 500);
+        }
+      };
+      
       utterance.onerror = () => {
         console.log("TTS error encountered. Stopping speech.");
         clearHighlights();
@@ -471,24 +524,6 @@
         autoReading = false;
         if (currentPage < pages.length - 1) {
           nextPage();
-        }
-      };
-      
-      utterance.onend = () => {
-        wordSpans.forEach(span => span.classList.remove('highlight'));
-        fallbackTimers.forEach(timer => clearTimeout(timer));
-        fallbackTimers = [];
-        isReading = false;
-        console.log("Finished speaking.");
-        // In auto-reading mode, if not manually canceled, auto-advance.
-        if (autoReading && currentPage < pages.length - 1) {
-          nextPage();
-          setTimeout(() => {
-            let nextText = pages[currentPage].querySelector('.text');
-            if (nextText) {
-              readTextAloud(nextText);
-            }
-          }, 500);
         }
       };
       
