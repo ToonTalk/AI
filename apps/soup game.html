@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sentient Spoonful (Emoji Edition with Sound)</title>
+  <style>
+    body {
+      margin: 0;
+      background: #eee;
+      font-family: sans-serif;
+    }
+    canvas {
+      display: block;
+      margin: 20px auto;
+      background-color: #FFF8DC; /* warm, soup-like background */
+      border: 2px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    // ----- Canvas Setup -----
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ----- Global Variables -----
+    let score = 0;
+    let gameOver = false;
+    // A flag to avoid multiple monster sounds.
+    let monsterSoundPlayed = false;
+
+    // ----- Audio Setup: Create a single AudioContext -----
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Synthesized sound effects using Oscillators.
+    function playSound(type) {
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      // Choose settings based on the sound type.
+      switch(type) {
+        case "collision":
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
+          break;
+        case "crystal":
+          oscillator.type = "triangle";
+          oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
+          break;
+        case "monster":
+          oscillator.type = "square";
+          oscillator.frequency.setValueAtTime(100, audioCtx.currentTime);
+          break;
+        default:
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
+          break;
+      }
+      oscillator.start();
+      // Create a quick envelope (0.2 seconds)
+      gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.2);
+      oscillator.stop(audioCtx.currentTime + 0.2);
+    }
+
+    // ----- Utility: Collision Detection -----
+    function isColliding(circle1, circle2) {
+      const dx = circle1.x - circle2.x;
+      const dy = circle1.y - circle2.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance < circle1.radius + circle2.radius;
+    }
+
+    // ----- Classes -----
+
+    // Player: Represented by a spoon emoji (🥄)
+    class Player {
+      constructor(x, y, radius, emoji) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.emoji = emoji;
+        this.speed = 3;
+        this.vx = 0;
+        this.vy = 0;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        // Keep player within the canvas.
+        if (this.x - this.radius < 0) this.x = this.radius;
+        if (this.x + this.radius > canvas.width) this.x = canvas.width - this.radius;
+        if (this.y - this.radius < 0) this.y = this.radius;
+        if (this.y + this.radius > canvas.height) this.y = canvas.height - this.radius;
+      }
+      draw(ctx) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        // Use a font size roughly twice the radius.
+        ctx.font = `${this.radius * 2}px serif`;
+        ctx.fillText(this.emoji, this.x, this.y);
+      }
+    }
+
+    // Vegetable: Uses random vegetable emojis.
+    class Vegetable {
+      constructor(x, y, radius) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.wobble = Math.random() * 2 * Math.PI;
+        const vegEmojis = ["🥕", "🍄", "🌽", "🥦"];
+        this.emoji = vegEmojis[Math.floor(Math.random() * vegEmojis.length)];
+      }
+      update() {
+        const decayFactor = 0.95 + Math.random() * 0.1;
+        this.vx *= decayFactor;
+        this.vy *= decayFactor;
+        // Add small random acceleration.
+        this.vx += (Math.random() - 0.5) * 0.2;
+        this.vy += (Math.random() - 0.5) * 0.2;
+        // Apply a sine/cosine wobble.
+        this.x += this.vx + Math.sin(this.wobble) * 0.5;
+        this.y += this.vy + Math.cos(this.wobble) * 0.5;
+        this.wobble += 0.05;
+        // Bounce off edges.
+        if (this.x + this.radius > canvas.width || this.x - this.radius < 0) {
+          this.vx *= -1;
+        }
+        if (this.y + this.radius > canvas.height || this.y - this.radius < 0) {
+          this.vy *= -1;
+        }
+      }
+      draw(ctx) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `${this.radius * 2}px serif`;
+        ctx.fillText(this.emoji, this.x, this.y);
+      }
+    }
+
+    // FlavorCrystal: Represented by the diamond emoji (💎)
+    class FlavorCrystal {
+      constructor(x, y, radius) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.emoji = "💎";
+      }
+      draw(ctx) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `${this.radius * 2}px serif`;
+        ctx.fillText(this.emoji, this.x, this.y);
+      }
+    }
+
+    // SoupMonster: Chases the player and is depicted by the monster emoji (👹)
+    class SoupMonster {
+      constructor(x, y, radius, emoji) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.emoji = emoji;
+        this.speed = 1.5;
+      }
+      update(targetX, targetY) {
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0) {
+          this.x += (dx / dist) * this.speed;
+          this.y += (dy / dist) * this.speed;
+        }
+      }
+      draw(ctx) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `${this.radius * 2}px serif`;
+        ctx.fillText(this.emoji, this.x, this.y);
+      }
+    }
+
+    // ----- Initialize Game Objects -----
+    const player = new Player(100, 100, 15, "🥄");
+    const vegetables = [];
+    const crystals = [];
+    // Position the Soup Monster in the opposite corner.
+    let monster = new SoupMonster(canvas.width - 50, canvas.height - 50, 25, "👹");
+
+    // Create vegetables.
+    for (let i = 0; i < 10; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      const radius = 15;
+      vegetables.push(new Vegetable(x, y, radius));
+    }
+
+    // Create flavor crystals.
+    for (let i = 0; i < 5; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      const radius = 12;
+      crystals.push(new FlavorCrystal(x, y, radius));
+    }
+
+    // ----- Input Handling -----
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+      // On first key press, resume the AudioContext if it's suspended.
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    // ----- Game Loop Functions -----
+    function update() {
+      // Update player velocity.
+      player.vx = 0;
+      player.vy = 0;
+      if (keys['ArrowUp'] || keys['w']) player.vy = -player.speed;
+      if (keys['ArrowDown'] || keys['s']) player.vy = player.speed;
+      if (keys['ArrowLeft'] || keys['a']) player.vx = -player.speed;
+      if (keys['ArrowRight'] || keys['d']) player.vx = player.speed;
+      player.update();
+
+      // Update vegetables and check collisions.
+      vegetables.forEach(veg => {
+        veg.update();
+        if (isColliding(player, veg)) {
+          playSound("collision");
+          // (Optional) Add any collision response here.
+        }
+      });
+
+      // Check crystal collection.
+      for (let i = crystals.length - 1; i >= 0; i--) {
+        const crystal = crystals[i];
+        if (isColliding(player, crystal)) {
+          playSound("crystal");
+          score += 10;
+          crystals.splice(i, 1);
+          // Spawn a new crystal.
+          const newCrystal = new FlavorCrystal(
+            Math.random() * canvas.width,
+            Math.random() * canvas.height,
+            12
+          );
+          crystals.push(newCrystal);
+        }
+      }
+
+      // Update the Soup Monster.
+      monster.update(player.x, player.y);
+      if (isColliding(player, monster)) {
+        if (!monsterSoundPlayed) {
+          playSound("monster");
+          monsterSoundPlayed = true;
+        }
+        gameOver = true;
+      }
+    }
+
+    function draw() {
+      // Clear the canvas.
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#FFF8DC';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw game objects.
+      crystals.forEach(crystal => crystal.draw(ctx));
+      vegetables.forEach(veg => veg.draw(ctx));
+      monster.draw(ctx);
+      player.draw(ctx);
+
+      // Draw score with extra left margin.
+      ctx.fillStyle = '#000';
+      ctx.font = '20px Arial';
+      ctx.textAlign = "left";
+      ctx.fillText("Score: " + score, 20, 30);
+
+      // Display Game Over overlay.
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#FFF';
+        ctx.font = '40px Arial';
+        ctx.textAlign = "center";
+        ctx.fillText("Game Over!", canvas.width / 2, canvas.height / 2);
+      }
+    }
+
+    function gameLoop() {
+      if (!gameOver) {
+        update();
+      }
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start the game loop.
+    gameLoop();
+  </script>
+</body>
+</html>
