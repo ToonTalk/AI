@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multi-Agent Gemini Conversation (Token Stats)</title>
+  <style>
+    /* Page styling */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0 auto;
+      padding: 20px;
+      max-width: 800px; /* Limit overall page width */
+      line-height: 1.5;
+      background-color: #fafafa;
+    }
+    h1 {
+      margin-top: 0;
+    }
+    form {
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .agentGroup {
+      border: 1px solid #eee;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      background-color: #fcfcfc;
+    }
+    .agentGroup label {
+      display: block;
+      margin-top: 5px;
+      font-weight: bold;
+    }
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 8px;
+      font-size: 0.9em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      margin: 5px 0;
+      padding: 8px 16px;
+      font-size: 0.9em;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #1976d2;
+      color: #fff;
+    }
+    button:hover {
+      background-color: #1565c0;
+    }
+    /* Conversation area */
+    #conversation {
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      min-height: 100px;
+    }
+    .message {
+      margin-bottom: 10px;
+    }
+    .message strong {
+      color: #333;
+    }
+    /* Debug area: hidden by default, narrower width, wrapping text */
+    #debug {
+      display: none; /* Hidden initially */
+      background: #f5f5f5;
+      border: 1px solid #999;
+      padding: 10px;
+      margin-bottom: 20px;
+      font-size: 0.9em;
+      max-width: 600px; /* Keep the debug log narrower than the main content */
+      white-space: pre-wrap; /* Respect whitespace but wrap text */
+      word-wrap: break-word; /* Break long words/lines */
+      overflow-wrap: break-word; /* Modern property for line-breaking */
+      line-height: 1.4;
+      border-radius: 4px;
+    }
+    #debug p {
+      margin: 0 0 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Multi-Agent Gemini Conversation</h1>
+  <form id="initForm">
+    <div>
+      <label for="apiKey">Gemini API Key:</label>
+      <input type="password" id="apiKey" placeholder="Enter your API key" required>
+    </div>
+
+    <div id="agentsContainer">
+      <!-- Agent 1 -->
+      <div class="agentGroup" data-agent-index="1">
+        <label for="agentName1">Agent 1 Name:</label>
+        <input type="text" id="agentName1" value="Agent1">
+        <label for="agentPersona1">Agent 1 Persona / Initial Prompt:</label>
+        <textarea id="agentPersona1" placeholder="Enter persona/initial prompt" required></textarea>
+      </div>
+      <!-- Agent 2 -->
+      <div class="agentGroup" data-agent-index="2">
+        <label for="agentName2">Agent 2 Name:</label>
+        <input type="text" id="agentName2" value="Agent2">
+        <label for="agentPersona2">Agent 2 Persona / Initial Prompt:</label>
+        <textarea id="agentPersona2" placeholder="Enter persona/initial prompt" required></textarea>
+      </div>
+    </div>
+
+    <button type="button" id="addAgentButton">Add Agent</button>
+    <button type="submit">Start Conversation</button>
+    <button type="button" id="stopButton" disabled>Stop Conversation</button>
+    <button type="button" id="toggleDebugButton">Show Debug Info</button>
+  </form>
+
+  <div id="conversation"></div>
+
+  <div id="debug"></div>
+
+  <script>
+    let stopConversation = false;
+
+    // For tracking usage stats across the entire conversation
+    let totalPrompts = 0;
+    let totalPromptTokens = 0;
+    let totalOutputTokens = 0;
+
+    // Toggle debug info display
+    function toggleDebug() {
+      const debugDiv = document.getElementById("debug");
+      const toggleBtn = document.getElementById("toggleDebugButton");
+      if (debugDiv.style.display === "none" || !debugDiv.style.display) {
+        debugDiv.style.display = "block";
+        toggleBtn.textContent = "Hide Debug Info";
+      } else {
+        debugDiv.style.display = "none";
+        toggleBtn.textContent = "Show Debug Info";
+      }
+    }
+
+    // Append a debug message as a new paragraph
+    function logDebug(message) {
+      const debugDiv = document.getElementById("debug");
+      const p = document.createElement("p");
+      p.textContent = message;
+      debugDiv.appendChild(p);
+      console.log(message);
+    }
+
+    // Simple markdown converter for **bold** and *italic*
+    function convertMarkdown(text) {
+      text = text.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+      text = text.replace(/\*(.+?)\*/g, '<i>$1</i>');
+      return text;
+    }
+
+    // Append a conversation message with the agent name in bold
+    function appendMessage(agentName, message) {
+      const conversationDiv = document.getElementById("conversation");
+      const messageHTML = `<div class="message"><strong>${agentName}:</strong> ${convertMarkdown(message)}</div>`;
+      conversationDiv.innerHTML += messageHTML;
+    }
+
+    // Gather agents from the agentsContainer
+    function getAgents() {
+      const agentGroups = document.querySelectorAll(".agentGroup");
+      const agents = [];
+      agentGroups.forEach((group, index) => {
+        const nameInput = group.querySelector('input[type="text"]');
+        const personaTextarea = group.querySelector('textarea');
+        const name = nameInput.value.trim() || `Agent${index+1}`;
+        const persona = personaTextarea.value.trim() || "";
+        agents.push({ name, persona });
+      });
+      return agents;
+    }
+
+    // Call Gemini API with the provided prompt
+    async function generateResponse(apiKey, agentPersona, conversationHistory, agentName) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const promptText = conversationHistory + "\n" + agentName + ":";
+      const payload = {
+        system_instruction: {
+          parts: { text: agentPersona }
+        },
+        contents: [
+          { parts: [ { text: promptText } ] }
+        ]
+      };
+
+      logDebug(`Payload for ${agentName}: ${JSON.stringify(payload)}`);
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        logDebug(`Response for ${agentName}: ${JSON.stringify(data)}`);
+
+        // Track usage stats if present
+        const usage = data.usageMetadata;
+        if (usage) {
+          if (usage.promptTokenCount) {
+            totalPromptTokens += usage.promptTokenCount;
+          }
+          if (usage.candidatesTokenCount) {
+            totalOutputTokens += usage.candidatesTokenCount;
+          }
+        }
+        totalPrompts++;
+
+        // Extract generated text
+        const candidate = data.candidates && data.candidates[0];
+        const candidateData = candidate && (candidate.content || candidate.output);
+        const generatedText = candidateData && candidateData.parts && candidateData.parts[0].text;
+        return generatedText ? generatedText.trim() : "";
+      } catch (error) {
+        logDebug(`Error calling Gemini API for ${agentName}: ${error}`);
+        return "Error generating response.";
+      }
+    }
+
+    // Show usage stats in debug log or conversation area
+    function showUsageStats() {
+      const statsMessage = `Conversation Stats:
+  - Prompts sent: ${totalPrompts}
+  - Total prompt tokens: ${totalPromptTokens}
+  - Total output tokens: ${totalOutputTokens}`;
+      logDebug(statsMessage);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const initForm = document.getElementById("initForm");
+      const stopButton = document.getElementById("stopButton");
+      const addAgentButton = document.getElementById("addAgentButton");
+      const toggleDebugButton = document.getElementById("toggleDebugButton");
+      const conversationDiv = document.getElementById("conversation");
+      const debugDiv = document.getElementById("debug");
+
+      toggleDebugButton.addEventListener("click", toggleDebug);
+
+      // Add an additional agent input group
+      addAgentButton.addEventListener("click", () => {
+        const agentsContainer = document.getElementById("agentsContainer");
+        const newIndex = agentsContainer.children.length + 1;
+        const agentGroup = document.createElement("div");
+        agentGroup.className = "agentGroup";
+        agentGroup.dataset.agentIndex = newIndex;
+        agentGroup.innerHTML = `
+          <label for="agentName${newIndex}">Agent ${newIndex} Name:</label>
+          <input type="text" id="agentName${newIndex}" value="Agent${newIndex}">
+          <label for="agentPersona${newIndex}">Agent ${newIndex} Persona / Initial Prompt:</label>
+          <textarea id="agentPersona${newIndex}" placeholder="Enter persona/initial prompt" required></textarea>
+        `;
+        agentsContainer.appendChild(agentGroup);
+      });
+
+      stopButton.addEventListener("click", () => {
+        stopConversation = true;
+        logDebug("Stop button clicked. Conversation will halt after current turn.");
+      });
+
+      initForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        stopConversation = false;
+        stopButton.disabled = false;
+        conversationDiv.innerHTML = "";
+        debugDiv.innerHTML = "";
+
+        // Reset usage stats for a new run
+        totalPrompts = 0;
+        totalPromptTokens = 0;
+        totalOutputTokens = 0;
+
+        const apiKey = document.getElementById("apiKey").value.trim();
+        const agents = getAgents();
+
+        // Preface debug log with agent names and descriptions
+        logDebug("Conversation Setup:");
+        agents.forEach(agent => {
+          logDebug(`${agent.name}: ${agent.persona}`);
+        });
+        logDebug("---- Start Conversation ----");
+
+        let conversationHistory = "";
+        const maxTurns = 10;
+        let agentIndex = 0;
+        const numAgents = agents.length;
+        let turnCount = 0;
+
+        while (!stopConversation && turnCount < maxTurns) {
+          const currentAgent = agents[agentIndex];
+          const responseText = await generateResponse(apiKey, currentAgent.persona, conversationHistory, currentAgent.name);
+
+          // Remove any duplicate leading agent name(s)
+          const namePattern = new RegExp(`^(?:${currentAgent.name}:\\s*)+`, "i");
+          let finalResponse = responseText.replace(namePattern, "").trim();
+          if (!finalResponse) {
+            finalResponse = "No response generated.";
+          }
+
+          // Update conversation
+          appendMessage(currentAgent.name, finalResponse);
+          conversationHistory += `${currentAgent.name}: ${finalResponse}\n`;
+
+          agentIndex = (agentIndex + 1) % numAgents;
+          turnCount++;
+        }
+
+        stopButton.disabled = true;
+        logDebug("Conversation ended.");
+        // Show final usage stats
+        showUsageStats();
+      });
+    });
+  </script>
+</body>
+</html>
