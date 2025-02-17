@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multi-Agent Gemini Conversation (with Auto Pause, Image, & Error History)</title>
+  <style>
+    /* Overall page styling */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0 auto;
+      padding: 20px;
+      max-width: 800px;
+      line-height: 1.5;
+      background-color: #fafafa;
+    }
+    h1, h2 {
+      margin-top: 0;
+    }
+    /* Form styling */
+    form {
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .agentGroup {
+      border: 1px solid #eee;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      background-color: #fcfcfc;
+    }
+    .agentGroup label, label {
+      display: block;
+      margin-top: 5px;
+      font-weight: bold;
+    }
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 8px;
+      font-size: 0.9em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      margin: 5px 0;
+      padding: 8px 16px;
+      font-size: 0.9em;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #1976d2;
+      color: #fff;
+    }
+    button:hover {
+      background-color: #1565c0;
+    }
+    /* Conversation area styling */
+    #conversation {
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      min-height: 100px;
+    }
+    .message {
+      margin-bottom: 10px;
+    }
+    .message strong {
+      color: #333;
+    }
+    /* Markdown styles */
+    pre {
+      background: #f0f0f0;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-family: Consolas, monospace;
+      margin: 10px 0;
+    }
+    code {
+      background: #f7f7f7;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: Consolas, monospace;
+    }
+    ol, ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    /* Debug area styling */
+    #debug {
+      display: none;
+      background: #f5f5f5;
+      border: 1px solid #999;
+      padding: 10px;
+      margin-bottom: 20px;
+      font-size: 0.9em;
+      max-width: 600px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      line-height: 1.4;
+      border-radius: 4px;
+    }
+    #debug p {
+      margin: 0 0 10px 0;
+    }
+    /* Style for code buttons */
+    .code-buttons {
+      margin-top: 5px;
+      text-align: right;
+    }
+    .code-buttons button {
+      font-size: 0.8em;
+      margin-left: 5px;
+      padding: 4px 8px;
+    }
+    /* Modal styles for Turtle Canvas */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.6);
+    }
+    .modal-content {
+      background-color: #fefefe;
+      margin: 10% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 420px;
+      text-align: center;
+      border-radius: 4px;
+    }
+    .close-button {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .close-button:hover,
+    .close-button:focus {
+      color: black;
+    }
+    #modalTurtleCanvas {
+      border: 1px solid #ccc;
+      background: #fff;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Multi-Agent Gemini Conversation</h1>
+  <form id="initForm">
+    <div>
+      <label for="apiKey">Gemini API Key:</label>
+      <input type="password" id="apiKey" placeholder="Enter your API key" required>
+    </div>
+    <div id="agentsContainer">
+      <!-- Agent 1 -->
+      <div class="agentGroup" data-agent-index="1">
+        <label for="agentName1">Agent 1 Name:</label>
+        <input type="text" id="agentName1" value="Agent1">
+        <label for="agentPersona1">Agent 1 Persona / Initial Prompt:</label>
+        <textarea id="agentPersona1" placeholder="Enter persona/initial prompt" required></textarea>
+      </div>
+      <!-- Agent 2 -->
+      <div class="agentGroup" data-agent-index="2">
+        <label for="agentName2">Agent 2 Name:</label>
+        <input type="text" id="agentName2" value="Agent2">
+        <label for="agentPersona2">Agent 2 Persona / Initial Prompt:</label>
+        <textarea id="agentPersona2" placeholder="Enter persona/initial prompt" required></textarea>
+      </div>
+    </div>
+    <button type="button" id="addAgentButton">Add Agent</button>
+    <button type="submit">Start Conversation</button>
+    <button type="button" id="stopButton" disabled>Stop Conversation</button>
+    <button type="button" id="toggleDebugButton">Show Debug Info</button>
+  </form>
+
+  <div id="conversation"></div>
+  <div id="debug"></div>
+
+  <!-- Modal for Turtle Canvas -->
+  <div id="canvasModal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" id="closeModal">&times;</span>
+      <canvas id="modalTurtleCanvas" width="400" height="400"></canvas>
+      <br>
+      <button id="downloadButton">Download Image</button>
+    </div>
+  </div>
+
+  <script>
+    // --- Console Buffering Setup for Generated Code ---
+    let consoleBuffer = [];
+    let capturingConsole = false;
+    (function() {
+      const originalLog = console.log;
+      console.log = function(...args) {
+        originalLog.apply(console, args);
+        if (capturingConsole) {
+          consoleBuffer.push(args.join(' '));
+        }
+      };
+      const originalError = console.error;
+      console.error = function(...args) {
+        originalError.apply(console, args);
+        if (capturingConsole) {
+          consoleBuffer.push('ERROR: ' + args.join(' '));
+        }
+      };
+      const originalWarn = console.warn;
+      console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        if (capturingConsole) {
+          consoleBuffer.push('WARN: ' + args.join(' '));
+        }
+      };
+    })();
+
+    // --- Global Variables ---
+    var conversationHistory = "";
+    var latestImageData = null;
+    
+    /* -------------------------------
+       Local Storage Setup
+    ------------------------------- */
+    function setupLocalStorageForInputs() {
+      document.querySelectorAll("input[id], textarea[id]").forEach(el => {
+        const key = el.id;
+        const storedVal = localStorage.getItem(key);
+        if (storedVal !== null) {
+          el.value = storedVal;
+        }
+        el.addEventListener("input", () => {
+          localStorage.setItem(key, el.value);
+        });
+      });
+    }
+    
+    /* -------------------------------
+       Conversation App Code 
+    ------------------------------- */
+    let stopConversation = false;
+    let totalPrompts = 0;
+    let totalPromptTokens = 0;
+    let totalOutputTokens = 0;
+    let pauseConversation = false;
+    let continuePromiseResolve = null;
+    
+    function pauseForContinue() {
+      return new Promise((resolve) => {
+        continuePromiseResolve = resolve;
+      });
+    }
+    
+    // Remove debug logging.
+    function logDebug(message) {}
+    
+    function toggleDebug() {
+      const debugDiv = document.getElementById("debug");
+      const toggleBtn = document.getElementById("toggleDebugButton");
+      if (!debugDiv.style.display || debugDiv.style.display === "none") {
+        debugDiv.style.display = "block";
+        toggleBtn.textContent = "Hide Debug Info";
+      } else {
+        debugDiv.style.display = "none";
+        toggleBtn.textContent = "Show Debug Info";
+      }
+    }
+    
+    function convertMarkdown(text) {
+      const codeBlocks = [];
+      text = text.replace(/```([\s\S]*?)```/g, function(match, p1) {
+        codeBlocks.push(p1);
+        return "%%CODEBLOCK" + (codeBlocks.length - 1) + "%%";
+      });
+      text = text.replace(/`([^`]+?)`/g, '<code>$1</code>');
+      text = text.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+      text = text.replace(/\*(.+?)\*/g, function(match, p1) {
+        const trimmed = p1.trim();
+        if (/^[0-9+\-*/\.\s]+$/.test(trimmed)) {
+          return match;
+        }
+        return '<i>' + p1 + '</i>';
+      });
+      let lines = text.split('\n');
+      let resultLines = [];
+      let inOrderedList = false;
+      let inUnorderedList = false;
+      lines.forEach(function(line) {
+        if (/^\s*\d+\.\s+/.test(line)) {
+          if (!inOrderedList) { resultLines.push('<ol>'); inOrderedList = true; }
+          line = line.replace(/^\s*\d+\.\s+/, '');
+          resultLines.push('<li>' + line + '</li>');
+        } else if (/^\s*[-*]\s+/.test(line)) {
+          if (!inUnorderedList) { resultLines.push('<ul>'); inUnorderedList = true; }
+          line = line.replace(/^\s*[-*]\s+/, '');
+          resultLines.push('<li>' + line + '</li>');
+        } else {
+          if (inOrderedList) { resultLines.push('</ol>'); inOrderedList = false; }
+          if (inUnorderedList) { resultLines.push('</ul>'); inUnorderedList = false; }
+          resultLines.push(line);
+        }
+      });
+      if (inOrderedList) { resultLines.push('</ol>'); }
+      if (inUnorderedList) { resultLines.push('</ul>'); }
+      text = resultLines.join('\n');
+      for (let i = 0; i < codeBlocks.length; i++) {
+        const codeHTML = '<pre><code>' + codeBlocks[i] + '</code></pre>';
+        text = text.replace("%%CODEBLOCK" + i + "%%", codeHTML);
+      }
+      return text;
+    }
+    
+    function appendMessage(agentName, message) {
+      const conversationDiv = document.getElementById("conversation");
+      const messageHTML = `<div class="message"><strong>${agentName}:</strong> ${convertMarkdown(message)}</div>`;
+      conversationDiv.insertAdjacentHTML("beforeend", messageHTML);
+      // Ensure system messages (without images) are added to conversationHistory.
+      if (agentName !== "System" || !message.includes("<img")) {
+        conversationHistory += agentName + ": " + message + "\n";
+      }
+      
+      const messageDiv = conversationDiv.lastElementChild;
+      const codeBlocks = messageDiv.querySelectorAll("pre > code");
+      codeBlocks.forEach(codeBlock => {
+        const btnContainer = document.createElement("div");
+        btnContainer.className = "code-buttons";
+        const runBtn = document.createElement("button");
+        runBtn.textContent = "Run Code";
+        runBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          runCodeFromBlock(codeBlock);
+        });
+        const copyBtn = document.createElement("button");
+        copyBtn.textContent = "Copy Code";
+        copyBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          copyCodeFromBlock(codeBlock);
+        });
+        btnContainer.appendChild(runBtn);
+        btnContainer.appendChild(copyBtn);
+        codeBlock.parentNode.insertAdjacentElement("afterend", btnContainer);
+      });
+      
+      if (codeBlocks.length > 0 && !pauseConversation) {
+        runCodeFromBlock(codeBlocks[0]);
+      }
+    }
+    
+    function getAgents() {
+      const agentGroups = document.querySelectorAll(".agentGroup");
+      const agents = [];
+      agentGroups.forEach((group, index) => {
+        const nameInput = group.querySelector('input[type="text"]');
+        const personaTextarea = group.querySelector('textarea');
+        const name = nameInput.value.trim() || `Agent${index+1}`;
+        const persona = personaTextarea.value.trim() || "";
+        agents.push({ name, persona });
+      });
+      return agents;
+    }
+    
+    async function generateResponse(apiKey, agentPersona, conversationHistory, agentName) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const promptText = conversationHistory + "\n" + agentName + ":";
+      const parts = [];
+      parts.push({ text: promptText });
+      if (latestImageData) {
+        const base64Data = latestImageData.split(",")[1];
+        parts.push({
+          inline_data: {
+            mime_type: "image/png",
+            data: base64Data
+          }
+        });
+        latestImageData = null;
+      }
+      const payload = {
+        system_instruction: { parts: { text: agentPersona } },
+        contents: [{ parts: parts }]
+      };
+      logDebug(`Payload for ${agentName}: ${JSON.stringify(payload)}`);
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        logDebug(`Response for ${agentName}: ${JSON.stringify(data)}`);
+        const usage = data.usageMetadata;
+        if (usage) {
+          if (usage.promptTokenCount) totalPromptTokens += usage.promptTokenCount;
+          if (usage.candidatesTokenCount) totalOutputTokens += usage.candidatesTokenCount;
+        }
+        totalPrompts++;
+        const candidate = data.candidates && data.candidates[0];
+        const candidateData = candidate && (candidate.content || candidate.output);
+        const generatedText = candidateData && candidateData.parts && candidateData.parts[0].text;
+        return generatedText ? generatedText.trim() : "";
+      } catch (error) {
+        logDebug(`Error calling Gemini API for ${agentName}: ${error}`);
+        return "Error generating response.";
+      }
+    }
+    
+    function showUsageStats() {
+      const statsMessage = `Conversation Stats:
+- Prompts sent: ${totalPrompts}
+- Total prompt tokens: ${totalPromptTokens}
+- Total output tokens: ${totalOutputTokens}`;
+      logDebug(statsMessage);
+    }
+    
+    function showControlButtons() {
+      return new Promise((resolve) => {
+        const container = document.createElement('div');
+        container.id = "controlButtons";
+        container.style.marginTop = "10px";
+        container.style.textAlign = "center";
+        container.innerHTML = `
+          <button id="continueButton" style="margin-right: 5px;">Continue</button>
+          <button id="stopButtonTemp" style="margin-right: 5px;">Stop</button>
+          <button id="addMessageButton">Add Message and Continue</button>
+        `;
+        document.getElementById("conversation").appendChild(container);
+        
+        document.getElementById("continueButton").addEventListener("click", () => {
+          container.remove();
+          resolve("continue");
+        });
+        
+        document.getElementById("stopButtonTemp").addEventListener("click", () => {
+          container.remove();
+          resolve("stop");
+        });
+        
+        document.getElementById("addMessageButton").addEventListener("click", () => {
+          const userInput = prompt("Enter your message:");
+          if (userInput && userInput.trim().length > 0) {
+            appendMessage("User", userInput);
+            conversationHistory += "User: " + userInput + "\n";
+          }
+          container.remove();
+          resolve("continue");
+        });
+      });
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      setupLocalStorageForInputs();
+      const initForm = document.getElementById("initForm");
+      const stopButton = document.getElementById("stopButton");
+      const addAgentButton = document.getElementById("addAgentButton");
+      const toggleDebugButton = document.getElementById("toggleDebugButton");
+    
+      toggleDebugButton.addEventListener("click", toggleDebug);
+      addAgentButton.addEventListener("click", () => {
+        const agentsContainer = document.getElementById("agentsContainer");
+        const newIndex = agentsContainer.children.length + 1;
+        const agentGroup = document.createElement("div");
+        agentGroup.className = "agentGroup";
+        agentGroup.dataset.agentIndex = newIndex;
+        agentGroup.innerHTML = `
+          <label for="agentName${newIndex}">Agent ${newIndex} Name:</label>
+          <input type="text" id="agentName${newIndex}" value="Agent${newIndex}">
+          <label for="agentPersona${newIndex}">Agent ${newIndex} Persona / Initial Prompt:</label>
+          <textarea id="agentPersona${newIndex}" placeholder="Enter persona/initial prompt" required></textarea>
+        `;
+        agentsContainer.appendChild(agentGroup);
+        agentGroup.querySelectorAll("input[id], textarea[id]").forEach(el => {
+          const key = el.id;
+          el.addEventListener("input", () => localStorage.setItem(key, el.value));
+        });
+      });
+      stopButton.addEventListener("click", () => {
+        stopConversation = true;
+      });
+      initForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        stopConversation = false;
+        stopButton.disabled = false;
+        document.getElementById("conversation").innerHTML = "";
+        document.getElementById("debug").innerHTML = "";
+        conversationHistory = "";
+        totalPrompts = 0; totalPromptTokens = 0; totalOutputTokens = 0;
+        const apiKey = document.getElementById("apiKey").value.trim();
+        const agents = getAgents();
+        logDebug("Conversation Setup:");
+        agents.forEach(agent => { logDebug(`${agent.name}: ${agent.persona}`); });
+        logDebug("---- Start Conversation ----");
+        
+        while (!stopConversation) {
+          for (const currentAgent of agents) {
+            if (stopConversation) break;
+            const responseText = await generateResponse(apiKey, currentAgent.persona, conversationHistory, currentAgent.name);
+            const namePattern = new RegExp(`^(?:${currentAgent.name}:\\s*)+`, "i");
+            let finalResponse = responseText.replace(namePattern, "").trim();
+            if (!finalResponse) finalResponse = "No response generated.";
+            appendMessage(currentAgent.name, finalResponse);
+            conversationHistory += currentAgent.name + ": " + finalResponse + "\n";
+            if (pauseConversation) {
+              await pauseForContinue();
+            }
+          }
+          if (stopConversation) break;
+          const userChoice = await showControlButtons();
+          if (userChoice === "stop") {
+            stopConversation = true;
+            break;
+          }
+        }
+        stopButton.disabled = true;
+        logDebug("Conversation ended.");
+        showUsageStats();
+      });
+    });
+    
+    /* -------------------------------
+       Turtle Graphics Implementation
+       (Canvas is in a modal popup with Download functionality)
+    ------------------------------- */
+    const canvas = document.getElementById("modalTurtleCanvas");
+    const ctx = canvas.getContext("2d");
+    const turtle = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      angle: 0,
+      penDown: true,
+      penColor: "#000",
+      penSize: 2,
+      reset() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.angle = 0;
+        this.penDown = true;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      },
+      penup() { this.penDown = false; },
+      pendown() { this.penDown = true; },
+      goto(x, y) {
+        if (this.penDown) {
+          ctx.beginPath();
+          ctx.moveTo(this.x, this.y);
+          ctx.lineTo(x, y);
+          ctx.strokeStyle = this.penColor;
+          ctx.lineWidth = this.penSize;
+          ctx.stroke();
+        }
+        this.x = x;
+        this.y = y;
+      },
+      forward(distance) {
+        const rad = this.angle * Math.PI / 180;
+        const newX = this.x + distance * Math.cos(rad);
+        const newY = this.y + distance * Math.sin(rad);
+        this.goto(newX, newY);
+      },
+      right(deg) { this.angle = (this.angle + deg) % 360; },
+      left(deg) { this.angle = (this.angle - deg + 360) % 360; },
+      setPenColor(color) { this.penColor = color; },
+      setPenSize(size) { this.penSize = size; },
+      back(distance) { this.forward(-distance); },
+      setHeading(deg) { this.angle = ((deg % 360) + 360) % 360; },
+      xCor() { return this.x; },
+      yCor() { return this.y; },
+      heading() { return this.angle; },
+      getPenColor() { return this.penColor; }
+    };
+    
+    function penup() { turtle.penup(); }
+    function pendown() { turtle.pendown(); }
+    function goto(x, y) { turtle.goto(x, y); }
+    function forward(distance) { turtle.forward(distance); }
+    function right(deg) { turtle.right(deg); }
+    function left(deg) { turtle.left(deg); }
+    function setPenColor(color) { turtle.setPenColor(color); }
+    function setPenSize(size) { turtle.setPenSize(size); }
+    function rgb(r, g, b) { return `rgb(${r}, ${g}, ${b})`; }
+    function back(distance) { turtle.back(distance); }
+    function setHeading(deg) { turtle.setHeading(deg); }
+    function xCor() { return turtle.xCor(); }
+    function yCor() { return turtle.yCor(); }
+    function heading() { return turtle.heading(); }
+    function getPenColor() { return turtle.getPenColor(); }
+    
+    function runCodeFromBlock(codeBlock) {
+      turtle.reset();
+      try {
+        let code = codeBlock.innerText;
+        code = code.replace(/^\s*javascript\s*\n/i, '');
+        capturingConsole = true;
+        new Function(code)();
+        capturingConsole = false;
+        showModal();
+        sendImagePrompt();
+        pauseConversation = true;
+        setTimeout(() => {
+          hideModal();
+          if (continuePromiseResolve) {
+            continuePromiseResolve();
+            continuePromiseResolve = null;
+          }
+          pauseConversation = false;
+        }, 5000);
+      } catch (e) {
+        capturingConsole = false;
+        let errorDetails = "Error running code: " + (e.message || e);
+        if (e.stack) {
+          errorDetails += "\nStack Trace:\n" + e.stack;
+        }
+        if (consoleBuffer.length > 0) {
+          errorDetails += "\nConsole Output:\n" + consoleBuffer.join("\n");
+          consoleBuffer = [];
+        }
+        // Append strong text indicating that one of the personas should fix this error.
+        errorDetails += "\n<strong>Please note: one of the personas should fix this error.</strong>";
+        // Append a system message with error details so all personas see it.
+        appendMessage("System", errorDetails);
+        showModal();
+        setTimeout(() => {
+          hideModal();
+          if (continuePromiseResolve) {
+            continuePromiseResolve();
+            continuePromiseResolve = null;
+          }
+          pauseConversation = false;
+        }, 5000);
+      }
+    }
+    
+    function copyCodeFromBlock(codeBlock) {
+      let codeText = codeBlock.innerText;
+      codeText = codeText.replace(/^\s*javascript\s*\n/i, '');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(codeText).then(() => {
+          alert("Code copied to clipboard!");
+        }).catch(err => {
+          alert("Failed to copy code: " + err);
+        });
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = codeText;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand('copy');
+          alert("Code copied to clipboard!");
+        } catch (err) {
+          alert("Failed to copy code: " + err);
+        }
+        document.body.removeChild(textarea);
+      }
+    }
+    
+    const modal = document.getElementById("canvasModal");
+    const closeModalBtn = document.getElementById("closeModal");
+    const downloadButton = document.getElementById("downloadButton");
+    
+    function showModal() {
+      modal.style.display = "block";
+    }
+    function hideModal() {
+      modal.style.display = "none";
+    }
+    closeModalBtn.addEventListener("click", hideModal);
+    window.addEventListener("click", (event) => {
+      if (event.target == modal) { hideModal(); }
+    });
+    downloadButton.addEventListener("click", () => {
+      const link = document.createElement('a');
+      link.download = 'turtle_graphics.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    });
+    
+    function sendImagePrompt() {
+      const imageDataURL = canvas.toDataURL("image/png");
+      latestImageData = imageDataURL;
+      let consoleMessages = "";
+      if (consoleBuffer.length > 0) {
+        consoleMessages = "<br><br><strong>Console Output:</strong><br>" + consoleBuffer.join("<br>");
+        consoleBuffer = [];
+      }
+      const conversationDiv = document.getElementById("conversation");
+      const messageHTML = `<div class="message"><strong>System:</strong> I just ran the code, and the resulting image looks like the following:<br><img src='${imageDataURL}' style='max-width:100%; height:auto;'/><br>${consoleMessages}</div>`;
+      conversationDiv.insertAdjacentHTML("beforeend", messageHTML);
+    }
+  </script>
+</body>
+</html>
