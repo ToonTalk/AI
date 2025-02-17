@@ -1,0 +1,149 @@
+<html>
+<body>
+</body>
+<script>
+function createBioluminescentJellyfish() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 600;
+  canvas.height = 400;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+
+  // Background Gradient with color shift
+  let gradientHue = 200;
+  function drawBackground() {
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, `hsl(${gradientHue}, 50%, 4%)`);
+    gradient.addColorStop(1, `hsl(${gradientHue + 20}, 50%, 8%)`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    gradientHue += 0.01; //Subtle color shift
+    if (gradientHue > 240) gradientHue = 200;
+  }
+
+  // Jellyfish body
+  let jellyfishBrightness = 100;
+  function drawJellyfish() {
+    const numStars = 50;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = 80;
+
+    for (let i = 0; i < numStars; i++) {
+      const angle = i * (2 * Math.PI) / numStars;
+      const x = centerX + radius * Math.cos(angle) + (Math.random() - 0.5) * 20;
+      const y = centerY + radius * Math.sin(angle) + (Math.random() - 0.5) * 20;
+      const size = 2 + Math.random() * 4;
+      const brightness = jellyfishBrightness + Math.sin(Date.now() / 100 + i) * 50;
+      const color = `rgb(${brightness},${brightness}, ${brightness})`;
+      ctx.font = `${size}em sans-serif`;
+      ctx.fillStyle = color;
+      ctx.fillText("✨", x, y);
+    }
+
+    // Tentacles
+    for (let i = 0; i < 16; i++) {
+      const angle = i * (2 * Math.PI) / 16;
+      const x = centerX + 120 * Math.cos(angle) + 10 * Math.sin(Date.now() / 100 + angle);
+      const y = centerY + 120 * Math.sin(angle) + 10 * Math.cos(Date.now() / 100 + angle);
+      ctx.fillStyle = "lightblue";
+      ctx.fillText("💧", x, y);
+    }
+  }
+
+  // Fish - multiple fish, varying speed and depth
+  const fishData = [
+    { x: 100, y: 100, speed: 1, emoji: "🐠", color: 'gold', originalColor: 'gold' },
+    { x: 200, y: 150, speed: 1.5, emoji: "🐟", color: 'lightcoral', originalColor: 'lightcoral' },
+    { x: 300, y: 80, speed: 0.8, emoji: "🐡", color: 'orange', originalColor: 'orange' }
+  ];
+
+  function drawFish() {
+    fishData.forEach((fish, index) => {
+      ctx.fillStyle = fish.color;
+      ctx.fillText(fish.emoji, fish.x, fish.y);
+      fish.x += fish.speed;
+      if (fish.x > canvas.width) {
+        fish.x = -20;
+      }
+      const rainbowColor = `hsl(${index * 60 + Date.now() / 10}, 100%, 50%)`;
+      ctx.fillStyle = rainbowColor;
+      ctx.fillText("💨", fish.x + 10, fish.y);
+    });
+  }
+
+  //Waves
+  let waveOffset = 0;
+
+  function drawWaves() {
+    ctx.fillStyle = "lightblue";
+    for (let i = 0; i < canvas.width; i++) {
+      const y = canvas.height * 0.8 + 10 * Math.sin(i / 20 + waveOffset);
+      ctx.fillText("🌊", i, y);
+    }
+    waveOffset += 0.01;
+  }
+
+  //Sparkle - more organic appearance
+  const sparkles = [];
+  function drawSparkle() {
+    if (Math.random() < 0.1) {
+      sparkles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 3 + 1,
+        alpha: 1,
+        lifespan: 60
+      });
+    }
+
+    sparkles.forEach((sparkle, index) => {
+      ctx.fillStyle = `rgba(255,255,255,${sparkle.alpha})`;
+      ctx.font = `${sparkle.size}em sans-serif`;
+      ctx.fillText("💫", sparkle.x, sparkle.y);
+      sparkle.alpha -= 1 / sparkle.lifespan;
+      sparkle.lifespan--;
+      if (sparkle.lifespan <= 0) sparkles.splice(index, 1);
+    });
+  }
+
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    drawJellyfish();
+    drawFish();
+    drawWaves();
+    drawSparkle();
+    requestAnimationFrame(animate);
+  }
+
+  canvas.addEventListener('click', (event) => {
+    jellyfishBrightness = 200;
+    setTimeout(() => { jellyfishBrightness = 100; }, 500);
+  });
+
+  canvas.addEventListener('mousemove', (event) => {
+    fishData.forEach(fish => {
+      const dx = event.offsetX - fish.x;
+      const dy = event.offsetY - fish.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < 30) {
+        fish.color = 'white';
+        fish.speed = fish.speed * 2;
+      } else {
+        fish.color = fish.originalColor;
+        fish.speed = fish.speed /2;
+      }
+    });
+  });
+
+
+  animate();
+}
+
+createBioluminescentJellyfish();
+
+</script>
+</body>
+</html>
