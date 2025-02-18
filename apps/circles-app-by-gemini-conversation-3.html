@@ -1,0 +1,127 @@
+<html>
+<body>
+<canvas id="modalTurtleCanvas" width="400" height="400"></canvas>
+</body>
+<script>
+
+const canvas = document.getElementById('modalTurtleCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = 500;
+canvas.height = 500;
+
+const numCircles = 10;
+const radiusStep = canvas.width / (numCircles * 2);
+let angleOffset = 0;
+
+//Improved Perlin noise for more natural variation
+function perlinNoise(x, y) {
+  let x0 = Math.floor(x),
+    x1 = x0 + 1,
+    y0 = Math.floor(y),
+    y1 = y0 + 1;
+  let sx = x - x0,
+    sy = y - y0;
+
+  let n00 = Math.random(),
+    n01 = Math.random(),
+    n10 = Math.random(),
+    n11 = Math.random();
+
+  let ix0 = n00 + sx * (n10 - n00),
+    ix1 = n01 + sx * (n11 - n01);
+
+  return ix0 + sy * (ix1 - ix0);
+}
+
+function drawCircle(radius, color, index) {
+  ctx.beginPath();
+  ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, 2 * Math.PI);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+
+  //More sophisticated fractured effect with Perlin noise
+  ctx.setLineDash([]);
+  const numDashes = 60; //Increased for finer detail
+  const dashArray = [];
+  for (let i = 0; i < numDashes; i++) {
+    const noise = perlinNoise(i + angleOffset * 2, index + angleOffset); //Added angleOffset for animation
+    const dashLength = 2 + noise * 15; //Increased range for variation
+    const gapLength = 1 + noise * 5; //Increased range for variation
+    dashArray.push(dashLength, gapLength);
+  }
+  ctx.setLineDash(dashArray);
+  ctx.stroke();
+}
+
+//Improved HSL to RGB conversion with error handling
+function hslToRgb(h, s, l) {
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h / 360 + 1 / 3);
+    g = hue2rgb(p, q, h / 360);
+    b = hue2rgb(p, q, h / 360 - 1 / 3);
+  }
+  return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+}
+
+
+//Enhanced color function with smoother transitions and subtle iridescence
+function getColor(index) {
+  let hue = (index * 30 + angleOffset * 5) % 360; //Slower hue shift
+  let saturation = 80 + Math.sin(angleOffset + index) * 10; //More pronounced saturation variation
+  let lightness = 50 + Math.cos(angleOffset + index) * 10; //More pronounced lightness variation
+  //Iridescence effect using small random offset
+  const iridescenceOffset = Math.random() * 5 - 2.5;
+  hue += iridescenceOffset;
+  saturation += iridescenceOffset;
+  lightness += iridescenceOffset;
+
+  const color = hslToRgb(hue, saturation, lightness);
+  return color;
+}
+
+//Glow effect function
+function glowEffect(radius, color) {
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, radius + 5, 0, 2 * Math.PI);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 10;
+    ctx.globalAlpha = 0.15; //Opacity of glow
+    ctx.stroke();
+    ctx.globalAlpha = 1.0; //Reset opacity
+}
+
+
+function animate() {
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  angleOffset += 0.01; //Animation speed
+
+  for (let i = 1; i <= numCircles; i++) {
+    const radius = i * radiusStep;
+    const color = getColor(i);
+    drawCircle(radius, color, i);
+    glowEffect(radius, color); //Apply glow effect
+  }
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+</script>
+</body>
+</html>
