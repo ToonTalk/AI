@@ -1,0 +1,79 @@
+<html>
+<body>
+<canvas id="modalTurtleCanvas" width="400" height="400"></canvas>
+</body>
+<script>
+
+// added the following since a user action is required
+document.addEventListener("click", (e) => {
+   oscillator.start();
+});
+
+const canvas = document.getElementById('modalTurtleCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const numStars = 50;
+const stars = [];
+let angle = 0;
+
+function randomColor() {
+    const r = Math.floor(Math.random() * 256);
+    const g = Math.floor(Math.random() * 256);
+    const b = Math.floor(Math.random() * 256);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+
+function drawFractal(x, y, size, level, hue) {
+    if (level === 0) {
+        ctx.beginPath();
+        ctx.arc(x, y, size / 2, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+        ctx.fill();
+        return;
+    }
+
+    const newSize = size / 2;
+    const hueShift = Math.random() * 10;
+    drawFractal(x - newSize, y, newSize, level - 1, hue + hueShift);
+    drawFractal(x + newSize, y, newSize, level - 1, hue + hueShift);
+    drawFractal(x, y - newSize, newSize, level - 1, hue + hueShift);
+    drawFractal(x, y + newSize, newSize, level - 1, hue + hueShift);
+
+}
+
+
+for (let i = 0; i < numStars; i++) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const size = 20 + Math.random() * 30;
+    const level = 3 + Math.floor(Math.random() * 3); // Adjust for fractal complexity
+    const hue = Math.random() * 360;
+    stars.push({ x, y, size, level, hue, pulse: 1 });
+}
+
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    angle += 0.002;
+
+    stars.forEach((star, index) => {
+        const pulsatingSize = star.size * (1 + 0.1 * Math.sin(star.pulse));
+        const x = star.x + 50 * Math.sin(angle + index);
+        const y = star.y + 50 * Math.cos(angle + index);
+
+        drawFractal(x, y, pulsatingSize, star.level, star.hue + Math.sin(star.pulse) * 10);
+
+        star.pulse += 0.02;
+
+    });
+    requestAnimationFrame(animate);
+}
+
+animate();
+
+</script>
+</body>
+</html>

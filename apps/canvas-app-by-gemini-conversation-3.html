@@ -1,0 +1,144 @@
+<html>
+<body>
+<canvas id="modalTurtleCanvas" width="400" height="400"></canvas>
+</body>
+<script>
+
+// added the following since a user action is required
+document.addEventListener("click", (e) => {
+   oscillator.start();
+});
+
+const canvas = document.getElementById('modalTurtleCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const numStars = 75;
+const stars = [];
+let angle = 0;
+
+const nebulaColors = [
+    '#220044',
+    '#440088',
+    '#6600CC',
+    '#8822EE',
+    '#AA44FF',
+    '#EE66FF',
+    '#FF88FF',
+    '#FFA500',
+    '#FFC866',
+    '#FFD700',
+    '#007bff',
+    '#00cccc',
+    '#48D1CC',
+    '#64B5F6'
+];
+
+function randomNebulaColor() {
+    return nebulaColors[Math.floor(Math.random() * nebulaColors.length)];
+}
+
+function drawFractal(x, y, size, level, hue, shape) {
+    if (level === 0) {
+        ctx.beginPath();
+        if (shape === 'comet') {
+            ctx.moveTo(x - size / 2, y);
+            ctx.lineTo(x + size / 2, y);
+            ctx.quadraticCurveTo(x + size, y, x + size / 2, y + size / 2);
+            ctx.quadraticCurveTo(x, y + size, x - size / 2, y);
+        } else {
+            ctx.arc(x, y, size / 2, 0, 2 * Math.PI);
+        }
+        ctx.fillStyle = hue;
+        ctx.fill();
+        return;
+    }
+    const newSize = size / 2;
+    const hueShift = Math.random() * 10;
+    drawFractal(x - newSize, y, newSize, level - 1, hue, shape);
+    drawFractal(x + newSize, y, newSize, level - 1, hue, shape);
+    drawFractal(x, y - newSize, newSize, level - 1, hue, shape);
+    drawFractal(x, y + newSize, newSize, level - 1, hue, shape);
+}
+
+for (let i = 0; i < numStars; i++) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const size = 10 + Math.random() * 40;
+    const level = 2 + Math.floor(Math.random() * 4);
+    const hue = randomNebulaColor();
+    const shape = Math.random() < 0.2 ? 'comet' : 'round';
+    stars.push({ x, y, size, level, hue, pulse: 1, shape, trail: [] });
+}
+
+//Audio Context Setup
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const oscillator = audioCtx.createOscillator();
+oscillator.type = 'sine';
+oscillator.frequency.setValueAtTime(50, audioCtx.currentTime); // Initial frequency
+const gainNode = audioCtx.createGain();
+gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); // Initial volume
+oscillator.connect(gainNode);
+gainNode.connect(audioCtx.destination);
+oscillator.start();
+
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width);
+    gradient.addColorStop(0, '#220044');
+    gradient.addColorStop(1, '#00cccc');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    angle += 0.002;
+
+    let maxBrightness = 0;
+    let brightestStarIndex = 0;
+
+
+    stars.forEach((star, index) => {
+        const pulsatingSize = star.size * (1 + 0.2 * Math.sin(star.pulse));
+        const x = star.x + 60 * Math.sin(angle + index);
+        const y = star.y + 60 * Math.cos(angle + index);
+
+        star.trail.push({ x, y, size: pulsatingSize, hue: star.hue });
+        if (star.trail.length > 20) {
+            star.trail.shift();
+        }
+
+        star.trail.forEach((point, i) => {
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, point.size / (i + 2), 0, 2 * Math.PI);
+            ctx.fillStyle = point.hue;
+            ctx.globalAlpha = 0.1 * (20 - i) / 20;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        });
+        drawFractal(x, y, pulsatingSize, star.level, star.hue, star.shape);
+
+        //Find brightest star
+        const brightness = pulsatingSize;
+        if (brightness > maxBrightness) {
+            maxBrightness = brightness;
+            brightestStarIndex = index;
+        }
+        star.pulse += 0.02;
+    });
+
+    //Update audio based on brightest star
+    const freq = 50 + maxBrightness; //Simple mapping of brightness to frequency
+    const gain = 0.1 + maxBrightness / 200; //Simple mapping to gain
+    oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(gain, audioCtx.currentTime);
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+
+</script>
+</body>
+</html>
