@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fireworks Display</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .firework {
+            position: absolute;
+            width: 2px;
+            height: 80px;
+            background-color: #fff;
+            opacity: 0;
+        }
+
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const container = document.body;
+
+        function createFirework() {
+            const firework = document.createElement('div');
+            firework.className = 'firework';
+            
+            // Random position
+            const x = Math.random() * window.innerWidth;
+            const y = Math.random() * (window.innerHeight - 100) + 50;
+            
+            firework.style.left = x + 'px';
+            firework.style.top = y + 'px';
+
+            container.appendChild(firework);
+
+            // Animate firework
+            const animate = () => {
+                if (firework.offsetTop > y - 80) {
+                    requestAnimationFrame(animate);
+                    firework.style.top = (firework.offsetTop - 5) + 'px';
+                    firework.style.opacity = (firework.offsetLeft / window.innerWidth) * 0.3;
+                } else {
+                    setTimeout(() => explode(firework, x), 100);
+                }
+            };
+
+            animate();
+        }
+
+        function explode(firework, x) {
+            const colors = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff'];
+            
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                
+                // Random position relative to firework
+                const startX = x + Math.random() * 10 - 5;
+                const startY = firework.offsetTop - 40 + Math.random() * 20;
+
+                particle.style.left = startX + 'px';
+                particle.style.top = startY + 'px';
+                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                // Add gradient effect
+                particle.style.background = `radial-gradient(${colors[Math.floor(Math.random() * colors.length)]} 0%, 
+                    ${colors[Math.floor(Math.random() * colors.length)]} 15%)`;
+                
+                container.appendChild(particle);
+
+                const angle = (Math.random() - 0.5) * Math.PI;
+                const velocity = 4 + Math.random() * 2;
+
+                // Animate particle
+                let currentX = startX;
+                let currentY = startY;
+                
+                const animate = () => {
+                    if (currentY < window.innerHeight) {
+                        currentX += Math.cos(angle) * velocity;
+                        currentY += Math.sin(angle) * velocity;
+                        
+                        particle.style.left = currentX + 'px';
+                        particle.style.top = currentY + 'px';
+                        particle.style.opacity = 1 - (currentY / window.innerHeight);
+                        
+                        requestAnimationFrame(animate);
+                    } else {
+                        particle.remove();
+                    }
+                };
+
+                animate();
+            }
+
+            firework.remove();
+        }
+
+        // Create fireworks periodically
+        setInterval(createFirework, 500);
+
+        // Add click event to create fireworks on click
+        document.addEventListener('click', createFirework);
+    </script>
+</body>
+</html>

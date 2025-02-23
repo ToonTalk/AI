@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Large Integer Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Large Integer Calculator</h1>
+    
+    <p>Enter a mathematical expression that evaluates to an integer:</p>
+    <input type="text" id="expression" placeholder="e.g., 2**100 or factorial(10)">
+    <button onclick="evaluateExpression()">Evaluate</button>
+    <button onclick="clearInput()">Clear</button>
+
+    <div class="result" id="result">
+        <h3>Number of Digits:</h3>
+        <p id="digits"></p>
+        
+        <h3>Integer:</h3>
+        <pre id="integer"></pre>
+        
+        <h3>English Representation:</h3>
+        <p id="english"></p>
+    </div>
+
+    <script>
+        function evaluateExpression() {
+            try {
+                const expression = document.getElementById('expression').value;
+                // Use BigInt for large integer calculations
+                const result = evalBigInt(expression);
+                
+                if (typeof result !== 'bigint') {
+                    throw new Error("The result must be an integer");
+                }
+                
+                displayResult(result);
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        function evalBigInt(expr) {
+            // Define helper functions
+            const helpers = {
+                factorial(n) {
+                    let result = 1n;
+                    for (let i = 2n; i <= n; i++) {
+                        result *= i;
+                    }
+                    return result;
+                }
+            };
+            
+            try {
+                const wrappedExpr = `(function() { 
+                    ${Object.keys(helpers).map(k => `const ${k} = helpers.${k};`).join('\n')}
+                    return BigInt(${expr});
+                }).call(this, ${JSON.stringify(helpers)})`;
+                
+                const func = new Function(wrappedExpr);
+                return func();
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        function displayResult(number) {
+            const digitsCount = number.toString().length;
+            const englishNumber = numberToEnglish(number);
+            
+            document.getElementById('digits').textContent = digitsCount;
+            document.getElementById('integer').textContent = number.toLocaleString();
+            document.getElementById('english').textContent = englishNumber;
+        }
+
+        // Number to English converter (simplified version)
+        function numberToEnglish(n) {
+            const numbers = [
+                'Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven',
+                'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen',
+                'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'
+            ];
+            
+            const tens = [
+                '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy',
+                'Eighty', 'Ninety'
+            ];
+
+            function convertChunk(chunk) {
+                let result = '';
+                if (chunk >= 100n) {
+                    const hundred = Number(chunk / 100n);
+                    chunk %= 100n;
+                    result += numbers[hundred] + ' Hundred ';
+                }
+                
+                const ten = Number(chunk / 10n);
+                const one = Number(chunk % 10n);
+                if (chunk >= 20n) {
+                    result += tens[ten] + ' ';
+                } else if (chunk >= 10n) {
+                    result += numbers[Number(chunk)] + ' ';
+                    chunk %= 10n;
+                }
+                
+                if (one > 0 && ten !== 1) {
+                    result += numbers[one] + ' ';
+                }
+                
+                return result.trim();
+            }
+
+            let english = '';
+            const chunks = [
+                { divisor: 1000000000000n, label: 'Trillion' },
+                { divisor: 1000000000n, label: 'Billion' },
+                { divisor: 1000000n, label: 'Million' },
+                { divisor: 1000n, label: 'Thousand' }
+            ];
+
+            for (const chunk of chunks) {
+                const value = Math.floor(Number(n / chunk.divisor));
+                if (value > 0) {
+                    english += convertChunk(value) + ' ' + chunk.label + ' ';
+                    n %= chunk.divisor;
+                }
+            }
+
+            if (n > 0n) {
+                english += convertChunk(n);
+            }
+
+            return english.trim();
+        }
+
+        function clearInput() {
+            document.getElementById('expression').value = '';
+            document.getElementById('result').innerHTML = `
+                <h3>Number of Digits:</h3>
+                <p id="digits"></p>
+                
+                <h3>Integer:</h3>
+                <pre id="integer"></pre>
+                
+                <h3>English Representation:</h3>
+                <p id="english"></p>
+            `;
+        }
+    </script>
+</body>
+</html>
