@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Air Drawing Debugging Enhanced</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      position: relative;
+      background-color: #000; /* Black background for better visibility */
+    }
+    #videoElement {
+      position: absolute;
+      top: 0;
+      left: 0;
+      /* No width or height specified; matches natural size */
+      /* Removed transform for mirroring */
+    }
+    #canvasElement {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none; /* Allows interactions to pass through */
+      /* No CSS transformations */
+    }
+    /* Styling for Debugging Information */
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background-color: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      max-width: 300px;
+      overflow-y: auto;
+      max-height: 90vh;
+      color: #000; /* Black text for readability */
+    }
+    /* Styling for Bounding Box */
+    .bounding-box {
+      stroke: #00FF00;
+      stroke-width: 2;
+      fill: rgba(0, 255, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <!-- Information Panel -->
+  <div id="info">
+    <p id="status">Initializing...</p>
+  </div>
+  
+  <!-- Video Element to Display Webcam Feed -->
+  <video id="videoElement" autoplay playsinline></video>
+  
+  <!-- Canvas Element for Drawing and Visualization -->
+  <canvas id="canvasElement"></canvas>
+
+  <!-- TensorFlow.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0/dist/tf.min.js"></script>
+  
+  <!-- TensorFlow.js Handpose Model -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.min.js"></script>
+  
+  <script>
+    const video = document.getElementById('videoElement');
+    const canvas = document.getElementById('canvasElement');
+    const ctx = canvas.getContext('2d');
+    const statusText = document.getElementById('status');
+
+    let model = null;
+    let previousPosition = null;
+    let drawing = false;
+
+    // Initialize Webcam Video Stream
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false
+        });
+        video.srcObject = stream;
+        return new Promise((resolve) => {
+          video.onloadedmetadata = () => {
+            video.play();
+            console.log('Webcam video started.');
+            statusText.innerText = 'Webcam video started.';
+            
+            // Set canvas dimensions considering DPR
+            setCanvasDimensions();
+            resolve();
+          };
+        });
+      } catch (err) {
+        alert('Error accessing the camera: ' + err);
+        console.error('Camera access error:', err);
+        statusText.innerText = 'Error accessing the camera.';
+      }
+    }
+
+    // Set Canvas Dimensions Considering Device Pixel Ratio
+    function setCanvasDimensions() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = video.videoWidth * dpr;
+      canvas.height = video.videoHeight * dpr;
+      canvas.style.width = `${video.videoWidth}px`;
+      canvas.style.height = `${video.videoHeight}px`;
+      ctx.scale(dpr, dpr);
+      console.log(`Video Dimensions: ${video.videoWidth}x${video.videoHeight}`);
+      console.log(`Canvas Dimensions: ${canvas.width}x${canvas.height} (scaled by DPR: ${dpr})`);
+      statusText.innerText += `\nVideo Dimensions: ${video.videoWidth}x${video.videoHeight}`;
+      statusText.innerText += `\nCanvas Dimensions: ${canvas.width}x${canvas.height} (DPR: ${dpr})`;
+      console.log(`Device Pixel Ratio: ${dpr}`);
+      statusText.innerText += `\nDevice Pixel Ratio: ${dpr}`;
+    }
+
+    // Load the Handpose model
+    async function loadModel() {
+      try {
+        model = await handpose.load();
+        console.log('Handpose model loaded.');
+        statusText.innerText += `\nHandpose model loaded.`;
+      } catch (error) {
+        console.error('Error loading Handpose model:', error);
+        statusText.innerText += `\nError loading Handpose model.`;
+      }
+    }
+
+    // Get the index finger tip position
+    function getIndexFingerTip(predictions) {
+      if (predictions.length > 0) {
+        const landmarks = predictions[0].landmarks;
+        // Index finger tip is landmark 8
+        const indexFingerTip = landmarks[8];
+        return { x: indexFingerTip[0], y: indexFingerTip[1], landmarks };
+      }
+      return null;
+    }
+
+    // Function to draw landmarks for visualization
+    function drawLandmarks(landmarks) {
+      ctx.fillStyle = 'blue';
+      landmarks.forEach(point => {
+        ctx.beginPath();
+        ctx.arc(point[0], point[1], 5, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+    }
+
+    // Function to visualize finger position
+    function drawFingerPosition(x, y) {
+      ctx.fillStyle = 'red';
+      ctx.beginPath();
+      ctx.arc(x, y, 10, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    // Function to draw bounding box
+    function drawBoundingBox(boundingBox) {
+      const { topLeft, bottomRight } = boundingBox;
+      const width = bottomRight[0] - topLeft[0];
+      const height = bottomRight[1] - topLeft[1];
+      ctx.strokeStyle = 'green';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(topLeft[0], topLeft[1], width, height);
+    }
+
+    // Main Function to Start the Application
+    async function main() {
+      await initCamera();
+      await loadModel();
+      detectHands();
+    }
+
+    // Hand Detection and Visualization
+    async function detectHands() {
+      if (!model) {
+        requestAnimationFrame(detectHands);
+        return;
+      }
+
+      const predictions = await model.estimateHands(video, true);
+      console.log('Predictions:', predictions);
+
+      const fingerData = getIndexFingerTip(predictions);
+
+      // Clear previous drawings
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (fingerData) {
+        const { x, y, landmarks } = fingerData;
+
+        // Draw landmarks for debugging
+        drawLandmarks(landmarks);
+
+        // Draw bounding box if available
+        if (predictions[0].boundingBox) {
+          drawBoundingBox(predictions[0].boundingBox);
+        }
+
+        // Draw finger position
+        drawFingerPosition(x, y);
+
+        // Log all keypoints
+        landmarks.forEach((point, index) => {
+          console.log(`Keypoint ${index}: (${point[0]}, ${point[1]}, ${point[2]})`);
+        });
+
+        // Log finger position
+        console.log(`Finger Position: (${x}, ${y})`);
+        statusText.innerText += `\nFinger Position: (${x.toFixed(2)}, ${y.toFixed(2)})`;
+
+        // Check if finger position is within canvas bounds
+        if (x >= 0 && x <= video.videoWidth && y >= 0 && y <= video.videoHeight) {
+          if (previousPosition) {
+            const dx = x - previousPosition.x;
+            const dy = y - previousPosition.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Threshold to start drawing
+            if (distance > 5) {
+              drawing = true;
+              console.log('Drawing...');
+              statusText.innerText += `\nDrawing...`;
+            } else {
+              drawing = false;
+            }
+          }
+
+          if (drawing && previousPosition) {
+            ctx.beginPath();
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 5;
+            ctx.moveTo(previousPosition.x, previousPosition.y);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+          }
+
+          previousPosition = { x, y };
+        } else {
+          console.warn(`Finger position out of bounds: (${x}, ${y})`);
+          statusText.innerText += `\nFinger position out of bounds.`;
+          previousPosition = null;
+        }
+      } else {
+        statusText.innerText += `\nNo hand detected.`;
+        previousPosition = null;
+      }
+
+      // Limit the status text to prevent overflow
+      if (statusText.innerText.split('\n').length > 15) {
+        const lines = statusText.innerText.split('\n');
+        statusText.innerText = lines.slice(lines.length - 15).join('\n');
+      }
+
+      requestAnimationFrame(detectHands);
+    }
+
+    // Start the application
+    main();
+  </script>
+</body>
+</html>
