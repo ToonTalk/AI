@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Motion Painter</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            position: relative;
+            margin: 20px;
+        }
+        #video {
+            transform: scaleX(-1);
+            display: none;
+        }
+        #paintCanvas {
+            transform: scaleX(-1);
+            background: transparent;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 2;
+        }
+        #debugCanvas {
+            transform: scaleX(-1);
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        .controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        button {
+            margin: 5px;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        input[type="color"] {
+            margin: 5px;
+            width: 50px;
+            height: 30px;
+        }
+        input[type="range"] {
+            width: 100px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button id="clearBtn">Clear Canvas</button>
+        <input type="color" id="colorPicker" value="#ff0000">
+        <input type="range" id="brushSize" min="1" max="20" value="5">
+        <button id="toggleDebug">Toggle Debug View</button>
+    </div>
+    <div class="container">
+        <video id="video" width="640" height="480" autoplay></video>
+        <canvas id="paintCanvas" width="640" height="480"></canvas>
+        <canvas id="debugCanvas" width="640" height="480"></canvas>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const paintCanvas = document.getElementById('paintCanvas');
+        const debugCanvas = document.getElementById('debugCanvas');
+        const clearBtn = document.getElementById('clearBtn');
+        const colorPicker = document.getElementById('colorPicker');
+        const brushSize = document.getElementById('brushSize');
+        const toggleDebug = document.getElementById('toggleDebug');
+        
+        const paintCtx = paintCanvas.getContext('2d');
+        const debugCtx = debugCanvas.getContext('2d');
+        
+        let isDebugMode = false;
+        let previousPoint = null;
+        let motionThreshold = 20;
+        
+        // Initialize camera
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                video.srcObject = stream;
+                video.play();
+                
+                // Start motion detection once video is playing
+                video.onplaying = () => {
+                    detectMotion();
+                };
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Unable to access camera. Please ensure you have granted camera permissions.');
+            }
+        }
+
+        function detectMotion() {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = 640;
+            tempCanvas.height = 480;
+
+            function processFrame() {
+                tempCtx.drawImage(video, 0, 0, 640, 480);
+                const frame = tempCtx.getImageData(0, 0, 640, 480);
+                const centerX = Math.floor(frame.width / 2);
+                const centerY = Math.floor(frame.height / 2);
+                
+                // Scan for movement in the center area
+                let maxDiff = 0;
+                let maxPoint = { x: centerX, y: centerY };
+                
+                for(let y = centerY - 100; y < centerY + 100; y += 2) {
+                    for(let x = centerX - 100; x < centerX + 100; x += 2) {
+                        const idx = (y * frame.width + x) * 4;
+                        const brightness = (frame.data[idx] + frame.data[idx + 1] + frame.data[idx + 2]) / 3;
+                        
+                        if(brightness > 200) { // Detect bright spots (like a finger)
+                            const diff = Math.abs(x - centerX) + Math.abs(y - centerY);
+                            if(diff > maxDiff) {
+                                maxDiff = diff;
+                                maxPoint = { x, y };
+                            }
+                        }
+                    }
+                }
+                
+                if(maxDiff > motionThreshold) {
+                    if(previousPoint) {
+                        paintCtx.beginPath();
+                        paintCtx.moveTo(previousPoint.x, previousPoint.y);
+                        paintCtx.lineTo(maxPoint.x, maxPoint.y);
+                        paintCtx.strokeStyle = colorPicker.value;
+                        paintCtx.lineWidth = brushSize.value;
+                        paintCtx.lineCap = 'round';
+                        paintCtx.stroke();
+                    }
+                    previousPoint = maxPoint;
+                } else {
+                    previousPoint = null;
+                }
+                
+                // Debug view
+                if(isDebugMode) {
+                    debugCtx.drawImage(video, 0, 0, 640, 480);
+                    debugCtx.fillStyle = 'red';
+                    debugCtx.beginPath();
+                    debugCtx.arc(maxPoint.x, maxPoint.y, 5, 0, Math.PI * 2);
+                    debugCtx.fill();
+                } else {
+                    debugCtx.clearRect(0, 0, 640, 480);
+                }
+                
+                requestAnimationFrame(processFrame);
+            }
+            
+            processFrame();
+        }
+
+        // Event Listeners
+        clearBtn.addEventListener('click', () => {
+            paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+        });
+
+        toggleDebug.addEventListener('click', () => {
+            isDebugMode = !isDebugMode;
+            debugCanvas.style.opacity = isDebugMode ? '0.5' : '0';
+        });
+
+        // Start the application
+        initCamera();
+    </script>
+</body>
+</html>
