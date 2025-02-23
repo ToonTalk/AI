@@ -27,7 +27,6 @@ async function setupWebcam() {
         });
     } catch (err) {
         console.error('Webcam setup error:', err.name, err.message);
-        // Handle specific errors
         switch (err.name) {
             case 'NotAllowedError':
                 alert('Camera access was denied. Please check your browser permissions.');
@@ -65,13 +64,13 @@ async function detectFingerDirection(predictions) {
 
         return directionVector;
     }
-
     return null;
 }
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 let drawing = false;
+let offCounter = 0; // Counts frames where the finger is not in drawing position
 
 function draw(x, y, color) {
     if (!drawing) return;
@@ -111,7 +110,6 @@ function extractColor(transcript) {
             return word;
         }
     }
-
     return null;
 }
 
@@ -124,17 +122,35 @@ async function mainLoop(model) {
         const x = indexFingerTip[0];
         const y = indexFingerTip[1];
 
-        if (directionVector.y < 0) {
-            // Finger is pointing upwards, start drawing
+        // Define thresholds: lower threshold to start drawing and a higher threshold to stop drawing
+        const thresholdStart = -10;  // More negative means finger clearly pointing up
+        const thresholdStop = -5;    // Less negative means less upward
+
+        // If not already drawing, check if we should start
+        if (!drawing && directionVector.y < thresholdStart) {
             drawing = true;
-            draw(x, y, currentColor);
+            offCounter = 0;
+        }
+
+        // If drawing, check if we should continue or eventually stop
+        if (drawing) {
+            if (directionVector.y > thresholdStop) {
+                offCounter++; // Increase counter if finger isn’t clearly pointing up
+            } else {
+                offCounter = 0; // Reset counter when finger is in proper position
+            }
+
+            // Only stop drawing if the condition persists for a few frames
+            if (offCounter > 3) {
+                drawing = false;
+                ctx.beginPath();
+            } else {
+                draw(x, y, currentColor);
+            }
         } else {
-            // Finger is not pointing upwards, stop drawing
-            drawing = false;
             ctx.beginPath();
         }
     }
-
     requestAnimationFrame(() => mainLoop(model));
 }
 
@@ -150,7 +166,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 currentColor = extractedColor;
             }
         
-            // Update the content of the last spoken and current color elements
             document.getElementById('last-spoken').textContent = `Last spoken: ${transcript}`;
             document.getElementById('current-color').textContent = `Current color: ${currentColor}`;
         };
@@ -159,12 +174,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     await setupWebcam();
     mainLoop(model);
 });
-
-
-
-
-
-
-
-
-
