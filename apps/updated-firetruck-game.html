@@ -1,0 +1,2462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D City Builder Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            user-select: none;
+        }
+        
+        #gameUI {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            user-select: none;
+            display: none;
+        }
+        
+        #missionInfo {
+            position: fixed;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background-color: rgba(255, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-align: center;
+            display: none;
+            font-weight: bold;
+        }
+        
+        #fireBar {
+            width: 100%;
+            height: 10px;
+            background-color: #555;
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        
+        #fireProgress {
+            height: 100%;
+            background-color: rgb(255, 50, 0);
+            width: 100%;
+            transition: width 0.3s;
+        }
+        #buildingOptions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .buildingOption {
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .buildingOption:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+        .selected {
+            background-color: rgba(0, 255, 0, 0.4);
+        }
+        #actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background-color: rgba(0, 120, 255, 0.7);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: rgba(0, 120, 255, 0.9);
+        }
+        #modeSwitch {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        #instructions {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas"></div>
+    
+    <div id="ui">
+        <h2>City Builder</h2>
+        <div id="buildingOptions">
+            <div class="buildingOption selected" data-type="skyscraper">Skyscraper</div>
+            <div class="buildingOption" data-type="house">House</div>
+            <div class="buildingOption" data-type="store">Store</div>
+            <div class="buildingOption" data-type="factory">Factory</div>
+            <div class="buildingOption" data-type="park">Park</div>
+        </div>
+        <div id="actions">
+            <button id="clearBtn">Clear All</button>
+            <button id="randomCity">Random City</button>
+        </div>
+    </div>
+    
+    <div id="modeSwitch">🔄 Switch to Firetruck Mode</div>
+    
+    <div id="instructions">
+        <h3>Instructions:</h3>
+        <p><strong>Build Mode:</strong> Click on the ground to place buildings. Select different building types from the panel.</p>
+        <p><strong>Firetruck Mode:</strong> Use WASD to drive and mouse to look around. Press SPACE to spray water on fires.</p>
+        <p>Switch between modes using the button at the bottom.</p>
+    </div>
+    
+    <div id="gameUI">
+        <h3>Fire Rescue Mission</h3>
+        <p>Time: <span id="timeDisplay">3:00</span></p>
+        <p>Score: <span id="scoreDisplay">0</span></p>
+        <p>Fires extinguished: <span id="firesDisplay">0</span></p>
+    </div>
+    
+    <div id="missionInfo">
+        <p>FIRE EMERGENCY! 🔥</p>
+        <div id="fireBar"><div id="fireProgress"></div></div>
+    </div>
+
+    <script>
+window.addEventListener('load', function() {
+    console.log('Window fully loaded - initializing game...');
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas').appendChild(renderer.domElement);
+
+        // Setup initial lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Brighter ambient light
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffee, 1.0); // Brighter sun
+        sunLight.position.set(50, 100, 50);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 500;
+        sunLight.shadow.camera.left = -100;
+        sunLight.shadow.camera.right = 100;
+        sunLight.shadow.camera.top = 100;
+        sunLight.shadow.camera.bottom = -100;
+        scene.add(sunLight);
+
+        // Ground
+        const groundGeometry = new THREE.PlaneGeometry(500, 500);
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x3a8c3a,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Grid for positioning buildings
+        const gridSize = 500;
+        const gridDivisions = 50;
+        const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x000000, 0x444444);
+        gridHelper.position.y = 0.01; // Slightly above ground to avoid z-fighting
+        scene.add(gridHelper);
+
+        // Road system
+        const roadWidth = 5;
+        const createRoad = (startX, startZ, endX, endZ) => {
+            const roadGeometry = new THREE.PlaneGeometry(
+                Math.abs(endX - startX) || roadWidth, 
+                Math.abs(endZ - startZ) || roadWidth
+            );
+            const roadMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x333333,
+                roughness: 0.9
+            });
+            const road = new THREE.Mesh(roadGeometry, roadMaterial);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(
+                (startX + endX) / 2,
+                0.02, // Slightly above ground
+                (startZ + endZ) / 2
+            );
+            road.receiveShadow = true;
+            scene.add(road);
+            
+            // Add yellow lines
+            if (endX - startX !== 0) {
+                // Horizontal road
+                const lineGeometry = new THREE.PlaneGeometry(Math.abs(endX - startX), 0.2);
+                const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                const line = new THREE.Mesh(lineGeometry, lineMaterial);
+                line.rotation.x = -Math.PI / 2;
+                line.position.set((startX + endX) / 2, 0.03, (startZ + endZ) / 2);
+                scene.add(line);
+            } else {
+                // Vertical road
+                const lineGeometry = new THREE.PlaneGeometry(0.2, Math.abs(endZ - startZ));
+                const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                const line = new THREE.Mesh(lineGeometry, lineMaterial);
+                line.rotation.x = -Math.PI / 2;
+                line.position.set((startX + endX) / 2, 0.03, (startZ + endZ) / 2);
+                scene.add(line);
+            }
+            
+            return road;
+        };
+
+        // Create main roads
+        const roads = [];
+        for (let i = -200; i <= 200; i += 50) {
+            roads.push(createRoad(-200, i, 200, i)); // Horizontal roads
+            roads.push(createRoad(i, -200, i, 200)); // Vertical roads
+        }
+
+        // Building geometries
+        const buildingGeometries = {
+            skyscraper: () => {
+                const group = new THREE.Group();
+                
+                // Main building
+                const baseHeight = 30 + Math.random() * 40;
+                const baseGeometry = new THREE.BoxGeometry(10, baseHeight, 10);
+                const baseMaterial = new THREE.MeshStandardMaterial({ 
+                    color: new THREE.Color(0.3 + Math.random() * 0.2, 0.3 + Math.random() * 0.2, 0.4 + Math.random() * 0.3),
+                    roughness: 0.2,
+                    metalness: 0.8
+                });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.y = baseHeight / 2;
+                base.castShadow = true;
+                base.receiveShadow = true;
+                group.add(base);
+                
+                // Windows
+                const windowMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x88ccff,
+                    roughness: 0.1,
+                    metalness: 0.9,
+                    emissive: 0x112233
+                });
+                
+                // Create window rows
+                const windowSize = 0.8;
+                const windowDepth = 0.1;
+                const windowsPerSide = 3;
+                const floors = Math.floor(baseHeight / 3);
+                
+                for (let floor = 0; floor < floors; floor++) {
+                    const yPos = 2 + floor * 3;
+                    
+                    // Create windows for each side of the building
+                    for (let side = 0; side < 4; side++) {
+                        for (let w = 0; w < windowsPerSide; w++) {
+                            const windowGeometry = new THREE.BoxGeometry(windowSize, windowSize, windowDepth);
+                            const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                            
+                            // Position according to which side
+                            const offset = -4 + (w + 1) * 2;
+                            
+                            if (side === 0) {
+                                window.position.set(offset, yPos, 5 + windowDepth/2);
+                            } else if (side === 1) {
+                                window.position.set(5 + windowDepth/2, yPos, -offset);
+                                window.rotation.y = Math.PI / 2;
+                            } else if (side === 2) {
+                                window.position.set(-offset, yPos, -5 - windowDepth/2);
+                                window.rotation.y = Math.PI;
+                            } else {
+                                window.position.set(-5 - windowDepth/2, yPos, offset);
+                                window.rotation.y = -Math.PI / 2;
+                            }
+                            
+                            group.add(window);
+                        }
+                    }
+                }
+                
+                // Roof structures
+                if (Math.random() > 0.5) {
+                    const roofStructureGeometry = new THREE.BoxGeometry(6, 10, 6);
+                    const roofStructureMaterial = new THREE.MeshStandardMaterial({ 
+                        color: baseMaterial.color,
+                        roughness: 0.4,
+                        metalness: 0.6
+                    });
+                    const roofStructure = new THREE.Mesh(roofStructureGeometry, roofStructureMaterial);
+                    roofStructure.position.y = baseHeight + 5;
+                    roofStructure.castShadow = true;
+                    group.add(roofStructure);
+                    
+                    // Antenna
+                    const antennaGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10, 8);
+                    const antennaMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x888888,
+                        roughness: 0.4,
+                        metalness: 0.8 
+                    });
+                    const antenna = new THREE.Mesh(antennaGeometry, antennaMaterial);
+                    antenna.position.y = baseHeight + 15;
+                    antenna.castShadow = true;
+                    group.add(antenna);
+                }
+                
+                return group;
+            },
+            house: () => {
+                const group = new THREE.Group();
+                
+                // Main house
+                const houseWidth = 8 + Math.random() * 4;
+                const houseDepth = 8 + Math.random() * 4;
+                const houseHeight = 4 + Math.random() * 2;
+                
+                const baseGeometry = new THREE.BoxGeometry(houseWidth, houseHeight, houseDepth);
+                const baseMaterial = new THREE.MeshStandardMaterial({ 
+                    color: new THREE.Color(
+                        0.8 + Math.random() * 0.2, 
+                        0.7 + Math.random() * 0.3, 
+                        0.6 + Math.random() * 0.4
+                    ),
+                    roughness: 0.7,
+                    metalness: 0.1
+                });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.y = houseHeight / 2;
+                base.castShadow = true;
+                base.receiveShadow = true;
+                group.add(base);
+                
+                // Roof
+                const roofHeight = 2 + Math.random() * 2;
+                const roofGeometry = new THREE.ConeGeometry(
+                    Math.sqrt(houseWidth * houseWidth + houseDepth * houseDepth) / 2 + 1, 
+                    roofHeight, 
+                    4
+                );
+                const roofMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x883333,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.y = houseHeight + roofHeight / 2;
+                roof.rotation.y = Math.PI / 4;
+                roof.castShadow = true;
+                group.add(roof);
+                
+                // Door
+                const doorWidth = 1.5;
+                const doorHeight = 2.2;
+                const doorGeometry = new THREE.PlaneGeometry(doorWidth, doorHeight);
+                const doorMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x663311,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                const door = new THREE.Mesh(doorGeometry, doorMaterial);
+                door.position.set(0, doorHeight / 2, houseDepth / 2 + 0.01);
+                group.add(door);
+                
+                // Windows
+                const windowWidth = 1.2;
+                const windowHeight = 1.2;
+                const windowGeometry = new THREE.PlaneGeometry(windowWidth, windowHeight);
+                const windowMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xaaccee,
+                    roughness: 0.2,
+                    metalness: 0.8
+                });
+                
+                // Front windows
+                const frontWindow1 = new THREE.Mesh(windowGeometry, windowMaterial);
+                frontWindow1.position.set(-houseWidth / 4, houseHeight / 2, houseDepth / 2 + 0.01);
+                group.add(frontWindow1);
+                
+                const frontWindow2 = new THREE.Mesh(windowGeometry, windowMaterial);
+                frontWindow2.position.set(houseWidth / 4, houseHeight / 2, houseDepth / 2 + 0.01);
+                group.add(frontWindow2);
+                
+                // Side windows
+                const sideWindow1 = new THREE.Mesh(windowGeometry, windowMaterial);
+                sideWindow1.position.set(houseWidth / 2 + 0.01, houseHeight / 2, 0);
+                sideWindow1.rotation.y = Math.PI / 2;
+                group.add(sideWindow1);
+                
+                const sideWindow2 = new THREE.Mesh(windowGeometry, windowMaterial);
+                sideWindow2.position.set(-houseWidth / 2 - 0.01, houseHeight / 2, 0);
+                sideWindow2.rotation.y = -Math.PI / 2;
+                group.add(sideWindow2);
+                
+                return group;
+            },
+            store: () => {
+                const group = new THREE.Group();
+                
+                // Main building
+                const storeWidth = 12;
+                const storeDepth = 10;
+                const storeHeight = 6;
+                
+                const baseGeometry = new THREE.BoxGeometry(storeWidth, storeHeight, storeDepth);
+                const baseMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xdddddd,
+                    roughness: 0.6,
+                    metalness: 0.3
+                });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.y = storeHeight / 2;
+                base.castShadow = true;
+                base.receiveShadow = true;
+                group.add(base);
+                
+                // Store front glass
+                const glassFrontGeometry = new THREE.PlaneGeometry(storeWidth - 2, storeHeight - 2);
+                const glassFrontMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x88ccff,
+                    transparent: true,
+                    opacity: 0.7,
+                    roughness: 0.1,
+                    metalness: 0.9
+                });
+                const glassFront = new THREE.Mesh(glassFrontGeometry, glassFrontMaterial);
+                glassFront.position.set(0, storeHeight / 2, storeDepth / 2 + 0.01);
+                group.add(glassFront);
+                
+                // Store sign
+                const signGeometry = new THREE.BoxGeometry(storeWidth + 1, 1.5, 0.5);
+                const signMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x3333cc,
+                    roughness: 0.3,
+                    metalness: 0.7,
+                    emissive: 0x0000aa,
+                    emissiveIntensity: 0.2
+                });
+                const sign = new THREE.Mesh(signGeometry, signMaterial);
+                sign.position.set(0, storeHeight + 0.75, storeDepth / 2 - 1);
+                sign.castShadow = true;
+                group.add(sign);
+                
+                // Roof
+                const roofGeometry = new THREE.BoxGeometry(storeWidth + 2, 0.5, storeDepth + 2);
+                const roofMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x333333,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.y = storeHeight + 0.25;
+                roof.castShadow = true;
+                group.add(roof);
+                
+                // Entrance
+                const entranceGeometry = new THREE.BoxGeometry(3, storeHeight / 2, 1);
+                const entranceMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xaaaaaa,
+                    roughness: 0.4,
+                    metalness: 0.6
+                });
+                const entrance = new THREE.Mesh(entranceGeometry, entranceMaterial);
+                entrance.position.set(0, storeHeight / 4, storeDepth / 2 + 0.5);
+                entrance.castShadow = true;
+                group.add(entrance);
+                
+                return group;
+            },
+            factory: () => {
+                const group = new THREE.Group();
+                
+                // Main building
+                const factoryWidth = 18;
+                const factoryDepth = 18;
+                const factoryHeight = 10;
+                
+                const baseGeometry = new THREE.BoxGeometry(factoryWidth, factoryHeight, factoryDepth);
+                const baseMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x999999,
+                    roughness: 0.7,
+                    metalness: 0.2
+                });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.y = factoryHeight / 2;
+                base.castShadow = true;
+                base.receiveShadow = true;
+                group.add(base);
+                
+                // Factory roof
+                const roofGeometry = new THREE.BoxGeometry(factoryWidth + 1, 1, factoryDepth + 1);
+                const roofMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x555555,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+                roof.position.y = factoryHeight + 0.5;
+                roof.castShadow = true;
+                group.add(roof);
+                
+                // Smokestacks
+                const createSmokestack = (x, z) => {
+                    const height = 5 + Math.random() * 3;
+                    const stackGeometry = new THREE.CylinderGeometry(1, 1.2, height, 8);
+                    const stackMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x773333,
+                        roughness: 0.8,
+                        metalness: 0.2
+                    });
+                    const stack = new THREE.Mesh(stackGeometry, stackMaterial);
+                    stack.position.set(x, factoryHeight + height / 2, z);
+                    stack.castShadow = true;
+                    return stack;
+                };
+                
+                group.add(createSmokestack(factoryWidth / 3, factoryDepth / 4));
+                group.add(createSmokestack(-factoryWidth / 3, factoryDepth / 4));
+                
+                // Windows
+                const windowRows = 2;
+                const windowsPerRow = 3;
+                const windowSize = 1.5;
+                const windowDepth = 0.1;
+                const windowMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x88aacc,
+                    roughness: 0.2,
+                    metalness: 0.5
+                });
+                
+                // Add windows to each side
+                for (let side = 0; side < 4; side++) {
+                    for (let row = 0; row < windowRows; row++) {
+                        for (let w = 0; w < windowsPerRow; w++) {
+                            const windowGeometry = new THREE.BoxGeometry(windowSize, windowSize, windowDepth);
+                            const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                            
+                            const xSpacing = factoryWidth / (windowsPerRow + 1);
+                            const yPos = 3 + row * 4;
+                            const xPos = -factoryWidth / 2 + xSpacing * (w + 1);
+                            
+                            if (side === 0) {
+                                window.position.set(xPos, yPos, factoryDepth / 2 + windowDepth / 2);
+                            } else if (side === 1) {
+                                window.position.set(factoryWidth / 2 + windowDepth / 2, yPos, -xPos);
+                                window.rotation.y = Math.PI / 2;
+                            } else if (side === 2) {
+                                window.position.set(-xPos, yPos, -factoryDepth / 2 - windowDepth / 2);
+                                window.rotation.y = Math.PI;
+                            } else {
+                                window.position.set(-factoryWidth / 2 - windowDepth / 2, yPos, xPos);
+                                window.rotation.y = -Math.PI / 2;
+                            }
+                            
+                            group.add(window);
+                        }
+                    }
+                }
+                
+                // Loading bay
+                const bayGeometry = new THREE.BoxGeometry(factoryWidth / 2, factoryHeight / 2, 2);
+                const bayMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x555555,
+                    roughness: 0.9,
+                    metalness: 0.1
+                });
+                const bay = new THREE.Mesh(bayGeometry, bayMaterial);
+                bay.position.set(0, factoryHeight / 4, factoryDepth / 2 + 1);
+                bay.castShadow = true;
+                group.add(bay);
+                
+                return group;
+            },
+            park: () => {
+                const group = new THREE.Group();
+                
+                // Ground
+                const groundSize = 20;
+                const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x338833, 
+                    roughness: 0.8,
+                    metalness: 0
+                });
+                const parkGround = new THREE.Mesh(groundGeometry, groundMaterial);
+                parkGround.rotation.x = -Math.PI / 2;
+                parkGround.position.y = 0.01;
+                parkGround.receiveShadow = true;
+                group.add(parkGround);
+                
+                // Walkways
+                const walkwayWidth = 2;
+                
+                const horizontalWalkwayGeometry = new THREE.PlaneGeometry(groundSize, walkwayWidth);
+                const verticalWalkwayGeometry = new THREE.PlaneGeometry(walkwayWidth, groundSize);
+                const walkwayMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xddddcc,
+                    roughness: 0.9,
+                    metalness: 0
+                });
+                
+                const horizontalWalkway = new THREE.Mesh(horizontalWalkwayGeometry, walkwayMaterial);
+                horizontalWalkway.rotation.x = -Math.PI / 2;
+                horizontalWalkway.position.y = 0.02;
+                horizontalWalkway.receiveShadow = true;
+                group.add(horizontalWalkway);
+                
+                const verticalWalkway = new THREE.Mesh(verticalWalkwayGeometry, walkwayMaterial);
+                verticalWalkway.rotation.x = -Math.PI / 2;
+                verticalWalkway.position.y = 0.02;
+                verticalWalkway.receiveShadow = true;
+                group.add(verticalWalkway);
+                
+                // Central area
+                const centralAreaSize = 6;
+                const centralGeometry = new THREE.CircleGeometry(centralAreaSize / 2, 32);
+                const centralMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xeeeedd,
+                    roughness: 0.9,
+                    metalness: 0
+                });
+                const centralArea = new THREE.Mesh(centralGeometry, centralMaterial);
+                centralArea.rotation.x = -Math.PI / 2;
+                centralArea.position.y = 0.03;
+                centralArea.receiveShadow = true;
+                group.add(centralArea);
+                
+                // Trees
+                const treePositions = [
+                    [-groundSize / 4, -groundSize / 4],
+                    [groundSize / 4, -groundSize / 4],
+                    [-groundSize / 4, groundSize / 4],
+                    [groundSize / 4, groundSize / 4]
+                ];
+                
+                treePositions.forEach(pos => {
+                    const tree = createTree();
+                    tree.position.set(pos[0], 0, pos[1]);
+                    group.add(tree);
+                });
+                
+                // Benches
+                const benchPositions = [
+                    [0, -centralAreaSize / 2 - 1, 0],
+                    [0, centralAreaSize / 2 + 1, Math.PI],
+                    [-centralAreaSize / 2 - 1, 0, Math.PI / 2],
+                    [centralAreaSize / 2 + 1, 0, -Math.PI / 2]
+                ];
+                
+                benchPositions.forEach(pos => {
+                    const bench = createBench();
+                    bench.position.set(pos[0], 0, pos[1]);
+                    bench.rotation.y = pos[2];
+                    group.add(bench);
+                });
+                
+                return group;
+            }
+        };
+
+        // Helper function to create a tree
+        function createTree() {
+            const treeGroup = new THREE.Group();
+            
+            // Tree trunk
+            const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 3, 8);
+            const trunkMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8B4513,
+                roughness: 0.9,
+                metalness: 0.1
+            });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.y = 1.5;
+            trunk.castShadow = true;
+            treeGroup.add(trunk);
+            
+            // Tree foliage
+            const foliageGeometry = new THREE.SphereGeometry(2.5, 8, 8);
+            const foliageMaterial = new THREE.MeshStandardMaterial({
+                color: 0x228B22,
+                roughness: 0.8,
+                metalness: 0
+            });
+            const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+            foliage.position.y = 4.5;
+            foliage.castShadow = true;
+            treeGroup.add(foliage);
+            
+            return treeGroup;
+        }
+        
+        // Create a firetruck for drive mode
+        function createFiretruck() {
+            const truckGroup = new THREE.Group();
+            
+            // Truck chassis
+            const chassisGeometry = new THREE.BoxGeometry(8, 1.5, 2.5);
+            const chassisMaterial = new THREE.MeshStandardMaterial({
+                color: 0xdd0000,
+                roughness: 0.3,
+                metalness: 0.7
+            });
+            const chassis = new THREE.Mesh(chassisGeometry, chassisMaterial);
+            chassis.position.y = 1.25;
+            chassis.castShadow = true;
+            truckGroup.add(chassis);
+            
+            // Truck cabin
+            const cabinGeometry = new THREE.BoxGeometry(2.5, 1.8, 2.4);
+            const cabinMaterial = new THREE.MeshStandardMaterial({
+                color: 0xdd0000,
+                roughness: 0.3,
+                metalness: 0.7
+            });
+            const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+            cabin.position.set(-2.5, 2.15, 0);
+            cabin.castShadow = true;
+            truckGroup.add(cabin);
+            
+            // Cabin windows
+            const windowMaterial = new THREE.MeshStandardMaterial({
+                color: 0x88ccff,
+                roughness: 0.1,
+                metalness: 0.9,
+                transparent: true,
+                opacity: 0.7
+            });
+            
+            // Windshield
+            const windshieldGeometry = new THREE.PlaneGeometry(2, 1.4);
+            const windshield = new THREE.Mesh(windshieldGeometry, windowMaterial);
+            windshield.position.set(-3.76, 2.3, 0);
+            windshield.rotation.y = Math.PI / 2;
+            truckGroup.add(windshield);
+            
+            // Side windows
+            const sideWindowGeometry = new THREE.PlaneGeometry(2, 1.2);
+            const leftWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+            leftWindow.position.set(-2.5, 2.3, 1.21);
+            truckGroup.add(leftWindow);
+            
+            const rightWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+            rightWindow.position.set(-2.5, 2.3, -1.21);
+            rightWindow.rotation.y = Math.PI;
+            truckGroup.add(rightWindow);
+            
+            // Equipment section
+            const equipGeometry = new THREE.BoxGeometry(4.5, 2.5, 2.4);
+            const equipMaterial = new THREE.MeshStandardMaterial({
+                color: 0xdd0000,
+                roughness: 0.4,
+                metalness: 0.6
+            });
+            const equipment = new THREE.Mesh(equipGeometry, equipMaterial);
+            equipment.position.set(1, 2.5, 0);
+            equipment.castShadow = true;
+            truckGroup.add(equipment);
+            
+            // Equipment details - ladder rack on top
+            const ladderRackGeometry = new THREE.BoxGeometry(4, 0.2, 2);
+            const ladderRackMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const ladderRack = new THREE.Mesh(ladderRackGeometry, ladderRackMaterial);
+            ladderRack.position.set(1, 3.8, 0);
+            ladderRack.castShadow = true;
+            truckGroup.add(ladderRack);
+            
+            // Ladder
+            const ladderGeometry = new THREE.BoxGeometry(5, 0.1, 1);
+            const ladderMaterial = new THREE.MeshStandardMaterial({
+                color: 0xaaaaaa,
+                roughness: 0.5,
+                metalness: 0.6
+            });
+            const ladder = new THREE.Mesh(ladderGeometry, ladderMaterial);
+            ladder.position.set(1, 3.95, 0);
+            ladder.castShadow = true;
+            truckGroup.add(ladder);
+            
+            // Ladder rungs
+            for (let i = -2; i <= 2; i += 0.5) {
+                const rungGeometry = new THREE.BoxGeometry(0.1, 0.05, 1);
+                const rung = new THREE.Mesh(rungGeometry, ladderMaterial);
+                rung.position.set(i, 3.95, 0);
+                truckGroup.add(rung);
+            }
+            
+            // Equipment compartment doors
+            const doorMaterial = new THREE.MeshStandardMaterial({
+                color: 0xbb0000,
+                roughness: 0.5,
+                metalness: 0.5
+            });
+            
+            // Side compartments
+            for (let x = -0.5; x <= 2.5; x += 1.5) {
+                const doorGeometry = new THREE.PlaneGeometry(1.2, 1.8);
+                
+                const leftDoor = new THREE.Mesh(doorGeometry, doorMaterial);
+                leftDoor.position.set(x, 2.5, 1.21);
+                truckGroup.add(leftDoor);
+                
+                const rightDoor = new THREE.Mesh(doorGeometry, doorMaterial);
+                rightDoor.position.set(x, 2.5, -1.21);
+                rightDoor.rotation.y = Math.PI;
+                truckGroup.add(rightDoor);
+            }
+            
+            // Truck wheels - bigger than standard car
+            const wheelGeometry = new THREE.CylinderGeometry(0.6, 0.6, 0.5, 16);
+            const wheelMaterial = new THREE.MeshStandardMaterial({
+                color: 0x111111,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            
+            const wheelPositions = [
+                [-2.5, 0.6, -1.4], // front-left
+                [-2.5, 0.6, 1.4],  // front-right
+                [1.5, 0.6, -1.4],  // middle-left
+                [1.5, 0.6, 1.4],   // middle-right
+                [3.0, 0.6, -1.4],  // back-left
+                [3.0, 0.6, 1.4]    // back-right
+            ];
+            
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.position.set(pos[0], pos[1], pos[2]);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.castShadow = true;
+                truckGroup.add(wheel);
+            });
+            
+            // Emergency lights
+            const createEmergencyLight = (x, y, z, color) => {
+                const lightGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.4);
+                const lightMaterial = new THREE.MeshStandardMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 1
+                });
+                const light = new THREE.Mesh(lightGeometry, lightMaterial);
+                light.position.set(x, y, z);
+                return light;
+            };
+            
+            // Light bar on top
+            const lightBarGeometry = new THREE.BoxGeometry(1.5, 0.3, 2);
+            const lightBarMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.5,
+                metalness: 0.7
+            });
+            const lightBar = new THREE.Mesh(lightBarGeometry, lightBarMaterial);
+            lightBar.position.set(-2.5, 3.2, 0);
+            truckGroup.add(lightBar);
+            
+            // Red and blue emergency lights
+            for (let i = -0.6; i <= 0.6; i += 0.4) {
+                truckGroup.add(createEmergencyLight(-2.5, 3.4, i, i < 0 ? 0xff0000 : 0x0000ff));
+            }
+            
+            // Additional lights on front
+            truckGroup.add(createEmergencyLight(-3.8, 2.8, -0.8, 0xff0000));
+            truckGroup.add(createEmergencyLight(-3.8, 2.8, 0.8, 0x0000ff));
+            
+            // Water cannon
+            const cannonBaseGeometry = new THREE.CylinderGeometry(0.4, 0.5, 0.5, 8);
+            const cannonBaseMaterial = new THREE.MeshStandardMaterial({
+                color: 0x666666,
+                roughness: 0.5,
+                metalness: 0.8
+            });
+            const cannonBase = new THREE.Mesh(cannonBaseGeometry, cannonBaseMaterial);
+            cannonBase.position.set(1, 4.1, 0);
+            truckGroup.add(cannonBase);
+            
+            const cannonGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1.2, 8);
+            const cannon = new THREE.Mesh(cannonGeometry, cannonBaseMaterial);
+            cannon.position.set(1, 4.6, 0);
+            cannon.rotation.x = -Math.PI / 6; // Tilt upward
+            truckGroup.add(cannon);
+            
+            // Headlights
+            const headlightGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+            const headlightMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffcc,
+                emissive: 0xffffcc,
+                emissiveIntensity: 1
+            });
+            
+            const leftHeadlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            leftHeadlight.position.set(-3.8, 1.5, -0.8);
+            truckGroup.add(leftHeadlight);
+            
+            const rightHeadlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            rightHeadlight.position.set(-3.8, 1.5, 0.8);
+            truckGroup.add(rightHeadlight);
+            
+            // Add spotlights from the headlights
+            const leftLight = new THREE.SpotLight(0xffffcc, 0.7);
+            leftLight.position.set(-3.8, 1.5, -0.8);
+            leftLight.target.position.set(-10, 0, -3);
+            leftLight.angle = Math.PI / 8;
+            leftLight.penumbra = 0.2;
+            leftLight.castShadow = true;
+            truckGroup.add(leftLight);
+            truckGroup.add(leftLight.target);
+            
+            const rightLight = new THREE.SpotLight(0xffffcc, 0.7);
+            rightLight.position.set(-3.8, 1.5, 0.8);
+            rightLight.target.position.set(-10, 0, 3);
+            rightLight.angle = Math.PI / 8;
+            rightLight.penumbra = 0.2;
+            rightLight.castShadow = true;
+            truckGroup.add(rightLight);
+            truckGroup.add(rightLight.target);
+            
+            // Water particles group
+            const waterParticlesGroup = new THREE.Group();
+            waterParticlesGroup.position.set(2, 4.6, 0);
+            waterParticlesGroup.visible = false;
+            truckGroup.add(waterParticlesGroup);
+            
+            // Add the water particles
+            const particleMaterial = new THREE.MeshStandardMaterial({
+                color: 0x88ccff,
+                transparent: true,
+                opacity: 0.7
+            });
+            
+            for (let i = 0; i < 30; i++) {
+                const size = 0.05 + Math.random() * 0.1;
+                const particleGeometry = new THREE.SphereGeometry(size, 8, 8);
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                // Position particles in a conical spray pattern
+                const distance = 1 + Math.random() * 10;
+                const spread = Math.random() * 1 - 0.5;
+                
+                particle.position.set(
+                    distance,
+                    distance * Math.sin(-Math.PI / 6) + spread,
+                    spread
+                );
+                
+                waterParticlesGroup.add(particle);
+            }
+            
+            // Store the water particles for animation
+            truckGroup.userData.waterParticles = waterParticlesGroup;
+            
+            return truckGroup;
+        }
+        
+        // Create a regular car (for traffic)
+        function createTrafficCar(color = 0xff0000) {
+            const carGroup = new THREE.Group();
+            
+            // Car body
+            const bodyGeometry = new THREE.BoxGeometry(4, 1.2, 2);
+            const bodyMaterial = new THREE.MeshStandardMaterial({
+                color: color || 0xff0000,
+                roughness: 0.3,
+                metalness: 0.7
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1;
+            body.castShadow = true;
+            carGroup.add(body);
+            
+            // Car cabin
+            const cabinGeometry = new THREE.BoxGeometry(2, 1, 1.8);
+            const cabinMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.1,
+                metalness: 0.9
+            });
+            const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+            cabin.position.set(-0.5, 1.6, 0);
+            cabin.castShadow = true;
+            carGroup.add(cabin);
+            
+            // Car wheels
+            const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 16);
+            const wheelMaterial = new THREE.MeshStandardMaterial({
+                color: 0x111111,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            
+            const wheelPositions = [
+                [-1.5, 0.5, -1.1], // front-left
+                [-1.5, 0.5, 1.1],  // front-right
+                [1.5, 0.5, -1.1],  // back-left
+                [1.5, 0.5, 1.1]    // back-right
+            ];
+            
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.position.set(pos[0], pos[1], pos[2]);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.castShadow = true;
+                carGroup.add(wheel);
+            });
+            
+            // Headlights
+            const headlightGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+            const headlightMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffcc,
+                emissive: 0xffffcc,
+                emissiveIntensity: 0.5
+            });
+            
+            const leftHeadlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            leftHeadlight.position.set(-2, 1, -0.7);
+            carGroup.add(leftHeadlight);
+            
+            const rightHeadlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            rightHeadlight.position.set(-2, 1, 0.7);
+            carGroup.add(rightHeadlight);
+            
+            return carGroup;
+        }
+        
+        // Helper function to create a bench
+        function createBench() {
+            const benchGroup = new THREE.Group();
+            
+            // Bench seat
+            const seatGeometry = new THREE.BoxGeometry(3, 0.3, 1);
+            const seatMaterial = new THREE.MeshStandardMaterial({
+                color: 0x885522,
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+            seat.position.y = 0.7;
+            seat.castShadow = true;
+            benchGroup.add(seat);
+            
+            // Bench legs
+            const legGeometry = new THREE.BoxGeometry(0.2, 0.7, 1);
+            const legMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.7,
+                metalness: 0.3
+            });
+            
+            const leg1 = new THREE.Mesh(legGeometry, legMaterial);
+            leg1.position.set(-1.2, 0.35, 0);
+            leg1.castShadow = true;
+            benchGroup.add(leg1);
+            
+            const leg2 = new THREE.Mesh(legGeometry, legMaterial);
+            leg2.position.set(1.2, 0.35, 0);
+            leg2.castShadow = true;
+            benchGroup.add(leg2);
+            
+            // Bench backrest
+            const backrestGeometry = new THREE.BoxGeometry(3, 1, 0.2);
+            const backrest = new THREE.Mesh(backrestGeometry, seatMaterial);
+            backrest.position.set(0, 1.35, -0.4);
+            backrest.castShadow = true;
+            benchGroup.add(backrest);
+            
+            return benchGroup;
+        }
+        
+        // Variables for game state
+        let buildings = [];
+        let trafficCars = [];
+        let fires = [];
+        let activeMissions = [];
+        let selectedBuildingType = 'skyscraper';
+        let buildMode = true;
+        let car;
+        let carSpeed = 0;
+        let carRotation = 0;
+        let waterActive = false;
+        let score = 0;
+        let timeRemaining = 180; // 3 minutes of gameplay
+        let gameStarted = false;
+        let carControls = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            brake: false,
+            spray: false
+        };
+        
+        // Camera setup
+        camera.position.set(0, 50, 100);
+        camera.lookAt(0, 0, 0);
+        
+        // Setup mouse raycaster for building placement
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        // Event listeners
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Mouse events for building placement
+        renderer.domElement.addEventListener('mousedown', (event) => {
+            console.log('Canvas clicked', {
+                buildMode: buildMode,
+                mouseX: (event.clientX / window.innerWidth) * 2 - 1,
+                mouseY: -(event.clientY / window.innerHeight) * 2 + 1
+            });
+            
+            if (!buildMode) return;
+            
+            // Calculate mouse position in normalized device coordinates
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            // Update the raycaster with the camera and mouse position
+            raycaster.setFromCamera(mouse, camera);
+            
+            // Calculate intersections with the ground plane
+            const intersects = raycaster.intersectObject(ground);
+            
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+                
+                // Round to the nearest grid point
+                const gridSize = 10;
+                const x = Math.round(point.x / gridSize) * gridSize;
+                const z = Math.round(point.z / gridSize) * gridSize;
+                
+                // Check if there's already a building here
+                const existingBuilding = buildings.find(b => 
+                    b.position.x === x && b.position.z === z
+                );
+                
+                if (existingBuilding) {
+                    // Remove the existing building
+                    scene.remove(existingBuilding);
+                    buildings = buildings.filter(b => b !== existingBuilding);
+                }
+                
+                // Create the selected building type
+                const building = buildingGeometries[selectedBuildingType]();
+                
+                // Fix for large buildings - ensure they're centered properly
+                building.userData.type = selectedBuildingType;
+                building.userData.canCatchFire = true;
+                building.userData.onFire = false;
+                
+                // Store building dimensions for proper placement
+                const bbox = new THREE.Box3().setFromObject(building);
+                const size = bbox.getSize(new THREE.Vector3());
+                
+                // Adjust position based on building size for proper grid alignment
+                building.position.set(x, 0, z);
+                scene.add(building);
+                buildings.push(building);
+            }
+        });
+        
+        // Setup event listeners for building selection
+        document.querySelectorAll('.buildingOption').forEach(option => {
+            option.addEventListener('click', (e) => {
+                console.log('Building option clicked:', option.dataset.type);
+                
+                // Remove selected class from all options
+                document.querySelectorAll('.buildingOption').forEach(o => {
+                    o.classList.remove('selected');
+                });
+                
+                // Add selected class to clicked option
+                option.classList.add('selected');
+                
+                // Set selected building type
+                selectedBuildingType = option.dataset.type;
+            });
+        });
+        
+        // Clear all buildings
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            console.log('Clear button clicked');
+            buildings.forEach(building => {
+                scene.remove(building);
+            });
+            buildings = [];
+        });
+        
+        // Generate a random city
+        document.getElementById('randomCity').addEventListener('click', () => {
+            console.log('Random city button clicked');
+            // Clear existing buildings
+            buildings.forEach(building => {
+                scene.remove(building);
+            });
+            buildings = [];
+            
+            // Place random buildings throughout the grid
+            const gridSize = 10;
+            const citySize = 20; // This will create a citySize x citySize grid
+            
+            for (let x = -citySize * gridSize / 2; x <= citySize * gridSize / 2; x += gridSize) {
+                for (let z = -citySize * gridSize / 2; z <= citySize * gridSize / 2; z += gridSize) {
+                    // Skip if on a road
+                    if (x % 50 === 0 || z % 50 === 0) {
+                        continue;
+                    }
+                    
+                    // 40% chance to place a building
+                    if (Math.random() < 0.4) {
+                        // Choose a random building type
+                        const buildingTypes = Object.keys(buildingGeometries);
+                        const randomType = buildingTypes[Math.floor(Math.random() * buildingTypes.length)];
+                        
+                        const building = buildingGeometries[randomType]();
+                        building.position.set(x, 0, z);
+                        scene.add(building);
+                        buildings.push(building);
+                    }
+                }
+            }
+        });
+        
+        // Switch between build and firetruck modes
+        const modeSwitch = document.getElementById('modeSwitch');
+        modeSwitch.addEventListener('click', () => {
+            console.log('Mode switch button clicked');
+            buildMode = !buildMode;
+            
+            if (buildMode) {
+                // Switch to build mode
+                modeSwitch.textContent = '🔄 Switch to Firetruck Mode';
+                document.getElementById('ui').style.display = 'block';
+                document.getElementById('gameUI').style.display = 'none';
+                document.getElementById('missionInfo').style.display = 'none';
+                
+                // Stop the game if it's running
+                gameStarted = false;
+                
+                // Clear all fires
+                clearAllFires();
+                
+                // Clear all traffic
+                clearAllTraffic();
+                
+                // Reset camera
+                camera.position.set(0, 50, 100);
+                camera.lookAt(0, 0, 0);
+                
+                // Remove car if exists
+                if (car) {
+                    scene.remove(car);
+                    car = null;
+                }
+                
+                // Show grid helper
+                gridHelper.visible = true;
+                
+            } else {
+                // Switch to firetruck mode
+                modeSwitch.textContent = '🔄 Switch to Build Mode';
+                document.getElementById('ui').style.display = 'none';
+                document.getElementById('gameUI').style.display = 'block';
+                
+                // Create firetruck if not exists
+                if (!car) {
+                    car = createFiretruck();
+                    // Place firetruck at a road intersection
+                    car.position.set(0, 0, 0);
+                    scene.add(car);
+                    
+                    // Position camera inside firetruck with a better view angle
+                    camera.position.set(-1, 5, 0); // Higher up position
+                    camera.lookAt(-10, 1, 0); // Looking forward but with more downward angle
+                    car.add(camera);
+                    
+                    // Start the game
+                    if (!gameStarted) {
+                        startFirefightingGame();
+                    }
+                }
+                
+                // Hide grid helper
+                gridHelper.visible = false;
+                
+                // Generate traffic if we don't have any yet
+                if (trafficCars.length === 0) {
+                    generateTraffic();
+                }
+                
+                // Add key controls for driving
+                setupDriveControls();
+            }
+        });
+        
+        // Setup keyboard controls for drive mode
+        function setupDriveControls() {
+            // Keyboard events
+            document.addEventListener('keydown', (event) => {
+                if (!buildMode) {
+                    switch (event.key.toLowerCase()) {
+                        case 'w':
+                            carControls.forward = true;
+                            break;
+                        case 's':
+                            carControls.backward = true;
+                            break;
+                        case 'a':
+                            carControls.left = true;
+                            break;
+                        case 'd':
+                            carControls.right = true;
+                            break;
+                        case ' ':
+                            carControls.brake = true;
+                            // Activate water spray
+                            activateWaterSpray(true);
+                            break;
+                    }
+                }
+            });
+            
+            document.addEventListener('keyup', (event) => {
+                if (!buildMode) {
+                    switch (event.key.toLowerCase()) {
+                        case 'w':
+                            carControls.forward = false;
+                            break;
+                        case 's':
+                            carControls.backward = false;
+                            break;
+                        case 'a':
+                            carControls.left = false;
+                            break;
+                        case 'd':
+                            carControls.right = false;
+                            break;
+                        case ' ':
+                            carControls.brake = false;
+                            // Deactivate water spray
+                            activateWaterSpray(false);
+                            break;
+                    }
+                }
+            });
+            
+            // Mouse look for drive mode
+            document.addEventListener('mousemove', (event) => {
+                if (!buildMode && car) {
+                    const rotationSpeed = 0.002;
+                    const movementX = event.movementX || 0;
+                    
+                    // Rotate the car based on mouse movement
+                    if (movementX !== 0) {
+                        carRotation -= movementX * rotationSpeed;
+                    }
+                }
+            });
+            
+            // Lock pointer when entering drive mode
+            renderer.domElement.addEventListener('click', () => {
+                if (!buildMode) {
+                    renderer.domElement.requestPointerLock();
+                }
+            });
+        }
+        
+        // Function to generate traffic cars
+        function generateTraffic() {
+            // Clear any existing traffic
+            clearAllTraffic();
+            
+            // Car colors
+            const carColors = [
+                0x2244cc, // blue
+                0x22cc44, // green
+                0xcccc22, // yellow
+                0xcc22cc, // purple
+                0x22cccc, // cyan
+                0xcc5522, // orange
+                0x555555, // gray
+                0x8844aa, // purple-blue
+                0x44aa88  // teal
+            ];
+            
+            // Generate cars at intersections
+            for (let i = -200; i <= 200; i += 50) {
+                for (let j = -200; j <= 200; j += 50) {
+                    // Skip some intersections randomly
+                    if (Math.random() < 0.7) continue;
+                    
+                    // Create a car
+                    const color = carColors[Math.floor(Math.random() * carColors.length)];
+                    const trafficCar = createTrafficCar(color);
+                    
+                    // Position at intersection
+                    trafficCar.position.set(i, 0, j);
+                    
+                    // Randomly rotate to face a direction aligned with the grid
+                    const directions = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+                    trafficCar.rotation.y = directions[Math.floor(Math.random() * directions.length)];
+                    
+                    // Add to scene and tracking array
+                    scene.add(trafficCar);
+                    trafficCars.push({
+                        object: trafficCar,
+                        speed: 0.05 + Math.random() * 0.1,
+                        direction: trafficCar.rotation.y
+                    });
+                }
+            }
+        }
+        
+        // Function to update traffic cars
+        function updateTraffic() {
+            if (buildMode) return;
+            
+            trafficCars.forEach(trafficCar => {
+                // Calculate velocity vector based on car's rotation
+                const velocity = new THREE.Vector3(
+                    Math.sin(trafficCar.direction) * trafficCar.speed,
+                    0,
+                    Math.cos(trafficCar.direction) * trafficCar.speed
+                );
+                
+                // Store previous position to use for collision resolution
+                const prevPosition = trafficCar.object.position.clone();
+                
+                // Update car position
+                trafficCar.object.position.add(velocity);
+                
+                // Check for boundaries
+                const boundarySize = 245;
+                if (Math.abs(trafficCar.object.position.x) > boundarySize || 
+                    Math.abs(trafficCar.object.position.z) > boundarySize) {
+                    // If we hit a boundary, turn around
+                    trafficCar.direction = (trafficCar.direction + Math.PI) % (2 * Math.PI);
+                    trafficCar.object.rotation.y = trafficCar.direction;
+                    trafficCar.object.position.copy(prevPosition); // Reset to previous position
+                }
+                
+                // Check for collisions with buildings
+                let collision = false;
+                buildings.forEach(building => {
+                    if (collision) return; // Skip if we already found a collision
+                    
+                    const buildingBoundingBox = new THREE.Box3().setFromObject(building);
+                    const carBoundingBox = new THREE.Box3().setFromObject(trafficCar.object);
+                    
+                    if (carBoundingBox.intersectsBox(buildingBoundingBox)) {
+                        collision = true;
+                    }
+                });
+                
+                // Check for collisions with player car
+                if (!collision && car) {
+                    const playerCarBoundingBox = new THREE.Box3().setFromObject(car);
+                    const trafficCarBoundingBox = new THREE.Box3().setFromObject(trafficCar.object);
+                    
+                    if (trafficCarBoundingBox.intersectsBox(playerCarBoundingBox)) {
+                        collision = true;
+                    }
+                }
+                
+                // Check for collisions with other traffic
+                if (!collision) {
+                    trafficCars.forEach(otherCar => {
+                        if (collision || otherCar.object === trafficCar.object) return;
+                        
+                        const otherCarBoundingBox = new THREE.Box3().setFromObject(otherCar.object);
+                        const thisCarBoundingBox = new THREE.Box3().setFromObject(trafficCar.object);
+                        
+                        if (thisCarBoundingBox.intersectsBox(otherCarBoundingBox)) {
+                            collision = true;
+                        }
+                    });
+                }
+                
+                // Handle collision
+                if (collision) {
+                    // Go back to previous position
+                    trafficCar.object.position.copy(prevPosition);
+                    
+                    // Choose a random new direction aligned with the grid
+                    const directions = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+                    trafficCar.direction = directions[Math.floor(Math.random() * directions.length)];
+                    trafficCar.object.rotation.y = trafficCar.direction;
+                }
+                
+                // Random direction changes at intersections
+                if (Math.abs(trafficCar.object.position.x) % 50 < 1 && 
+                    Math.abs(trafficCar.object.position.z) % 50 < 1 && 
+                    Math.random() < 0.05) {
+                    // Change direction at intersections occasionally
+                    const directions = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+                    trafficCar.direction = directions[Math.floor(Math.random() * directions.length)];
+                    trafficCar.object.rotation.y = trafficCar.direction;
+                }
+            });
+        }
+        
+        // Function to clear all traffic cars
+        function clearAllTraffic() {
+            trafficCars.forEach(trafficCar => {
+                scene.remove(trafficCar.object);
+            });
+            trafficCars = [];
+        }
+        
+        // Create a fire effect on a building
+        function createFire(building) {
+            if (building.userData.onFire) return; // Already on fire
+            
+            building.userData.onFire = true;
+            building.userData.fireHealth = 100; // 100% fire
+            
+            // Get building dimensions and position
+            const bbox = new THREE.Box3().setFromObject(building);
+            const size = bbox.getSize(new THREE.Vector3());
+            const center = bbox.getCenter(new THREE.Vector3());
+            
+            // Create fire particles
+            const fireGroup = new THREE.Group();
+            fireGroup.position.copy(center);
+            
+            // Important: Adjust fire position to be on top of the building
+            const heightOffset = size.y / 2;
+            fireGroup.position.y = building.position.y + heightOffset;
+            
+            // Fire materials with brighter, more visible colors
+            const fireMaterials = [
+                new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.95 }),
+                new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 }),
+                new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.85 })
+            ];
+            
+            // Create larger, more visible fire particles
+            const particleCount = Math.ceil(size.x * size.z / 3); // More particles
+            
+            for (let i = 0; i < particleCount; i++) {
+                const flameHeight = 1 + Math.random() * 3; // Taller flames
+                const flameGeometry = new THREE.ConeGeometry(0.8, flameHeight, 8); // Wider flames
+                const flameMaterial = fireMaterials[Math.floor(Math.random() * fireMaterials.length)];
+                const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+                
+                // Position flames across the top of the building - spread them out more visibly
+                flame.position.set(
+                    (Math.random() - 0.5) * size.x * 0.9,
+                    Math.random() * 0.5, // Vary height slightly
+                    (Math.random() - 0.5) * size.z * 0.9
+                );
+                
+                // Random rotation for more natural look
+                flame.rotation.y = Math.random() * Math.PI * 2;
+                
+                // Larger scale for more visibility
+                flame.scale.set(
+                    1 + Math.random() * 1.5,
+                    1 + Math.random() * 1.5,
+                    1 + Math.random() * 1.5
+                );
+                
+                // Store original scale for animation
+                flame.userData.originalScale = flame.scale.clone();
+                flame.userData.phaseOffset = Math.random() * Math.PI * 2;
+                
+                fireGroup.add(flame);
+            }
+            
+            // Add smoke particles - darker and more pronounced
+            const smokeMaterial = new THREE.MeshBasicMaterial({
+                color: 0x444444,
+                transparent: true,
+                opacity: 0.7 // More visible smoke
+            });
+            
+            for (let i = 0; i < particleCount / 2; i++) {
+                const smokeGeometry = new THREE.SphereGeometry(1 + Math.random() * 1.5, 8, 8); // Larger smoke particles
+                const smoke = new THREE.Mesh(smokeGeometry, smokeMaterial);
+                
+                smoke.position.set(
+                    (Math.random() - 0.5) * size.x * 0.8,
+                    3 + Math.random() * 4, // Position higher above the flames
+                    (Math.random() - 0.5) * size.z * 0.8
+                );
+                
+                smoke.scale.set(
+                    1.5 + Math.random() * 2.5,
+                    1.5 + Math.random() * 2.5,
+                    1.5 + Math.random() * 2.5
+                );
+                
+                // Store original values for animation
+                smoke.userData.originalY = smoke.position.y;
+                smoke.userData.riseSpeed = 0.03 + Math.random() * 0.04; // Faster rise
+                
+                fireGroup.add(smoke);
+            }
+            
+            // Add light source to make fire more visible at night/distance
+            const fireLight = new THREE.PointLight(0xff5500, 2, 20);
+            fireLight.position.set(0, size.y / 4, 0);
+            fireGroup.add(fireLight);
+            
+            // Store the fire group in the building
+            building.userData.fireGroup = fireGroup;
+            scene.add(fireGroup);
+            
+            // Add to fires array for tracking
+            fires.push({
+                building: building,
+                fireGroup: fireGroup
+            });
+            
+            // Create a new fire mission
+            createFireMission(building);
+            
+            // Show emergency alert
+            showEmergencyAlert(building);
+            
+            return fireGroup;
+        }
+        
+        // Function to create a fire mission
+        function createFireMission(building) {
+            const bbox = new THREE.Box3().setFromObject(building);
+            const center = bbox.getCenter(new THREE.Vector3());
+            
+            activeMissions.push({
+                building: building,
+                location: center,
+                active: true
+            });
+            
+            // Show mission info
+            document.getElementById('missionInfo').style.display = 'block';
+            
+            // Update mission UI
+            updateMissionUI();
+        }
+        
+        // Create emergency UI alert for new fires
+        function showEmergencyAlert(building) {
+            // Create a flash effect for emergency
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+            overlay.style.zIndex = '100';
+            overlay.style.pointerEvents = 'none';
+            document.body.appendChild(overlay);
+            
+            // Play emergency sound
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            oscillator.start();
+            
+            // Pulse the sound and flash the screen
+            let counter = 0;
+            const pulseInterval = setInterval(() => {
+                counter++;
+                if (counter % 2 === 0) {
+                    oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5
+                    overlay.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+                } else {
+                    oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime); // E5
+                    overlay.style.backgroundColor = 'rgba(255, 0, 0, 0.1)';
+                }
+                
+                if (counter >= 6) {
+                    clearInterval(pulseInterval);
+                    oscillator.stop();
+                    document.body.removeChild(overlay);
+                }
+            }, 300);
+            
+            // Show popup with location
+            const bbox = new THREE.Box3().setFromObject(building);
+            const center = bbox.getCenter(new THREE.Vector3());
+            
+            const popup = document.createElement('div');
+            popup.style.position = 'fixed';
+            popup.style.top = '50%';
+            popup.style.left = '50%';
+            popup.style.transform = 'translate(-50%, -50%)';
+            popup.style.backgroundColor = 'rgba(200, 0, 0, 0.9)';
+            popup.style.color = 'white';
+            popup.style.padding = '20px';
+            popup.style.borderRadius = '10px';
+            popup.style.fontSize = '24px';
+            popup.style.fontWeight = 'bold';
+            popup.style.textAlign = 'center';
+            popup.style.zIndex = '101';
+            popup.style.boxShadow = '0 0 20px red';
+            popup.style.border = '2px solid white';
+            popup.style.animation = 'pulse 0.5s infinite alternate';
+            
+            // Create CSS animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes pulse {
+                    from { transform: translate(-50%, -50%) scale(1); }
+                    to { transform: translate(-50%, -50%) scale(1.05); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            popup.innerHTML = `
+                <div>🔥 FIRE EMERGENCY! 🔥</div>
+                <div style="margin-top:10px;">Building at coordinates: X:${Math.round(center.x)}, Z:${Math.round(center.z)}</div>
+                <div style="margin-top:10px;">RESPOND IMMEDIATELY!</div>
+            `;
+            document.body.appendChild(popup);
+            
+            // Remove popup after a few seconds
+            setTimeout(() => {
+                document.body.removeChild(popup);
+                document.head.removeChild(style);
+            }, 3000);
+        }
+        
+        // Function to update mission UI
+        function updateMissionUI() {
+            const missionInfo = document.getElementById('missionInfo');
+            const activeMission = activeMissions.find(m => m.active);
+            
+            if (activeMission) {
+                // Update fire bar
+                const building = activeMission.building;
+                const fireProgress = document.getElementById('fireProgress');
+                fireProgress.style.width = `${building.userData.fireHealth}%`;
+            } else {
+                missionInfo.style.display = 'none';
+            }
+        }
+        
+        // Function to extinguish fire with water spray
+        function extinguishFire(building, amount) {
+            if (!building.userData.onFire) return;
+            
+            // Reduce fire health
+            building.userData.fireHealth -= amount;
+            
+            // Update UI
+            updateMissionUI();
+            
+            // Check if fire is extinguished
+            if (building.userData.fireHealth <= 0) {
+                building.userData.fireHealth = 0;
+                building.userData.onFire = false;
+                
+                // Remove fire effect
+                if (building.userData.fireGroup) {
+                    scene.remove(building.userData.fireGroup);
+                    building.userData.fireGroup = null;
+                }
+                
+                // Remove from fires array
+                fires = fires.filter(fire => fire.building !== building);
+                
+                // Mark mission as completed
+                const mission = activeMissions.find(m => m.building === building);
+                if (mission) {
+                    mission.active = false;
+                }
+                
+                // Add score
+                score += 100;
+                document.getElementById('scoreDisplay').textContent = score;
+                document.getElementById('firesDisplay').textContent = 
+                    parseInt(document.getElementById('firesDisplay').textContent) + 1;
+                
+                // Hide mission info
+                updateMissionUI();
+                
+                // Create a new fire if game is still going
+                if (gameStarted && timeRemaining > 0) {
+                    setTimeout(createRandomFire, 5000 + Math.random() * 10000); // New fire in 5-15 seconds
+                }
+            }
+        }
+        
+        // Function to create a random fire
+        function createRandomFire() {
+            if (!gameStarted || buildings.length === 0) return;
+            
+            // Filter buildings that can catch fire and aren't already on fire
+            const fireTargets = buildings.filter(b => 
+                b.userData.canCatchFire && 
+                !b.userData.onFire
+            );
+            
+            if (fireTargets.length > 0) {
+                const randomBuilding = fireTargets[Math.floor(Math.random() * fireTargets.length)];
+                createFire(randomBuilding);
+            }
+        }
+        
+        // Function to clear all fires
+        function clearAllFires() {
+            fires.forEach(fire => {
+                if (fire.building) {
+                    fire.building.userData.onFire = false;
+                    fire.building.userData.fireHealth = 0;
+                }
+                if (fire.fireGroup) {
+                    scene.remove(fire.fireGroup);
+                }
+            });
+            fires = [];
+            activeMissions = [];
+            
+            // Hide mission info
+            document.getElementById('missionInfo').style.display = 'none';
+        }
+        
+        // Function to update fire effects
+        function updateFires() {
+            const time = performance.now() * 0.001; // Time in seconds
+            
+            fires.forEach(fire => {
+                if (!fire.fireGroup) return;
+                
+                // Update fire animation
+                fire.fireGroup.children.forEach(child => {
+                    if (child.geometry instanceof THREE.ConeGeometry) {
+                        // Animate flames
+                        const phase = time + child.userData.phaseOffset;
+                        const scaleFactor = 0.8 + Math.sin(phase * 3) * 0.2;
+                        
+                        child.scale.set(
+                            child.userData.originalScale.x * scaleFactor,
+                            child.userData.originalScale.y * (0.9 + Math.sin(phase * 5) * 0.1),
+                            child.userData.originalScale.z * scaleFactor
+                        );
+                        
+                        // Add flickering movement to make flames more visible
+                        child.position.x += (Math.random() - 0.5) * 0.1;
+                        child.position.z += (Math.random() - 0.5) * 0.1;
+                        
+                        // Occasionally make flames taller
+                        if (Math.random() < 0.05) {
+                            child.scale.y *= 1.5;
+                        }
+                    } else if (child.geometry instanceof THREE.SphereGeometry) {
+                        // Animate smoke rising
+                        child.position.y += child.userData.riseSpeed;
+                        
+                        // Reset smoke when it rises too high
+                        if (child.position.y > child.userData.originalY + 5) {
+                            child.position.y = child.userData.originalY;
+                            child.material.opacity = 0.5;
+                        } else {
+                            // Fade out as it rises
+                            child.material.opacity = 0.5 * (1 - (child.position.y - child.userData.originalY) / 5);
+                        }
+                    }
+                });
+            });
+        }
+        
+        // Function to activate water spray
+        function activateWaterSpray(active) {
+            if (!car) return;
+            
+            const waterParticles = car.userData.waterParticles;
+            if (waterParticles) {
+                waterParticles.visible = active;
+                waterActive = active;
+                
+                // Check if we're hitting any fires
+                if (active) {
+                    checkWaterHit();
+                }
+            }
+        }
+        
+        // Function to update water particles
+        function updateWaterParticles() {
+            if (!car || !waterActive || !car.userData.waterParticles) return;
+            
+            const waterParticles = car.userData.waterParticles;
+            
+            // Animate water particles
+            waterParticles.children.forEach(particle => {
+                // Reset particles that have traveled too far
+                if (particle.position.x > 15) {
+                    const spread = Math.random() * 1 - 0.5;
+                    particle.position.set(
+                        1 + Math.random() * 3,
+                        Math.sin(-Math.PI / 6) * particle.position.x + spread,
+                        spread
+                    );
+                } else {
+                    // Move particles forward
+                    particle.position.x += 0.2 + Math.random() * 0.1;
+                }
+            });
+        }
+        
+        // Function to check if water spray hits a fire
+        function checkWaterHit() {
+            if (!car || !waterActive) return;
+            
+            // Get firetruck position and direction
+            const truckPosition = car.position.clone();
+            const truckDirection = new THREE.Vector3(
+                Math.sin(carRotation),
+                0,
+                Math.cos(carRotation)
+            );
+            
+            // Check each fire
+            fires.forEach(fire => {
+                const building = fire.building;
+                if (!building.userData.onFire) return;
+                
+                // Get building position
+                const bbox = new THREE.Box3().setFromObject(building);
+                const buildingPos = bbox.getCenter(new THREE.Vector3());
+                
+                // Calculate vector from truck to building
+                const truckToBuilding = buildingPos.clone().sub(truckPosition);
+                
+                // Calculate distance - INCREASED RANGE to 25 units
+                const distance = truckToBuilding.length();
+                
+                // Check if building is in range (25 units) and in the right direction
+                if (distance < 25) {
+                    // Calculate dot product to see if we're facing the building
+                    const normalizedTruckToBuilding = truckToBuilding.clone().normalize();
+                    const dotProduct = normalizedTruckToBuilding.dot(truckDirection);
+                    
+                    // If truck is facing the building (dot product > 0.5, about 60 degrees)
+                    if (dotProduct > 0.5) {
+                        // Extinguish fire - increased rate to 1.5%
+                        extinguishFire(building, 1.5);
+                    }
+                }
+            });
+        }
+        
+        // Create a directional arrow to help player find the fire
+        function createDirectionalArrow(car, targetBuilding) {
+            // Remove any existing arrows
+            const existingArrow = scene.getObjectByName("directionalArrow");
+            if (existingArrow) {
+                scene.remove(existingArrow);
+            }
+            
+            // Create arrow group
+            const arrowGroup = new THREE.Group();
+            arrowGroup.name = "directionalArrow";
+            
+            // Create arrow body
+            const arrowBodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 4, 8);
+            const arrowHeadGeometry = new THREE.ConeGeometry(0.8, 2, 8);
+            
+            const arrowMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xff0000,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const arrowBody = new THREE.Mesh(arrowBodyGeometry, arrowMaterial);
+            arrowBody.position.y = 2;
+            
+            const arrowHead = new THREE.Mesh(arrowHeadGeometry, arrowMaterial);
+            arrowHead.position.y = 5;
+            
+            arrowGroup.add(arrowBody);
+            arrowGroup.add(arrowHead);
+            
+            // Position arrow above car
+            arrowGroup.position.set(0, 7, 0);
+            car.add(arrowGroup);
+            
+            // Update arrow to point toward fire
+            const updateArrow = () => {
+                if (!car || !targetBuilding || !targetBuilding.userData.onFire) {
+                    if (arrowGroup) {
+                        car.remove(arrowGroup);
+                    }
+                    return;
+                }
+                
+                // Get building position
+                const bbox = new THREE.Box3().setFromObject(targetBuilding);
+                const buildingPos = bbox.getCenter(new THREE.Vector3());
+                
+                // Calculate vector from car to building in world space
+                const carWorldPos = new THREE.Vector3();
+                car.getWorldPosition(carWorldPos);
+                const direction = buildingPos.clone().sub(carWorldPos);
+                
+                // Convert to local space direction
+                const localDirection = direction.clone().applyQuaternion(car.quaternion.clone().inverse());
+                
+                // Calculate angle in the car's local XZ plane
+                const angle = Math.atan2(localDirection.x, localDirection.z);
+                
+                // Rotate arrow to point in that direction
+                arrowGroup.rotation.y = angle;
+            };
+            
+            // Add the update function to the arrow
+            arrowGroup.userData.update = updateArrow;
+            
+            // Make the arrow pulse/float animation
+            const animateArrow = () => {
+                if (!arrowGroup.parent) return; // Stop if removed
+                
+                const time = performance.now() * 0.001;
+                arrowGroup.position.y = 7 + Math.sin(time * 2) * 0.5;
+                
+                // Slowly rotate for visibility
+                arrowGroup.rotation.y += 0.01;
+                
+                // Fade in and out
+                const opacity = 0.5 + Math.sin(time * 3) * 0.3;
+                arrowMaterial.opacity = Math.max(0.2, Math.min(0.8, opacity));
+                
+                // Hide after 10 seconds
+                setTimeout(() => {
+                    if (arrowGroup.parent) {
+                        car.remove(arrowGroup);
+                    }
+                }, 10000);
+                
+                requestAnimationFrame(animateArrow);
+            };
+            
+            // Start animation
+            animateArrow();
+            
+            return arrowGroup;
+        }
+        
+        // Function to start the firefighting game
+        function startFirefightingGame() {
+            gameStarted = true;
+            score = 0;
+            timeRemaining = 180; // 3 minutes
+            
+            // Update UI
+            document.getElementById('scoreDisplay').textContent = score;
+            document.getElementById('firesDisplay').textContent = "0";
+            document.getElementById('timeDisplay').textContent = formatTime(timeRemaining);
+            
+            // Start timer
+            const gameTimer = setInterval(() => {
+                timeRemaining--;
+                document.getElementById('timeDisplay').textContent = formatTime(timeRemaining);
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(gameTimer);
+                    endGame();
+                }
+            }, 1000);
+            
+            // Create first fire immediately
+            setTimeout(createRandomFire, 1000);
+            
+            // Place player closer to first fire when it appears
+            setTimeout(() => {
+                if (fires.length > 0 && car) {
+                    const firstFire = fires[0];
+                    const building = firstFire.building;
+                    const bbox = new THREE.Box3().setFromObject(building);
+                    const center = bbox.getCenter(new THREE.Vector3());
+                    
+                    // Place player 15 units away from the building
+                    const direction = new THREE.Vector3(1, 0, 1).normalize();
+                    const playerPos = center.clone().add(direction.multiplyScalar(15));
+                    
+                    // Set player position and rotation to face the fire
+                    car.position.set(playerPos.x, 0, playerPos.z);
+                    
+                    // Calculate angle to face the building
+                    const dx = center.x - playerPos.x;
+                    const dz = center.z - playerPos.z;
+                    carRotation = Math.atan2(dx, dz);
+                    car.rotation.y = carRotation;
+                    
+                    // Show a helper arrow pointing to the fire
+                    createDirectionalArrow(car, building);
+                }
+            }, 1500);
+        }
+        
+        // Function to end the game
+        function endGame() {
+            gameStarted = false;
+            
+            alert(`Game Over! Your final score is ${score}.\nYou extinguished ${document.getElementById('firesDisplay').textContent} fires!`);
+            
+            // Auto-switch back to build mode
+            buildMode = false; // Set to false so the click handler will toggle it to true
+            modeSwitch.click();
+        }
+        
+        // Helper function to format time
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Car physics and movement
+        function updateCar() {
+            if (!car || buildMode) return;
+            
+            const maxSpeed = 0.5;
+            const acceleration = 0.01;
+            const deceleration = 0.005;
+            const rotationSpeed = 0.03;
+            
+            // Update car rotation based on left/right controls
+            if (carControls.left) {
+                carRotation += rotationSpeed;
+            }
+            if (carControls.right) {
+                carRotation -= rotationSpeed;
+            }
+            
+            // Apply forward/backward movement based on carControls
+            if (carControls.forward) {
+                carSpeed = Math.min(carSpeed + acceleration, maxSpeed);
+            } else if (carControls.backward) {
+                carSpeed = Math.max(carSpeed - acceleration, -maxSpeed / 2);
+            } else if (carControls.brake) {
+                carSpeed *= 0.9; // Apply brakes
+            } else {
+                // Natural deceleration
+                if (Math.abs(carSpeed) < deceleration) {
+                    carSpeed = 0;
+                } else if (carSpeed > 0) {
+                    carSpeed -= deceleration;
+                } else if (carSpeed < 0) {
+                    carSpeed += deceleration;
+                }
+            }
+            
+            // Update car position based on speed and rotation
+            car.rotation.y = carRotation;
+            
+            // Calculate velocity vector based on car's rotation
+            const velocity = new THREE.Vector3(
+                Math.sin(carRotation) * carSpeed,
+                0,
+                Math.cos(carRotation) * carSpeed
+            );
+            
+            // Update car position
+            car.position.add(velocity);
+            
+            // Simple collision detection with boundaries
+            const boundarySize = 245;
+            car.position.x = Math.max(-boundarySize, Math.min(boundarySize, car.position.x));
+            car.position.z = Math.max(-boundarySize, Math.min(boundarySize, car.position.z));
+            
+            // Simple collision detection with buildings
+            buildings.forEach(building => {
+                const buildingBoundingBox = new THREE.Box3().setFromObject(building);
+                const carBoundingBox = new THREE.Box3().setFromObject(car);
+                
+                if (carBoundingBox.intersectsBox(buildingBoundingBox)) {
+                    // Collision detected, reverse the car's movement
+                    car.position.sub(velocity.multiplyScalar(1.5));
+                    carSpeed *= -0.5; // Bounce back a bit
+                }
+            });
+            
+            // Collision detection with traffic cars
+            trafficCars.forEach(trafficCar => {
+                const trafficCarBoundingBox = new THREE.Box3().setFromObject(trafficCar.object);
+                const playerCarBoundingBox = new THREE.Box3().setFromObject(car);
+                
+                if (playerCarBoundingBox.intersectsBox(trafficCarBoundingBox)) {
+                    // Collision detected, move player away from traffic car
+                    car.position.sub(velocity.multiplyScalar(1.5));
+                    carSpeed *= -0.5; // Bounce back a bit
+                }
+            });
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update car if in drive mode
+            updateCar();
+            
+            // Update traffic
+            updateTraffic();
+            
+            // Update fire effects
+            updateFires();
+            
+            // Update water particles
+            updateWaterParticles();
+            
+            // Check for water hitting fires continuously
+            if (waterActive) {
+                checkWaterHit();
+            }
+            
+            // Update directional arrow if it exists
+            const arrow = scene.getObjectByName("directionalArrow");
+            if (arrow && arrow.userData.update) {
+                arrow.userData.update();
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Start the animation loop
+        animate();
+        
+        // Setup direct event listeners
+        const setupDirectListeners = () => {
+            console.log('Setting up direct listeners');
+            
+            // Building options
+            const options = document.querySelectorAll('.buildingOption');
+            console.log('Building options found:', options.length);
+            options.forEach(option => {
+                option.onclick = function() {
+                    console.log('Building option clicked:', this.dataset.type);
+                    options.forEach(o => o.classList.remove('selected'));
+                    this.classList.add('selected');
+                    selectedBuildingType = this.dataset.type;
+                };
+            });
+            
+            // Clear button
+            const clearBtn = document.getElementById('clearBtn');
+            if (clearBtn) {
+                clearBtn.onclick = function() {
+                    console.log('Clear button clicked');
+                    buildings.forEach(building => {
+                        scene.remove(building);
+                    });
+                    buildings = [];
+                };
+            }
+            
+            // Random city button
+            const randomCityBtn = document.getElementById('randomCity');
+            if (randomCityBtn) {
+                randomCityBtn.onclick = function() {
+                    console.log('Random city button clicked');
+                    // Clear existing buildings
+                    buildings.forEach(building => {
+                        scene.remove(building);
+                    });
+                    buildings = [];
+                    
+                    // Place random buildings throughout the grid
+                    const gridSize = 10;
+                    const citySize = 20; // This will create a citySize x citySize grid
+                    
+                    for (let x = -citySize * gridSize / 2; x <= citySize * gridSize / 2; x += gridSize) {
+                        for (let z = -citySize * gridSize / 2; z <= citySize * gridSize / 2; z += gridSize) {
+                            // Skip if on a road
+                            if (x % 50 === 0 || z % 50 === 0) {
+                                continue;
+                            }
+                            
+                            // 40% chance to place a building
+                            if (Math.random() < 0.4) {
+                                // Choose a random building type
+                                const buildingTypes = Object.keys(buildingGeometries);
+                                const randomType = buildingTypes[Math.floor(Math.random() * buildingTypes.length)];
+                                
+                                const building = buildingGeometries[randomType]();
+                                building.position.set(x, 0, z);
+                                scene.add(building);
+                                buildings.push(building);
+                            }
+                        }
+                    }
+                };
+            }
+            
+            // Mode switch button
+            const modeSwitchBtn = document.getElementById('modeSwitch');
+            if (modeSwitchBtn) {
+                modeSwitchBtn.onclick = function() {
+                    console.log('Mode switch button clicked');
+                    buildMode = !buildMode;
+                    
+                    if (buildMode) {
+                        // Switch to build mode
+                        modeSwitchBtn.textContent = '🔄 Switch to Firetruck Mode';
+                        document.getElementById('ui').style.display = 'block';
+                        document.getElementById('gameUI').style.display = 'none';
+                        document.getElementById('missionInfo').style.display = 'none';
+                        
+                        // Stop the game if it's running
+                        gameStarted = false;
+                        
+                        // Clear all fires
+                        clearAllFires();
+                        
+                        // Clear all traffic
+                        clearAllTraffic();
+                        
+                        // Reset camera
+                        camera.position.set(0, 50, 100);
+                        camera.lookAt(0, 0, 0);
+                        
+                        // Remove car if exists
+                        if (car) {
+                            scene.remove(car);
+                            car = null;
+                        }
+                        
+                        // Show grid helper
+                        gridHelper.visible = true;
+                        
+                    } else {
+                        // Switch to firetruck mode
+                        modeSwitchBtn.textContent = '🔄 Switch to Build Mode';
+                        document.getElementById('ui').style.display = 'none';
+                        document.getElementById('gameUI').style.display = 'block';
+                        
+                        // Create firetruck if not exists
+                        if (!car) {
+                            car = createFiretruck();
+                            // Place firetruck at a road intersection
+                            car.position.set(0, 0, 0);
+                            scene.add(car);
+                            
+                            // Position camera inside firetruck with a better view angle
+                            camera.position.set(-1, 5, 0); // Higher up position
+                            camera.lookAt(-10, 1, 0); // Looking forward but with more downward angle
+                            car.add(camera);
+                            
+                            // Start the game
+                            if (!gameStarted) {
+                                startFirefightingGame();
+                            }
+                        }
+                        
+                        // Hide grid helper
+                        gridHelper.visible = false;
+                        
+                        // Generate traffic if we don't have any yet
+                        if (trafficCars.length === 0) {
+                            generateTraffic();
+                        }
+                        
+                        // Add key controls for driving
+                        setupDriveControls();
+                    }
+                };
+            }
+        };
+        
+        // Call it now
+        setupDirectListeners();
+        
+        // Add debug button
+        const debugButton = document.createElement('button');
+        debugButton.style.position = 'fixed';
+        debugButton.style.bottom = '80px';
+        debugButton.style.right = '20px';
+        debugButton.style.zIndex = '1000';
+        debugButton.style.padding = '10px';
+        debugButton.style.background = 'red';
+        debugButton.style.color = 'white';
+        debugButton.textContent = 'Debug Test';
+        debugButton.onclick = function() {
+            console.log('Debug button clicked');
+            const els = {
+                buildOptions: document.querySelectorAll('.buildingOption').length,
+                clearBtn: !!document.getElementById('clearBtn'),
+                randomCity: !!document.getElementById('randomCity'),
+                modeSwitch: !!document.getElementById('modeSwitch')
+            };
+            console.log('Elements exist:', els);
+            
+            // Re-setup listeners
+            setupDirectListeners();
+        };
+        document.body.appendChild(debugButton);
+        
+        console.log('Game initialized successfully');
+    }); // End of window load

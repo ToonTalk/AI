@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fireworks Show</title>
+  <style>
+    canvas { display: block; margin: 0 auto; background: black; }
+  </style>
+</head>
+<body>
+  <canvas id="fireworks"></canvas>
+  <script>
+    const canvas = document.getElementById('fireworks');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const fireworks = [];
+
+    function Firework(x, y, color) {
+      this.x = x;
+      this.y = y;
+      this.color = color;
+      this.gravity = 0.05;
+      this.sparkles = [];
+      for (let i = 0; i < 100; i++) {
+        this.sparkles.push({
+          x: 0,
+          y: 0,
+          angle: Math.random() * Math.PI * 2,
+          speed: Math.random() * 3 + 1,
+          opacity: 1,
+        });
+      }
+    }
+
+    Firework.prototype.update = function() {
+      this.sparkles.forEach(sparkle => {
+        sparkle.x += Math.cos(sparkle.angle) * sparkle.speed;
+        sparkle.y += Math.sin(sparkle.angle) * sparkle.speed + this.gravity;
+        sparkle.opacity -= 0.02; // Fade out for afterglow effect
+      });
+    };
+
+    Firework.prototype.draw = function() {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      this.sparkles.forEach(sparkle => {
+        if (sparkle.opacity > 0) {
+          ctx.fillStyle = `rgba(${this.color}, ${sparkle.opacity})`;
+          ctx.beginPath();
+          ctx.arc(this.x + sparkle.x, this.y + sparkle.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+      ctx.restore();
+    };
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      fireworks.forEach(firework => firework.update());
+      fireworks.forEach(firework => firework.draw());
+
+      if (Math.random() > 0.9) {
+        fireworks.push(
+          new Firework(
+            Math.random() * canvas.width,
+            Math.random() * canvas.height / 2,
+            `${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}`
+          )
+        );
+      }
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+</html>
