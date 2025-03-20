@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fireworks with Gravity and Sound</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: black; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="fireworksCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('fireworksCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const gravity = 0.1;
+
+    // Sound effects
+    const launchSound = new Audio('https://assets.mixkit.co/active_storage/sfx/1654/1654-preview.mp3');
+    const explosionSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2700/2700-preview.mp3');
+
+    class Firework {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.particles = [];
+        this.createParticles();
+        this.playExplosionSound();
+      }
+
+      createParticles() {
+        const numParticles = 100;
+        for (let i = 0; i < numParticles; i++) {
+          const angle = (Math.PI * 2 * i) / numParticles;
+          const speed = Math.random() * 5 + 2;
+          const vx = Math.cos(angle) * speed;
+          const vy = Math.sin(angle) * speed;
+          this.particles.push({ 
+            x: this.x, 
+            y: this.y, 
+            vx, 
+            vy, 
+            alpha: 1 
+          });
+        }
+      }
+
+      playExplosionSound() {
+        explosionSound.currentTime = 0;
+        explosionSound.play();
+      }
+
+      update() {
+        this.particles.forEach(particle => {
+          particle.vy += gravity;
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.alpha -= 0.008;
+        });
+        
+        this.particles = this.particles.filter(p => p.alpha > 0);
+      }
+
+      draw() {
+        this.particles.forEach(particle => {
+          ctx.globalAlpha = particle.alpha;
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, 2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    const fireworks = [];
+    
+    function createFirework() {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height/2;
+      const color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+      fireworks.push(new Firework(x, y, color));
+      playLaunchSound();
+    }
+
+    function playLaunchSound() {
+      launchSound.currentTime = 0;
+      launchSound.play();
+    }
+
+    function animate() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      fireworks.forEach(firework => {
+        firework.update();
+        firework.draw();
+      });
+
+      for (let i = fireworks.length - 1; i >= 0; i--) {
+        if (fireworks[i].particles.length === 0) {
+          fireworks.splice(i, 1);
+        }
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    setInterval(createFirework, 800);
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    animate();
+  </script>
+</body>
+</html>
