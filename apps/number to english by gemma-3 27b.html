@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Integer Expression Evaluator</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+    #container {
+      width: 500px;
+      margin: 20px auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #3e8e41;
+    }
+    #resultContainer {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="container">
+    <h1>Integer Expression Evaluator</h1>
+
+    <label for="expression">Enter Integer Expression:</label>
+    <input type="text" id="expression" placeholder="e.g., 123 + 456 * 789">
+
+    <button onclick="evaluateExpression()">Evaluate</button>
+
+    <div id="resultContainer">
+      <h2>Result:</h2>
+      <p><strong>Number:</strong> <span id="numberResult"></span></p>
+      <p><strong>Number of Digits:</strong> <span id="digitCountResult"></span></p>
+      <p><strong>English Equivalent:</strong> <span id="englishEquivalentResult"></span></p>
+    </div>
+  </div>
+
+  <script>
+    function evaluateExpression() {
+      const expression = document.getElementById("expression").value;
+
+      try {
+        // Use eval() to evaluate the expression. **WARNING:** See security note below!
+        let result = eval(expression);
+
+        if (isNaN(result) || !isFinite(result) || !Number.isInteger(result)) {
+          document.getElementById("numberResult").textContent = "Invalid Expression: Must be an integer";
+          document.getElementById("digitCountResult").textContent = "";
+          document.getElementById("englishEquivalentResult").textContent = "";
+          return;
+        }
+
+        // Use BigInt to handle very large numbers
+        if (typeof result === 'number' && !Number.isSafeInteger(result)) {
+            result = BigInt(result); // Convert to BigInt if it exceeds safe integer limit
+        } else if (typeof result !== 'bigint'){
+          result = BigInt(result); //Convert to bigint even if already a number
+        }
+
+        document.getElementById("numberResult").textContent = result;
+
+        const digitCount = String(result).length;  // Count digits as a string
+        document.getElementById("digitCountResult").textContent = digitCount;
+
+        const englishEquivalent = numberToEnglish(result);
+        document.getElementById("englishEquivalentResult").textContent = englishEquivalent;
+
+
+      } catch (error) {
+        document.getElementById("numberResult").textContent = "Error: Invalid Expression";
+        document.getElementById("digitCountResult").textContent = "";
+        document.getElementById("englishEquivalentResult").textContent = "";
+      }
+    }
+
+    function numberToEnglish(num) {
+      if (typeof num !== 'bigint') {
+        return "Invalid input: Must be a BigInt";
+      }
+
+      if (num === 0n) {
+        return "zero";
+      }
+
+      const lessThanTwenty = [
+        "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"
+      ];
+
+      const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+      const scales = [
+        "", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion",
+        "sextillion", "septillion", "octillion", "nonillion", "decillion", "undecillion",
+        "duodecillion", "tredecillion" // Add more scales as needed
+      ];
+
+      function convertLessThanOneThousand(n) {
+        if (n < 20n) {
+          return lessThanTwenty[Number(n)];
+        } else if (n < 100n) {
+          const ten = Number(n / 10n);
+          const unit = n % 10n;
+          return tens[ten] + (unit > 0 ? " " + lessThanTwenty[Number(unit)] : "");
+        } else {
+          const hundred = Number(n / 100n);
+          const remainder = n % 100n;
+          return lessThanTwenty[hundred] + " hundred" + (remainder > 0 ? " " + convertLessThanOneThousand(remainder) : "");
+        }
+      }
+
+      let result = "";
+      let scaleIndex = 0;
+      let remainingNum = num;
+
+      while (remainingNum > 0n) {
+        const remainder = remainingNum % 1000n;
+        if (remainder > 0n) {
+          const convertedRemainder = convertLessThanOneThousand(remainder);
+          result = convertedRemainder + " " + scales[scaleIndex] + (result ? ", " + result : "");
+        }
+        remainingNum /= 1000n;
+        scaleIndex++;
+
+        if (scaleIndex >= scales.length) { // Check if scaleIndex is within bounds
+          break;  // Exit the loop if we run out of scale names
+        }
+      }
+
+      return result.trim(); // Remove trailing comma and space
+    }
+  </script>
+</body>
+</html>

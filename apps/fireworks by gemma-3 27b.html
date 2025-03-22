@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Colorful Fireworks</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden; /* Hide scrollbars */
+      background-color: black;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fireworksCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('fireworksCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    // Array to store fireworks particles
+    const particles = [];
+
+    // Function to create a random color
+    function getRandomColor() {
+      const hue = Math.random() * 360;
+      return `hsl(${hue}, 100%, 50%)`;
+    }
+
+    // Particle class
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = Math.random() * 3 + 1; // Random size between 1 and 4
+        this.velocity = {
+          x: (Math.random() - 0.5) * 5,  // Random horizontal velocity
+          y: (Math.random() - 0.5) * -8   // Random upward velocity
+        };
+        this.gravity = 0.1;
+        this.alpha = 1; // Initial opacity
+        this.lifespan = Math.random() * 60 + 30; // Lifespan in frames
+        this.age = 0;
+      }
+
+      update() {
+        this.velocity.y += this.gravity;
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
+        this.alpha -= 1 / this.lifespan; // Fade out over lifespan
+        this.age++;
+
+        // Reset if particle goes off screen or reaches end of life
+        if (this.y > height || this.alpha <= 0) {
+          return false; // Signal to remove from array
+        }
+        return true;
+      }
+
+      draw() {
+        ctx.globalAlpha = this.alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.globalAlpha = 1; // Reset alpha for other particles
+      }
+    }
+
+    // Function to create a firework burst
+    function createFirework(x, y) {
+      const color = getRandomColor();
+      const numParticles = Math.floor(Math.random() * 50) + 20; // Random number of particles (20-70)
+
+      for (let i = 0; i < numParticles; i++) {
+        particles.push(new Particle(x, y, color));
+      }
+    }
+
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Clear the canvas
+      ctx.clearRect(0, 0, width, height);
+
+      // Update and draw particles
+      const newParticles = []; // Create a new array to hold updated particles
+      for (let i = 0; i < particles.length; i++) {
+        if (particles[i].update()) {
+          newParticles.push(particles[i]);  // Add particle if it's still alive
+        }
+      }
+      particles.length = 0; // Clear the original array
+      particles.push(...newParticles); // Copy updated particles back
+
+      // Create new fireworks randomly, but near the bottom of the screen
+      if (Math.random() < 0.05) {  // Adjust probability for firework frequency
+        const x = Math.random() * width;
+        const y = height; // Start at the very bottom
+        createFirework(x, y);
+      }
+
+
+      // Draw particles after updating to ensure correct layering
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].draw();
+      }
+
+    }
+
+    // Start the animation
+    animate();
+
+    // Resize canvas on window resize
+    window.addEventListener('resize', () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    });
+  </script>
+</body>
+</html>
