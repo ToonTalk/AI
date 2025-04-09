@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Number Evaluator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+        }
+        
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        input[type="text"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+
+        .result-section {
+            margin: 20px 0;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Number Evaluator</h1>
+        
+        <input type="text" id="numberInput" placeholder="Enter a number (e.g., 1234567890)">
+        <button onclick="runEvaluation()">Evaluate</button>
+
+        <div id="resultsContainer" class="result-section">
+            <div class="result-item"><span>Number:</span><span id="resultNumber"></span></div>
+            <div class="result-item"><span>Digit Count:</span><span id="digitCount"></span></div>
+            <div class="result-item"><span>English Equivalent:</span><span id="englishEquivalent"></span></div>
+        </div>
+
+    </div>
+
+<script>
+function runEvaluation() {
+    const input = document.getElementById('numberInput').value.trim();
+    
+    // Clear previous results
+    document.getElementById('resultNumber').textContent = '';
+    document.getElementById('digitCount').textContent = '';
+    document.getElementById('englishEquivalent').textContent = '';
+
+    if (!input || isNaN(input)) {
+        alert("Please enter a valid number");
+        return;
+    }
+
+    const resultContainer = document.getElementById('resultsContainer');
+    
+    // Display original number
+    document.getElementById('resultNumber').textContent = input;
+
+    // Calculate digit count
+    document.getElementById('digitCount').textContent = input.length;
+
+    // Convert to English
+    try {
+        const englishVersion = numberToWords(input);
+        document.getElementById('englishEquivalent').textContent = englishVersion;
+    } catch (e) {
+        alert("Error converting number: " + e.message);
+    }
+}
+
+function numberToWords(numStr) {
+    if (!numStr) return 'zero';
+    
+    const scales = ["", "thousand", "million", "billion", 
+                    "trillion", "quadrillion", "quintillion"];
+    
+    // Process in chunks of 3 digits from right
+    let chunks = [];
+    for (let i = numStr.length; i > 0; ) {
+        const take = Math.min(i, 3);
+        i -= take;
+        chunks.unshift(numStr.slice(i, i + take));
+    }
+    
+    let words = '';
+    chunks.forEach((chunk, index) => {
+        const scaleWord = scales[index];
+        
+        // Process each chunk (group of three digits)
+        const part = hundredsToWords(chunk.padStart(3, '0'));
+        if (part && part !== 'zero') {
+            words += (words ? ' ' : '') + part + (scaleWord ? ` ${scaleWord}` : '');
+        }
+    });
+
+    return words.trim() || 'zero';
+}
+
+function hundredsToWords(numStr) {
+    numStr = numStr.padStart(3, '0'); // Ensure 3 digits
+    const units = ['zero', 'one', 'two', 'three', 'four',
+                   'five', 'six', 'seven', 'eight', 'nine'];
+    const teens = ['', 'eleven', 'twelve', 'thirteen', 
+                  'fourteen','fifteen','sixteen','seventeen',
+                  'eighteen', 'nineteen'];
+    const tens = ['zero', 'ten', 'twenty', 'thirty', 'forty',
+                  'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    
+    let word = '';
+    
+    // Hundreds place
+    if (numStr[0] != '0') {
+        word += units[numStr[0]] + ' hundred';
+    }
+    
+    const lastTwoDigits = numStr.slice(1);
+    
+    // Tens and ones
+    switch(lastTwoDigits) {
+        case '00': break;
+        case '01': 
+            word += (word ? ' ' : '') + 'one'; 
+            break;
+        default:
+            let tensDigit = lastTwoDigits[0];
+            const onesDigit = lastTwoDigits[1];
+            
+            if (tensDigit === '1') {
+                // Teens
+                word += (word ? ' ' : '') + teens[onesDigit];
+            } else {
+                if(tensDigit !== '0') 
+                    word += (word ? ' ' : '') + tens[tensDigit];
+                
+                if(onesDigit !== '0' && tensDigit != '1')
+                    word += `-${units[onesDigit]}`;
+            }
+    }
+    
+    return word || units[numStr[2]]; // Handle cases like 5
+}
+
+// Helper to handle edge cases for two digits
+function twoDigitsToWords(num) {
+    const teens = ['', 'eleven', 'twelve', 'thirteen', 
+                  'fourteen','fifteen','sixteen','seventeen',
+                  'eighteen', 'nineteen'];
+    const tens = ['ten', 'twenty', 'thirty', 'forty', 
+                 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    
+    if (num[0] == 1) {
+        return teens[num[1]] || '';
+    }
+    
+    let word = '';
+    if(num[0] > 0) word += tens[num[0]-1];
+    if(num[1] > 0 && num[0] != 1) 
+        word += '-' + units[num[1]];
+        
+    return word;
+}
+</script>
+</body>
+
+</html>
