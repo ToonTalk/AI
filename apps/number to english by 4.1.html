@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Big Integer Expression Evaluator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.2/math.js"></script>
+  <style>
+    body { font-family: sans-serif; max-width: 700px; margin: 40px auto; line-height: 1.7;}
+    input, button, textarea { font-size: 1.2em; }
+    .result-block { background: #f6f6f6; padding: 12px 18px; border-radius: 6px; margin: 18px 0; word-break: break-all;}
+    label { display: block; margin-bottom: 8px;}
+  </style>
+</head>
+<body>
+  <h1>Big Integer Expression Evaluator</h1>
+  <form id="evaluate-form">
+    <label for="expr">Enter an integer expression (arbitrarily large):</label>
+    <textarea id="expr" rows="2" cols="60" placeholder="e.g. 2**2000 + 3*10**100"></textarea><br>
+    <button type="submit">Evaluate</button>
+  </form>
+
+  <div id="output" style="display:none;">
+    <div class="result-block" id="number"></div>
+    <div class="result-block" id="digits"></div>
+    <div class="result-block" id="words"></div>
+  </div>
+  <div id="error" style="color: red; margin-top: 20px;"></div>
+
+<script>
+// ==== English Number Names Generator for Arbitrarily Big Numbers ====
+
+// Names up to decillion, then generates power names by pattern (e.g., undecillion, tredecillion, etc.)
+const small_names = [
+  "", "thousand", "million", "billion", "trillion", "quadrillion",
+  "quintillion", "sextillion", "septillion", "octillion", "nonillion",
+  "decillion", "undecillion", "duodecillion", "tredecillion", "quattuordecillion",
+  "quindecillion", "sexdecillion", "septendecillion", "octodecillion",
+  "novemdecillion", "vigintillion"
+];
+
+// Latin prefixes for scale > vigintillion
+const ten_prefixes = ["", "un", "duo", "tre", "quattuor", "quin", "sex", "septen", "octo", "novem"];
+const tens_names = [
+  "", "dec", "vigint", "trigint", "quadragint", "quinquagint",
+  "sexagint", "septuagint", "octogint", "nonagint", "cent"
+];
+
+function getScaleName(group) {
+  if (group < small_names.length) return small_names[group];
+  // pattern: {ten_prefix}{tens_names}{illion}, e.g., unvigintillion, duotrigintillion ...
+  let n = group;
+  let ones = n % 10, tens = Math.floor(n / 10);
+  let name = "";
+  if (tens < tens_names.length) {
+    name = (ten_prefixes[ones] || "") + (tens_names[tens] || "") + "illion";
+  } else {
+    // For absurdly gigantic numbers, just spell out in power notation
+    name = `(10^${3 * group})`;
+  }
+  return name;
+}
+
+// Converts a number string to English words
+function numberToWords(numStr) {
+  if (numStr[0] === '-') return "minus " + numberToWords(numStr.slice(1));
+  if (!/^\d+$/.test(numStr)) return "Invalid input";
+  if (numStr === '0') return "zero";
+  // Split into 3-digit groups
+  let groups = [];
+  let i = numStr.length;
+  while (i > 0) {
+    groups.unshift(numStr.substring(Math.max(0, i - 3), i));
+    i -= 3;
+  }
+
+  // Three-digit group to words
+  function threeToWords(n) {
+    const below_20 = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+                      "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+    const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+    let w = '';
+    let num = parseInt(n, 10);
+    if (num === 0) return '';
+    if (num < 20) return below_20[num];
+    if (num < 100) {
+      return tens[Math.floor(num / 10)] + (num % 10 ? '-' + below_20[num % 10] : '');
+    }
+    w = below_20[Math.floor(num / 100)] + " hundred";
+    let rest = num % 100;
+    if (rest) w += ' ' + threeToWords(rest);
+    return w;
+  }
+
+  let words = [];
+  for (let g = 0; g < groups.length; ++g) {
+    let n = parseInt(groups[groups.length - 1 - g], 10);
+    if (n) {
+      let groupName = getScaleName(g);
+      let thisPart = threeToWords(groups[groups.length - 1 - g]);
+      words.push(thisPart + (groupName ? ' ' + groupName : ''));
+    }
+  }
+  // Combine in natural order
+  return words.reverse().join(', ').replace(/,\s*$/, '');
+}
+
+// ---- Evaluate and Display Logic ----
+const form = document.getElementById('evaluate-form');
+form.onsubmit = function(e) {
+  e.preventDefault();
+  const expr = document.getElementById('expr').value;
+  document.getElementById('error').textContent = '';
+  document.getElementById('output').style.display = 'none';
+
+  try {
+    // Accept both ** and ^ as exponent operators
+    const processedExpr = expr.replace(/\*\*/g, '^');
+    math.config({number: 'BigNumber', precision: 1000});
+    let value = math.evaluate(processedExpr);
+    let intVal = value.toString().split('.')[0];
+    if (/[eE]/.test(intVal)) intVal = math.bignumber(intVal).toFixed(0);
+    let intValFormatted = intVal.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    document.getElementById('number').innerHTML = "<b>Result:</b><br>" + intValFormatted;
+    document.getElementById('digits').innerHTML = "<b>Number of digits:</b> " + intVal.replace(/-/,'').length;
+
+    const MAX_WORDS_GROUPS = 350; // ~1050 digits
+    let wordString;
+    if (intVal.replace('-','').length > MAX_WORDS_GROUPS*3) {
+      wordString = "Number too large to verbalize ('" + getScaleName(MAX_WORDS_GROUPS) + "' or above supported)";
+    } else {
+      wordString = numberToWords(intVal);
+    }
+    document.getElementById('words').innerHTML = "<b>English words:</b><br>" + wordString;
+    document.getElementById('output').style.display = '';
+  } catch (err) {
+    document.getElementById('error').textContent = "Error: " + err.message;
+  }
+};
+</script>
+</body>
+</html>
