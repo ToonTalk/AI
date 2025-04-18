@@ -3,159 +3,381 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Perfect Tic‑Tac‑Toe with Gemini & Speech</title>
+    <title>Tic‑Tac‑Toe • AI vs You</title>
     <style>
-      :root { --size: 100px; }
-      body { font-family: system-ui, sans-serif; background:#f7f7f8; display:flex; flex-direction:column; align-items:center; padding:1rem; }
-      h1 { font-size:2rem; margin:0.5rem 0 1rem; }
-      #board { display:grid; grid-template-columns:repeat(3, var(--size)); gap:8px; margin-bottom:1rem; }
-      .square { width:var(--size); height:var(--size); font-size:3rem; font-weight:600; display:flex; align-items:center; justify-content:center; position:relative; border-radius:12px; background:#fff; border:1px solid #ccc; cursor:pointer; user-select:none; }
-      .square:hover { background:#f0f0f0; }
-      .indexLabel { position:absolute; top:4px; left:6px; font-size:0.65rem; color:#999; pointer-events:none; }
-      #status { min-height:1.5rem; font-size:1.1rem; margin-bottom:0.25rem; }
-      #remark { min-height:1.5rem; font-style:italic; color:#0657c2; margin-bottom:0.75rem; }
-      button.action { padding:0.5rem 1rem; border-radius:8px; border:none; background:#2563eb; color:#fff; font-size:0.9rem; cursor:pointer; }
-      button.action:hover { background:#1e4fc4; }
-      #tips { margin-top:1rem; font-size:0.75rem; color:#555; max-width:320px; }
-      #tips li { margin-bottom:0.25rem; }
-      #logView { white-space:pre-wrap; background:#fff; border:1px solid #ccc; border-radius:8px; padding:0.5rem; margin-top:0.5rem; max-width:320px; display:none; }
+      :root {
+        --primary: #2563eb;
+        --primary-hover: #1e4fc4;
+        --radius: 10px;
+        --size: 100px;
+        --shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        background: #f5f6fa;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+        color: #222;
+      }
+      h1 {
+        margin: 1.2rem 0 0.5rem;
+        font-size: 2.1rem;
+        font-weight: 700;
+        text-align: center;
+      }
+      .card {
+        background: #fff;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 1.2rem;
+        max-width: 380px;
+        width: 90%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      /* controls */
+      .controls {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr auto auto auto;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      #apiKey {
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #ccc;
+        border-radius: var(--radius);
+        font-size: 0.9rem;
+        width: 100%;
+      }
+      .btn {
+        border: none;
+        border-radius: var(--radius);
+        padding: 0.45rem 0.9rem;
+        font-size: 0.85rem;
+        cursor: pointer;
+        background: var(--primary);
+        color: #fff;
+        transition: 0.15s background-color;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+      }
+      .btn:hover { background: var(--primary-hover); }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      /* board */
+      #board {
+        display: grid;
+        grid-template-columns: repeat(3, var(--size));
+        gap: 8px;
+        margin-bottom: 1rem;
+      }
+      .square {
+        width: var(--size);
+        height: var(--size);
+        font-size: 3rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        border-radius: var(--radius);
+        background: #fff;
+        border: 2px solid #d1d5db;
+        cursor: pointer;
+        transition: 0.15s background-color;
+      }
+      .square:hover { background: #f3f4f6; }
+      .indexLabel {
+        position: absolute;
+        top: 4px;
+        left: 6px;
+        font-size: 0.65rem;
+        color: #9ca3af;
+        pointer-events: none;
+      }
+      /* status */
+      #status {
+        min-height: 1.5rem;
+        font-size: 1.05rem;
+        margin-bottom: 0.25rem;
+        text-align: center;
+      }
+      #remark {
+        min-height: 1.5rem;
+        font-style: italic;
+        color: #0657c2;
+        text-align: center;
+        margin-bottom: 0.5rem;
+      }
+      /* log */
+      #logView {
+        white-space: pre-wrap;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: var(--radius);
+        padding: 0.6rem;
+        max-height: 160px;
+        overflow: auto;
+        margin-top: 0.75rem;
+        width: 100%;
+        font-size: 0.8rem;
+        display: none;
+      }
+      /* tips */
+      #tips {
+        margin-top: 1rem;
+        font-size: 0.75rem;
+        color: #555;
+        list-style: disc;
+        padding-left: 1.2rem;
+        width: 100%;
+      }
+      #tips li { margin-bottom: 0.25rem; }
+      @media (max-width: 500px) {
+        :root { --size: 80px; }
+        .controls {
+          grid-template-columns: 1fr auto;
+          grid-template-rows: auto auto;
+          grid-auto-flow: row;
+        }
+        .controls .btn { margin-top: 0.5rem; }
+      }
     </style>
   </head>
   <body>
     <h1>Tic‑Tac‑Toe</h1>
-
-    <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;max-width:340px;">
-      <input id="apiKey" type="password" placeholder="Google API key" style="flex:1 1 150px;padding:0.4rem 0.5rem;border:1px solid #ccc;border-radius:8px;font-size:0.85rem;" />
-      <button id="micBtn" class="action" title="Enable microphone">🎤</button>
-      <button id="restartBtn" class="action">Restart</button>
-      <button id="logBtn" class="action">Show Log</button>
-    </div>
-
-    <div id="board"></div>
-
-    <div id="status"></div>
-    <div id="remark"></div>
-
-    <pre id="logView"></pre>
-
-    <ul id="tips">
-      <li>Square numbers (0‑8) are shown on each tile.</li>
-      <li>Click 🎤 and grant microphone permission so Gemini can hear you.</li>
-      <li>Use <em>Show Log</em> to toggle the full conversation.</li>
-    </ul>
+    <section class="card">
+      <div class="controls">
+        <input id="apiKey" type="password" placeholder="Google API key" />
+        <button id="micBtn" class="btn" title="Enable microphone">🎤</button>
+        <button id="restartBtn" class="btn">Restart</button>
+        <button id="logBtn" class="btn">Show Log</button>
+      </div>
+      <div id="board"></div>
+      <div id="status"></div>
+      <div id="remark"></div>
+      <pre id="logView"></pre>
+      <ul id="tips">
+        <li>Square numbers (0‑8) are shown on each tile.</li>
+        <li>Click 🎤 then allow mic so the AI can hear you.</li>
+        <li>Use <em>Show Log</em> to toggle the full conversation.</li>
+      </ul>
+    </section>
 
     <script>
-      // ---------------- Config & State ----------------
+      /* ---------- State ---------- */
       const board = Array(9).fill(null);
-      const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-      const MODELS = ["gemini-2.5-pro-exp-03-25","gemini-2.0-flash","gemini-2.0-flash-lite"];
+      const LINES = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+      ];
+      const MODELS = [
+        'gemini-2.5-pro-exp-03-25',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite'
+      ];
       const context = [];
-      let lastSpeech = "";
+      let lastSpeech = '';
       let gameEnded = false;
 
-      // DOM refs
-      const apiKeyEl = document.getElementById("apiKey");
-      const statusEl = document.getElementById("status");
-      const remarkEl = document.getElementById("remark");
-      const boardEl = document.getElementById("board");
-      const micBtn = document.getElementById("micBtn");
-      const restartBtn = document.getElementById("restartBtn");
-      const logBtn = document.getElementById("logBtn");
-      const logView = document.getElementById("logView");
+      /* ---------- DOM ---------- */
+      const $ = id => document.getElementById(id);
+      const apiKeyEl = $('apiKey');
+      const statusEl = $('status');
+      const remarkEl = $('remark');
+      const boardEl = $('board');
+      const micBtn = $('micBtn');
+      const restartBtn = $('restartBtn');
+      const logBtn = $('logBtn');
+      const logView = $('logView');
 
-      // Build board UI
-      for(let i=0;i<9;i++){
-        const btn=document.createElement("button");
-        btn.className="square";
-        btn.innerHTML=`<span class='indexLabel'>${i}</span><span class='value'></span>`;
-        btn.addEventListener("click",()=>humanMove(i));
+      /* ---------- Board UI ---------- */
+      for (let i = 0; i < 9; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'square';
+        btn.innerHTML = `<span class="indexLabel">${i}</span><span class="value"></span>`;
+        btn.addEventListener('click', () => humanMove(i));
         boardEl.appendChild(btn);
       }
-      const squares=[...boardEl.children];
+      const squares = [...boardEl.children];
+      const renderBoard = () => squares.forEach((b, i) => b.querySelector('.value').textContent = board[i] || '');
 
-      // ---------------- Utilities ----------------
-      function speak(text){ if(!text||!window.speechSynthesis) return; window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang="en-US"; window.speechSynthesis.speak(u); }
-      const winner=s=>{for(const [a,b,c] of LINES){if(s[a]&&s[a]===s[b]&&s[a]===s[c])return s[a];}return null;};
-      const full=s=>s.every(Boolean);
-      function minimax(s,ai){const w=winner(s);if(w==="O")return 1;if(w==="X")return -1;if(full(s))return 0;let best=ai?-Infinity:Infinity;for(let i=0;i<9;i++){if(s[i])continue;s[i]=ai?"O":"X";const sc=minimax(s,!ai);s[i]=null;best=ai?Math.max(best,sc):Math.min(best,sc);}return best;}
-      const bestMove=state=>{let best=-Infinity,m=-1;for(let i=0;i<9;i++){if(state[i])continue;state[i]="O";const sc=minimax(state,false);state[i]=null;if(sc>best){best=sc;m=i;}}return m;};
-      const grid=s=>s.map(v=>v||"_").reduce((r,v,i)=>(r[Math.floor(i/3)]=(r[Math.floor(i/3)]?r[Math.floor(i/3)]+" ":"")+v,r),["","",""]).join(" / ");
-      const addCtx=(role,text)=>{context.push({role,text}); logView.textContent=context.map(c=>`[${c.role}] ${c.text}`).join("\n");};
-      const renderBoard=()=>squares.forEach((btn,i)=>btn.querySelector('.value').textContent=board[i]||"");
-
-      // ---------------- Gemini ----------------
-      async function gemini(key,prompt){
-        for(const model of MODELS){
-          try{
-            const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-            const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.9,maxOutputTokens:64}})});
-            if(!res.ok) continue;
-            const data=await res.json();
-            const txt=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text).join(" ").trim();
-            if(txt) return txt;
-          }catch{/* ignore */}
+      /* ---------- Utils ---------- */
+      const speak = t => { if (!t || !window.speechSynthesis) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'en-US'; window.speechSynthesis.speak(u); };
+      const winner = s => LINES.find(([a, b, c]) => s[a] && s[a] === s[b] && s[a] === s[c]) ? s[LINES.find(([a, b, c]) => s[a] && s[a] === s[b] && s[a] === s[c])[0]] : null;
+      const full   = s => s.every(Boolean);
+      const minimax = (s, ai) => {
+        const w = winner(s);
+        if (w === 'O') return 1;
+        if (w === 'X') return -1;
+        if (full(s)) return 0;
+        let best = ai ? -Infinity : Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (s[i]) continue;
+          s[i] = ai ? 'O' : 'X';
+          const score = minimax(s, !ai);
+          s[i] = null;
+          best = ai ? Math.max(best, score) : Math.min(best, score);
         }
-        return "";
-      }
+        return best;
+      };
+      const bestMove = s => {
+        let best = -Infinity, move = -1;
+        for (let i = 0; i < 9; i++) {
+          if (s[i]) continue;
+          s[i] = 'O';
+          const score = minimax(s, false);
+          s[i] = null;
+          if (score > best) { best = score; move = i; }
+        }
+        return move;
+      };
+      const grid = s => s.map(v => v || '_').reduce((r, v, i) => (r[Math.floor(i / 3)] = (r[Math.floor(i / 3)] ? r[Math.floor(i / 3)] + ' ' : '') + v, r), ['', '', '']).join(' / ');
+      const addCtx = (role, text) => { context.push({ role, text }); renderLog(); };
+      const renderLog = () => { logView.textContent = context.map(c => `[${c.role}] ${c.text}`).join('\n'); };
 
-      async function getAIReply(state,moveIdx){
-        const key=apiKeyEl.value.trim(); if(!key) return "";
-        const prompt=`Context: ${context.map(c=>`[${c.role}] ${c.text}`).join(" | ")}. Board: ${grid(state)}. ${moveIdx!==null?`AI placed O on #${moveIdx}. `:""}${lastSpeech?`Human said: \"${lastSpeech}\".`:""} Reply with ONE witty line (≤15 words).`;
-        return await gemini(key,prompt);
-      }
+      /* ---------- Gemini ---------- */
+      const gemini = async (key, prompt) => {
+        for (const model of MODELS) {
+          try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.9, maxOutputTokens: 64 }
+              })
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const txt = (data.candidates?.[0]?.content?.parts || []).map(p => p.text).join(' ').trim();
+            if (txt) return txt;
+          } catch { /* ignore */ }
+        }
+        return '';
+      };
+      const getAIReply = async (state, moveIdx) => {
+        const key = apiKeyEl.value.trim();
+        if (!key) return '';
+        const prompt = `Context: ${context.map(c => `[${c.role}] ${c.text}`).join(' | ')}. Board: ${grid(state)}. ${moveIdx !== null ? `AI placed O on #${moveIdx}. ` : ''}${lastSpeech ? `Human said: "${lastSpeech}". ` : ''}Reply with ONE witty line (≤15 words).`;
+        return await gemini(key, prompt);
+      };
 
-      // ---------------- Speech recognizer ----------------
-      let recognizer=null; let lastTranscript="";
-      function initMic(){
-        if(recognizer) return;
-        const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-        if(!SR){alert("Speech recognition not supported");return;}
-        recognizer=new SR(); recognizer.lang="en-US"; recognizer.continuous=true;
-        recognizer.onresult=async e=>{
-          if(gameEnded) return;
-          const txt=e.results[e.results.length-1][0].transcript.trim();
-          if(!txt||txt===lastTranscript) return;
-          lastTranscript=txt; lastSpeech=txt; addCtx("Human",txt);
-          const ai=await getAIReply([...board],null); if(ai){ remarkEl.textContent=ai; speak(ai); addCtx("AI",ai);} lastSpeech="";
+      /* ---------- Speech recognition ---------- */
+      let recognizer = null, lastTranscript = '';
+      const initMic = () => {
+        if (recognizer) return;
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) { alert('Speech recognition not supported'); return; }
+        recognizer = new SR();
+        recognizer.lang = 'en-US';
+        recognizer.continuous = true;
+        recognizer.onresult = async e => {
+          if (gameEnded) return;
+          const txt = e.results[e.results.length - 1][0].transcript.trim();
+          if (!txt || txt === lastTranscript) return;
+          lastTranscript = txt;
+          lastSpeech = txt;
+          addCtx('Human', txt);
+          const ai = await getAIReply([...board], null);
+          if (ai) { remarkEl.textContent = ai; speak(ai); addCtx('AI', ai); }
+          lastSpeech = '';
         };
-        recognizer.onstart=()=>micBtn.textContent="🎤✅";
-        recognizer.onerror=e=>console.warn("speech",e);
+        recognizer.onstart = () => micBtn.textContent = '🎤✅';
         recognizer.start();
-      }
-      micBtn.addEventListener("click",()=>{ if(micBtn.textContent!=="🎤✅") initMic(); });
+      };
+      micBtn.addEventListener('click', () => { if (micBtn.textContent !== '🎤✅') initMic(); });
 
-      // ---------------- Gameplay ----------------
-      async function gameLoop(){
-        const w=winner(board);
-        if(w){gameEnded=true;const msg=w==="X"?"You win!":"I win!";statusEl.textContent=msg;speak(msg);addCtx("AI",msg);return;}
-        if(full(board)){gameEnded=true;const msg="It's a draw!";statusEl.textContent=msg;speak(msg);addCtx("AI",msg);return;}
-        const xCnt=board.filter(v=>v==="X").length,oCnt=board.filter(v=>v==="O").length;
-        if(xCnt>oCnt){statusEl.textContent="AI is thinking…";const move=bestMove([...board]);if(move>-1){await new Promise(r=>setTimeout(r,300));board[move]="O";renderBoard();const line=await getAIReply([...board],move);if(line){remarkEl.textContent=line;speak(line);addCtx("AI",line);}else if(!apiKeyEl.value.trim()){const warn="Please enter a valid Google API key for witty AI comments.";remarkEl.textContent=warn;speak(warn);}}
+      /* ---------- Game loop ---------- */
+      const gameLoop = async () => {
+        const w = winner(board);
+        if (w) {
+          gameEnded = true;
+          const msg = w === 'X' ? 'You win!' : 'I win!';
+          statusEl.textContent = msg;
+          speak(msg);
+          addCtx('AI', msg);
+          return;
         }
-        statusEl.textContent="Your turn (X)";
-      }
+        if (full(board)) {
+          gameEnded = true;
+          const msg = "It's a draw!";
+          statusEl.textContent = msg;
+          speak(msg);
+          addCtx('AI', msg);
+          return;
+        }
+        const xCnt = board.filter(v => v === 'X').length;
+        const oCnt = board.filter(v => v === 'O').length;
+        if (xCnt > oCnt) {
+          statusEl.textContent = 'AI is thinking…';
+          const move = bestMove([...board]);
+          if (move > -1) {
+            await new Promise(r => setTimeout(r, 300));
+            board[move] = 'O';
+            renderBoard();
+            const line = await getAIReply([...board], move);
+            if (line) {
+              remarkEl.textContent = line;
+              speak(line);
+              addCtx('AI', line);
+            } else if (!apiKeyEl.value.trim()) {
+              const warn = 'Please enter a valid Google API key for witty AI comments.';
+              remarkEl.textContent = warn;
+              speak(warn);
+            }
+          }
+        }
+        statusEl.textContent = 'Your turn (X)';
+      };
 
-      function humanMove(idx){
-        if(gameEnded||board[idx]) return;
-        remarkEl.textContent="";
-        board[idx]="X";
+      /* ---------- User actions ---------- */
+      const humanMove = idx => {
+        if (gameEnded || board[idx]) return;
+        remarkEl.textContent = '';
+        board[idx] = 'X';
         renderBoard();
-        addCtx("Human","Played #"+idx);
-        if(!apiKeyEl.value.trim()){
-          const warn="Please enter a valid Google API key for witty AI comments.";
-          remarkEl.textContent=warn; speak(warn); addCtx("AI",warn);
+        addCtx('Human', 'Played #' + idx);
+        if (!apiKeyEl.value.trim()) {
+          const warn = 'Please enter a valid Google API key for witty AI comments.';
+          remarkEl.textContent = warn;
+          speak(warn);
+          addCtx('AI', warn);
         }
         gameLoop();
-      }
-
-      // ---------------- UI Buttons ----------------
-      restartBtn.addEventListener("click",()=>{
-        board.fill(null); context.length=0; gameEnded=false; lastSpeech=""; lastTranscript=""; statusEl.textContent="Your turn (X)"; remarkEl.textContent=""; renderBoard(); speak("Game restarted. Your turn."); logView.textContent=""; logView.style.display="none"; logBtn.textContent="Show Log";
+      };
+      restartBtn.addEventListener('click', () => {
+        board.fill(null);
+        context.length = 0;
+        gameEnded = false;
+        lastSpeech = lastTranscript = '';
+        statusEl.textContent = 'Your turn (X)';
+        remarkEl.textContent = '';
+        renderBoard();
+        speak('Game restarted. Your turn.');
+        logView.textContent = '';
+        logView.style.display = 'none';
+        logBtn.textContent = 'Show Log';
       });
-      logBtn.addEventListener("click",()=>{const vis=logView.style.display==="block";logView.style.display=vis?"none":"block";logBtn.textContent=vis?"Show Log":"Hide Log";});
+      logBtn.addEventListener('click', () => {
+        const vis = logView.style.display === 'block';
+        logView.style.display = vis ? 'none' : 'block';
+        logBtn.textContent = vis ? 'Show Log' : 'Hide Log';
+      });
 
-      // Initial draw
-      renderBoard(); statusEl.textContent="Your turn (X)";
+      /* ---------- Init ---------- */
+      renderBoard();
+      statusEl.textContent = 'Your turn (X)';
     </script>
   </body>
 </html>
