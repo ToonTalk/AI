@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Creative Quest – Laugh‑structionist Edition</title>
+  <style>
+    :root {
+      --primary:#ec4899;
+      --light:#fdf2f8;
+      --card:#ffffff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--light);color:#111;display:flex;flex-direction:column;min-height:100vh;align-items:center}
+    header{width:100%;background:var(--primary);color:#fff;text-align:center;padding:1.2rem 0;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+    h1{margin:0;font-size:2rem}
+    #studio{width:92%;max-width:760px;margin:2rem 0;flex:1}
+    .stage{display:none;background:var(--card);border-radius:14px;box-shadow:0 4px 14px rgba(0,0,0,.08);padding:2rem 1.75rem;position:relative;overflow:hidden}
+    .stage.active{display:block;animation:fadeIn .4s ease}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+    .challenge-btn{display:block;width:100%;background:#fce7f3;border:2px dashed var(--primary);border-radius:10px;padding:.9rem 1.1rem;margin:.6rem 0;text-align:left;cursor:pointer;transition:transform .12s,background .2s;font-size:1.05rem}
+    .challenge-btn:hover{background:#fbcfe8;transform:translateX(4px)}
+    textarea{width:100%;min-height:130px;padding:.85rem;border:2px solid #fbcfe8;border-radius:10px;font-size:1rem;margin:.6rem 0;resize:vertical}
+    button.primary{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:.8rem 1.6rem;font-size:1rem;cursor:pointer;margin-top:1rem;transition:transform .1s}
+    button.primary:active{transform:scale(0.97)}
+    .nav{display:flex;gap:.5rem;margin-top:1rem}
+    .nav span{flex:1;height:6px;border-radius:3px;background:#fbcfe8}
+    .nav .done{background:var(--primary)}
+    .note{font-size:.9rem;color:#6b7280;margin-top:.5rem}
+    .joke{margin-top:1.2rem;font-size:.95rem;color:#6b7280;font-style:italic;text-align:center}
+  </style>
+</head>
+<body>
+<header>
+  <h1>AI Creative Quest 😂</h1>
+  <p style="margin-top:.3rem;font-size:1rem">Learn by Making • Laugh by Breaking</p>
+</header>
+
+<div id="studio">
+  <!-- Stage 1 -->
+  <section id="stage1" class="stage active">
+    <h2>1. Pick Your Playground</h2>
+    <p>Choose a challenge that tickles your brain. You’ll craft a prompt, summon AI wizardry, then roast‑err‑reflect on the result.</p>
+    <div id="challengeList"></div>
+    <div id="jokeBox1" class="joke"></div>
+  </section>
+
+  <!-- Stage 2 -->
+  <section id="stage2" class="stage">
+    <h2 id="challengeTitle"></h2>
+    <p id="challengeDesc"></p>
+    <h3>Your (possibly ridiculous) Prompt</h3>
+    <textarea id="promptInput" placeholder="Dear chatbot, please write a haiku about a confused toaster..."></textarea>
+    <p class="note">Pro‑tip: The AI can smell fear. Be specific.</p>
+    <button class="primary" id="toReflect">Run Prompt & Face the Music →</button>
+    <div id="jokeBox2" class="joke"></div>
+  </section>
+
+  <!-- Stage 3 -->
+  <section id="stage3" class="stage">
+    <h2>🎉 Reflect & Roast 🎉</h2>
+    <p>Paste a snippet or describe what the chatbot birthed into the universe, then answer our extremely serious questions.</p>
+    <textarea id="outputPaste" placeholder="It wrote an opera about potatoes..."></textarea>
+
+    <h3>1. What made you spit out your drink?</h3>
+    <textarea id="q1"></textarea>
+    <h3>2. How did you poke the AI to improve?</h3>
+    <textarea id="q2"></textarea>
+    <h3>3. If you had infinite pizza and time, what would you try next?</h3>
+    <textarea id="q3"></textarea>
+
+    <button class="primary" id="savePlan">Download My Glorious Reflection</button>
+    <button class="primary" id="restart" style="background:#6b7280;margin-left:.5rem">Reset & Retry</button>
+    <div id="jokeBox3" class="joke"></div>
+  </section>
+
+  <div class="nav" id="progressNav">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+
+<script>
+const jokes=[
+  "Why did the neural network go to art school? It wanted to improve its draw calls.",
+  "What’s a large language model’s favorite drink? Token water.",
+  "I told my chatbot a joke about UDP… but I'm not sure it got it.",
+  "Why do AI assistants make great comedians? Perfect timing – unless the servers lag.",
+  "I asked GPT to be funny. It replied: 404 Humor Not Found – self‑aware AND savage!"
+];
+function randomJoke(){return jokes[Math.floor(Math.random()*jokes.length)];}
+
+const challenges=[
+  {id:"adventure",title:"Ridiculous Quest",description:"Concoct a text adventure where the hero must return a library book to a dragon with overdue fines."},
+  {id:"dialog",title:"Awkward Interview",description:"Chat up a historical figure about modern memes. Brace for confusion."},
+  {id:"panel",title:"Opinion Overload Panel",description:"Assemble a panel of experts, a toddler, and a parrot to debate pineapple pizza."},
+  {id:"story",title:"Absurd Story Forge",description:"Co‑write an epic where the main character is a spoon aspiring to be a fork."},
+  {id:"sim",title:"Chaotic Eco‑Sim",description:"Simulate a predator‑prey dance between rubber ducks and tacos."}
+];
+
+const stageEls=[...document.querySelectorAll('.stage')];
+const navBars=[...document.querySelectorAll('.nav span')];
+let data={};
+
+function showStage(i){stageEls.forEach((s,idx)=>s.classList.toggle('active',idx===i));navBars.forEach((b,idx)=>b.classList.toggle('done',idx<=i));
+  const box=document.querySelector(`#jokeBox${i+1}`);if(box) box.textContent=randomJoke();}
+
+const listDiv=document.getElementById('challengeList');
+challenges.forEach(ch=>{
+  const btn=document.createElement('button');btn.className='challenge-btn';btn.textContent=ch.title;btn.onclick=()=>selectChallenge(ch);listDiv.appendChild(btn);
+});
+
+function selectChallenge(ch){data.challenge=ch;document.getElementById('challengeTitle').textContent=ch.title;document.getElementById('challengeDesc').textContent=ch.description;showStage(1);}
+
+document.getElementById('toReflect').onclick=()=>{
+  data.prompt=document.getElementById('promptInput').value.trim();if(!data.prompt){alert('Your prompt is emptier than a zero‑indexed cookie jar.');return;}showStage(2);} ;
+
+function downloadFile(filename,text){const blob=new Blob([text],{type:'text/plain'});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=filename;link.click();}
+
+document.getElementById('savePlan').onclick=()=>{
+  data.output=document.getElementById('outputPaste').value.trim();data.q1=document.getElementById('q1').value.trim();data.q2=document.getElementById('q2').value.trim();data.q3=document.getElementById('q3').value.trim();const summary=`AI Creative Quest Reflection (Comedy Edition)\n\nChallenge: ${data.challenge.title}\nPrompt:\n${data.prompt}\n\nChatbot Output:\n${data.output}\n\n1. Spit‑take Moments:\n${data.q1}\n\n2. Iterations & Pokes:\n${data.q2}\n\n3. Next Wild Idea:\n${data.q3}`;downloadFile('ai_creative_quest_lol.txt',summary);} ;
+
+document.getElementById('restart').onclick=()=>location.reload();
+
+showStage(0);
+</script>
+</body>
+</html>

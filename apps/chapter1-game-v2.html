@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Creative Quest – Constructionist Edition</title>
+  <style>
+    :root {
+      --primary:#4f46e5;
+      --light:#f3f4f6;
+      --card:#ffffff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--light);color:#111;display:flex;flex-direction:column;min-height:100vh;align-items:center}
+    header{
+      width:100%;background:var(--primary);color:#fff;text-align:center;padding:1rem 0;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+    h1{margin:0;font-size:1.8rem}
+    #studio{width:90%;max-width:720px;margin:2rem 0;flex:1}
+    .stage{display:none;background:var(--card);border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:2rem 1.5rem}
+    .stage.active{display:block}
+    .challenge-btn{display:block;width:100%;background:#e5e7eb;border:none;border-radius:8px;padding:.75rem 1rem;margin:.5rem 0;text-align:left;cursor:pointer;transition:background .2s;font-size:1rem}
+    .challenge-btn:hover{background:#d1d5db}
+    textarea{width:100%;min-height:120px;padding:.75rem;border:1px solid #d1d5db;border-radius:8px;font-size:1rem;margin:.5rem 0}
+    button.primary{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:.75rem 1.5rem;font-size:1rem;cursor:pointer;margin-top:1rem}
+    .nav{display:flex;gap:.5rem;margin-top:1rem}
+    .nav span{flex:1;height:6px;border-radius:3px;background:#d1d5db}
+    .nav .done{background:var(--primary)}
+    .note{font-size:.9rem;color:#555;margin-top:.5rem}
+  </style>
+</head>
+<body>
+<header>
+  <h1>AI Creative Quest – Constructionist Edition</h1>
+  <p style="margin-top:.25rem;font-size:.95rem">Plan • Build • Reflect</p>
+</header>
+
+<div id="studio">
+  <!-- Stage 1: Choose Challenge -->
+  <section id="stage1" class="stage active">
+    <h2>Select a Creative Challenge</h2>
+    <p>Pick something you’d like to <em>build</em> with a chatbot. You’ll design a prompt, run it, then reflect on what you made.</p>
+    <div id="challengeList"></div>
+  </section>
+
+  <!-- Stage 2: Craft Prompt -->
+  <section id="stage2" class="stage">
+    <h2 id="challengeTitle"></h2>
+    <p id="challengeDesc"></p>
+    <h3>Your Draft Prompt</h3>
+    <textarea id="promptInput" placeholder="Type the instructions you’d give the chatbot..."></textarea>
+    <p class="note">Tip: Think about goal, role, constraints, and iteration plan.</p>
+    <button class="primary" id="toReflect">Run Prompt & Reflect →</button>
+  </section>
+
+  <!-- Stage 3: Reflection -->
+  <section id="stage3" class="stage">
+    <h2>Reflect on Your Creation</h2>
+    <p>Paste a snippet or describe what the chatbot produced. Then answer the questions below.</p>
+    <textarea id="outputPaste" placeholder="What did the chatbot create? (brief)"></textarea>
+
+    <h3>1. What surprised you in the output?</h3>
+    <textarea id="q1"></textarea>
+    <h3>2. How did you iterate or refine your prompt?</h3>
+    <textarea id="q2"></textarea>
+    <h3>3. What’s one next step to improve the creation?</h3>
+    <textarea id="q3"></textarea>
+
+    <button class="primary" id="savePlan">Download Reflection</button>
+    <button class="primary" id="restart" style="background:#6b7280;margin-left:.5rem">Start Over</button>
+  </section>
+
+  <div class="nav" id="progressNav">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+
+<script>
+const challenges=[
+  {id:"adventure",title:"Text‑Based Adventure",description:"Design a prompt that lets a player explore a historical or fictional world through conversation."},
+  {id:"dialog",title:"Simulated Dialog with a Historical Figure",description:"Create a chat where you can interview someone from history (or the future)."},
+  {id:"panel",title:"Multi‑Expert Panel",description:"Prompt the AI to role‑play a panel of experts discussing an issue you care about."},
+  {id:"story",title:"Illustrated Story Generator",description:"Co‑write a short story with images on a topic of your choice."},
+  {id:"sim",title:"Eco‑System Simulation",description:"Guide the AI to build a simple predator‑prey or similar simulation you can tweak."}
+];
+const stageEls=[...document.querySelectorAll('.stage')];
+const navBars=[...document.querySelectorAll('.nav span')];
+let data={};
+
+function showStage(i){stageEls.forEach((s,idx)=>s.classList.toggle('active',idx===i));navBars.forEach((b,idx)=>b.classList.toggle('done',idx<=i));}
+
+// Populate challenge list
+const listDiv=document.getElementById('challengeList');
+challenges.forEach(ch=>{
+  const btn=document.createElement('button');btn.className='challenge-btn';btn.textContent=ch.title;btn.onclick=()=>selectChallenge(ch);listDiv.appendChild(btn);
+});
+
+function selectChallenge(ch){data.challenge=ch;document.getElementById('challengeTitle').textContent=ch.title;document.getElementById('challengeDesc').textContent=ch.description;showStage(1);}
+
+// Proceed to reflection
+document.getElementById('toReflect').onclick=()=>{
+  data.prompt=document.getElementById('promptInput').value.trim();if(!data.prompt){alert('Write your prompt first!');return;}showStage(2);} ;
+
+// Save reflection
+function downloadFile(filename,text){const blob=new Blob([text],{type:'text/plain'});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=filename;link.click();}
+
+document.getElementById('savePlan').onclick=()=>{
+  data.output=document.getElementById('outputPaste').value.trim();data.q1=document.getElementById('q1').value.trim();data.q2=document.getElementById('q2').value.trim();data.q3=document.getElementById('q3').value.trim();const summary=`AI Creative Quest Reflection\n\nChallenge: ${data.challenge.title}\nPrompt:\n${data.prompt}\n\nChatbot Output:\n${data.output}\n\n1. Surprises:\n${data.q1}\n\n2. Iterations:\n${data.q2}\n\n3. Next Step:\n${data.q3}`;downloadFile('ai_creative_quest_reflection.txt',summary);} ;
+
+document.getElementById('restart').onclick=()=>location.reload();
+
+// Init progress nav colors
+showStage(0);
+</script>
+</body>
+</html>
