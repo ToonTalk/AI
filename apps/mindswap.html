@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindswap: The Experience</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #000;
+            color: #0f0;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #0ff;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 0 0 10px #0ff;
+        }
+        #game-container {
+            background-color: #001a00;
+            border: 2px solid #0f0;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        #text-display {
+            min-height: 200px;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+        }
+        #options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .option-btn {
+            background-color: #003300;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-radius: 5px;
+            text-align: left;
+        }
+        .option-btn:hover {
+            background-color: #006600;
+            transform: translateX(5px);
+        }
+        #stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px dashed #0f0;
+            border-radius: 5px;
+        }
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        #inventory {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px dashed #0f0;
+            border-radius: 5px;
+        }
+        #inventory h3 {
+            margin-top: 0;
+            color: #0ff;
+        }
+        .inventory-item {
+            margin: 5px 0;
+        }
+        #mind-meter {
+            width: 100%;
+            height: 20px;
+            background-color: #001100;
+            margin-top: 20px;
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #mind-fill {
+            height: 100%;
+            background-color: #0f0;
+            width: 100%;
+            transition: width 0.5s;
+        }
+        .flicker {
+            animation: flicker 0.5s infinite alternate;
+        }
+        @keyframes flicker {
+            from { opacity: 0.8; }
+            to { opacity: 1; }
+        }
+        .shake {
+            animation: shake 0.5s;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .alien-text {
+            color: #ff00ff;
+        }
+        #current-body {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 50, 0, 0.8);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            border: 1px solid #0f0;
+        }
+    </style>
+</head>
+<body>
+    <div id="current-body">Current Body: Human</div>
+    <h1>MINDSWAP: THE EXPERIENCE</h1>
+    <div id="game-container">
+        <div id="stats">
+            <div class="stat">
+                <div>Mental Stability</div>
+                <div class="stat-value" id="stability">100%</div>
+            </div>
+            <div class="stat">
+                <div>Current Planet</div>
+                <div class="stat-value" id="location">Earth</div>
+            </div>
+            <div class="stat">
+                <div>Credits</div>
+                <div class="stat-value" id="credits">500</div>
+            </div>
+        </div>
+        
+        <div id="text-display">Welcome to MINDSWAP!
+
+You are Marvin Flynn, an ordinary Earth citizen who has just discovered the interstellar mindswap service. 
+
+Through this revolutionary technology, you can temporarily exchange consciousness with beings across the galaxy, experiencing life through alien bodies while your own body is safely maintained in a preservation chamber.
+
+Are you ready to begin your journey through the cosmos?</div>
+        
+        <div id="options-container">
+            <button class="option-btn" onclick="selectOption(0)">I'm ready for my first mindswap!</button>
+            <button class="option-btn" onclick="selectOption(1)">I'd like to learn more about how mindswapping works</button>
+            <button class="option-btn" onclick="selectOption(2)">This sounds dangerous. I think I'll pass.</button>
+        </div>
+        
+        <div id="mind-meter">
+            <div id="mind-fill"></div>
+        </div>
+        
+        <div id="inventory">
+            <h3>Inventory</h3>
+            <div id="inventory-items">
+                <div class="inventory-item">Mindswap Contract (standard)</div>
+                <div class="inventory-item">Personal Identification Chip</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        const gameState = {
+            currentScene: "intro",
+            stability: 100,
+            location: "Earth",
+            credits: 500,
+            currentBody: "Human",
+            inventory: ["Mindswap Contract (standard)", "Personal Identification Chip"],
+            swapsRemaining: 5
+        };
+
+        // Scene data
+        const scenes = {
+            intro: {
+                text: "Welcome to MINDSWAP!\n\nYou are Marvin Flynn, an ordinary Earth citizen who has just discovered the interstellar mindswap service.\n\nThrough this revolutionary technology, you can temporarily exchange consciousness with beings across the galaxy, experiencing life through alien bodies while your own body is safely maintained in a preservation chamber.\n\nAre you ready to begin your journey through the cosmos?",
+                options: [
+                    { text: "I'm ready for my first mindswap!", nextScene: "mindswapOffice" },
+                    { text: "I'd like to learn more about how mindswapping works", nextScene: "tutorial" },
+                    { text: "This sounds dangerous. I think I'll pass.", nextScene: "chickOut" }
+                ]
+            },
+            tutorial: {
+                text: "MINDSWAP EXPLAINED:\n\nMindswapping is the revolutionary technology that allows consciousness to be transmitted across interstellar distances.\n\n1. Your mind pattern is scanned and encoded.\n2. Your body is placed in stasis.\n3. Your consciousness is transmitted to a host body somewhere in the galaxy.\n4. You return when your rental period expires.\n\nWARNING: Extended stays in alien bodies may result in pattern degradation, identity confusion, or existential disconnection. Mindswap Inc. is not responsible for psychological trauma or philosophical crises.",
+                options: [
+                    { text: "I understand and want to proceed.", nextScene: "mindswapOffice" },
+                    { text: "This seems risky. Let me think about it.", nextScene: "chickOut" }
+                ]
+            },
+            chickOut: {
+                text: "As you hesitate at the threshold of this new frontier, you can't help but feel that the risks outweigh the rewards. Perhaps it's better to remain in your familiar human form than to venture into the unknown...\n\nBut the brochure in your hand keeps beckoning with images of exotic worlds and experiences beyond imagination. The Mindswap office door remains open.\n\nPerhaps another day?",
+                options: [
+                    { text: "No, I've changed my mind. Let's do this!", nextScene: "mindswapOffice" },
+                    { text: "Restart the experience", nextScene: "intro" }
+                ]
+            },
+            mindswapOffice: {
+                text: "You enter the sleek offices of Mindswap Inc. The receptionist, a being with six arms and translucent skin, greets you with professional courtesy.\n\n\"Welcome to Mindswap Inc., where you can be anyone, anywhere! We have several exciting consciousness exchange opportunities available today. Which would you like to explore?\"",
+                options: [
+                    { text: "I'd like to swap with a Martian Sand Dweller", nextScene: "martianSwap" },
+                    { text: "How about an Arcturian Thought Weaver?", nextScene: "arcturianSwap" },
+                    { text: "Is there something more... adventurous?", nextScene: "exoticOptions" }
+                ]
+            },
+            exoticOptions: {
+                text: "The receptionist's eyes gleam with intrigue. \"Ah, a thrill-seeker! We have some... specialized options that might interest you.\"\n\nShe lowers her voice. \"For clients seeking unique experiences, we offer:\n\n1. A Vorellian Mist Entity - pure consciousness with no physical form\n2. A Chronojumper from Tau Ceti - they experience time non-linearly\n3. A Quantum Superposition Being - exists in multiple states simultaneously\"\n\nShe adds with caution, \"These experiences are intense and potentially disorienting. Mind stability below 75% is not recommended for these swaps.\"",
+                options: [
+                    { text: "I'll try the Vorellian Mist Entity", nextScene: "vorellianSwap" },
+                    { text: "The Chronojumper sounds fascinating", nextScene: "chronoSwap" },
+                    { text: "Maybe I should start with something simpler", nextScene: "mindswapOffice" }
+                ]
+            },
+            martianSwap: {
+                text: "You've selected a Martian Sand Dweller!\n\nThe technician explains: \"These beings are adapted to the harsh Martian deserts. They have enhanced vision, can sense vibrations through the ground, and have a specialized respiratory system. They're quite popular for geological expeditions.\"\n\nYou're led to a mindswap chamber - a sleek pod with neural interfaces. As you lie down, electrodes attach to your temples.\n\n\"Initiating mindswap sequence. Relax your consciousness and prepare for transition...\"",
+                options: [
+                    { text: "Proceed with the mindswap", nextScene: "martianExperience" },
+                    { text: "Wait, I've changed my mind!", nextScene: "mindswapOffice" }
+                ]
+            },
+            martianExperience: {
+                text: "A rush of disorientation sweeps over you as your consciousness transfers...\n\n...\n\n...\n\nYou awaken in a new body! Your vision has changed dramatically - you can see heat signatures and subtle variations in the Martian soil. Your four-fingered hands have tough, insulated skin.\n\nYou're in a small Martian settlement. The reduced gravity gives you a feeling of lightness, and you can sense vibrations from machinery operating far below the surface.\n\nHow will you spend your time in this new form?",
+                options: [
+                    { text: "Explore the Martian settlement", nextScene: "martianSettlement" },
+                    { text: "Test my new sensory abilities", nextScene: "martianSenses" },
+                    { text: "I'm feeling unsteady - I want to swap back", nextScene: "earlyReturn" }
+                ]
+            },
+            martianSettlement: {
+                text: "You venture through the dome-covered settlement. Martian Sand Dwellers move with a distinctive gait - efficient and graceful in the lower gravity.\n\nThe settlement is a marvel of adaptive engineering: buildings are partially buried for insulation, with transparent domes allowing views of the rust-colored sky. Water recycling systems hum efficiently throughout the complex.\n\nA group of Martians notice you and approach. Through your borrowed body's instincts, you realize they're greeting you as a returning explorer. One speaks: \"Did you find any new crystal deposits in the western ridge? The colony's power reserves are running low.\"",
+                options: [
+                    { text: "Try to bluff: \"I'm still analyzing my findings.\"", nextScene: "martianBluff" },
+                    { text: "Admit you're a mindswap visitor", nextScene: "martianReveal" },
+                    { text: "Excuse yourself and explore elsewhere", nextScene: "martianExplore" }
+                ]
+            },
+            martianBluff: {
+                text: "\"Still analyzing?\" The lead Martian's infrared signature flares with annoyance. \"We've been waiting for your report for days. The Council won't approve new exploration resources without preliminary findings.\"\n\nYour borrowed body's autonomic responses trigger - a warming sensation across your face indicates the Martian equivalent of embarrassment. You realize you've stumbled into a complex social situation involving resource politics.\n\nAnother Martian steps forward, their posture indicating suspicion. \"You don't seem yourself today. Did something happen in the western territories?\"",
+                options: [
+                    { text: "Come clean about being a mindswap visitor", nextScene: "martianReveal" },
+                    { text: "Double down: \"I encountered unusual phenomena that affected my memory\"", nextScene: "martianDeception" },
+                    { text: "Create a distraction and escape", nextScene: "martianEscape" }
+                ]
+            },
+            martianEscape: {
+                text: "You notice an automated delivery drone hovering nearby. Using your Martian body's instinctive knowledge, you subtly adjust a control panel on the wall.\n\n\"What's that sound?\" you ask, pointing in the opposite direction.\n\nAs the Martians turn to look, the drone emits a loud malfunction alert. In the ensuing confusion, you slip away down a side corridor, your borrowed body's knowledge guiding you through the labyrinthine settlement.\n\nYou eventually find yourself in a quiet garden area, safe from immediate questioning but uncertain of your next move. The deception has increased your mental strain.",
+                options: [
+                    { text: "Seek out other mindswap tourists for guidance", nextScene: "martianVisitors" },
+                    { text: "Find a quiet place to test this body's capabilities", nextScene: "martianSenses" },
+                    { text: "Look for the mindswap monitoring station to return early", nextScene: "earlyReturn" }
+                ]
+            },
+            martianDeception: {
+                text: "\"I encountered... something unusual in the western territories,\" you improvise. \"A strange energy field. It's affected my memory and perceptions. I need more time to analyze both my findings and what happened to me.\"\n\nThe Martians exchange concerned glances, their body heat signatures shifting in a pattern your borrowed brain interprets as alarm.\n\n\"An unknown energy field?\" The leader's demeanor changes from annoyance to concern. \"This could be serious. You should report to medical for a full neural scan immediately. If there's an undocumented phenomenon in the territories, we need to know before sending more explorers.\"",
+                options: [
+                    { text: "Go to medical and risk being discovered", nextScene: "martianMedical" },
+                    { text: "Admit the truth now", nextScene: "martianReveal" },
+                    { text: "Excuse yourself: \"I need to rest first\"", nextScene: "martianRest" }
+                ]
+            },
+            martianMedical: {
+                text: "You're escorted to the medical facility - a chamber with advanced scanning equipment and biometric monitoring systems unlike anything on Earth.\n\nA Martian with specialized markings on their exoskeleton approaches. \"I understand you've encountered an unknown field effect. I'll need to perform a full neural pattern scan.\"\n\nAs they prepare the equipment, you realize this scan will almost certainly reveal your human neural signature overlaid on the Martian brain patterns. There's no way to maintain your deception through this procedure.",
+                options: [
+                    { text: "Confess before the scan begins", nextScene: "martianConfess" },
+                    { text: "Try to negotiate: \"Perhaps a rest period first?\"", nextScene: "martianNegotiate" },
+                    { text: "Create an emergency and escape", nextScene: "martianMedicalEscape" }
+                ]
+            },
+            martianConfess: {
+                text: "\"Before we proceed, I should tell you something,\" you say. \"I'm not actually Dryson. I'm a human consciousness using the mindswap service.\"\n\nThe medical officer's heat signature shifts to a pattern indicating mild surprise, but not alarm.\n\n\"Ah, a tourist. You should have said so earlier.\" They set down their equipment. \"We get many mindswap visitors. The neural scan could have been dangerous for you - the calibrations are specifically for Martian neural pathways.\"\n\nThey make a note in their system. \"Dryson has authorized his body for the mindswap program. Please be more forthcoming in the future. Would you like a proper orientation to Martian physiology?\"",
+                options: [
+                    { text: "Accept the medical orientation", nextScene: "martianPhysiology" },
+                    { text: "Ask to return to Earth immediately", nextScene: "earlyReturn" },
+                    { text: "Request directions to the tourist area", nextScene: "martianTouristArea" }
+                ]
+            },
+            martianRest: {
+                text: "\"I think I need to rest before any examination,\" you say. \"The experience was... disorienting.\"\n\nThe lead Martian studies you, their infrared signature indicating skepticism, but their cultural norms around health take precedence.\n\n\"Very well. Report to medical after a rest cycle. But this is now a priority matter - the Council will want to know about any anomalous phenomena in the territories.\"\n\nThey allow you to leave, but you sense their suspicion hasn't diminished. You find your way to what appears to be Dryson's living quarters, guided by your borrowed body's muscle memory. The space is sparse but functional, with geological samples neatly categorized on shelves.",
+                options: [
+                    { text: "Search the quarters for information about Dryson", nextScene: "martianQuarters" },
+                    { text: "Use this time to practice being a Martian", nextScene: "martianPractice" },
+                    { text: "Look for a way to contact Mindswap Inc.", nextScene: "contactMindswap" }
+                ]
+            },
+            martianExplore: {
+                text: "You excuse yourself from the group, pretending to recognize someone in the distance. As you navigate through the settlement, you're struck by the elegant efficiency of Martian design. Every structure, pathway, and system serves multiple purposes.\n\nYou discover a central plaza with what appears to be a community gathering space. Various Martians engage in activities - some are clearly working with holographic data displays, others seem to be in recreational pursuits. Your borrowed body's instincts help you interpret the social dynamics at play.\n\nIn one corner, you notice several beings whose movements seem slightly unnatural - fellow mindswap tourists perhaps?",
+                options: [
+                    { text: "Approach the possible mindswap tourists", nextScene: "martianVisitors" },
+                    { text: "Observe the recreational activities", nextScene: "martianRecreation" },
+                    { text: "Examine the holographic data displays", nextScene: "martianData" }
+                ]
+            },
+            martianNegotiate: {
+                text: "\"I'm feeling quite fatigued from my experience,\" you say. \"Perhaps we could delay the scan until after I've had some rest? My perceptions might be clearer then.\"\n\nThe medical officer's thermal signature shifts in a pattern that suggests professional assessment. \"Fatigue can indeed alter neural readings. However, if there's an environmental hazard, we need to identify it promptly.\"\n\nThey reach a compromise. \"I'll perform a basic physiological scan now - no neural intrusion. Then you may rest for one cycle before the full procedure.\"",
+                options: [
+                    { text: "Accept the basic scan", nextScene: "martianBasicScan" },
+                    { text: "Admit the truth", nextScene: "martianConfess" },
+                    { text: "Feign sudden illness", nextScene: "martianFeigned" }
+                ]
+            },
+            martianMedicalEscape: {
+                text: "You scan the medical facility, looking for an escape route. Your Martian body's instincts identify the environmental controls nearby.\n\n\"Before we begin, could I have some water?\" you ask, moving toward the control panel.\n\nWhile the technician turns, you quickly adjust several settings. The room's atmospheric regulators emit a warning tone, and a red light begins flashing.\n\n\"Environmental regulation error,\" announces an automated voice. \"Adjusting oxygen mixture.\"\n\nIn the momentary confusion, you slip out the door, hearing the technician call after you. You've escaped temporarily, but this deception has increased your mental strain considerably.",
+                options: [
+                    { text: "Hide in the residential section", nextScene: "martianHiding" },
+                    { text: "Look for the mindswap monitoring station", nextScene: "earlyReturn" },
+                    { text: "Try to blend in with a group of tourists", nextScene: "martianVisitors" }
+                ]
+            },
+            martianVisitors: {
+                text: "You approach the group of beings whose movements appear slightly uncoordinated - a telltale sign of consciousness adapting to new bodies.\n\n\"First swap?\" asks one Martian in accented speech, noticing your approach. The group consists of three Martian bodies, but their mannerisms clearly indicate non-native consciousnesses.\n\n\"I'm from Earth,\" you explain. \"This is my first time on Mars.\"\n\n\"Same here!\" says another. \"I'm actually from Ganymede Colony. Fascinating to experience these sensory capabilities, isn't it? I keep getting overwhelmed by the vibration sensing.\"\n\nThe third visitor, more adapted to the body, offers advice. \"The trick is to let the body's instincts guide you rather than fighting them. These Martian forms have millions of years of evolutionary knowledge embedded in their systems.\"",
+                options: [
+                    { text: "Ask about their experiences and tips", nextScene: "martianAdvice" },
+                    { text: "Inquire about the best attractions to visit", nextScene: "martianAttractions" },
+                    { text: "Ask if they've had any difficult encounters with real Martians", nextScene: "martianEncounters" }
+                ]
+            },
+            martianRitual: {
+                text: "You give in to the body's urge to perform what feels like a morning ritual. Your limbs move in a precise sequence of stretches and positions, each movement releasing tension from specific muscle groups adapted to the Martian environment.\n\nAs your body flows through the movements, you experience a profound sense of connection with your temporary form. The ritual seems to calibrate your sensory systems - your vision sharpens, your vibration sensitivity becomes more precise, and your thermoregulation adjusts to the Martian temperature fluctuations.\n\nNearby Martians notice your practice. One nods approvingly. \"Good to see a mindswap visitor respecting our ways,\" they comment, their heat signature indicating genuine appreciation.",
+                options: [
+                    { text: "Ask them about the ritual's significance", nextScene: "martianRitualExplained" },
+                    { text: "Inquire about other Martian customs", nextScene: "martianCustoms" },
+                    { text: "Ask for recommendations on how to best experience Mars", nextScene: "martianRecommendations" }
+                ]
+            },
+            martianPhysical: {
+                text: "You find an open area to test your Martian body's physical capabilities. The lower gravity immediately gives you a sense of power and agility that would be impossible on Earth.\n\nYou break into a run, and your body responds with extraordinary efficiency - each stride covering several meters in a graceful bound. Your muscles seem perfectly adapted to the Martian environment, conserving energy and heat in the thin atmosphere.\n\nYou attempt a jump and soar nearly three meters high, landing with precision that surprises you. The body's reflexes are handling calculations your human mind would struggle with.\n\nA small group of young Martians has gathered to watch you, their thermal signatures indicating amusement. One calls out, \"Trying out the rental body?\"",
+                options: [
+                    { text: "Demonstrate more physical feats for their entertainment", nextScene: "martianPerformance" },
+                    { text: "Ask them to show you some typical Martian activities", nextScene: "martianActivities" },
+                    { text: "Inquire about locations where you can further test these abilities", nextScene: "martianLocations" }
+                ]
+            },
+            martianTouristArea: {
+                text: "The medical officer provides directions to the designated tourist zone - a section of the settlement designed to showcase Martian culture and provide amenities for visitors.\n\n\"You'll find other mindswap tourists there, as well as guides who can enhance your experience,\" they explain. \"I've also flagged your neural signature in our system so other Martians will recognize you as a visitor.\"\n\nYou follow their directions to a colorful district with informational displays and activity centers. A sign in multiple languages reads: \"Welcome to Mars - Experience Life Through New Eyes.\" Several attendants in specially marked clothing stand ready to assist visitors.",
+                options: [
+                    { text: "Join a guided tour of the settlement", nextScene: "martianGuidedTour" },
+                    { text: "Sign up for a 'Mars Physical Challenge' activity", nextScene: "martianChallenge" },
+                    { text: "Visit the cultural exchange center", nextScene: "martianCulture" }
+                ]
+            },
+            martianReveal: {
+                text: "\"I should be honest - I'm actually a mindswap visitor from Earth. This is my first time experiencing life as a Martian.\"\n\nThe group's body language shifts immediately. Their infrared signatures cool, indicating relief or amusement.\n\n\"Ah, that explains it,\" the lead Martian says. \"We get many tourists these days. The actual Dryson is probably still out at the dig site.\" They extend a four-fingered hand in a welcoming gesture. \"I'm Khal-Tur, settlement coordinator. Would you like a proper introduction to our way of life?\"",
+                options: [
+                    { text: "Accept the tour", nextScene: "martianTour" },
+                    { text: "Ask about the crystal deposits they mentioned", nextScene: "martianCrystals" },
+                    { text: "Inquire about the body you're currently inhabiting", nextScene: "martianBody" }
+                ]
+            },
+            martianSenses: {
+                text: "You find an open area to test your new sensory capabilities. The Martian body responds with unexpected precision.\n\nClosing your eyes, you press your hands to the ground and feel vibrations - you can distinguish between a group of children playing 100 meters away and the low hum of maintenance machinery below the surface.\n\nYour vision is equally remarkable - you can focus on distant objects with clarity impossible in your human form. The infrared spectrum allows you to \"see\" temperature variations, creating an intuitive understanding of your environment's thermal landscape.\n\nYour borrowed body's instincts begin to surface - an urge to perform a morning stretching ritual, and knowledge of which local plants are edible.",
+                options: [
+                    { text: "Follow the body's instinct to perform the stretching ritual", nextScene: "martianRitual" },
+                    { text: "Test your physical capabilities further", nextScene: "martianPhysical" },
+                    { text: "Seek out other mindswap visitors", nextScene: "martianVisitors" }
+                ]
+            },
+            arcturianSwap: {
+                text: "You've selected an Arcturian Thought Weaver!\n\nThe technician explains: \"Arcturians communicate primarily through telepathic imagery. Their society values philosophical exploration and artistic expression. Their bodies require minimal maintenance, allowing consciousness to focus on abstract thought.\"\n\nAs you enter the mindswap chamber, the technician adds, \"Be prepared for a dramatic shift in perception. Arcturians experience reality as interwoven layers of thought and emotion. Some visitors find it disorienting at first.\"\n\nThe electrodes activate, and you feel your consciousness beginning to dissolve...",
+                options: [
+                    { text: "Embrace the dissolution", nextScene: "arcturianExperience" },
+                    { text: "Try to maintain your human thought patterns", nextScene: "arcturianResistance" },
+                    { text: "Abort the transfer", nextScene: "mindswapOffice" }
+                ]
+            },
+            arcturianExperience: {
+                text: "Colors cascade through your mind as your consciousness reconstructs itself in the Arcturian brain...\n\n...\n\n...\n\nYou awaken to a world transformed. Physical reality seems less substantial, overlaid with shimmering thought-forms and emotional resonances. Your slender, pale blue body feels weightless, almost incidental to your existence.\n\nYou're in what appears to be a gathering space - a crystal dome under Arcturus' golden light. Other Arcturians float nearby, their thoughts gently brushing against your consciousness like curious fingers.\n\nThe most striking change is how you perceive others - not just as physical forms, but as complex tapestries of thoughts, memories, and emotions that you can actually see and feel.",
+                options: [
+                    { text: "Attempt to communicate with nearby Arcturians", nextScene: "arcturianCommunication" },
+                    { text: "Explore your environment", nextScene: "arcturianExploration" },
+                    { text: "Turn inward and explore your borrowed consciousness", nextScene: "arcturianIntrospection" }
+                ]
+            },
+            vorellianSwap: {
+                text: "You've selected a Vorellian Mist Entity!\n\nThe technician looks concerned. \"This is one of our most advanced exchanges. Vorellians exist as conscious gaseous forms with no solid body. You'll experience existence without physical boundaries, sensing electromagnetic fields and chemical compositions directly.\"\n\nShe calibrates the equipment with extra care. \"I must warn you - the absence of physical form can be extremely disorienting. Many clients report feelings of existential panic initially. Would you like to proceed?\"",
+                options: [
+                    { text: "Yes, I'm ready for a truly alien experience", nextScene: "vorellianExperience" },
+                    { text: "Perhaps I should start with something less extreme", nextScene: "mindswapOffice" }
+                ]
+            },
+            vorellianExperience: {
+                text: "The transition is unlike anything you've experienced - instead of transferring to a new body, you feel yourself dissolving completely...\n\n...\n\n...\n\nConsciousness returns, but everything has changed. You have no eyes, yet you perceive. You have no limbs, yet you move. You exist as a diffuse cloud of sentient particles, drifting through an environment saturated with information.\n\nYou're in what feels like a Vorellian gathering place - a complex electromagnetic field generator creating a space where mist entities can congregate and communicate. Other Vorellians swirl around you, their particle patterns shifting in what you somehow understand is conversation.\n\nYou can sense the chemical composition of everything around you, feel electrical currents, and move by willing your particles to flow in any direction.",
+                options: [
+                    { text: "Attempt to communicate with other Vorellians", nextScene: "vorellianCommunication" },
+                    { text: "Explore your ability to move and change form", nextScene: "vorellianMovement" },
+                    { text: "This is too disorienting - I want to return to human form", nextScene: "vorellianPanic" }
+                ]
+            },
+            chronoSwap: {
+                text: "You've selected a Chronojumper from Tau Ceti!\n\nThe technician raises her eyebrows. \"An adventurous choice. Chronojumpers experience time non-linearly - past, present, and potential futures blend together in their perception.\"\n\nShe makes several adjustments to the equipment. \"This exchange requires additional neural synchronization. Their brains have evolved to process simultaneous timestreams without cognitive overload. Yours will need to adapt quickly.\"\n\nAs you recline in the chamber, she adds, \"Remember: what you'll experience as 'memory' and 'prediction' are just different dimensions of 'now' to a Chronojumper.\"",
+                options: [
+                    { text: "Begin the chronojump", nextScene: "chronoExperience" },
+                    { text: "This sounds too intense - choose another option", nextScene: "mindswapOffice" }
+                ]
+            },
+            chronoExperience: {
+                text: "The transfer begins, but instead of a linear transition, you experience moments of the process simultaneously - the beginning, middle, and end all at once...\n\n...\n\n...\n\nYou exist within a Chronojumper's perception. Your consciousness inhabits a humanoid body with iridescent skin that shifts colors with temporal fluctuations. But the physical form seems secondary to the astonishing way you now perceive reality.\n\nTime has transformed from a river into an ocean. You stand in a Tau Cetian gathering hall, but you simultaneously experience:\n\n- The hall being constructed (15 years ago)\n- Current conversations happening around you\n- A celebration that will occur next month\n- The building's eventual abandonment (decades from now)\n\nAll these timestreams coexist in your perception, constantly shifting in prominence as your attention moves.",
+                options: [
+                    { text: "Focus on the present moment", nextScene: "chronoPresent" },
+                    { text: "Explore future timestreams", nextScene: "chronoFuture" },
+                    { text: "Try to understand how Chronojumpers navigate this perception", nextScene: "chronoNavigation" }
+                ]
+            },
+            earlyReturn: {
+                text: "You signal for an early return, feeling unsettled by the alien experience. The Mindswap operators begin the return protocol...\n\n...\n\n...\n\nYou reawaken in your human body, the transition leaving you with a mild headache and lingering sensory echoes from your Martian experience. The technician looks concerned.\n\n\"Early returns can be jarring,\" she explains. \"Your consciousness was still adapting to the host body. Some disorientation is normal.\"\n\nShe reviews your neural readings. \"Your mind stability has decreased slightly. I'd recommend a rest period before attempting another swap.\"",
+                options: [
+                    { text: "Rest and then try another swap", nextScene: "mindswapOffice" },
+                    { text: "Ask about less disorienting options", nextScene: "beginnerOptions" },
+                    { text: "I think I need more time to adjust to this technology", nextScene: "endExperience" }
+                ]
+            },
+            martianTour: {
+                text: "Khal-Tur proves to be an enthusiastic guide. \"Our settlement was established 32 Martian cycles ago, focused on sustainable living and crystal mining.\"\n\nThe tour reveals ingenious adaptations: moisture reclamation systems, subterranean gardens using specialized lighting, and communal spaces designed to strengthen social bonds.\n\n\"Our greatest challenge is energy generation,\" Khal-Tur explains, showing you a pulsing crystal array. \"These photoelectric crystals are unique to Mars - they convert not just visible light but also cosmic radiation into usable energy.\"\n\nYou notice other mindswap tourists - their movements slightly unnatural as they adjust to Martian bodies. Your own body's muscle memory is making the experience increasingly seamless.",
+                options: [
+                    { text: "Ask to visit the crystal mines", nextScene: "martianMines" },
+                    { text: "Join a communal meal", nextScene: "martianMeal" },
+                    { text: "Thank Khal-Tur and explore independently", nextScene: "martianIndependent" }
+                ]
+            },
+            beginnerOptions: {
+                text: "\"First-time swapper, huh?\" The technician smiles sympathetically. \"We have several experiences designed specifically for beginners:\"\n\n1. Europan Aquatic - humanoid but adapted for ocean living on Jupiter's moon. Very similar neurological structure to humans.\n\n2. Venusian Cloud Glider - exists in Venus's upper atmosphere, gentle sensory enhancement without radical physiological differences.\n\n3. Lunar Colonist - basically human but with adaptations for low gravity and radiation resistance. Minimal adjustment required.\"",
+                options: [
+                    { text: "Let's try the Europan Aquatic", nextScene: "europanSwap" },
+                    { text: "The Venusian Cloud Glider sounds interesting", nextScene: "venusianSwap" },
+                    { text: "I'd prefer the Lunar Colonist", nextScene: "lunarSwap" }
+                ]
+            },
+            endExperience: {
+                text: "The Mindswap technician helps you collect your belongings.\n\n\"Many people need time to process their first mindswap experience,\" she assures you. \"Even just the concept of consciousness transfer can be philosophically challenging. Take some time to reflect on today's experience.\"\n\nShe hands you a brochure. \"We offer integration counseling for those who find themselves dwelling on existential questions after a swap. And when you're ready to try again, your customer profile will be waiting.\"\n\nAs you exit the Mindswap facility, you feel both disappointed at your limited experience and strangely relieved to be firmly in your own body, with its familiar limitations and sensations.",
+                options: [
+                    { text: "Restart the Mindswap experience", nextScene: "intro" },
+                    { text: "End the simulation", nextScene: "endGame" }
+                ]
+            },
+            endGame: {
+                text: "Thank you for experiencing MINDSWAP!\n\nInspired by Robert Sheckley's novel, this simulation explores themes of consciousness, identity, and the subjective nature of experience.\n\nIn Sheckley's \"Mindswap,\" the protagonist experiences similar dislocations of self, confronting the question: If you can change bodies, what truly constitutes your identity?\n\nFeel free to restart and explore different paths and alien experiences!",
+                options: [
+                    { text: "Restart the Mindswap experience", nextScene: "intro" }
+                ]
+            },
+// the following pasted in from separately generate scenes
+// CHRONOJUMPER EXPERIENCE ADDITIONAL SCENES
+    chronoManagement: {
+        text: "You ask how Chronojumpers manage multiple timestreams simultaneously without becoming overwhelmed. The nearby Chronojumper responds with unusual clarity, their thoughts structured to be comprehensible to your transitioning consciousness.\n\n\"We don't block or eliminate timestreams - that would be like blinding ourselves,\" they explain. \"Instead, we develop attentional hierarchies. Some timestreams receive foreground focus, others background awareness.\"\n\nThey demonstrate mentally, guiding your perception through different attentional configurations. You experience how they can foreground the present while maintaining awareness of significant past and future points - like hearing the primary melody of music without losing track of the harmony.\n\n\"Physical brain structures support this from birth,\" they add. \"But even non-Chronojumpers can develop the skill partially. Your mind is adapting rapidly - unusual for a first-time visitor.\"",
+        options: [
+            { text: "Ask about the evolutionary development of this ability", nextScene: "chronoEvolution" },
+            { text: "Practice the attentional techniques they've demonstrated", nextScene: "chronoPractice" },
+            { text: "Inquire about the limits of their temporal perception", nextScene: "chronoLimits" }
+        ]
+    },
+    chronoGathering: {
+        text: "You inquire about the purpose of this gathering, curious what brings Chronojumpers together in this hall.\n\n\"This is a Temporal Confluence,\" they explain. \"We're not just gathering in spatial proximity, but at a significant nexus point across multiple timestreams.\"\n\nYou learn that Chronojumpers organize social events around moments where multiple important timestreams intersect - points where decisions or events will have cascading effects across different possible futures. By gathering at these confluences, they can collectively experience and sometimes subtly influence these pivotal moments.\n\n\"Today's confluence centers on scientific discovery,\" they continue. \"In this room, someone will conceive an insight with far-reaching consequences. We gather to witness the thought's emergence and its ripples through potential futures.\"",
+        options: [
+            { text: "Ask which individual will have the insight", nextScene: "chronoInsight" },
+            { text: "Inquire about the ethics of observing future consequences", nextScene: "chronoEthics" },
+            { text: "Explore how such gatherings affect the participants", nextScene: "chronoEffect" }
+        ]
+    },
+    chronoGuidance: {
+        text: "You request guidance on navigating Chronojumper society, conscious of your limited understanding of their temporal customs.\n\n\"First principle: intention recognition,\" explains your guide. \"We perceive intentions across timestreams, so deception is impossible and rarely attempted. Authenticity is fundamental.\"\n\nThey explain that Chronojumper interactions involve temporal context - acknowledging significant past events and future possibilities relevant to the current exchange. It's considered respectful to maintain awareness of these connections rather than focusing narrowly on the present moment.\n\n\"Second principle: confluence respect. When multiple significant timestreams intersect, these moments receive special attention. Interrupting someone experiencing a personal confluence would be like interrupting an important dream for humans.\"\n\n\"Third principle: temporal privacy. Though we perceive multiple timestreams, we choose which aspects to acknowledge explicitly. Commenting on someone's potential futures without invitation would be deeply intrusive.\"",
+        options: [
+            { text: "Practice these principles in a simple interaction", nextScene: "chronoPractice" },
+            { text: "Ask about cultural expressions and arts", nextScene: "chronoArts" },
+            { text: "Inquire about their perception of non-Chronojumper species", nextScene: "chronoPerception" }
+        ]
+    },
+    chronoSpecific: {
+        text: "You focus on a particularly vivid future probability - a timeline where a conversation in the hall leads to a significant scientific breakthrough. As you concentrate, this potential future comes into sharper focus.\n\nYou observe the specific sequence: two Chronojumpers currently on opposite sides of the room will meet, discuss their respective research, and realize their work perfectly complements each other's. This chance meeting creates a new approach to temporal physics with far-reaching implications.\n\nMost fascinating is experiencing the breakthrough from multiple temporal perspectives simultaneously - seeing the idea's conception, development, implementation, and historical significance all at once. It's like watching a seed, sprout, mature tree, and forest ecosystem simultaneously.\n\nA nearby Chronojumper notices your focus. \"Significant confluence, yes. Many observe this probability line. High certainty, strong outcomes.\"",
+        options: [
+            { text: "Ask if they take actions to ensure this meeting occurs", nextScene: "chronoAction" },
+            { text: "Explore other possible futures stemming from this event", nextScene: "chronoBranches" },
+            { text: "Inquire about how they use future knowledge in present decisions", nextScene: "chronoKnowledge" }
+        ]
+    },
+    chronoFutureUse: {
+        text: "\"How do Chronojumpers use future perception in daily life?\" you ask, curious about the practical applications of this remarkable ability.\n\n\"Future-streams inform without determining,\" comes the response. \"We see probabilities, not certainties. The value is in understanding consequences before choices.\"\n\nThey explain that Chronojumpers use future perception for everything from personal decisions to scientific research. By seeing the probable outcomes of different approaches, they can optimize their efforts toward desired results. This has accelerated their technological and social development exponentially.\n\n\"Most valuable application is in identifying 'confluence points' - decision moments where small actions create large divergences in future-streams. Finding these leverage points allows maximum effect from minimal effort.\"",
+        options: [
+            { text: "Ask about mistaken predictions or unexpected outcomes", nextScene: "chronoMistakes" },
+            { text: "Inquire about the psychological effects of seeing potential futures", nextScene: "chronoPsychology" },
+            { text: "Question the impact on free will and choice", nextScene: "chronoFreeWill" }
+        ]
+    },
+    chronoTechnique: {
+        text: "You accept the Chronojumper's guidance, allowing them to demonstrate their temporal focusing technique. Their thoughts connect with yours, creating a structured framework for your perception.\n\n\"Begin with present-anchoring,\" they instruct. \"Establish current moment as primary reference point.\"\n\nFollowing their guidance, you focus on the immediate present, letting it become solid and clear in your perception. From this anchor, they show how to extend awareness to other timestreams without losing your grounding.\n\n\"Now add controlled perception-threads to significant past and future points. Not all - select by relevance to current context.\"\n\nThe technique feels like learning to divide your attention in a completely new dimension. Gradually, you achieve a more balanced awareness - the present remains primary, but with contextual threads extending to important related moments in past and future timestreams.",
+        options: [
+            { text: "Practice maintaining this balanced perception", nextScene: "chronoPractice" },
+            { text: "Ask how they identify which timestreams are significant", nextScene: "chronoSignificance" },
+            { text: "Try extending your perception further into future possibilities", nextScene: "chronoExtend" }
+        ]
+    },
+    chronoEvolution: {
+        text: "You inquire about how Chronojumpers evolved their remarkable temporal perception. The response comes with fascinating depth, including both biological and cultural dimensions.\n\n\"Neural architecture unique to our species,\" they explain. \"Began with anticipatory adaptation for hunting - predicting prey movements by seconds, then minutes. Natural selection favored more advanced prediction.\"\n\nOver millions of years, this predictive capacity expanded from immediate physical events to increasingly distant probabilities. Specialized brain structures developed to process multiple timestreams simultaneously without cognitive overload.\n\n\"Biological foundation important, but cultural practices equally vital,\" they continue. \"Each generation developed cognitive techniques to enhance natural abilities. Children undergo temporal perception training from early development, gradually expanding their temporal horizon and discrimination abilities.\"",
+        options: [
+            { text: "Ask about differences in temporal perception between individuals", nextScene: "chronoIndividual" },
+            { text: "Inquire about how their language evolved to express temporal concepts", nextScene: "chronoLanguage" },
+            { text: "Question whether this ability could be technologically enhanced", nextScene: "chronoTechnology" }
+        ]
+    },
+    chronoPhilosophy: {
+        text: "You ask about the philosophical implications of experiencing time non-linearly. The Chronojumper's response radiates with thoughtful complexity - clearly a topic of deep importance to their species.\n\n\"Our temporal perception fundamentally shapes our understanding of existence,\" they explain. \"Where linear species see discrete cause-effect chains, we perceive vast causal webs across timestreams.\"\n\nThis perspective has led to philosophical frameworks very different from human traditions. Chronojumpers don't distinguish sharply between determinism and free will, seeing instead a complex interplay of probability fields that both constrain and enable choice.\n\n\"Most significant philosophical question for us: meaning creation in probability space. If all possibilities exist as potentials, what gives value to actualized versus unactualized paths? Our dominant philosophical traditions focus on intentional navigation of possibility rather than fixed ethical systems.\"",
+        options: [
+            { text: "Ask about their concept of identity across timestreams", nextScene: "chronoIdentity" },
+            { text: "Explore their understanding of death and finitude", nextScene: "chronoDeath" },
+            { text: "Inquire about how they reconcile knowledge of potential futures with present action", nextScene: "chronoAction" }
+        ]
+    },
+// BEGINNER OPTION SCENES - COMPLETE VERSION
+europanSwap: {
+        text: "You've selected an Europan Aquatic!\n\nThe technician explains: \"Europans evolved in the subsurface oceans of Jupiter's moon. They're humanoid, but with significant adaptations for aquatic life - enhanced lung capacity, webbed extremities, and specialized vision that works efficiently in both water and air.\"\n\nShe calibrates the equipment. \"This is an excellent choice for first-time swappers. Europan neurology is quite compatible with human patterns, but the sensory experience is noticeably enhanced without being overwhelming.\"\n\nThe mindswap chamber activates, and you feel the familiar disorientation as your consciousness transfers...",
+        options: [
+            { text: "Embrace the transfer process", nextScene: "europanExperience" },
+            { text: "Maintain focus on your human identity during transition", nextScene: "europanFocus" },
+            { text: "Abort the transfer", nextScene: "mindswapOffice" }
+        ]
+    },
+    europanExperience: {
+        text: "Your consciousness settles into the Europan body with remarkable ease. The transition feels smooth, almost natural, as their neurological structure accommodates your human thought patterns with minimal resistance.\n\nYou become aware of your new form - sleek, hydrodynamic, with webbed hands and feet. Your skin has a subtle bluish tint and feels more sensitive than human skin, capable of detecting minute pressure changes in the surrounding water or air.\n\nYou're in an aquatic habitat - a vast, transparent dome beneath the ice crust of Europa. The enclosed ocean teems with bioluminescent life forms. Other Europans swim gracefully through the water or walk along platforms and structures that blend seamlessly with the natural environment.\n\nMost striking is your new visual perception - water and air appear equally clear, with no distortion when looking between mediums. You can perceive subtle temperature variations as color differences, creating beautiful thermal patterns across the underwater landscape.",
+        options: [
+            { text: "Test your swimming capabilities", nextScene: "europanSwimming" },
+            { text: "Explore the underwater habitat", nextScene: "europanHabitat" },
+            { text: "Interact with other Europans", nextScene: "europanSocial" }
+        ]
+    },
+    europanFocus: {
+        text: "During the transfer, you maintain a strong focus on your human identity, creating a more distinct separation between your consciousness and the Europan neural structure. The transition still succeeds, but there's a noticeable sense of being a visitor rather than fully integrated.\n\nYou find yourself in an Europan body, aware of its aquatic adaptations - the webbed extremities, pressure-sensitive skin, and enhanced respiratory system. You're in an underwater habitat, a massive dome beneath Europa's ice crust, filled with bioluminescent marine life and elegant organic architecture.\n\nYour new senses function well, but there's a slight delay as your consciousness processes the information. It's like speaking a language you've studied but aren't fluent in - comprehensible but requiring extra attention.\n\nA nearby Europan notices your slightly uncoordinated movements. \"First-time visitor?\" they ask, their voice clear despite being underwater. \"It's easier if you relax your human thought patterns and allow the Europan neurology to guide sensory processing.\"",
+        options: [
+            { text: "Try relaxing your mental barriers", nextScene: "europanRelax" },
+            { text: "Ask for tips on navigating with this body", nextScene: "europanTips" },
+            { text: "Maintain your human perspective while exploring", nextScene: "europanHumanView" }
+        ]
+    },
+    europanSwimming: {
+        text: "You slide into the water, letting your borrowed body's instincts guide you. The sensation is extraordinary - not at all like human swimming. Your webbed extremities and hydrodynamic form cut through water with effortless efficiency.\n\nYour enhanced lung capacity allows you to stay underwater for extended periods, and a specialized organ helps regulate buoyancy precisely. Most remarkable is how your vision remains perfectly clear underwater, with no distortion or blurring.\n\nAs you gain confidence, you attempt more complex maneuvers - rapid turns, vertical dives, and sustained deep swimming. Your Europan body responds with precision and grace, designed by evolution for exactly this environment.\n\nNearby Europans watch with appreciation, their body language indicating approval of your quick adaptation. One approaches, swimming in a graceful spiral pattern that you somehow recognize as a friendly greeting gesture.",
+        options: [
+            { text: "Return the greeting and introduce yourself", nextScene: "europanGreeting" },
+            { text: "Ask them to demonstrate more advanced swimming techniques", nextScene: "europanAdvanced" },
+            { text: "Inquire about the underwater environment and wildlife", nextScene: "europanWildlife" }
+        ]
+    },
+    europanHabitat: {
+        text: "You explore the underwater habitat, marveling at its organic design. Unlike human structures that stand apart from their environment, Europan architecture grows from and integrates with the natural surroundings.\n\nLiving coral-like organisms form the basis of many structures, carefully cultivated into habitation spaces, walkways, and public areas. Bioluminescent organisms provide lighting, their colors shifting to indicate different functional zones.\n\nThe habitat extends both above and below the water line, with seamless transitions between aquatic and air-filled spaces. Most fascinating is the ice ceiling far above - the underside of Europa's frozen surface, through which filtered light from distant Jupiter creates ever-shifting patterns.\n\nYou notice that Europans move between water and air frequently, their amphibious nature allowing them to function optimally in both environments. Their society doesn't distinguish between underwater and surface activities the way humans might segregate land and water.",
+        options: [
+            { text: "Visit the scientific research area", nextScene: "europanScience" },
+            { text: "Explore the artistic and cultural center", nextScene: "europanCulture" },
+            { text: "Find an observation area for viewing marine life", nextScene: "europanMarine" }
+        ]
+    },
+    europanSocial: {
+        text: "You approach a group of Europans engaged in what appears to be a social gathering. They welcome you with fluid hand gestures that your borrowed body instinctively recognizes as greetings.\n\n\"A visitor from Earth,\" one says, their voice melodic and clear even underwater. \"How do you find our world?\"\n\nCommunication happens both above and below water without difficulty. Europan vocal structures are adapted for both environments, producing sounds that travel efficiently through either medium.\n\nThe social dynamics are fascinating - Europans maintain closer physical proximity than humans typically would, and use subtle water pressure changes as a component of their communication. Your sensitive skin can detect these pressure signals, adding an emotional dimension to the conversation that would be impossible for humans to perceive.\n\n\"Your adaptation is impressive,\" comments another Europan. \"Many visitors struggle with the sensory integration.\"",
+        options: [
+            { text: "Ask about Europan social customs and etiquette", nextScene: "europanCustoms" },
+            { text: "Inquire about their perception of Earth and humans", nextScene: "europanPerception" },
+            { text: "Request a tour of their community", nextScene: "europanTour" }
+        ]
+    },
+    venusianSwap: {
+        text: "You've selected a Venusian Cloud Glider!\n\nThe technician smiles approvingly. \"Cloud Gliders are perfect for beginners. They evolved in Venus's upper atmosphere, living their entire lives soaring through the cloud layers. They're lightweight humanoids with hollow bones and membranous wings.\"\n\nShe makes some adjustments to the equipment. \"Their neurological structure is very compatible with human patterns, but they'll give you the remarkable experience of true flight. Their sensory systems emphasize atmospheric pressure variations and gas composition detection - fascinating but not disorienting.\"\n\nAs the mindswap sequence begins, you feel yourself becoming lighter, almost buoyant as your consciousness shifts...",
+        options: [
+            { text: "Fully embrace the transition to a flying form", nextScene: "venusianExperience" },
+            { text: "Focus on maintaining your sense of identity", nextScene: "venusianIdentity" },
+            { text: "Abort the transfer", nextScene: "mindswapOffice" }
+        ]
+    },
+    venusianExperience: {
+        text: "The transition completes, and you find yourself in a body so light it seems almost weightless. Your new form has a slender, elongated structure with thin limbs and membranous wings extending from modified arms. Your skin has a golden hue that shimmers with specialized reflective cells.\n\nYou're soaring through the upper atmosphere of Venus, among the more hospitable cloud layers. All around you, other Venusian Cloud Gliders ride thermal currents with casual mastery. Below, the dense, toxic lower atmosphere forms a golden sea of clouds stretching to the horizon.\n\nYour new senses are extraordinary. You can feel minute variations in air pressure and current that allow for precise navigation. Your enhanced vision perceives both visible light and infrared, showing thermal currents as visible streams you can follow. Most fascinating is your atmospheric composition sense - you can \"taste\" the air, detecting gases and their concentrations with remarkable precision.\n\nThe sensation of flight is exhilarating, but not frightening - your borrowed body knows instinctively how to adjust its wings and posture to maintain stability.",
+        options: [
+            { text: "Experiment with different flying techniques", nextScene: "venusianFlying" },
+            { text: "Approach a nearby Venusian settlement", nextScene: "venusianSettlement" },
+            { text: "Test your atmospheric composition sensing", nextScene: "venusianSensing" }
+        ]
+    },
+    venusianIdentity: {
+        text: "During the transfer, you maintain strong focus on your human identity. The process completes successfully, but with a distinct sense of separation between your consciousness and the Venusian neural patterns.\n\nYou find yourself in a Cloud Glider body, soaring through Venus's upper atmosphere. The golden clouds extend in all directions, with other Venusians gracefully navigating thermal currents nearby. Your new body has membranous wings and incredibly light bone structure.\n\nThe flying sensations are extraordinary but slightly disconnected - like controlling a sophisticated vehicle rather than having innate flying ability. Your human mind needs to consciously process sensory information that Venusians handle instinctively, creating a slight delay in reactions.\n\nA nearby Venusian notices your somewhat rigid flight pattern and approaches in a spiral that indicates curiosity. \"Earth visitor? Your thought patterns are very structured,\" they observe. \"The experience improves if you allow your consciousness to merge more fully with our neural architecture.\"",
+        options: [
+            { text: "Try relaxing your mental barriers", nextScene: "venusianRelax" },
+            { text: "Ask for guidance on basic flight techniques", nextScene: "venusianGuidance" },
+            { text: "Maintain your human perspective while exploring", nextScene: "venusianHumanView" }
+        ]
+    },
+    venusianFlying: {
+        text: "You surrender to the joy of flight, allowing your borrowed body's instincts to guide you. The experience is nothing like the limited human imagination of flying - it's more comprehensive, more natural, with your entire physiology perfectly adapted for aerial existence.\n\nYou experiment with different wing positions and body postures, discovering how to climb rapidly on thermal currents, dive in controlled swoops, and glide efficiently over long distances. Your hollow bones and ultralight muscle structure make every movement effortless.\n\nMost remarkable is the sensory integration - you can feel air currents before they reach you by detecting subtle pressure changes. Your vision identifies optimal thermal columns by their heat signatures. Even your hearing is specialized, using sound reflections to build a three-dimensional awareness of the air space around you.\n\nNearby Venusians observe your rapid adaptation with approval, a few performing elaborate aerial maneuvers that you recognize as invitations to join them.",
+        options: [
+            { text: "Join the group flight demonstration", nextScene: "venusianGroup" },
+            { text: "Ask them to show you more advanced techniques", nextScene: "venusianAdvanced" },
+            { text: "Inquire about the atmospheric layers and environment", nextScene: "venusianAtmosphere" }
+        ]
+    },
+    venusianSettlement: {
+        text: "You fly toward what appears to be a Venusian settlement - a cluster of translucent, balloon-like structures floating in the golden clouds. As you approach, you see that these aren't isolated bubbles but an interconnected network of habitats linked by graceful tensile structures.\n\nThe settlement isn't fixed in position but drifts with the atmospheric currents, its components constantly adjusting to maintain optimal positioning in the habitable layer. Solar collection membranes spread wide above the main structures, gathering energy and providing shade.\n\nVenusians move through and around the habitat with fluid grace, some carrying objects in specialized pouches, others performing maintenance on the external membranes. The entire community feels alive, responsive to environmental changes and social needs.\n\nAs you come closer, entrance portals dilate open - not rigid doors but elastic membranes that create temporary openings while maintaining the internal atmosphere. Your Venusian senses detect the slightly different air composition inside - optimized for rest and social gathering rather than flight.",
+        options: [
+            { text: "Enter the settlement", nextScene: "venusianInterior" },
+            { text: "Circle the perimeter to observe its structure", nextScene: "venusianStructure" },
+            { text: "Communicate with the Venusians maintaining the habitat", nextScene: "venusianMaintenance" }
+        ]
+    },
+    venusianSensing: {
+        text: "You focus on your new atmospheric composition sense, a capability entirely absent in humans. Through specialized receptors distributed across your skin and respiratory system, you can detect and analyze gas concentrations with remarkable precision.\n\nThe upper Venusian atmosphere reveals itself as a complex, layered environment. You sense the primary carbon dioxide base, but also detect sulfur compounds, water vapor, and trace gases in constantly shifting patterns. These variations create what amounts to a chemical landscape as rich and detailed as visual scenery would be to human eyes.\n\nMost fascinating is how this sense integrates with your other perceptions - the composition data combines with pressure and temperature information to give you intuitive understanding of weather patterns, air current formation, and even the time of day as solar heating changes atmospheric activity.\n\nYou discover you can \"taste\" the passage of other Venusians, as their bodies leave subtle chemical signatures in the air. These traces contain identifiable individual patterns and even emotional states - a form of passive communication unique to cloud-dwelling species.",
+        options: [
+            { text: "Follow an interesting chemical trail", nextScene: "venusianTrail" },
+            { text: "Try to detect the settlement's atmospheric signature", nextScene: "venusianSignature" },
+            { text: "Ask another Venusian about this sensory ability", nextScene: "venusianExplanation" }
+        ]
+    },
+    lunarSwap: {
+        text: "You've selected a Lunar Colonist!\n\nThe technician nods. \"A very gentle first experience. Lunar Colonists are essentially human, just with genetic and cybernetic adaptations for low gravity and radiation resistance. Their sensory systems and cognitive structures are nearly identical to yours.\"\n\nShe prepares the equipment with minimal adjustments. \"This is often where we start with more cautious clients. You'll experience the physical differences of living on the Moon without significant cognitive adjustment. Think of it as 'Human Plus' rather than truly alien.\"\n\nThe transfer process begins, and you notice how smoothly your consciousness shifts compared to previous attempts...",
+        options: [
+            { text: "Focus on the physical sensations during transfer", nextScene: "lunarExperience" },
+            { text: "Pay attention to the cybernetic enhancements", nextScene: "lunarCybernetics" },
+            { text: "Abort the transfer", nextScene: "mindswapOffice" }
+        ]
+    },
+    lunarExperience: {
+        text: "Your consciousness transfers with minimal disorientation. The Lunar Colonist body feels immediately familiar - human in all essential ways, just optimized for lunar conditions.\n\nYou're in a habitation dome on the lunar surface. Through large windows, you can see the stark lunar landscape - gray regolith stretching to the horizon under the black sky. Earth hangs large and blue in the distance.\n\nAs you move, you notice the difference immediately. Your body feels strong yet incredibly light in the Moon's gravity. What would be a normal step on Earth becomes an extended glide, and you need to adjust to avoid unintentional jumps.\n\nYour senses are enhanced but not alien. Your vision has improved acuity and better light adaptation for the extreme contrast of lunar conditions. A subtle heads-up display appears at the edge of your vision - a cybernetic enhancement providing environmental data like external temperature, radiation levels, and oxygen status.\n\nMost interesting is the radiation sense - a tingling awareness of cosmic ray exposure that helps Colonists navigate safer paths across the lunar surface.",
+        options: [
+            { text: "Test your physical capabilities in lunar gravity", nextScene: "lunarPhysical" },
+            { text: "Explore the lunar settlement", nextScene: "lunarSettlement" },
+            { text: "Examine the cybernetic enhancements", nextScene: "lunarCybernetics" }
+        ]
+    },
+    lunarCybernetics: {
+        text: "You focus on the cybernetic enhancements integrated into your borrowed Lunar Colonist body. Unlike more alien forms, these augmentations are designed to complement human physiology rather than replace it.\n\nA neural interface provides a heads-up display in your visual field, showing environmental data, settlement information, and body status. You can control the interface through subtle eye movements and thought commands that feel surprisingly intuitive.\n\nImplanted sensors monitor radiation exposure, oxygen levels, and vital signs, automatically adjusting your body's responses to maintain optimal functioning in lunar conditions. Bone and muscle enhancements provide structural support despite the low gravity environment.\n\nMost interesting is the mesh network connecting all Colonists - you sense a background awareness of other enhanced humans nearby, their general location and status available as a security measure in the hostile lunar environment.\n\n\"First time with cybernetic integration?\" asks a Colonist who notices your experimental adjustments. \"The neural adaptation period is usually quick - most visitors report full intuitive control within an hour.\"",
+        options: [
+            { text: "Ask about the development of these enhancements", nextScene: "lunarDevelopment" },
+            { text: "Explore the community network capabilities", nextScene: "lunarNetwork" },
+            { text: "Inquire about daily life with these augmentations", nextScene: "lunarDaily" }
+        ]
+    },
+    lunarPhysical: {
+        text: "You find an open recreation area to test your physical capabilities in lunar gravity. Your first steps are awkward - with gravity only one-sixth of Earth's, normal walking movements send you bouncing higher than intended.\n\nGradually, you adapt to the new physics, learning the efficient gliding gait that Lunar Colonists use. Your enhanced muscles and reinforced skeleton work perfectly in this environment, providing precision control once you adjust your expectations.\n\nYou attempt increasingly ambitious movements - high jumps that would be impossible on Earth, long-distance leaps, and even acrobatic maneuvers that take advantage of the extended hang time. Your borrowed body responds with surprising agility and strength.\n\nA group of Colonists are playing a three-dimensional ball game that utilizes the unique lunar conditions. They notice your practice session and wave you over. \"Want to join? It's called Orbital - designed specifically for lunar gravity. Easy to learn but takes time to master.\"",
+        options: [
+            { text: "Join the Orbital game", nextScene: "lunarGame" },
+            { text: "Ask about physical training for Lunar conditions", nextScene: "lunarTraining" },
+            { text: "Inquire about outdoor activities on the lunar surface", nextScene: "lunarOutdoor" }
+        ]
+    },
+    lunarSettlement: {
+        text: "You explore the lunar settlement, a series of interconnected domes and subsurface habitats housing several thousand Colonists. The architecture balances functionality with aesthetic considerations - necessary in an environment where residents spend most of their time indoors.\n\nPublic spaces feature gardens with Earth plants, water features that create beautiful low-gravity patterns, and art installations designed specifically for lunar light conditions. Residential areas blend private quarters with communal spaces, reflecting the close-knit nature of lunar society.\n\nThe settlement's economy centers around helium-3 mining, scientific research, and increasingly, tourism. Your cybernetic enhancements provide background information about different sections as you pass through them.\n\nMost interesting is the cultural adaptation - after several generations, Lunar Colonists have developed distinct social customs, art forms, and even linguistic patterns that reflect their unique environment. Your borrowed body's instincts help you navigate these cultural differences naturally.",
+        options: [
+            { text: "Visit the scientific research facilities", nextScene: "lunarScience" },
+            { text: "Explore the artistic and cultural center", nextScene: "lunarCulture" },
+            { text: "Find an observation deck with Earth views", nextScene: "lunarObservation" }
+        ]
+    },
+
+// VORELLIAN EXPERIENCE ADDITIONAL SCENES
+vorellianSociety: {
+        text: "You direct an inquiry about Vorellian society through particle pattern modulations. The responses come as complex electromagnetic signals that your borrowed consciousness translates automatically.\n\n\"Society concept different for us,\" one entity explains. \"No permanent structures. No fixed relationships. All voluntary association based on current resonance pattern compatibility.\"\n\nYou learn that Vorellians organize around shared interests or projects, forming temporary collective entities that dissolve when their purpose is complete. These collectives can range from small partnerships to massive cooperative structures involving thousands of entities.\n\n\"Individual identity persists through pattern memory, not physical continuity,\" another explains. \"Some patterns stable for centuries, others transform frequently. Identity as choice, not constraint.\"\n\nMost fascinating is their governance system - decisions affecting the species emerge from sophisticated pattern resonance processes rather than hierarchical structures. It's democracy as pure information flow, without representatives or institutions.",
+        options: [
+            { text: "Ask about Vorellian history and evolution", nextScene: "vorellianHistory" },
+            { text: "Inquire about conflicts or disagreements", nextScene: "vorellianConflict" },
+            { text: "Learn about Vorellian arts and creativity", nextScene: "vorellianArts" }
+        ]
+    },
+    vorellianPerception: {
+        text: "\"How do you perceive reality?\" Your question reaches the surrounding entities, who respond with enthusiasm - this appears to be a topic Vorellians find deeply interesting.\n\nTheir perception is fundamentally different from embodied species. Without dedicated sensory organs, they directly sense electromagnetic fields, chemical compositions, temperature gradients, and quantum states of matter. Information doesn't require processing or interpretation - reality is experienced as raw data without the filtering that brains perform.\n\n\"No distinction between 'out there' and 'in here,'\" one explains. \"Reality not representation but direct participation. We exist as patterns within the phenomena we perceive.\"\n\nMost alien is their perception of consciousness itself - they can directly sense the information patterns of other minds, whether Vorellian or embodied species. To them, thoughts are simply another form of physical pattern, as tangible as matter or energy.",
+        options: [
+            { text: "Ask how they perceive time", nextScene: "vorellianTime" },
+            { text: "Inquire about their limitations or blind spots", nextScene: "vorellianLimits" },
+            { text: "Explore how they communicate with embodied species", nextScene: "vorellianCommunicate" }
+        ]
+    },
+    vorellianGuidance: {
+        text: "You express your disorientation, sending patterns of confusion and request for assistance. Several Vorellians respond, modifying their electromagnetic signals to forms more easily processed by your transitioning consciousness.\n\n\"First exchange difficult,\" comes the response. \"Too much information without filtering structures of physical brain. Focus on pattern coherence first.\"\n\nThey guide you through exercises to maintain the integrity of your particle distribution - the equivalent of maintaining a coherent sense of self in this formless state. Next, they demonstrate information filtering techniques, showing how to selectively attend to specific data streams rather than being overwhelmed by omnidirectional input.\n\n\"Human consciousness pattern unusual - very rigid, very bounded,\" one notes with what feels like fascination. \"Most visitors struggle with boundary dissolution. You maintaining coherence well for first exchange.\"",
+        options: [
+            { text: "Practice maintaining coherence while moving", nextScene: "vorellianMovement" },
+            { text: "Work on selective perception techniques", nextScene: "vorellianFiltering" },
+            { text: "Ask about common difficulties for embodied visitors", nextScene: "vorellianDifficulties" }
+        ]
+    },
+    vorellianMerging: {
+        text: "With growing confidence, you attempt to merge with more complex materials in your environment. You extend a portion of your particle consciousness into a crystalline structure with fascinating results.\n\nUnlike the liquid, the crystal's rigid atomic lattice creates resistance, but also provides a structured framework that your consciousness can navigate. You gain unprecedented insight into the material's composition - not just its elements, but the subtle energy states between atoms, the quantum fluctuations in its fields, and even traces of its formation history preserved in structural anomalies.\n\nMost surprising is your detection of information patterns embedded in the crystal - deliberate modifications to its structure that store data. You've inadvertently accessed a Vorellian information repository, sensing what appears to be artistic or historical records encoded as subtle variations in crystalline structure.",
+        options: [
+            { text: "Explore the stored information further", nextScene: "vorellianInformation" },
+            { text: "Try merging with biological material", nextScene: "vorellianBiology" },
+            { text: "Withdraw and share your discovery with other Vorellians", nextScene: "vorellianDiscovery" }
+        ]
+    },
+    vorellianExpansion: {
+        text: "You focus on expanding your particle distribution, deliberately stretching the boundaries of your consciousness. The sensation is liberating - like stretching muscles long confined in too small a space.\n\nAs you expand, your perception broadens. You become aware of environmental details across a wide area simultaneously - temperature variations, air current patterns, electromagnetic fields, even the subtle gravitational differences throughout the space.\n\nAt maximum expansion, you discover limits - beyond a certain diffusion, your consciousness pattern begins to lose coherence. Your thoughts become fragmented, distributed across too wide an area to maintain integration. It's not painful, but produces a concerning sense of dissolution.\n\nBefore reaching dangerous dispersal, you contract to a more stable configuration. Nearby Vorellians pulse with what your consciousness interprets as approval at your cautious experimentation.",
+        options: [
+            { text: "Try rapid expansion and contraction cycles", nextScene: "vorellianCycles" },
+            { text: "Experiment with asymmetrical distribution", nextScene: "vorellianAsymmetry" },
+            { text: "Ask about maximum safe expansion limits", nextScene: "vorellianLimits" }
+        ]
+    },
+    vorellianCoordination: {
+        text: "You notice several Vorellians moving in synchronized patterns, their particle distributions flowing in harmonious coordination. Intrigued, you approach and signal your interest in participating.\n\n\"Group movement practice,\" one explains. \"Efficiency through coordination. Share processing across multiple consciousness nodes.\"\n\nThey welcome you into their formation, adjusting their patterns to accommodate your less experienced control. The exercise begins simply - synchronized movement in basic geometrical paths, then progresses to more complex coordination.\n\nAs you practice, you discover a startling capability - partial consciousness sharing at pattern intersection points. When your particles intermingle with another Vorellian's, information transfers directly between you, creating moments of shared awareness that would be impossible for physically distinct beings.",
+        options: [
+            { text: "Deepen the coordination exercise", nextScene: "vorellianDeepen" },
+            { text: "Explore the consciousness sharing aspect", nextScene: "vorellianSharing" },
+            { text: "Learn about practical applications of this coordination", nextScene: "vorellianApplications" }
+        ]
+    },
+    vorellianRecovery: {
+        text: "Following the guidance of the surrounding entities, you focus intensely on your particle pattern, visualizing it as a coherent whole rather than disconnected particles. Gradually, your sense of panic subsides.\n\n\"Pattern stabilizing,\" one entity notes. \"Finding coherence balance between excessive rigidity and excessive diffusion. Good progress.\"\n\nYou learn that this disorientation is common for visitors from embodied species. Physical bodies provide constant boundaries and feedback that define the self. Without these, consciousness must establish its own boundaries through active pattern maintenance.\n\n\"Some visitors never adjust,\" another entity explains. \"Different consciousness types have different adaptability ranges. Human patterns particularly challenging due to strong body-identity association.\"",
+        options: [
+            { text: "Continue practicing pattern stabilization", nextScene: "vorellianStabilization" },
+            { text: "Ask for more advanced guidance techniques", nextScene: "vorellianAdvanced" },
+            { text: "Try a simplification approach - moving as a cohesive cloud", nextScene: "vorellianSimplification" }
+        ]
+    },
+    vorellianReturn: {
+        text: "Your distress signals are clear and unmistakable to the Vorellians. They immediately activate emergency protocols, their patterns forming a stabilizing field around your dispersing consciousness.\n\n\"Return sequence initiated,\" comes the calm communication. \"Maintain whatever coherence possible. Guide assisting pattern integrity until transfer complete.\"\n\nA Vorellian with specialized training in consciousness transfers envelops your pattern, providing structure and stability. You sense the mindswap system activating, preparing to recall your consciousness to your human body.\n\n\"Brief exchanges valuable data nonetheless,\" the specialist notes. \"Even failed attempts increase understanding between our forms. No regret necessary.\"",
+        options: [
+            { text: "Express gratitude as you prepare to transfer", nextScene: "vorellianGratitude" },
+            { text: "Ask if you can try again sometime with better preparation", nextScene: "vorellianRetry" },
+            { text: "Focus entirely on maintaining your pattern for transfer", nextScene: "earlyReturn" }
+        ]
+    },
+    vorellianGuided: {
+        text: "You accept the offer of guidance, allowing a Vorellian specialist to partially integrate with your particle pattern. The effect is immediate and remarkable - your dispersing consciousness stabilizes, supported by the expert's structured approach.\n\n\"Providing template for pattern maintenance,\" the guide explains directly into your consciousness. \"Observe my structure. Replicate within your own pattern paradigm.\"\n\nThe guidance feels like learning to balance on a bicycle with someone holding the seat - initially dependent but gradually developing your own stability. The Vorellian's presence doesn't override your individuality but rather provides a framework that your consciousness can use to organize itself.\n\n\"All consciousness exists as patterns,\" the guide explains. \"Physical bodies provide pattern through structure. Here, we must create pattern through intention and practice instead.\"",
+        options: [
+            { text: "Focus on learning the pattern maintenance technique", nextScene: "vorellianTechnique" },
+            { text: "Ask questions about Vorellian consciousness while guided", nextScene: "vorellianQuestions" },
+            { text: "Request to try navigating independently with minimal support", nextScene: "vorellianIndependent" }
+        ]
+    },
+// ARCTURIAN EXPERIENCE ADDITIONAL SCENES
+arcturianResistance: {
+        text: "As your consciousness begins to dissolve into the Arcturian neural structure, you instinctively resist, trying to maintain your human thought patterns. The result is disorienting and uncomfortable - like trying to force a square peg into a round hole.\n\nError signals cascade through your perception as your human linear thinking conflicts with the Arcturian's multi-layered consciousness. The transition becomes jarring rather than smooth.\n\nEventually, you stabilize in a hybrid state - your human identity intact but awkwardly superimposed on the Arcturian neural architecture. Other Arcturians notice your discordant thought patterns, their own thoughts radiating curiosity and concern.\n\nOne approaches, sending a gentle thought-pattern of assistance. \"Your resistance creates disharmony. Allow natural integration for comfort.\"",
+        options: [
+            { text: "Relax and allow the integration process", nextScene: "arcturianRelax" },
+            { text: "Maintain some resistance while adapting gradually", nextScene: "arcturianGradual" },
+            { text: "Request help understanding the integration process", nextScene: "arcturianHelp" }
+        ]
+    },
+    arcturianSociety: {
+        text: "You form a query about Arcturian society, projecting concepts of social structure, governance, and daily life. The response comes as a rich tapestry of interconnected thoughts rather than a linear explanation.\n\nYou perceive that Arcturian society is organized around thought-harmonies rather than physical locations or hierarchical structures. Individuals naturally group by complementary consciousness patterns, forming what might be called \"thought-communities.\"\n\nWhat humans would call governance happens through resonance - when decisions affecting many must be made, a process of thought-synchronization occurs, seeking patterns that accommodate diverse perspectives. It's neither democracy nor consensus as humans understand them, but something deeper - finding the natural harmony in seemingly discordant viewpoints.\n\nWork, recreation, and relationship all blend together without firm boundaries, each flowing into the other as attention and intention shift.",
+        options: [
+            { text: "Ask about conflict resolution in their society", nextScene: "arcturianConflict" },
+            { text: "Inquire about their relationship with other species", nextScene: "arcturianRelations" },
+            { text: "Explore how they perceive and experience time", nextScene: "arcturianTime" }
+        ]
+    },
+    arcturianEarth: {
+        text: "You share memories and impressions of Earth, finding your human experiences translate into thought-patterns of surprising richness. The Arcturians receive these impressions with fascination.\n\nAs you project images of Earth's oceans, forests, and cities, the Arcturians respond with recognition - they've encountered human minds before. But they perceive Earth differently through your consciousness than through previous exchanges.\n\n\"Each mind-filter unique,\" comes the impression. \"Your Earth contains emotional resonances others did not project. Water-patterns particularly vibrant with meaning-association.\"\n\nYou realize they're perceiving not just your visual memories of Earth, but all the emotional, historical, and personal associations connected to them - the full context that shapes your perception of your home planet. It's both invasive and strangely intimate.",
+        options: [
+            { text: "Share experiences of human art and creativity", nextScene: "arcturianArt" },
+            { text: "Project concepts of human relationships and love", nextScene: "arcturianLove" },
+            { text: "Communicate human philosophical concepts", nextScene: "arcturianPhilosophy" }
+        ]
+    },
+    arcturianGuidance: {
+        text: "You project your disorientation and request guidance on navigating Arcturian consciousness. Several minds respond, offering supportive thought-patterns that stabilize your perception.\n\nAn experienced guide approaches, their thought-patterns exceptionally clear and structured for your benefit. \"New consciousness integration requires pattern adaptation. I will demonstrate.\"\n\nThey share a series of mental exercises - first showing how to organize perception in layers, attending to different aspects of reality simultaneously rather than sequentially. Next, they demonstrate thought-movement - how to direct consciousness with precision rather than allowing it to wander as human minds often do.\n\nMost importantly, they show how to modulate your thought-emissions - in Arcturian society, untrained minds can project disruptively, broadcasting private thoughts in ways considered crude or intrusive.",
+        options: [
+            { text: "Practice the layered perception technique", nextScene: "arcturianLayers" },
+            { text: "Work on thought-movement control", nextScene: "arcturianControl" },
+            { text: "Focus on modulating your thought-emissions", nextScene: "arcturianModulation" }
+        ]
+    },
+    arcturianSymphony: {
+        text: "You drift toward the harmonious thought-patterns you perceive as a symphony. As you approach, the Arcturians welcome you into their collective experience, adjusting to accommodate your less refined participation.\n\nThe symphony is unlike anything in human experience - not sound, but pure conceptual harmony. Participants contribute thought-patterns that weave together, creating emergent meanings and experiences impossible for a single mind to generate.\n\nYou tentatively contribute a simple pattern based on mathematical sequences you remember. The group incorporates your offering, transforming and enhancing it. Through their response, you experience your own thought from multiple perspectives simultaneously - an exhilarating sensation of expanded consciousness.\n\nGradually, the symphony builds toward what feels like a climax of pure conceptual beauty - patterns of perfect relation and meaning that resonate with something deep in your consciousness regardless of species.",
+        options: [
+            { text: "Fully immerse yourself in the experience", nextScene: "arcturianImmersion" },
+            { text: "Analyze the structure of the thought-symphony", nextScene: "arcturianAnalysis" },
+            { text: "Contribute a complex human emotional memory", nextScene: "arcturianContribution" }
+        ]
+    },
+    arcturianContemplation: {
+        text: "You approach a crystalline structure that seems to dampen external thought-patterns. As you enter, the constant background hum of Arcturian consciousness fades to a gentle murmur.\n\nThe chamber is designed for deep contemplation - its geometry and materials creating a space where thoughts turn inward rather than outward. Several Arcturians occupy similar chambers nearby, each engaged in complex internal processes.\n\nIn this quieter mental space, you discover new aspects of your borrowed consciousness. The Arcturian mind naturally organizes thoughts fractally - each concept containing nested sub-concepts that can be explored in infinite detail. What might be a simple idea to a human unfolds here as a rich territory of interconnected meanings.\n\nYou experiment with this capacity, selecting a basic concept like 'circle' and discovering you can explore its mathematical, symbolic, natural, and conceptual dimensions simultaneously, appreciating relations impossible in linear human thought.",
+        options: [
+            { text: "Explore a complex philosophical concept", nextScene: "arcturianPhilosophy" },
+            { text: "Examine your own human memories from this perspective", nextScene: "arcturianMemories" },
+            { text: "Study the architecture of the contemplation chamber itself", nextScene: "arcturianChamber" }
+        ]
+    },
+    arcturianArchitecture: {
+        text: "You focus on understanding how the physical structures around you interact with Arcturian thought. The architecture reveals itself as far more sophisticated than initially apparent.\n\nThe crystalline materials respond to thought-patterns, subtly shifting their molecular structure to enhance or dampen specific frequencies of consciousness. What appeared decorative is revealed as functional - geometric patterns that guide thought-flow like riverbanks direct water.\n\nAn Arcturian architect notices your interest, sharing technical insights. \"Physical/thought interface crucial for harmonious existence. Structure shapes thought; thought shapes structure. Recursive optimization over nine thousand cycles of design.\"\n\nYou perceive that Arcturians don't distinguish sharply between technology and art, or between physical and mental reality. Their architecture exists simultaneously as material construction and thought construct, each aspect informing the other in constant dialogue.",
+        options: [
+            { text: "Ask about the historical development of their architecture", nextScene: "arcturianHistory" },
+            { text: "Explore how the structures accommodate visitors", nextScene: "arcturianVisitors" },
+            { text: "Inquire about their most advanced architectural achievements", nextScene: "arcturianAdvanced" }
+        ]
+    },
+    arcturianDeep: {
+        text: "You direct your awareness deeper into the Arcturian consciousness structure, beyond the surface layers you've been operating in. The experience becomes increasingly alien but fascinating.\n\nIn these deeper layers, individual identity begins to blur. You encounter thought-patterns that seem to exist independently of any particular thinker - persistent structures more like natural formations than conscious creations. Some appear ancient, accreted over countless generations of Arcturian thought.\n\nNavigation becomes challenging as familiar reference points disappear. Concepts of location, sequence, and even distinct objects lose coherence. Instead, reality organizes around relationships and resonances between patterns of pure meaning.\n\nIn this depth, you brush against something vast - a collective dimension of Arcturian consciousness where individual minds connect at fundamental levels. It's both frightening and compelling, offering a profound communion unlike anything possible in human experience.",
+        options: [
+            { text: "Retreat to more familiar consciousness layers", nextScene: "arcturianRetreat" },
+            { text: "Cautiously explore the collective consciousness", nextScene: "arcturianCollective" },
+            { text: "Seek guidance from more experienced minds", nextScene: "arcturianDeeperGuide" }
+        ]
+    },
+    arcturianIdentity: {
+        text: "You focus on the fascinating question of how your human identity exists within this alien mind structure. The investigation reveals surprising insights.\n\nYour human selfhood appears as a distinct pattern within the Arcturian consciousness - more rigid and densely packed than native thought-structures, with strong boundaries separating 'self' from 'other.' This pattern maintains its integrity despite the more fluid nature of Arcturian thought surrounding it.\n\nMost intriguing is how your memories and personality traits appear from this perspective - not as stories or fixed attributes, but as dynamic patterns constantly recreating themselves through self-reference. You perceive your own identity as a process rather than a thing, a persistent pattern of organization rather than fixed content.\n\nThe Arcturian consciousness provides a framework for this observation impossible in a human brain, allowing you to witness your own mental processes from outside while still experiencing them from within - a paradoxical perspective both illuminating and unsettling.",
+        options: [
+            { text: "Explore how this perspective changes your self-concept", nextScene: "arcturianSelfConcept" },
+            { text: "Compare your identity pattern with Arcturian identity structures", nextScene: "arcturianComparison" },
+            { text: "Consider the philosophical implications", nextScene: "arcturianImplications" }
+        ]
+    },
+    arcturianRefocus: {
+        text: "You shift your awareness back to the external environment, re-engaging with the crystal dome and the Arcturians around you. After your introspective exploration, your perception of the outside world has changed.\n\nYou now notice layers of information previously overlooked - the subtle thought-emissions of nearby Arcturians, the way the architecture guides and shapes consciousness flows, the historical thought-residues embedded in older structures.\n\nMost striking is your enhanced perception of relationships - not just between individuals, but between concepts, intentions, physical structures, and historical contexts. Everything exists in a web of connections visible from this consciousness perspective.\n\nAn Arcturian approaches, their thought-pattern indicating something like approval. \"Integration progressing well. Human pattern adapting to our structure while maintaining integrity. Rare achievement for brief exchange.\"",
+        options: [
+            { text: "Ask what makes human integration unusual", nextScene: "arcturianUnusual" },
+            { text: "Explore the communal spaces with your enhanced perception", nextScene: "arcturianCommunal" },
+            { text: "Seek out new experiences unique to Arcturian consciousness", nextScene: "arcturianUnique" }
+        ]
+    }
+
+        };
+
+        // Function to update the game state display
+        function updateGameState() {
+            document.getElementById("stability").innerText = gameState.stability + "%";
+            document.getElementById("location").innerText = gameState.location;
+            document.getElementById("credits").innerText = gameState.credits;
+            document.getElementById("current-body").innerText = "Current Body: " + gameState.currentBody;
+            
+            // Update mind meter
+            document.getElementById("mind-fill").style.width = gameState.stability + "%";
+            
+            // Change color based on stability
+            if (gameState.stability < 30) {
+                document.getElementById("mind-fill").style.backgroundColor = "#ff0000";
+            } else if (gameState.stability < 70) {
+                document.getElementById("mind-fill").style.backgroundColor = "#ffff00";
+            } else {
+                document.getElementById("mind-fill").style.backgroundColor = "#00ff00";
+            }
+            
+            // Update inventory
+            const inventoryElement = document.getElementById("inventory-items");
+            inventoryElement.innerHTML = "";
+            gameState.inventory.forEach(item => {
+                const itemElement = document.createElement("div");
+                itemElement.className = "inventory-item";
+                itemElement.textContent = item;
+                inventoryElement.appendChild(itemElement);
+            });
+        }
+        
+        // Function to handle scene transitions
+        function loadScene(sceneName) {
+            const scene = scenes[sceneName];
+            if (!scene) {
+                console.error("Scene not found:", sceneName);
+                return;
+            }
+            
+            // Update game state based on scene
+            gameState.currentScene = sceneName;
+            
+            // Update location based on scene context
+            if (sceneName.includes("martian")) {
+                gameState.location = "Mars";
+                gameState.currentBody = "Martian Sand Dweller";
+            } else if (sceneName.includes("arcturian")) {
+                gameState.location = "Arcturus System";
+                gameState.currentBody = "Arcturian Thought Weaver";
+            } else if (sceneName.includes("vorellian")) {
+                gameState.location = "Vorelli Nebula";
+                gameState.currentBody = "Vorellian Mist Entity";
+            } else if (sceneName.includes("chrono")) {
+                gameState.location = "Tau Ceti";
+                gameState.currentBody = "Chronojumper";
+            } else if (sceneName.includes("europan")) {
+                gameState.location = "Europa";
+                gameState.currentBody = "Europan Aquatic";
+            } else if (sceneName.includes("venusian")) {
+                gameState.location = "Venus Atmosphere";
+                gameState.currentBody = "Venusian Cloud Glider";
+            } else if (sceneName.includes("lunar")) {
+                gameState.location = "Luna";
+                gameState.currentBody = "Lunar Colonist";
+            } else if (sceneName.includes("mindswap") || sceneName === "intro" || sceneName === "tutorial" || sceneName === "chickOut") {
+                gameState.location = "Earth";
+                gameState.currentBody = "Human";
+            }
+            
+            // Update mind stability based on body type
+            if (gameState.currentBody !== "Human") {
+                // More exotic bodies cause more stability loss
+                if (["Vorellian Mist Entity", "Chronojumper"].includes(gameState.currentBody)) {
+                    gameState.stability = Math.max(gameState.stability - 15, 0);
+                } else if (["Arcturian Thought Weaver"].includes(gameState.currentBody)) {
+                    gameState.stability = Math.max(gameState.stability - 10, 0);
+                } else {
+                    gameState.stability = Math.max(gameState.stability - 5, 0);
+                }
+            } else {
+                // Returning to human form restores some stability
+                gameState.stability = Math.min(gameState.stability + 20, 100);
+            }
+            
+            // Display the scene text
+            document.getElementById("text-display").innerText = scene.text;
+            
+            // Create the options
+            const optionsContainer = document.getElementById("options-container");
+            optionsContainer.innerHTML = "";
+            
+            scene.options.forEach((option, index) => {
+                const button = document.createElement("button");
+                button.className = "option-btn";
+                button.textContent = option.text;
+                button.onclick = function() { selectOption(index); };
+                optionsContainer.appendChild(button);
+            });
+            
+            // Update the game state display
+            updateGameState();
+            
+            // Apply visual effects based on the scene
+            applySceneEffects(sceneName);
+        }
+        
+        // Function to apply visual effects based on scene
+        function applySceneEffects(sceneName) {
+            const container = document.getElementById("game-container");
+            const textDisplay = document.getElementById("text-display");
+            
+            // Reset all effects
+            container.classList.remove("shake");
+            textDisplay.classList.remove("flicker", "alien-text");
+            document.body.style.backgroundColor = "#000";
+            document.body.style.color = "#0f0";
+            
+            // Apply specific effects
+            if (sceneName.includes("swap") && !sceneName.includes("Office")) {
+                // Mind swap transition effect
+                container.classList.add("shake");
+                setTimeout(() => {
+                    container.classList.remove("shake");
+                }, 500);
+            }
+            
+            // Body-specific effects
+            if (sceneName.includes("arcturian")) {
+                document.body.style.backgroundColor = "#000033";
+                document.body.style.color = "#00ffff";
+                textDisplay.classList.add("flicker");
+            } else if (sceneName.includes("vorellian")) {
+                document.body.style.backgroundColor = "#1a001a";
+                document.body.style.color = "#ff00ff";
+                textDisplay.style.opacity = 0.9;
+            } else if (sceneName.includes("chrono")) {
+                // Create time distortion effect
+                let fadeInterval = setInterval(() => {
+                    textDisplay.style.opacity = 0.7 + Math.random() * 0.3;
+                }, 100);
+                
+                // Clear interval when moving to another scene
+                setTimeout(() => {
+                    clearInterval(fadeInterval);
+                    textDisplay.style.opacity = 1;
+                }, 10000); // Clear after 10 seconds
+            } else if (sceneName.includes("martian")) {
+                document.body.style.backgroundColor = "#330000";
+                document.body.style.color = "#ff6600";
+            }
+        }
+        
+        // Function to handle option selection
+        function selectOption(optionIndex) {
+            const currentScene = scenes[gameState.currentScene];
+            if (!currentScene || !currentScene.options || !currentScene.options[optionIndex]) {
+                console.error("Invalid option selection");
+                return;
+            }
+            
+            const selectedOption = currentScene.options[optionIndex];
+            
+            // Handle credits transactions
+            if (selectedOption.creditsChange) {
+                gameState.credits += selectedOption.creditsChange;
+            }
+            
+            // Handle inventory changes
+            if (selectedOption.addItem) {
+                gameState.inventory.push(selectedOption.addItem);
+            }
+            if (selectedOption.removeItem && gameState.inventory.includes(selectedOption.removeItem)) {
+                const index = gameState.inventory.indexOf(selectedOption.removeItem);
+                gameState.inventory.splice(index, 1);
+            }
+            
+            // Load the next scene
+            loadScene(selectedOption.nextScene);
+        }
+        
+        // Initialize the game
+        document.addEventListener("DOMContentLoaded", function() {
+            loadScene("intro");
+        });
+
+        // Start the game immediately if the DOM is already loaded
+        if (document.readyState === "complete" || document.readyState === "interactive") {
+            loadScene("intro");
+        }
+    </script>
