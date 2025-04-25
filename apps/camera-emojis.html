@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Emoji Video Feed with Color Analysis</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      max-width: 800px;
+      width: 100%;
+    }
+    
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      width: 100%;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    
+    button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      background-color: #4285f4;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #2b6cb0;
+    }
+    
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    
+    select, input {
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+    
+    .message {
+      padding: 10px;
+      background-color: #ffeb3b;
+      border-radius: 4px;
+      display: none;
+      text-align: center;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+    
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      align-items: center;
+    }
+    
+    label {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .status {
+      margin: 10px 0;
+      font-size: 14px;
+      color: #666;
+      text-align: center;
+    }
+    
+    /* Main content layout */
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 640px;
+      gap: 20px;
+    }
+    
+    #output-container {
+      width: 100%;
+      background-color: #000;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    #ascii-canvas {
+      width: 100%;
+      display: block;
+      font-family: monospace;
+      line-height: 1;
+      white-space: pre;
+      overflow: hidden;
+      background-color: #000;
+      color: #fff;
+      padding: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+      letter-spacing: 0;
+      height: auto;
+      aspect-ratio: 4/3; /* Set 4:3 aspect ratio */
+    }
+    
+    .colored-char {
+      display: inline-block;
+    }
+    
+    #video-preview {
+      width: 100%;
+      max-width: 320px;
+      border-radius: 8px;
+      background-color: #333;
+      align-self: center;
+    }
+    
+    #analysis-progress {
+      display: none;
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+      text-align: center;
+      font-weight: bold;
+    }
+    
+    #debug-panel {
+      margin-top: 20px;
+      width: 100%;
+      max-width: 640px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 15px;
+      background-color: #fff;
+      display: none; /* Hide debug by default */
+    }
+    
+    .debug-title {
+      font-weight: bold;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 5px;
+    }
+    
+    .debug-info {
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    
+    #toggle-debug {
+      margin-top: 10px;
+      background-color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Emoji Video Feed with Color Analysis</h1>
+    
+    <div id="permission-message" class="message">
+      Please allow camera access to use this app.
+    </div>
+    
+    <div class="controls">
+      <button id="start-button">Start Camera</button>
+      <button id="stop-button" disabled>Stop Camera</button>
+      
+      <div class="control-group">
+        <label for="character-set">Character Set</label>
+        <select id="character-set">
+          <option value="emoji" selected>Happy Faces</option>
+          <option value="coloredFaces">Diverse Faces</option>
+          <option value="faces">Expression Faces</option>
+          <option value="animals">Animal Emojis</option>
+          <option value="foods">Food Emojis</option>
+          <option value="nature">Nature Emojis</option>
+          <option value="blocks">Block Characters</option>
+          <option value="standard">Standard ASCII</option>
+          <option value="simple">Simple</option>
+          <option value="custom">Custom (X and space)</option>
+        </select>
+      </div>
+      
+      <div class="control-group">
+        <label for="resolution">Resolution</label>
+        <select id="resolution">
+          <option value="high">High</option>
+          <option value="medium" selected>Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      
+      <div class="control-group">
+        <label for="invert">Invert Colors</label>
+        <input type="checkbox" id="invert" checked>
+      </div>
+      
+      <div class="control-group">
+        <label for="matching-method">Matching Method</label>
+        <select id="matching-method">
+          <option value="brightness">Brightness → Emoji (Apply Color)</option>
+          <option value="color-analysis" selected>RGB Color Analysis</option>
+        </select>
+      </div>
+      
+      <div class="control-group">
+        <label for="distance-method">Color Distance</label>
+        <select id="distance-method">
+          <option value="perceptual" selected>Perceptual</option>
+          <option value="euclidean">Euclidean</option>
+        </select>
+      </div>
+      
+      <div class="control-group">
+        <label for="show-colors">Show Original Colors</label>
+        <input type="checkbox" id="show-colors" checked>
+      </div>
+      
+      <div class="control-group">
+        <label for="color-brightness">Color Intensity</label>
+        <input type="range" id="color-brightness" min="50" max="150" value="100">
+        <span id="color-brightness-value">100%</span>
+      </div>
+    </div>
+
+    <div class="status" id="status-message">Ready to start. Click "Start Camera" to begin.</div>
+    
+    <div class="main-content">
+      <!-- Analysis progress indicator -->
+      <div id="analysis-progress">Analyzing emoji colors... Please wait.</div>
+      
+      <!-- Emoji output first -->
+      <div id="output-container">
+        <pre id="ascii-canvas"></pre>
+      </div>
+      
+      <!-- Video preview below -->
+      <video id="video-preview" autoplay muted></video>
+    </div>
+    
+    <button id="toggle-debug">Show Debug Info</button>
+    
+    <div id="debug-panel">
+      <div class="debug-title">Debug Information</div>
+      
+      <div>
+        <strong>Video Element Status:</strong>
+        <div id="video-debug" class="debug-info">Not initialized</div>
+      </div>
+      
+      <div>
+        <strong>Pixel Data Sample:</strong>
+        <div id="pixel-debug" class="debug-info">No data yet</div>
+      </div>
+      
+      <div>
+        <strong>Character Set Sample:</strong>
+        <div id="char-debug" class="debug-info">No character set selected</div>
+      </div>
+      
+      <div>
+        <strong>Output Sample:</strong>
+        <div id="output-debug" class="debug-info">No output generated yet</div>
+      </div>
+      
+      <div>
+        <strong>Emoji Analysis:</strong>
+        <div id="emoji-analysis-debug" class="debug-info">No emoji analysis yet</div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // DOM Elements
+    const videoElement = document.getElementById('video-preview');
+    const asciiCanvas = document.getElementById('ascii-canvas');
+    const startButton = document.getElementById('start-button');
+    const stopButton = document.getElementById('stop-button');
+    const permissionMessage = document.getElementById('permission-message');
+    const characterSetSelect = document.getElementById('character-set');
+    const resolutionSelect = document.getElementById('resolution');
+    const invertCheckbox = document.getElementById('invert');
+    const statusMessage = document.getElementById('status-message');
+    const showColorsCheckbox = document.getElementById('show-colors');
+    const colorBrightnessInput = document.getElementById('color-brightness');
+    const colorBrightnessValue = document.getElementById('color-brightness-value');
+    const matchingMethodSelect = document.getElementById('matching-method');
+    const distanceMethodSelect = document.getElementById('distance-method');
+    const analysisProgress = document.getElementById('analysis-progress');
+    const toggleDebugButton = document.getElementById('toggle-debug');
+    const debugPanel = document.getElementById('debug-panel');
+    
+    // Debug elements
+    const videoDebug = document.getElementById('video-debug');
+    const pixelDebug = document.getElementById('pixel-debug');
+    const charDebug = document.getElementById('char-debug');
+    const outputDebug = document.getElementById('output-debug');
+    const emojiAnalysisDebug = document.getElementById('emoji-analysis-debug');
+    
+    // Variables
+    let stream = null;
+    let animationFrameId = null;
+    let canvasContext = null;
+    let canvasElement = null;
+    let isProcessing = false;
+    let emojiColorAnalysis = {}; // Store emoji color analyses
+    
+    // Character sets (guaranteed to work across platforms)
+    const characterSets = {
+      standard: [' ', '.', ',', ':', ';', '+', '*', '?', '%', 'S', '#', '@'],
+      simple: [' ', '.', ':', '#'],
+      blocks: [' ', '░', '▒', '▓', '█'],
+      emoji: ['😀', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳'],
+      custom: [' ', 'X'],
+      faces: ['🙂', '😐', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓'],
+      coloredFaces: ['👶', '👶🏻', '👶🏼', '👶🏽', '👶🏾', '👶🏿', '👧', '👧🏻', '👧🏼', '👧🏽', '👧🏾', '👧🏿', '👦', '👦🏻', '👦🏼', '👦🏽', '👦🏾', '👦🏿', '👩', '👩🏻', '👩🏼', '👩🏽', '👩🏾', '👩🏿', '👨', '👨🏻', '👨🏼', '👨🏽', '👨🏾', '👨🏿'],
+      animals: ['🐵', '🐒', '🦍', '🦧', '🐶', '🐕', '🦮', '🐩', '🐺', '🦊', '🦝', '🐱', '🐈', '🦁', '🐯', '🐅', '🐆', '🐴', '🐎', '🦄', '🦓', '🦌', '🐮', '🐂', '🐃', '🐄', '🐷', '🐖'],
+      foods: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶️', '🌽', '🥕', '🧄', '🧅', '🥔'],
+      nature: ['🌵', '🎄', '🌲', '🌳', '🌴', '🌱', '🌿', '☘️', '🍀', '🎍', '🪴', '🎋', '🍃', '🍂', '🍁', '🍄', '🌾', '💐', '🌷', '🌹', '🥀', '🌺', '🌸', '🌼', '🌻', '🌞', '🌝', '🌛']
+    };
+    
+    // Resolution settings - using 4:3 aspect ratio
+    const resolutions = {
+      high: { width: 80, height: 60 },     // 4:3 aspect ratio
+      medium: { width: 60, height: 45 },   // 4:3 aspect ratio 
+      low: { width: 40, height: 30 }       // 4:3 aspect ratio
+    };
+    
+    // Toggle debug panel
+    toggleDebugButton.addEventListener('click', () => {
+      if (debugPanel.style.display === 'none' || !debugPanel.style.display) {
+        debugPanel.style.display = 'block';
+        toggleDebugButton.textContent = 'Hide Debug Info';
+      } else {
+        debugPanel.style.display = 'none';
+        toggleDebugButton.textContent = 'Show Debug Info';
+      }
+    });
+    
+    // Log to both console and debug panel
+    function debugLog(element, message) {
+      console.log(message);
+      element.textContent = typeof message === 'object' ? JSON.stringify(message, null, 2) : message;
+    }
+    
+    // Initialize hidden canvas for processing
+    function initCanvas() {
+      if (!canvasElement) {
+        canvasElement = document.createElement('canvas');
+        canvasContext = canvasElement.getContext('2d', { willReadFrequently: true });
+      }
+      
+      const resolution = resolutions[resolutionSelect.value];
+      canvasElement.width = resolution.width;
+      canvasElement.height = resolution.height;
+      
+      debugLog(videoDebug, `Canvas initialized: ${canvasElement.width}x${canvasElement.height}`);
+    }
+    
+    // Update character set debug info
+    function updateCharDebug() {
+      const chars = characterSets[characterSetSelect.value];
+      debugLog(charDebug, `Using character set "${characterSetSelect.value}": ${chars.join(' ')}`);
+    }
+    
+    // Analyze emoji colors
+    function analyzeEmojiColors(emojiList) {
+      return new Promise((resolve) => {
+        // Create temporary elements
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 32;
+        canvas.height = 32;
+        
+        const emojiColors = [];
+        
+        // Analyze each emoji
+        for (const emoji of emojiList) {
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0)'; // Transparent background
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw emoji
+          ctx.font = '24px Arial';
+          ctx.fillStyle = '#FFFFFF'; // White color for maximum contrast
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(emoji, canvas.width / 2, canvas.height / 2);
+          
+          // Get image data
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          // Calculate average RGB
+          let totalPixels = 0;
+          let totalR = 0;
+          let totalG = 0;
+          let totalB = 0;
+          
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const a = data[i + 3];
+            
+            // Only count non-transparent pixels
+            if (a > 10) {  // Small threshold to avoid background noise
+              totalR += r;
+              totalG += g;
+              totalB += b;
+              totalPixels++;
+            }
+          }
+          
+          if (totalPixels > 0) {
+            const avgR = Math.round(totalR / totalPixels);
+            const avgG = Math.round(totalG / totalPixels);
+            const avgB = Math.round(totalB / totalPixels);
+            const brightness = 0.299 * avgR + 0.587 * avgG + 0.114 * avgB;
+            
+            emojiColors.push({
+              emoji,
+              r: avgR,
+              g: avgG,
+              b: avgB,
+              brightness
+            });
+          } else {
+            // If no visible pixels, use a default color (light yellow for most emojis)
+            emojiColors.push({
+              emoji,
+              r: 255,
+              g: 224,
+              b: 0,
+              brightness: 224
+            });
+          }
+        }
+        
+        // Sort by brightness for better matching
+        emojiColors.sort((a, b) => a.brightness - b.brightness);
+        
+        resolve(emojiColors);
+      });
+    }
+    
+    // Find the best matching emoji for a pixel based on color
+    function findBestMatchingEmoji(pixelR, pixelG, pixelB, emojiColors) {
+      // Calculate pixel brightness
+      const pixelBrightness = 0.299 * pixelR + 0.587 * pixelG + 0.114 * pixelB;
+      
+      // Find closest emoji by color distance
+      let bestMatch = emojiColors[0];
+      let minColorDistance = colorDistance(pixelR, pixelG, pixelB, bestMatch.r, bestMatch.g, bestMatch.b);
+      
+      for (let i = 1; i < emojiColors.length; i++) {
+        const distance = colorDistance(pixelR, pixelG, pixelB, emojiColors[i].r, emojiColors[i].g, emojiColors[i].b);
+        if (distance < minColorDistance) {
+          minColorDistance = distance;
+          bestMatch = emojiColors[i];
+        }
+      }
+      
+      return bestMatch;
+    }
+    
+    // Calculate color distance using the selected method
+    function colorDistance(r1, g1, b1, r2, g2, b2) {
+      const distanceMethod = distanceMethodSelect.value;
+      
+      if (distanceMethod === 'euclidean') {
+        // Simple Euclidean distance in RGB space
+        const rDiff = r1 - r2;
+        const gDiff = g1 - g2;
+        const bDiff = b1 - b2;
+        
+        return Math.sqrt(
+          rDiff * rDiff +
+          gDiff * gDiff +
+          bDiff * bDiff
+        );
+      } else {
+        // Perceptual color distance formula (weighted Euclidean)
+        const rMean = (r1 + r2) / 2;
+        const rDiff = r1 - r2;
+        const gDiff = g1 - g2;
+        const bDiff = b1 - b2;
+        
+        // Weights based on human perception
+        const rWeight = 2 + rMean / 256;
+        const gWeight = 4.0;
+        const bWeight = 2 + (255 - rMean) / 256;
+        
+        return Math.sqrt(
+          rWeight * rDiff * rDiff +
+          gWeight * gDiff * gDiff +
+          bWeight * bDiff * bDiff
+        );
+      }
+    }
+    
+    // Analyze all emoji sets
+    async function analyzeAllEmojiSets() {
+      analysisProgress.style.display = 'block';
+      analysisProgress.textContent = 'Analyzing emoji colors... Please wait.';
+      
+      // Do analysis for each emoji set
+      for (const [setName, emojis] of Object.entries(characterSets)) {
+        if (!emojiColorAnalysis[setName]) {
+          statusMessage.textContent = `Analyzing ${setName} emoji colors...`;
+          emojiColorAnalysis[setName] = await analyzeEmojiColors(emojis);
+          
+          // Debug log the first few emoji colors
+          let debugSample = `Analyzed ${setName} emoji colors:\n`;
+          const sampleSize = Math.min(5, emojiColorAnalysis[setName].length);
+          for (let i = 0; i < sampleSize; i++) {
+            const emoji = emojiColorAnalysis[setName][i];
+            debugSample += `${emoji.emoji}: RGB(${emoji.r},${emoji.g},${emoji.b}) Brightness: ${emoji.brightness.toFixed(1)}\n`;
+          }
+          debugLog(emojiAnalysisDebug, debugSample);
+        }
+      }
+      
+      analysisProgress.style.display = 'none';
+      statusMessage.textContent = 'Emoji color analysis complete!';
+    }
+    
+    // Start camera
+    startButton.addEventListener('click', async () => {
+      try {
+        permissionMessage.style.display = 'block';
+        statusMessage.textContent = 'Requesting camera access...';
+        debugLog(videoDebug, 'Attempting to access camera...');
+        
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          } 
+        });
+        
+        videoElement.srcObject = stream;
+        
+        // Wait for video metadata to load
+        await new Promise(resolve => {
+          videoElement.onloadedmetadata = resolve;
+        });
+        
+        permissionMessage.style.display = 'none';
+        startButton.disabled = true;
+        stopButton.disabled = false;
+        
+        debugLog(videoDebug, `Video ready: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+        
+        initCanvas();
+        updateCharDebug();
+        
+        // Analyze emoji colors if using color analysis method
+        if (matchingMethodSelect.value === 'color-analysis') {
+          await analyzeAllEmojiSets();
+        }
+        
+        statusMessage.textContent = 'Camera active! Processing video...';
+        startVideoProcessing();
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        permissionMessage.textContent = 'Camera access denied or not available.';
+        permissionMessage.style.backgroundColor = '#f44336';
+        permissionMessage.style.color = 'white';
+        permissionMessage.style.display = 'block';
+        statusMessage.textContent = 'Error: ' + error.message;
+        debugLog(videoDebug, `Camera error: ${error.message}`);
+      }
+    });
+    
+    // Stop camera
+    stopButton.addEventListener('click', () => {
+      stopVideoProcessing();
+      
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        videoElement.srcObject = null;
+      }
+      
+      startButton.disabled = false;
+      stopButton.disabled = true;
+      statusMessage.textContent = 'Camera stopped. Click "Start Camera" to begin again.';
+      debugLog(videoDebug, 'Camera stopped');
+    });
+    
+    // Process video frame and convert to ASCII/emoji
+    function processVideoFrame() {
+      if (!isProcessing || !stream) return;
+      
+      // Use fixed 4:3 aspect ratio
+      const resolution = resolutions[resolutionSelect.value];
+      
+      // Set canvas to fixed 4:3 ratio
+      if (canvasElement) {
+        canvasElement.width = resolution.width;
+        canvasElement.height = resolution.height;
+      }
+      
+      const showColors = showColorsCheckbox.checked;
+      const colorBrightness = parseInt(colorBrightnessInput.value) / 100;
+      const matchingMethod = matchingMethodSelect.value;
+      const distanceMethod = distanceMethodSelect.value;
+      const currentCharSet = characterSetSelect.value;
+      const chars = characterSets[currentCharSet];
+      const isInverted = invertCheckbox.checked;
+      
+      try {
+        // Draw current video frame to canvas for processing
+        canvasContext.drawImage(
+          videoElement, 
+          0, 0, 
+          canvasElement.width, canvasElement.height
+        );
+        
+        // Get pixel data
+        const imageData = canvasContext.getImageData(
+          0, 0, 
+          canvasElement.width, canvasElement.height
+        );
+        
+        const { data, width, height } = imageData;
+        
+        // Debug first few pixels
+        let pixelSample = '';
+        for (let i = 0; i < 5; i++) {
+          const pixelIndex = i * 4;
+          const r = data[pixelIndex];
+          const g = data[pixelIndex + 1];
+          const b = data[pixelIndex + 2];
+          const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+          pixelSample += `Pixel ${i}: RGB(${r},${g},${b}) Brightness: ${brightness.toFixed(1)}\n`;
+        }
+        debugLog(pixelDebug, pixelSample);
+        
+        // Create HTML output with colored spans
+        let outputHtml = '';
+        let outputSample = '';
+        let sampleSize = 20;
+        
+        // Get analyzed emoji colors if using color analysis method
+        const analyzedEmojis = matchingMethod === 'color-analysis' && 
+                             emojiColorAnalysis[currentCharSet] ? 
+                             emojiColorAnalysis[currentCharSet] : null;
+        
+        // Process each pixel and convert to character with color
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = data[pixelIndex];
+            const g = data[pixelIndex + 1];
+            const b = data[pixelIndex + 2];
+            
+            // Calculate brightness using proper luminance formula
+            const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+            
+            let char;
+            
+            if (matchingMethod === 'color-analysis' && analyzedEmojis) {
+              // Use color analysis method - find closest matching emoji by color
+              const bestMatch = findBestMatchingEmoji(r, g, b, analyzedEmojis);
+              char = bestMatch.emoji;
+            } else {
+              // Use traditional brightness mapping method
+              let index;
+              if (isInverted) {
+                index = Math.floor((255 - brightness) * (chars.length - 1) / 255);
+              } else {
+                index = Math.floor(brightness * (chars.length - 1) / 255);
+              }
+              
+              // Ensure index is within bounds
+              index = Math.max(0, Math.min(chars.length - 1, index));
+              char = chars[index];
+            }
+            
+            // Adjust color brightness
+            const adjustedR = Math.min(255, Math.round(r * colorBrightness));
+            const adjustedG = Math.min(255, Math.round(g * colorBrightness));
+            const adjustedB = Math.min(255, Math.round(b * colorBrightness));
+            
+            // Add colored character
+            if (showColors) {
+              const colorStyle = `color: rgb(${adjustedR}, ${adjustedG}, ${adjustedB});`;
+              outputHtml += `<span class="colored-char" style="${colorStyle}">${char}</span>`;
+            } else {
+              outputHtml += char;
+            }
+            
+            // Collect sample for debugging
+            if (y < 2 && x < sampleSize) {
+              outputSample += char;
+              if (x === sampleSize - 1) outputSample += '\n';
+            }
+          }
+          outputHtml += '<br>';
+        }
+        
+        // Debug output sample
+        debugLog(outputDebug, `First 2 rows of output:\n${outputSample}`);
+        
+        // Update status to show resolution
+        const matchingMethodText = matchingMethod === 'color-analysis' ? 'RGB color analysis' : 'brightness mapping';
+        const distanceMethodText = distanceMethod === 'euclidean' ? 'Euclidean' : 'Perceptual';
+        const colorStatus = showColors ? 'with original colors' : 'without colors';
+        
+        let statusText = `Processing at ${width}x${height} resolution (4:3) using ${matchingMethodText} ${colorStatus}`;
+        if (matchingMethod === 'color-analysis') {
+          statusText += ` with ${distanceMethodText} distance`;
+        }
+        
+        statusMessage.textContent = statusText;
+        
+        // Update display using innerHTML for colored text
+        asciiCanvas.innerHTML = outputHtml;
+      } catch (error) {
+        console.error('Error processing frame:', error);
+        debugLog(outputDebug, `Processing error: ${error.message}`);
+        statusMessage.textContent = 'Error: ' + error.message;
+      }
+      
+      // Request next frame
+      animationFrameId = requestAnimationFrame(processVideoFrame);
+    }
+    
+    // Start video processing
+    function startVideoProcessing() {
+      isProcessing = true;
+      processVideoFrame();
+    }
+    
+    // Stop video processing
+    function stopVideoProcessing() {
+      isProcessing = false;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    }
+    
+    // Handle control changes
+    characterSetSelect.addEventListener('change', async () => {
+      updateCharDebug();
+      
+      // If using color analysis, analyze the new emoji set if needed
+      if (matchingMethodSelect.value === 'color-analysis' && !emojiColorAnalysis[characterSetSelect.value]) {
+        if (isProcessing) {
+          stopVideoProcessing();
+          await analyzeAllEmojiSets();
+          startVideoProcessing();
+        } else {
+          await analyzeAllEmojiSets();
+        }
+      }
+      
+      statusMessage.textContent = `Character set changed to ${characterSetSelect.options[characterSetSelect.selectedIndex].text}`;
+    });
+    
+    resolutionSelect.addEventListener('change', () => {
+      initCanvas();
+      statusMessage.textContent = `Resolution changed to ${resolutionSelect.options[resolutionSelect.selectedIndex].text}`;
+    });
+    
+    invertCheckbox.addEventListener('change', () => {
+      updateCharDebug();
+      statusMessage.textContent = invertCheckbox.checked ? 'Colors inverted' : 'Colors normal';
+    });
+    
+    showColorsCheckbox.addEventListener('change', () => {
+      statusMessage.textContent = showColorsCheckbox.checked ? 'Original colors enabled' : 'Original colors disabled';
+    });
+    
+    colorBrightnessInput.addEventListener('input', () => {
+      colorBrightnessValue.textContent = `${colorBrightnessInput.value}%`;
+    });
+    
+    matchingMethodSelect.addEventListener('change', async () => {
+      // If switching to color analysis, make sure we have emoji analysis data
+      if (matchingMethodSelect.value === 'color-analysis' && !emojiColorAnalysis[characterSetSelect.value]) {
+        if (isProcessing) {
+          stopVideoProcessing();
+          await analyzeAllEmojiSets();
+          startVideoProcessing();
+        } else {
+          await analyzeAllEmojiSets();
+        }
+      }
+      
+      statusMessage.textContent = `Matching method changed to ${matchingMethodSelect.options[matchingMethodSelect.selectedIndex].text}`;
+    });
+    
+    distanceMethodSelect.addEventListener('change', () => {
+      const method = distanceMethodSelect.value === 'euclidean' ? 'Euclidean' : 'Perceptual';
+      statusMessage.textContent = `Color distance method changed to ${method}`;
+    });
+    
+    // Initialize
+    colorBrightnessValue.textContent = `${colorBrightnessInput.value}%`;
+    updateCharDebug();
+  </script>
+</body>
+</html>
