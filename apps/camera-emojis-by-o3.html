@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Emoji Video Feed – Palette Picker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --ui-bg: rgba(0, 0, 0, 0.6);
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #000;
+      color: #fff;
+      overflow: hidden;
+      font-family: monospace;
+    }
+    #emoji-area {
+      white-space: pre;
+      line-height: 0.9em;
+      font-size: 0.9em;
+      user-select: none;
+    }
+    #controls {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: var(--ui-bg);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-family: sans-serif;
+      z-index: 9999;
+    }
+    #controls label {
+      margin-right: 4px;
+      font-size: 0.9em;
+    }
+    #paletteSelect {
+      font-size: 0.9em;
+      background: #111;
+      color: #fff;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 2px 4px;
+    }
+    video,
+    canvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label for="paletteSelect">Palette:</label>
+    <select id="paletteSelect">
+      <option value="food">Food</option>
+      <option value="animals">Animals</option>
+      <option value="flowers">Flowers</option>
+      <option value="misc">Misc</option>
+    </select>
+  </div>
+
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+  <pre id="emoji-area">Loading camera…</pre>
+
+  <script>
+    // Palette definitions – representative RGBs are eyeballed estimates
+    const palettes = {
+      food: [
+        { e: "🍒", r: 177, g:  24, b:  34 },
+        { e: "🍎", r: 200, g:  33, b:  39 },
+        { e: "🍑", r: 255, g: 180, b: 120 },
+        { e: "🍊", r: 255, g: 159, b:  50 },
+        { e: "🥕", r: 237, g: 127, b:  47 },
+        { e: "🍋", r: 255, g: 222, b:  54 },
+        { e: "🍌", r: 244, g: 239, b: 131 },
+        { e: "🥦", r:  83, g: 140, b:  63 },
+        { e: "🥒", r: 104, g: 158, b:  79 },
+        { e: "🫐", r:  55, g:  85, b: 140 },
+        { e: "🍇", r: 111, g:  45, b: 152 },
+        { e: "🍫", r:  88, g:  52, b:  40 },
+        { e: "🍞", r: 193, g: 150, b: 109 }
+      ],
+      animals: [
+        { e: "🦊", r: 229, g: 119, b:  37 }, // fox
+        { e: "🐻", r: 140, g:  83, b:  46 }, // bear
+        { e: "🐶", r: 200, g: 180, b: 150 }, // dog
+        { e: "🐱", r: 245, g: 190, b:  60 }, // cat
+        { e: "🐷", r: 255, g: 170, b: 185 }, // pig
+        { e: "🐰", r: 230, g: 230, b: 230 }, // rabbit
+        { e: "🐸", r:  86, g: 159, b:  58 }, // frog
+        { e: "🦁", r: 237, g: 173, b:  30 }, // lion
+        { e: "🐧", r:  30, g:  30, b:  30 }, // penguin (dark)
+        { e: "🐳", r:  80, g: 180, b: 220 }  // whale – blue
+      ],
+      flowers: [
+        { e: "🌹", r: 200, g:   0, b:  50 },
+        { e: "🌺", r: 255, g:  87, b: 136 },
+        { e: "🌸", r: 255, g: 182, b: 193 },
+        { e: "🌼", r: 255, g: 240, b: 190 },
+        { e: "🌻", r: 255, g: 200, b:   0 },
+        { e: "🏵️", r: 255, g: 160, b:   0 },
+        { e: "🪻", r: 140, g: 100, b: 200 },
+        { e: "💐", r: 210, g: 100, b: 160 },
+        { e: "🪷", r: 255, g: 142, b: 167 }
+      ],
+      misc: [
+        { e: "❤️", r: 200, g:   0, b:   0 },
+        { e: "🧡", r: 255, g: 115, b:   0 },
+        { e: "💛", r: 255, g: 200, b:   0 },
+        { e: "💚", r:   0, g: 180, b:  90 },
+        { e: "💙", r:   0, g: 120, b: 210 },
+        { e: "💜", r: 140, g:  70, b: 180 },
+        { e: "🤎", r: 110, g:  60, b:  40 },
+        { e: "🖤", r:  30, g:  30, b:  30 },
+        { e: "🤍", r: 240, g: 240, b: 240 },
+        { e: "🟣", r: 130, g:  80, b: 190 },
+        { e: "🟡", r: 255, g: 210, b:  70 },
+        { e: "🔵", r:  45, g: 110, b: 220 },
+        { e: "🟢", r:  45, g: 180, b:  75 },
+        { e: "🟠", r: 255, g: 150, b:  45 },
+        { e: "🔴", r: 220, g:  35, b:  35 }
+      ]
+    };
+
+    let currentPalette = palettes.food;
+
+    const video   = document.getElementById("video");
+    const canvas  = document.getElementById("canvas");
+    const pre     = document.getElementById("emoji-area");
+    const ctx     = canvas.getContext("2d");
+    const select  = document.getElementById("paletteSelect");
+
+    select.addEventListener("change", (e) => {
+      currentPalette = palettes[e.target.value];
+    });
+
+    // Render size (smaller = faster)
+    const WIDTH  = 64;
+    const HEIGHT = 48;
+    canvas.width  = WIDTH;
+    canvas.height = HEIGHT;
+
+    async function init() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        video.addEventListener("loadedmetadata", () => requestAnimationFrame(draw));
+      } catch (err) {
+        pre.textContent = "Error accessing camera: " + err.message;
+      }
+    }
+
+    function colorToEmoji(r, g, b) {
+      // Find closest emoji in currentPalette using Euclidean distance in RGB
+      let best = currentPalette[0];
+      let bestDist = Infinity;
+      for (const p of currentPalette) {
+        const dist = (r - p.r) ** 2 + (g - p.g) ** 2 + (b - p.b) ** 2;
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = p;
+        }
+      }
+      return best.e;
+    }
+
+    function draw() {
+      ctx.drawImage(video, 0, 0, WIDTH, HEIGHT);
+      const frame = ctx.getImageData(0, 0, WIDTH, HEIGHT).data;
+      let output = "";
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          const idx = (y * WIDTH + x) * 4;
+          output += colorToEmoji(frame[idx], frame[idx + 1], frame[idx + 2]);
+        }
+        output += "\n";
+      }
+      pre.textContent = output;
+      requestAnimationFrame(draw);
+    }
+
+    init();
+  </script>
+</body>
+</html>

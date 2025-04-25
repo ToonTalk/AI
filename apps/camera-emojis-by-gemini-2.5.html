@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emoji Video Feed - Brightness & Color</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for better emoji rendering */
+        #emojiOutput {
+            font-family: 'Courier New', Courier, monospace; /* Monospaced font for grid alignment */
+            line-height: 0.7; /* Adjust line height for density */
+            letter-spacing: -1px; /* Adjust letter spacing for density */
+            overflow: hidden;
+            white-space: pre;
+            margin: 0 auto; /* Center the output */
+            background-color: #f0f0f0; /* Light background for contrast */
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            /* Make it responsive - adjust width based on container */
+            width: 100%;
+            max-width: 640px; /* Max width to prevent it getting too large */
+            height: auto; /* Adjust height based on content/aspect ratio */
+            aspect-ratio: 4 / 3; /* Maintain a common video aspect ratio */
+            display: flex; /* Use flex to center placeholder text */
+            align-items: center;
+            justify-content: center;
+            color: #333; /* Darker text color for placeholder */
+            font-size: 1rem; /* Slightly larger placeholder text */
+        }
+        /* Ensure video and canvas are hidden but accessible */
+        .hidden-media {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+         /* Adjust emoji font size for responsiveness */
+        @media (max-width: 640px) {
+            #emojiOutput {
+                font-size: 0.5rem; /* Smaller font on smaller screens */
+                line-height: 0.6;
+                letter-spacing: -0.5px;
+            }
+        }
+         @media (min-width: 641px) {
+            #emojiOutput {
+                font-size: 0.7rem; /* Slightly larger font on larger screens */
+                 line-height: 0.7;
+                letter-spacing: -1px;
+            }
+        }
+        /* Style radio buttons */
+        .form-radio {
+             appearance: none;
+             border: 2px solid #ccc;
+             border-radius: 50%;
+             width: 1.2em;
+             height: 1.2em;
+             margin-right: 0.3em;
+             position: relative;
+             top: 0.2em;
+             cursor: pointer;
+        }
+        .form-radio:checked {
+             border-color: #3b82f6; /* Blue-500 */
+             background-color: #3b82f6;
+        }
+         .form-radio:checked::after {
+             content: '';
+             display: block;
+             width: 0.6em;
+             height: 0.6em;
+             background-color: white;
+             border-radius: 50%;
+             position: absolute;
+             top: 50%;
+             left: 50%;
+             transform: translate(-50%, -50%);
+         }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="container mx-auto p-4 text-center bg-white rounded-lg shadow-md max-w-3xl w-full">
+        <h1 class="text-2xl md:text-3xl font-bold mb-4 text-gray-800">Emoji Video Feed</h1>
+
+        <div class="mb-4 flex justify-center space-x-6">
+            <label class="inline-flex items-center cursor-pointer">
+                <input type="radio" class="form-radio text-blue-500" name="mode" value="brightness" checked>
+                <span class="ml-2 text-gray-700">Brightness</span>
+            </label>
+            <label class="inline-flex items-center cursor-pointer">
+                <input type="radio" class="form-radio text-green-500" name="mode" value="color">
+                <span class="ml-2 text-gray-700">Color</span>
+            </label>
+        </div>
+
+        <button id="startButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4 transition duration-300 ease-in-out transform hover:scale-105">
+            Start Webcam
+        </button>
+
+        <div class="w-full flex justify-center mb-4">
+             <div id="emojiOutput">
+                 Select mode and click "Start Webcam".
+             </div>
+        </div>
+
+        <div id="errorMessage" class="text-red-500 mt-2 h-6"></div>
+
+        <video id="video" playsinline autoplay muted class="hidden-media"></video>
+        <canvas id="canvas" class="hidden-media"></canvas>
+    </div>
+
+    <script>
+        // Get DOM elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const emojiOutput = document.getElementById('emojiOutput');
+        const startButton = document.getElementById('startButton');
+        const errorMessage = document.getElementById('errorMessage');
+        const modeRadios = document.querySelectorAll('input[name="mode"]');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true }); // Optimize for frequent reads
+
+        // --- Configuration ---
+        const EMOJI_WIDTH = 80; // Number of emojis horizontally
+        let emojiHeight = 60; // Initial vertical emoji count
+        let animationFrameId = null; // To control the animation loop
+        let currentMode = 'brightness'; // Default mode
+
+        // --- Emoji Palettes ---
+
+        // Brightness-based mapping (Food theme)
+        function getEmojiForBrightness(brightness) {
+            if (brightness < 25) return '☕'; // Coffee
+            if (brightness < 50) return '🍫'; // Chocolate
+            if (brightness < 75) return '🍞'; // Bread
+            if (brightness < 100) return '🍄'; // Mushroom
+            if (brightness < 125) return '🍚'; // Rice
+            if (brightness < 150) return '🧀'; // Cheese
+            if (brightness < 175) return '🍕'; // Pizza
+            if (brightness < 200) return '🍔'; // Burger
+            if (brightness < 225) return '🍟'; // Fries
+            return '🍦'; // Ice Cream
+        }
+
+        // Color-based mapping
+        const emojiColorPalette = [
+            // Reds / Pinks
+            { char: '❤️', rgb: [220, 40, 40] },   // Red Heart
+            { char: '🍓', rgb: [252, 50, 50] },   // Strawberry
+            { char: '🌸', rgb: [255, 183, 197] }, // Cherry Blossom (Pink)
+            // Oranges
+            { char: '🧡', rgb: [253, 126, 20] },  // Orange Heart
+            { char: '🥕', rgb: [253, 140, 20] },  // Carrot
+            { char: '🏀', rgb: [234, 88, 12] },   // Basketball
+            // Yellows
+            { char: '💛', rgb: [255, 220, 0] },   // Yellow Heart
+            { char: '🍋', rgb: [255, 240, 30] },  // Lemon
+            { char: '☀️', rgb: [255, 200, 0] },   // Sun
+            // Greens
+            { char: '💚', rgb: [80, 200, 80] },   // Green Heart
+            { char: '🌲', rgb: [0, 100, 0] },    // Evergreen Tree (Dark Green)
+            { char: '🥑', rgb: [80, 150, 30] },  // Avocado
+            { char: '🐸', rgb: [100, 180, 80] },  // Frog
+            // Blues
+            { char: '💙', rgb: [60, 100, 220] },  // Blue Heart
+            { char: '🌊', rgb: [0, 150, 255] },   // Water Wave (Light Blue)
+            { char: '🫐', rgb: [50, 50, 200] },   // Blueberry (Dark Blue)
+            // Purples
+            { char: '💜', rgb: [150, 80, 190] },  // Purple Heart
+            { char: '🍆', rgb: [100, 0, 100] },   // Eggplant
+            // Browns
+            { char: '🤎', rgb: [140, 80, 40] },   // Brown Heart
+            { char: '🧱', rgb: [180, 80, 80] },   // Brick
+            { char: '🪵', rgb: [160, 120, 80] },  // Wood
+            // Grays / Whites / Blacks
+            { char: '🖤', rgb: [30, 30, 30] },    // Black Heart
+            { char: '⚫', rgb: [20, 20, 20] },    // Black Circle
+            { char: '☁️', rgb: [220, 220, 230] }, // Cloud (Light Gray/White)
+            { char: '🤍', rgb: [240, 240, 240] }, // White Heart
+            { char: '⚪', rgb: [230, 230, 230] }, // White Circle
+            { char: '⚙️', rgb: [180, 180, 180] }, // Gear (Gray)
+        ];
+
+        // Function to calculate squared Euclidean distance between two RGB colors
+        function colorDistanceSquared(rgb1, rgb2) {
+            let rDiff = rgb1[0] - rgb2[0];
+            let gDiff = rgb1[1] - rgb2[1];
+            let bDiff = rgb1[2] - rgb2[2];
+            return rDiff * rDiff + gDiff * gDiff + bDiff * bDiff; // No sqrt needed for comparison
+        }
+
+        // Function to find the closest emoji in the palette to a given RGB color
+        function getEmojiForColor(r, g, b) {
+            let minDistance = Infinity;
+            let closestEmoji = '?'; // Default fallback
+
+            for (const emoji of emojiColorPalette) {
+                const distance = colorDistanceSquared([r, g, b], emoji.rgb);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestEmoji = emoji.char;
+                }
+            }
+            return closestEmoji;
+        }
+
+        // --- Core Frame Processing ---
+        function processFrame() {
+            // Exit condition
+            if (!animationFrameId || video.paused || video.ended || !video.srcObject) {
+                console.log("Stopping frame processing.");
+                if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+                return;
+            }
+
+            // Draw mirrored video frame to canvas
+            ctx.save();
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            let emojiString = '';
+            try {
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                const sampleSizeX = Math.max(1, canvas.width / EMOJI_WIDTH);
+                const sampleSizeY = Math.max(1, canvas.height / emojiHeight);
+
+                // Iterate through the emoji grid
+                for (let y = 0; y < emojiHeight; y++) {
+                    for (let x = 0; x < EMOJI_WIDTH; x++) {
+                        // Sample pixel coordinates (top-left of the block)
+                        const srcX = Math.min(canvas.width - 1, Math.floor(x * sampleSizeX));
+                        const srcY = Math.min(canvas.height - 1, Math.floor(y * sampleSizeY));
+                        const pixelIndex = (srcY * canvas.width + srcX) * 4;
+
+                        if (pixelIndex + 3 < data.length) {
+                            const r = data[pixelIndex];
+                            const g = data[pixelIndex + 1];
+                            const b = data[pixelIndex + 2];
+
+                            // Choose emoji based on current mode
+                            if (currentMode === 'color') {
+                                emojiString += getEmojiForColor(r, g, b);
+                            } else { // Default to brightness mode
+                                const brightness = (r + g + b) / 3;
+                                emojiString += getEmojiForBrightness(brightness);
+                            }
+                        } else {
+                            emojiString += '?';
+                            console.warn("Pixel index out of bounds:", pixelIndex);
+                        }
+                    }
+                    emojiString += '\n'; // Newline after each row
+                }
+
+                // Update DOM (only if changed)
+                if (emojiOutput.textContent !== emojiString) {
+                    emojiOutput.textContent = emojiString;
+                }
+
+            } catch (error) {
+                console.error("Error processing canvas frame:", error);
+                errorMessage.textContent = "Error processing video frame. Stopping.";
+                stopWebcam();
+                return;
+            }
+
+            // Request next frame if still active
+            if (animationFrameId) {
+                animationFrameId = requestAnimationFrame(processFrame);
+            }
+        }
+
+        // --- Webcam Control ---
+        async function startWebcam() {
+            stopWebcam();
+            errorMessage.textContent = '';
+            emojiOutput.textContent = 'Starting webcam...';
+            startButton.disabled = true;
+            startButton.textContent = 'Starting...';
+            // Disable mode switching while starting/running
+            modeRadios.forEach(radio => radio.disabled = true);
+
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+                    audio: false
+                });
+                video.srcObject = stream;
+
+                video.onloadedmetadata = () => {
+                    console.log("Video metadata loaded:", video.videoWidth, "x", video.videoHeight);
+                    if (video.videoWidth === 0 || video.videoHeight === 0) {
+                        errorMessage.textContent = "Failed to get video dimensions.";
+                        stopWebcam(); return;
+                    }
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    emojiHeight = Math.max(1, Math.round(EMOJI_WIDTH * (video.videoHeight / video.videoWidth)));
+                    console.log(`Emoji grid: ${EMOJI_WIDTH}x${emojiHeight}`);
+
+                    emojiOutput.style.aspectRatio = `${canvas.width} / ${canvas.height}`;
+                    emojiOutput.style.display = 'block';
+                    emojiOutput.style.alignItems = '';
+                    emojiOutput.style.justifyContent = '';
+                    emojiOutput.style.color = '';
+                    emojiOutput.style.fontSize = '';
+
+                    video.play().then(() => {
+                        console.log("Video playback started.");
+                        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                        animationFrameId = requestAnimationFrame(processFrame);
+                        console.log("Frame processing loop started with ID:", animationFrameId);
+
+                        startButton.textContent = 'Stop Webcam';
+                        startButton.classList.replace('bg-blue-500', 'bg-red-500');
+                        startButton.classList.replace('hover:bg-blue-700', 'hover:bg-red-700');
+                        startButton.disabled = false; // Re-enable start/stop button
+                        // Keep mode radios disabled while running
+
+                    }).catch(playError => {
+                        console.error("Error trying to play video:", playError);
+                        errorMessage.textContent = "Could not start video playback.";
+                        stopWebcam();
+                    });
+                };
+
+                video.onerror = (event) => {
+                    console.error("Video element error:", event);
+                    errorMessage.textContent = "An error occurred with the video stream.";
+                    stopWebcam();
+                };
+
+            } catch (err) {
+                console.error("Error accessing webcam:", err);
+                // Simplified error messages
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    errorMessage.textContent = 'Webcam access denied.';
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                     errorMessage.textContent = 'No webcam found.';
+                } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                     errorMessage.textContent = 'Webcam is already in use or cannot be read.';
+                } else {
+                    errorMessage.textContent = `Could not access webcam: ${err.name}`;
+                }
+                 emojiOutput.textContent = 'Could not start webcam.';
+                 stopWebcam(); // Ensure cleanup
+            }
+             // Re-enable button if getUserMedia failed before onloadedmetadata
+             if (startButton.disabled) {
+                 startButton.disabled = false;
+                 startButton.textContent = 'Start Webcam';
+                 modeRadios.forEach(radio => radio.disabled = false); // Re-enable mode switching if start failed
+             }
+        }
+
+        function stopWebcam() {
+            console.log("Attempting to stop webcam...");
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            video.pause();
+            video.removeAttribute('src');
+
+            startButton.textContent = 'Start Webcam';
+            startButton.classList.replace('bg-red-500', 'bg-blue-500');
+            startButton.classList.replace('hover:bg-red-700', 'hover:bg-blue-700');
+            startButton.disabled = false;
+            modeRadios.forEach(radio => radio.disabled = false); // Re-enable mode switching
+
+            emojiOutput.textContent = 'Webcam stopped. Select mode and click "Start Webcam".';
+            emojiOutput.style.display = 'flex';
+            emojiOutput.style.alignItems = 'center';
+            emojiOutput.style.justifyContent = 'center';
+            emojiOutput.style.aspectRatio = '4 / 3';
+        }
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', () => {
+            if (video.srcObject && animationFrameId) {
+                stopWebcam();
+            } else {
+                startWebcam();
+            }
+        });
+
+        // Update mode when radio button changes
+        modeRadios.forEach(radio => {
+            radio.addEventListener('change', (event) => {
+                currentMode = event.target.value;
+                console.log("Mode changed to:", currentMode);
+                // No need to restart webcam if it's already running,
+                // processFrame will pick up the new mode automatically.
+            });
+        });
+
+        window.addEventListener('beforeunload', stopWebcam);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                stopWebcam();
+            }
+        });
+
+    </script>
+
+</body>
+</html>
