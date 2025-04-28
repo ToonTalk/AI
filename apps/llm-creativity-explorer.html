@@ -30,7 +30,14 @@
             font-weight: 600; /* font-semibold */
         }
         .history-table td.prompt-cell {
-             max-width: 250px; /* Limit prompt width */
+             max-width: 150px; /* Adjust prompt width */
+             overflow: hidden;
+             text-overflow: ellipsis;
+             white-space: nowrap;
+             text-align: left;
+        }
+         .history-table td.model-cell {
+             max-width: 120px; /* Limit model name width */
              overflow: hidden;
              text-overflow: ellipsis;
              white-space: nowrap;
@@ -56,7 +63,7 @@
             resize: vertical;
         }
         /* Styling for diversity score display */
-        .diversity-score {
+        .diversity-score, .api-call-count, .avg-similarity-score {
             font-size: 0.875rem; /* text-sm */
             margin-top: 0.75rem; /* mt-3 */
             padding: 0.5rem 0.75rem; /* py-2 px-3 */
@@ -64,10 +71,22 @@
             border: 1px solid #e5e7eb; /* cool-gray-200 */
             border-radius: 0.375rem; /* rounded-md */
             display: inline-block; /* Allow inline display */
+            margin-right: 0.5rem; /* mr-2 for spacing */
         }
-        .diversity-score strong {
+        .diversity-score strong, .api-call-count strong, .avg-similarity-score strong {
              font-weight: 600; /* font-semibold */
              color: #4b5563; /* cool-gray-600 */
+        }
+         /* Styling for individual similarity-to-mean score */
+        .sim-to-mean-score {
+            font-size: 0.75rem; /* text-xs */
+            color: #6b7280; /* cool-gray-500 */
+            margin-top: 0.25rem; /* mt-1 */
+            display: block; /* Ensure it's on its own line */
+        }
+        /* Hide custom model input initially */
+        #customModelInputContainer.hidden {
+            display: none;
         }
     </style>
 </head>
@@ -82,6 +101,7 @@
          <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-r-md" role="alert">
             <p class="font-bold">API Usage Note</p>
             <p class="text-sm">Generating many samples may exceed the Gemini API <a href="https://ai.google.dev/pricing" target="_blank" class="underline hover:text-blue-600">free tier limits</a> (e.g., requests per minute). Use responsibly.</p>
+             <div id="apiCallCount" class="api-call-count mt-2"></div>
         </div>
 
         <form id="promptForm" class="space-y-4">
@@ -95,14 +115,28 @@
                 <textarea id="prompt" name="prompt" rows="4" required placeholder="Enter the prompt to send to Gemini"
                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label for="samples" class="block text-sm font-medium text-gray-700">Number of Samples (e.g., 2-10):</label>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                 <div>
+                    <label for="modelSelect" class="block text-sm font-medium text-gray-700">Model:</label>
+                    <select id="modelSelect" name="modelSelect" class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (Latest)</option>
+                        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (Latest)</option>
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                 </div>
+                 <div id="customModelInputContainer" class="hidden">
+                     <label for="customModelName" class="block text-sm font-medium text-gray-700">Custom Model Name:</label>
+                     <input type="text" id="customModelName" name="customModelName" placeholder="e.g., gemini-pro"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                 </div>
+                 <div>
+                    <label for="samples" class="block text-sm font-medium text-gray-700">Number of Samples:</label>
                     <input type="number" id="samples" name="samples" min="2" max="20" value="3" required
                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                 </div>
                 <div>
-                    <label for="temperature" class="block text-sm font-medium text-gray-700">Temperature (0.0 - 1.0):</label>
+                    <label for="temperature" class="block text-sm font-medium text-gray-700">Temperature:</label>
                     <input type="number" id="temperature" name="temperature" min="0.0" max="1.0" step="0.1" value="0.7" required
                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                 </div>
@@ -129,6 +163,7 @@
                  <p class="text-xs text-gray-500 mb-2">Measures similarity based on shared keywords.</p>
                 <div id="tfidfSimilarity" class="overflow-x-auto bg-white p-2 rounded shadow"></div>
                  <div id="tfidfDiversityScore" class="diversity-score hidden"></div>
+                 <div id="tfidfAvgSimilarityToMean" class="avg-similarity-score hidden"></div>
             </div>
 
             <div>
@@ -136,6 +171,7 @@
                  <p class="text-xs text-gray-500 mb-2">Measures similarity based on semantic meaning (may take time to load model).</p>
                 <div id="useSimilarity" class="overflow-x-auto bg-white p-2 rounded shadow"></div>
                  <div id="useDiversityScore" class="diversity-score hidden"></div>
+                 <div id="useAvgSimilarityToMean" class="avg-similarity-score hidden"></div>
             </div>
         </div>
 
@@ -166,17 +202,24 @@
         const useSimilarityDiv = document.getElementById('useSimilarity');
         const tfidfDiversityScoreDiv = document.getElementById('tfidfDiversityScore');
         const useDiversityScoreDiv = document.getElementById('useDiversityScore');
+        const tfidfAvgSimilarityToMeanDiv = document.getElementById('tfidfAvgSimilarityToMean');
+        const useAvgSimilarityToMeanDiv = document.getElementById('useAvgSimilarityToMean');
         const historyArea = document.getElementById('historyArea');
         const historyTableContainer = document.getElementById('historyTableContainer');
         const clearHistoryButton = document.getElementById('clearHistoryButton');
-        const exportHistoryButton = document.getElementById('exportHistoryButton'); // New export button
+        const exportHistoryButton = document.getElementById('exportHistoryButton');
         const promptInput = document.getElementById('prompt');
         const samplesInput = document.getElementById('samples');
         const temperatureInput = document.getElementById('temperature');
+        const modelSelect = document.getElementById('modelSelect');
+        const customModelInputContainer = document.getElementById('customModelInputContainer');
+        const customModelNameInput = document.getElementById('customModelName');
+        const apiCallCountDiv = document.getElementById('apiCallCount');
 
         // --- History Constants ---
         const HISTORY_KEY = 'geminiSimilarityHistory';
         const MAX_DISPLAY_HISTORY = 10; // How many to show on page
+        const DEFAULT_MODEL = 'gemini-1.5-flash-latest';
 
 
         // --- Variables for models ---
@@ -194,12 +237,34 @@
                     promptInput.value = lastRun.prompt || '';
                     samplesInput.value = lastRun.samples || 3;
                     temperatureInput.value = lastRun.temperature !== undefined ? lastRun.temperature : 0.7;
+                    // Set model selector based on history
+                    const lastModel = lastRun.model || DEFAULT_MODEL;
+                    const modelOptionExists = Array.from(modelSelect.options).some(opt => opt.value === lastModel);
+                    if (modelOptionExists) {
+                        modelSelect.value = lastModel;
+                        customModelInputContainer.classList.add('hidden');
+                        customModelNameInput.value = ''; // Clear custom if standard selected
+                    } else if (lastModel) { // Check if lastModel is not empty/null
+                        modelSelect.value = 'custom';
+                        customModelInputContainer.classList.remove('hidden');
+                        customModelNameInput.value = lastModel;
+                    } else { // Fallback if lastModel was invalid/empty
+                         modelSelect.value = DEFAULT_MODEL;
+                         customModelInputContainer.classList.add('hidden');
+                         customModelNameInput.value = '';
+                    }
+
                     displayHistoryTable(history); // Display history on load
+                    displayApiCallCount(history); // Display API call count
                 } else {
                     // Set default values if no history
                     promptInput.value = '';
                     samplesInput.value = 3;
                     temperatureInput.value = 0.7;
+                    modelSelect.value = DEFAULT_MODEL; // Default model
+                    customModelInputContainer.classList.add('hidden');
+                    customModelNameInput.value = '';
+                    displayApiCallCount([]); // Show 0 count if no history
                 }
                 return history;
             } catch (e) {
@@ -208,20 +273,26 @@
                 promptInput.value = '';
                 samplesInput.value = 3;
                 temperatureInput.value = 0.7;
+                modelSelect.value = DEFAULT_MODEL;
+                customModelInputContainer.classList.add('hidden');
+                customModelNameInput.value = '';
+                displayApiCallCount([]); // Show 0 count on error
                 return []; // Return empty array on error
             }
         }
 
         function saveHistory(newEntry) {
             try {
-                let history = loadHistory(); // Get current full history
+                // Load full history without relying on loadHistory's form population side-effect
+                const storedHistory = localStorage.getItem(HISTORY_KEY);
+                let history = storedHistory ? JSON.parse(storedHistory) : [];
                  if (!Array.isArray(history)) {
                     console.warn("History was not an array, resetting.");
                     history = [];
                  }
                 history.push(newEntry); // Add the new run to the full history
 
-                // ** Store the FULL history, don't slice here **
+                // Store the FULL history
                 localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
                 return history; // Return the updated full history
             } catch (e) {
@@ -236,11 +307,15 @@
              try {
                  localStorage.removeItem(HISTORY_KEY);
                  displayHistoryTable([]); // Update display to show empty table
+                 displayApiCallCount([]); // Update API call count display
                  historyArea.classList.add('hidden'); // Hide the history section
                  // Reset form fields to defaults
                  promptInput.value = '';
                  samplesInput.value = 3;
                  temperatureInput.value = 0.7;
+                 modelSelect.value = DEFAULT_MODEL;
+                 customModelInputContainer.classList.add('hidden');
+                 customModelNameInput.value = '';
                  console.log("History cleared.");
              } catch (e) {
                  console.error("Error clearing history from localStorage:", e);
@@ -257,32 +332,41 @@
             }
 
             let tableHtml = '<table class="w-full text-sm text-left text-gray-500 history-table"><thead><tr>';
-            tableHtml += '<th class="w-1/6">Timestamp</th>';
-            tableHtml += '<th class="w-2/6">Prompt</th>';
-            tableHtml += '<th class="w-1/12">Samples</th>'; // Adjusted width
-            tableHtml += '<th class="w-1/12">Temp.</th>';   // Added Temp column
-            tableHtml += '<th class="w-1/6">TF-IDF Div.</th>';
-            tableHtml += '<th class="w-1/6">USE Div.</th>';
+            tableHtml += '<th class="w-[15%]">Timestamp</th>';
+            tableHtml += '<th class="w-[20%]">Prompt</th>';
+            tableHtml += '<th class="w-[15%]">Model</th>';
+            tableHtml += '<th class="w-[8%]">Samples</th>';
+            tableHtml += '<th class="w-[8%]">Temp.</th>';
+            tableHtml += '<th class="w-[11%]">TFIDF Div.</th>';
+            tableHtml += '<th class="w-[11%]">USE Div.</th>';
+            tableHtml += '<th class="w-[12%]">AvgSimMean TFIDF</th>';
+            tableHtml += '<th class="w-[10%]">AvgSimMean USE</th>';
             tableHtml += '</tr></thead><tbody>';
 
-            // ** Display only the last MAX_DISPLAY_HISTORY entries **
+            // Display only the last MAX_DISPLAY_HISTORY entries
             const startIndex = Math.max(0, history.length - MAX_DISPLAY_HISTORY);
             for (let i = history.length - 1; i >= startIndex; i--) {
                 const entry = history[i];
-                const timestamp = new Date(entry.timestamp).toLocaleString(); // Format timestamp
-                const promptSnippet = entry.prompt ? entry.prompt.substring(0, 50) + (entry.prompt.length > 50 ? '...' : '') : 'N/A';
-                const tempValue = typeof entry.temperature === 'number' ? entry.temperature.toFixed(1) : 'N/A'; // Format temperature
-                const tfidfScore = typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity) ? entry.tfidfDiversity.toFixed(3) : 'N/A';
-                const useScore = typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity) ? entry.useDiversity.toFixed(3) : 'N/A';
+                const timestamp = new Date(entry.timestamp).toLocaleString();
+                const promptSnippet = entry.prompt ? entry.prompt.substring(0, 40) + (entry.prompt.length > 40 ? '...' : '') : 'N/A';
+                const modelName = entry.model || 'N/A';
+                const modelSnippet = modelName.length > 18 ? modelName.substring(0, 16) + '...' : modelName;
+                const tempValue = typeof entry.temperature === 'number' ? entry.temperature.toFixed(1) : 'N/A';
+                const tfidfDivScore = typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity) ? entry.tfidfDiversity.toFixed(3) : 'N/A';
+                const useDivScore = typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity) ? entry.useDiversity.toFixed(3) : 'N/A';
+                const tfidfAvgSimScore = typeof entry.tfidfAvgSimilarityToMean === 'number' && !isNaN(entry.tfidfAvgSimilarityToMean) ? entry.tfidfAvgSimilarityToMean.toFixed(3) : 'N/A';
+                const useAvgSimScore = typeof entry.useAvgSimilarityToMean === 'number' && !isNaN(entry.useAvgSimilarityToMean) ? entry.useAvgSimilarityToMean.toFixed(3) : 'N/A';
 
                 tableHtml += '<tr>';
                 tableHtml += `<td class="whitespace-nowrap">${timestamp}</td>`;
-                // Add title attribute for full prompt on hover
                 tableHtml += `<td class="prompt-cell" title="${entry.prompt || ''}">${promptSnippet}</td>`;
+                tableHtml += `<td class="model-cell" title="${modelName}">${modelSnippet}</td>`;
                 tableHtml += `<td>${entry.samples || 'N/A'}</td>`;
-                tableHtml += `<td>${tempValue}</td>`; // Display temperature
-                tableHtml += `<td>${tfidfScore}</td>`;
-                tableHtml += `<td>${useScore}</td>`;
+                tableHtml += `<td>${tempValue}</td>`;
+                tableHtml += `<td>${tfidfDivScore}</td>`;
+                tableHtml += `<td>${useDivScore}</td>`;
+                tableHtml += `<td>${tfidfAvgSimScore}</td>`;
+                tableHtml += `<td>${useAvgSimScore}</td>`;
                 tableHtml += '</tr>';
             }
 
@@ -291,7 +375,27 @@
             historyArea.classList.remove('hidden'); // Show history section
         }
 
-        // --- NEW: Export History to CSV ---
+        // --- Display API Call Count ---
+        function displayApiCallCount(history) {
+             const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+             let callCount = 0;
+
+             if (Array.isArray(history)) {
+                 // Filter history for entries within the last 24 hours
+                 const recentHistory = history.filter(entry => entry.timestamp >= twentyFourHoursAgo);
+                 // Sum the 'samples' count for each recent entry
+                 callCount = recentHistory.reduce((sum, entry) => {
+                     // Add entry.samples if it's a valid number, otherwise add 0
+                     return sum + (typeof entry.samples === 'number' && !isNaN(entry.samples) ? entry.samples : 0);
+                 }, 0);
+             }
+
+             // Update the display element
+             apiCallCountDiv.innerHTML = `<strong>API Calls (Last 24h):</strong> ${callCount}`;
+        }
+
+
+        // --- Export History to CSV ---
         function escapeCsvValue(value) {
             if (value === null || value === undefined) {
                 return '';
@@ -306,21 +410,27 @@
         }
 
         function exportHistoryToCSV() {
-            const history = loadHistory(); // Load the full history
+             // Load the full history directly from storage for export
+             const storedHistory = localStorage.getItem(HISTORY_KEY);
+             const history = storedHistory ? JSON.parse(storedHistory) : [];
+
             if (history.length === 0) {
                 alert("No history to export.");
                 return;
             }
 
-            const headers = ['Timestamp', 'Prompt', 'Samples', 'Temperature', 'TFIDF_Diversity', 'USE_Diversity'];
+            const headers = ['Timestamp', 'Prompt', 'Model', 'Samples', 'Temperature', 'TFIDF_Diversity', 'USE_Diversity', 'AvgSimMean_TFIDF', 'AvgSimMean_USE']; // Added new headers
             // Convert history data to CSV rows
             const csvRows = history.map(entry => [
                 new Date(entry.timestamp).toISOString(), // Use ISO format for consistency
                 escapeCsvValue(entry.prompt),
+                escapeCsvValue(entry.model), // Export model name
                 entry.samples,
                 entry.temperature,
                 typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity) ? entry.tfidfDiversity.toFixed(5) : '', // More precision for CSV
-                typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity) ? entry.useDiversity.toFixed(5) : ''
+                typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity) ? entry.useDiversity.toFixed(5) : '',
+                typeof entry.tfidfAvgSimilarityToMean === 'number' && !isNaN(entry.tfidfAvgSimilarityToMean) ? entry.tfidfAvgSimilarityToMean.toFixed(5) : '', // New score
+                typeof entry.useAvgSimilarityToMean === 'number' && !isNaN(entry.useAvgSimilarityToMean) ? entry.useAvgSimilarityToMean.toFixed(5) : ''      // New score
             ].join(',')); // Join values with commas
 
             // Combine headers and rows
@@ -520,9 +630,38 @@
             return pairCount > 0 ? sumDissimilarity / pairCount : NaN;
         }
 
+        // --- Calculate Mean Vector ---
+        function calculateMeanVector(vectors) {
+            if (!vectors || vectors.length === 0) return null;
+            const vectorLength = vectors[0].length;
+            const meanVector = new Array(vectorLength).fill(0);
+
+            for (const vec of vectors) {
+                if (vec.length !== vectorLength) {
+                     console.error("Inconsistent vector lengths found.");
+                     return null;
+                }
+                for (let i = 0; i < vectorLength; i++) {
+                    meanVector[i] += vec[i];
+                }
+            }
+
+            // Divide by the number of vectors to get the mean
+            for (let i = 0; i < vectorLength; i++) {
+                meanVector[i] /= vectors.length;
+            }
+            return meanVector;
+        }
+
+        // --- Calculate Similarities to Mean ---
+        function calculateSimilaritiesToMean(vectors, meanVector) {
+            if (!vectors || !meanVector || vectors.length === 0) return [];
+            return vectors.map(vec => calculateCosineSimilarity(vec, meanVector));
+        }
+
 
          // --- Gemini API Call ---
-        async function callGeminiAPI(apiKey, promptText, temperature, attempt) { // Added temperature parameter
+        async function callGeminiAPI(apiKey, modelName, promptText, temperature, attempt) { // Added modelName parameter
             try {
                 // Ensure the main class is loaded
                 if (!GoogleGenAI) throw new Error("GoogleGenAI class not loaded from module.");
@@ -547,9 +686,9 @@
                 ].filter(setting => setting.category && setting.threshold);
 
                 // Use genAI.models.generateContent structure
-                // Specify the model name within this call
+                // Specify the selected model name within this call
                 const result = await genAI.models.generateContent({
-                    model: "gemini-1.5-flash-latest", // Using the stable flash model
+                    model: modelName, // Use the selected model name
                     contents: [{ role: "user", parts: [{ text: promptText }] }],
                     generationConfig, // Pass the config with temperature
                     safetySettings,
@@ -690,39 +829,59 @@
              return tableHtml;
         }
 
-        function displayResults(responses, tfidfMatrix, useMatrix, tfidfDiversity, useDiversity) {
-             // Display Generated Responses
-             responsesList.innerHTML = responses.map((resp, index) => `
-                <div class="border border-gray-200 p-3 rounded-md bg-gray-50 shadow-sm mb-4">
-                    <p class="font-semibold text-gray-600 mb-1">Response ${index + 1}:</p>
-                    <p class="text-gray-800 text-sm whitespace-pre-wrap">${resp || "[Empty Response]"}</p>
-                </div>
-             `).join('');
+        function displayResults(responses, tfidfMatrix, useMatrix, tfidfDiversity, useDiversity, tfidfAvgSimToMean, useAvgSimToMean, tfidfSimilaritiesToMean, useSimilaritiesToMean) { // Added individual scores
+             // Display Generated Responses with individual similarity to mean
+             responsesList.innerHTML = responses.map((resp, index) => {
+                 const tfidfSimMeanText = (tfidfSimilaritiesToMean && !isNaN(tfidfSimilaritiesToMean[index]))
+                     ? `TF-IDF Sim to Mean: ${tfidfSimilaritiesToMean[index].toFixed(3)}`
+                     : 'TF-IDF Sim to Mean: N/A';
+                 const useSimMeanText = (useSimilaritiesToMean && !isNaN(useSimilaritiesToMean[index]))
+                     ? `USE Sim to Mean: ${useSimilaritiesToMean[index].toFixed(3)}`
+                     : 'USE Sim to Mean: N/A';
 
-             // Display TF-IDF Similarities Table and Diversity Score
+                 return `
+                    <div class="border border-gray-200 p-3 rounded-md bg-gray-50 shadow-sm mb-4">
+                        <p class="font-semibold text-gray-600 mb-1">Response ${index + 1}:</p>
+                        <p class="text-gray-800 text-sm whitespace-pre-wrap">${resp || "[Empty Response]"}</p>
+                        <span class="sim-to-mean-score">${tfidfSimMeanText}</span>
+                        <span class="sim-to-mean-score">${useSimMeanText}</span>
+                    </div>
+                 `;
+             }).join('');
+
+             // Display TF-IDF Similarities Table and Scores
              tfidfSimilarityDiv.innerHTML = createSimilarityTable(tfidfMatrix, responses.length, 'TF-IDF');
              if (!isNaN(tfidfDiversity)) {
-                 tfidfDiversityScoreDiv.innerHTML = `<strong>Avg. TF-IDF Dissimilarity (Diversity):</strong> ${tfidfDiversity.toFixed(3)}`;
+                 tfidfDiversityScoreDiv.innerHTML = `<strong>Avg. Pairwise Dissimilarity:</strong> ${tfidfDiversity.toFixed(3)}`;
                  tfidfDiversityScoreDiv.classList.remove('hidden');
              } else {
                  tfidfDiversityScoreDiv.classList.add('hidden');
              }
+             if (!isNaN(tfidfAvgSimToMean)) { // Display new score
+                 tfidfAvgSimilarityToMeanDiv.innerHTML = `<strong>Avg. Similarity to Mean:</strong> ${tfidfAvgSimToMean.toFixed(3)}`;
+                 tfidfAvgSimilarityToMeanDiv.classList.remove('hidden');
+             } else {
+                 tfidfAvgSimilarityToMeanDiv.classList.add('hidden');
+             }
 
 
-             // Display USE Similarities Table and Diversity Score
+             // Display USE Similarities Table and Scores
              useSimilarityDiv.innerHTML = createSimilarityTable(useMatrix, responses.length, 'USE');
               if (!isNaN(useDiversity)) {
-                 useDiversityScoreDiv.innerHTML = `<strong>Avg. USE Dissimilarity (Diversity):</strong> ${useDiversity.toFixed(3)}`;
+                 useDiversityScoreDiv.innerHTML = `<strong>Avg. Pairwise Dissimilarity:</strong> ${useDiversity.toFixed(3)}`;
                  useDiversityScoreDiv.classList.remove('hidden');
              } else {
                   useDiversityScoreDiv.classList.add('hidden');
              }
+              if (!isNaN(useAvgSimToMean)) { // Display new score
+                 useAvgSimilarityToMeanDiv.innerHTML = `<strong>Avg. Similarity to Mean:</strong> ${useAvgSimToMean.toFixed(3)}`;
+                 useAvgSimilarityToMeanDiv.classList.remove('hidden');
+             } else {
+                 useAvgSimilarityToMeanDiv.classList.add('hidden');
+             }
 
              // Make the results area visible
              resultsArea.classList.remove('hidden');
-
-             // Display history table (called separately now after saving)
-             // displayHistoryTable(loadHistory()); // Load and display fresh history
         }
 
         // --- Form Submit Handler ---
@@ -737,11 +896,16 @@
             const apiKey = document.getElementById('apiKey').value;
             const promptText = document.getElementById('prompt').value;
             const numSamples = parseInt(document.getElementById('samples').value, 10);
-            const temperature = parseFloat(document.getElementById('temperature').value); // Get temperature
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            // Get selected model name
+            let modelName = modelSelect.value;
+            if (modelName === 'custom') {
+                modelName = customModelNameInput.value.trim();
+            }
 
             // Basic validation
-            if (!apiKey || !promptText || isNaN(numSamples) || numSamples < 2 || isNaN(temperature) || temperature < 0.0 || temperature > 1.0) {
-                displayError("Please fill in all fields correctly (API Key, Prompt, Samples >= 2, Temperature 0.0-1.0).");
+            if (!apiKey || !promptText || isNaN(numSamples) || numSamples < 2 || isNaN(temperature) || temperature < 0.0 || temperature > 1.0 || !modelName) {
+                displayError("Please fill in all fields correctly (API Key, Prompt, Samples >= 2, Temperature 0.0-1.0, Model).");
                 return;
             }
 
@@ -751,57 +915,53 @@
             let useEmbeddingsTensor = null;
             let tfidfSimilarityMatrix = null;
             let useSimilarityMatrix = null;
-            let tfidfDiversity = NaN; // Initialize diversity scores
+            let tfidfDiversity = NaN;
             let useDiversity = NaN;
+            let tfidfAvgSimilarityToMean = NaN;
+            let useAvgSimilarityToMean = NaN;
+            let tfidfSimilaritiesToMean = []; // Store individual scores
+            let useSimilaritiesToMean = [];   // Store individual scores
+            let currentFullHistory = [];
 
             try {
-                // 1. Start loading USE model in parallel (don't await yet)
+                // 1. Start loading USE model in parallel
                 const useModelLoadingPromise = loadUseModel().catch(err => {
                     console.warn("USE Model loading failed in background. Proceeding without USE.");
-                    return null; // Ensure promise resolves even on error
+                    return null;
                  });
 
                 // 2. Generate responses from Gemini API
-                displayStatus(`Generating ${numSamples} responses (Temp: ${temperature.toFixed(1)})...`, true);
+                displayStatus(`Generating ${numSamples} responses using ${modelName} (Temp: ${temperature.toFixed(1)})...`, true);
                 const generationPromises = [];
                 for (let i = 0; i < numSamples; i++) {
-                    // Add a small delay between requests
                     if (i > 0) await new Promise(resolve => setTimeout(resolve, 300));
                     displayStatus(`Generating response ${i + 1} of ${numSamples}...`, true);
-                    // Call API for each sample, passing temperature
                     generationPromises.push(
-                        callGeminiAPI(apiKey, promptText, temperature, i + 1) // Pass temperature here
+                        callGeminiAPI(apiKey, modelName, promptText, temperature, i + 1)
                             .catch(err => {
                                 console.error(`Error generating response ${i + 1}:`, err);
                                 displayError(`Failed response ${i + 1}: ${err.message}`);
-                                return null; // Return null for failed responses
+                                return null;
                             })
                     );
                 }
-                // Wait for all API calls to settle
                 const results = await Promise.all(generationPromises);
-                // Filter out nulls (failed responses)
                 responses = results.filter(r => typeof r === 'string');
 
-                // Check if enough responses were generated
-                if (responses.length === 0) {
-                     throw new Error("All API calls failed. Cannot proceed.");
-                } else if (responses.length < numSamples) {
-                    displayStatus(`Successfully generated ${responses.length}/${numSamples} responses.`, false);
-                } else {
-                     displayStatus("All responses received.", false);
-                }
+                if (responses.length === 0) throw new Error("All API calls failed. Cannot proceed.");
+                if (responses.length < numSamples) displayStatus(`Successfully generated ${responses.length}/${numSamples} responses.`, false);
+                else displayStatus("All responses received.", false);
 
-                 // Need at least two responses to compare
                  if (responses.length < 2) {
                     displayError("Need at least two successful responses to calculate similarity.");
-                    displayResults(responses, null, null, NaN, NaN);
-                    return; // Exit handleSubmit early
+                    displayResults(responses, null, null, NaN, NaN, NaN, NaN, [], []); // Pass empty arrays
+                    currentFullHistory = loadHistory();
+                    return;
                  }
 
                 // --- Calculations (only run if responses.length >= 2) ---
 
-                // 3. Calculate TF-IDF Similarities & Diversity
+                // 3. Calculate TF-IDF Metrics
                 tfidfVectors = calculateTfIdfVectors(responses);
                 tfidfSimilarityMatrix = [];
                  if (tfidfVectors && tfidfVectors.length > 0) {
@@ -816,16 +976,29 @@
                     displayStatus("TF-IDF similarities calculated.", false);
                     tfidfDiversity = calculateAverageDissimilarity(tfidfSimilarityMatrix);
                     displayStatus("TF-IDF diversity calculated.", false);
+
+                    // Calculate TF-IDF similarity to mean
+                    const tfidfMeanVector = calculateMeanVector(tfidfVectors);
+                    if (tfidfMeanVector) {
+                        tfidfSimilaritiesToMean = calculateSimilaritiesToMean(tfidfVectors, tfidfMeanVector); // Store individual scores
+                        const validSims = tfidfSimilaritiesToMean.filter(s => !isNaN(s));
+                        if (validSims.length > 0) {
+                            tfidfAvgSimilarityToMean = validSims.reduce((a, b) => a + b, 0) / validSims.length;
+                        }
+                         displayStatus("TF-IDF similarity to mean calculated.", false);
+                    }
+
                  } else {
                      displayStatus("Skipping TF-IDF calculation.", false);
                  }
 
-                // 4. Calculate USE Embeddings & Similarities & Diversity
+                // 4. Calculate USE Metrics
                 await useModelLoadingPromise;
                 if (useModel) {
                     useEmbeddingsTensor = await getUseEmbeddings(responses);
                     if (useEmbeddingsTensor) {
                          displayStatus("Calculating USE similarities...", true);
+                         let useEmbeddingsArray = null;
                          const useMatrixTensor = tf.tidy(() => {
                              const norms = useEmbeddingsTensor.norm('euclidean', 1, true);
                              const epsilon = tf.scalar(1e-12);
@@ -834,28 +1007,45 @@
                              return tf.matMul(normalizedEmbeddings, normalizedEmbeddings, false, true);
                          });
                          useSimilarityMatrix = await useMatrixTensor.array();
-                         useEmbeddingsTensor.dispose();
                          useMatrixTensor.dispose();
                          displayStatus("USE similarities calculated.", false);
                          useDiversity = calculateAverageDissimilarity(useSimilarityMatrix);
                          displayStatus("USE diversity calculated.", false);
+
+                         // Calculate USE similarity to mean
+                         useEmbeddingsArray = await useEmbeddingsTensor.array();
+                         useEmbeddingsTensor.dispose();
+                         const useMeanVector = calculateMeanVector(useEmbeddingsArray);
+                         if (useMeanVector) {
+                             useSimilaritiesToMean = calculateSimilaritiesToMean(useEmbeddingsArray, useMeanVector); // Store individual scores
+                             const validSims = useSimilaritiesToMean.filter(s => !isNaN(s));
+                             if (validSims.length > 0) {
+                                 useAvgSimilarityToMean = validSims.reduce((a, b) => a + b, 0) / validSims.length;
+                             }
+                             displayStatus("USE similarity to mean calculated.", false);
+                         }
+
                     } else { displayStatus("Skipping USE similarities (embedding error).", false); }
                 } else { displayStatus("Skipping USE similarities (model load failed).", false); }
 
                 // 5. Save results to history
-                const currentHistory = saveHistory({
+                currentFullHistory = saveHistory({
                     timestamp: Date.now(),
                     prompt: promptText,
+                    model: modelName,
                     samples: numSamples,
-                    temperature: temperature, // Save temperature
+                    temperature: temperature,
                     tfidfDiversity: tfidfDiversity,
-                    useDiversity: useDiversity
+                    useDiversity: useDiversity,
+                    tfidfAvgSimilarityToMean: tfidfAvgSimilarityToMean, // Save new metric
+                    useAvgSimilarityToMean: useAvgSimilarityToMean     // Save new metric
                 });
 
                 // 6. Display all results including diversity scores and updated history
                 displayStatus("Displaying results...", false);
-                displayResults(responses, tfidfSimilarityMatrix, useSimilarityMatrix, tfidfDiversity, useDiversity);
-                displayHistoryTable(currentHistory); // Display the updated history table
+                displayResults(responses, tfidfSimilarityMatrix, useSimilarityMatrix, tfidfDiversity, useDiversity, tfidfAvgSimilarityToMean, useAvgSimilarityToMean, tfidfSimilaritiesToMean, useSimilaritiesToMean); // Pass individual scores
+                displayHistoryTable(currentFullHistory); // Display the updated history table
+                displayApiCallCount(currentFullHistory); // Update API call count
                 displayStatus("Done.", false); // Clear status
 
             } catch (error) {
@@ -863,7 +1053,9 @@
                 console.error("Error in handleSubmit:", error);
                 displayError(error.message || "An unexpected error occurred.", error);
                 // Display history even if the current run failed
-                 displayHistoryTable(loadHistory());
+                 currentFullHistory = loadHistory();
+                 displayHistoryTable(currentFullHistory);
+                 displayApiCallCount(currentFullHistory);
             } finally {
                 // Always re-enable button and hide loader
                 generateButton.disabled = false;
@@ -880,7 +1072,15 @@
         // --- Event Listeners ---
         form.addEventListener('submit', handleSubmit);
         clearHistoryButton.addEventListener('click', clearHistory);
-        exportHistoryButton.addEventListener('click', exportHistoryToCSV); // Add listener for export
+        exportHistoryButton.addEventListener('click', exportHistoryToCSV);
+        // Show/hide custom model input based on selection
+        modelSelect.addEventListener('change', (event) => {
+            if (event.target.value === 'custom') {
+                customModelInputContainer.classList.remove('hidden');
+            } else {
+                customModelInputContainer.classList.add('hidden');
+            }
+        });
 
 
         // --- Initial Page Load ---
