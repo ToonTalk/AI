@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Response Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@latest/dist/universal-sentence-encoder.min.js"></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/genai": "https://unpkg.com/@google/genai?module"
+        }
+      }
+    </script>
+
+    <style>
+        /* Basic styling for tables and loader */
+        .similarity-table th, .similarity-table td,
+        .history-table th, .history-table td {
+            border: 1px solid #e2e8f0; /* cool-gray-200 */
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.875rem; /* text-sm */
+        }
+        .similarity-table th, .history-table th {
+            background-color: #f1f5f9; /* cool-gray-100 */
+            font-weight: 600; /* font-semibold */
+        }
+        .history-table td.prompt-cell {
+             max-width: 250px; /* Limit prompt width */
+             overflow: hidden;
+             text-overflow: ellipsis;
+             white-space: nowrap;
+             text-align: left;
+        }
+        .loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3b82f6; /* Blue-500 */
+            border-radius: 50%;
+            width: 20px; /* Smaller loader */
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 8px; /* ml-2 */
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Ensure text area resizes vertically */
+        textarea {
+            resize: vertical;
+        }
+        /* Styling for diversity score display */
+        .diversity-score {
+            font-size: 0.875rem; /* text-sm */
+            margin-top: 0.75rem; /* mt-3 */
+            padding: 0.5rem 0.75rem; /* py-2 px-3 */
+            background-color: #f8fafc; /* cool-gray-50 */
+            border: 1px solid #e5e7eb; /* cool-gray-200 */
+            border-radius: 0.375rem; /* rounded-md */
+            display: inline-block; /* Allow inline display */
+        }
+        .diversity-score strong {
+             font-weight: 600; /* font-semibold */
+             color: #4b5563; /* cool-gray-600 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans p-4 sm:p-6 md:p-10">
+    <div class="container mx-auto max-w-4xl bg-white p-6 md:p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl md:text-3xl font-bold mb-6 text-gray-800 text-center">Gemini Response Similarity Explorer</h1>
+
+        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-r-md" role="alert">
+            <p class="font-bold">Security Warning</p>
+            <p class="text-sm">Never expose your API key publicly. This tool is intended for local or personal use. Entering your key here stores it only in your browser's memory for this session.</p>
+        </div>
+         <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-r-md" role="alert">
+            <p class="font-bold">API Usage Note</p>
+            <p class="text-sm">Generating many samples may exceed the Gemini API <a href="https://ai.google.dev/pricing" target="_blank" class="underline hover:text-blue-600">free tier limits</a> (e.g., requests per minute). Use responsibly.</p>
+        </div>
+
+        <form id="promptForm" class="space-y-4">
+            <div>
+                <label for="apiKey" class="block text-sm font-medium text-gray-700">Gemini API Key:</label>
+                <input type="password" id="apiKey" name="apiKey" required placeholder="Enter your API key here"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+            <div>
+                <label for="prompt" class="block text-sm font-medium text-gray-700">Prompt:</label>
+                <textarea id="prompt" name="prompt" rows="4" required placeholder="Enter the prompt to send to Gemini"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="samples" class="block text-sm font-medium text-gray-700">Number of Samples (e.g., 2-10):</label>
+                    <input type="number" id="samples" name="samples" min="2" max="20" value="3" required
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="temperature" class="block text-sm font-medium text-gray-700">Temperature (0.0 - 1.0):</label>
+                    <input type="number" id="temperature" name="temperature" min="0.0" max="1.0" step="0.1" value="0.7" required
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+            </div>
+            <div>
+                 <button type="submit" id="generateButton"
+                        class="w-full inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition duration-150 ease-in-out">
+                    Generate & Compare Responses
+                    <div id="loader" class="loader hidden"></div>
+                 </button>
+            </div>
+        </form>
+
+        <div id="statusArea" class="mt-6 text-sm text-center"></div>
+
+        <div id="resultsArea" class="mt-8 space-y-8 hidden">
+            <div>
+                <h2 class="text-xl font-semibold mb-4 text-gray-700 border-b pb-2">Generated Responses:</h2>
+                <div id="responsesList" class="space-y-4"></div>
+            </div>
+
+            <div>
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">Cosine Similarity (TF-IDF):</h2>
+                 <p class="text-xs text-gray-500 mb-2">Measures similarity based on shared keywords.</p>
+                <div id="tfidfSimilarity" class="overflow-x-auto bg-white p-2 rounded shadow"></div>
+                 <div id="tfidfDiversityScore" class="diversity-score hidden"></div>
+            </div>
+
+            <div>
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">Cosine Similarity (Universal Sentence Encoder):</h2>
+                 <p class="text-xs text-gray-500 mb-2">Measures similarity based on semantic meaning (may take time to load model).</p>
+                <div id="useSimilarity" class="overflow-x-auto bg-white p-2 rounded shadow"></div>
+                 <div id="useDiversityScore" class="diversity-score hidden"></div>
+            </div>
+        </div>
+
+        <div id="historyArea" class="mt-10 pt-6 border-t border-gray-300 hidden">
+             <h2 class="text-xl font-semibold mb-4 text-gray-700">Run History (Most Recent 10):</h2>
+             <div id="historyTableContainer" class="overflow-x-auto bg-white p-2 rounded shadow">
+                 </div>
+             <div class="mt-4 space-x-2">
+                 <button id="exportHistoryButton" class="py-1 px-3 text-xs bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">Export Full History (CSV)</button>
+                 <button id="clearHistoryButton" class="py-1 px-3 text-xs bg-red-500 hover:bg-red-600 text-white rounded-md shadow-sm">Clear History</button>
+             </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // Import necessary components from the correct package
+        import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+
+        // --- Get DOM Elements ---
+        const form = document.getElementById('promptForm');
+        const generateButton = document.getElementById('generateButton');
+        const loader = document.getElementById('loader');
+        const statusArea = document.getElementById('statusArea');
+        const resultsArea = document.getElementById('resultsArea');
+        const responsesList = document.getElementById('responsesList');
+        const tfidfSimilarityDiv = document.getElementById('tfidfSimilarity');
+        const useSimilarityDiv = document.getElementById('useSimilarity');
+        const tfidfDiversityScoreDiv = document.getElementById('tfidfDiversityScore');
+        const useDiversityScoreDiv = document.getElementById('useDiversityScore');
+        const historyArea = document.getElementById('historyArea');
+        const historyTableContainer = document.getElementById('historyTableContainer');
+        const clearHistoryButton = document.getElementById('clearHistoryButton');
+        const exportHistoryButton = document.getElementById('exportHistoryButton'); // New export button
+        const promptInput = document.getElementById('prompt');
+        const samplesInput = document.getElementById('samples');
+        const temperatureInput = document.getElementById('temperature');
+
+        // --- History Constants ---
+        const HISTORY_KEY = 'geminiSimilarityHistory';
+        const MAX_DISPLAY_HISTORY = 10; // How many to show on page
+
+
+        // --- Variables for models ---
+        let useModel = null;
+        let useModelPromise = null; // To prevent multiple load attempts
+
+        // --- Local Storage & History Logic ---
+        function loadHistory() {
+            try {
+                const storedHistory = localStorage.getItem(HISTORY_KEY);
+                const history = storedHistory ? JSON.parse(storedHistory) : [];
+                if (history.length > 0) {
+                    // Populate form with the most recent entry
+                    const lastRun = history[history.length - 1];
+                    promptInput.value = lastRun.prompt || '';
+                    samplesInput.value = lastRun.samples || 3;
+                    temperatureInput.value = lastRun.temperature !== undefined ? lastRun.temperature : 0.7;
+                    displayHistoryTable(history); // Display history on load
+                } else {
+                    // Set default values if no history
+                    promptInput.value = '';
+                    samplesInput.value = 3;
+                    temperatureInput.value = 0.7;
+                }
+                return history;
+            } catch (e) {
+                console.error("Error loading history from localStorage:", e);
+                // Set default values on error
+                promptInput.value = '';
+                samplesInput.value = 3;
+                temperatureInput.value = 0.7;
+                return []; // Return empty array on error
+            }
+        }
+
+        function saveHistory(newEntry) {
+            try {
+                let history = loadHistory(); // Get current full history
+                 if (!Array.isArray(history)) {
+                    console.warn("History was not an array, resetting.");
+                    history = [];
+                 }
+                history.push(newEntry); // Add the new run to the full history
+
+                // ** Store the FULL history, don't slice here **
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+                return history; // Return the updated full history
+            } catch (e) {
+                console.error("Error saving history to localStorage:", e);
+                // Attempt to return current history even if save failed
+                const currentHistory = localStorage.getItem(HISTORY_KEY);
+                return currentHistory ? JSON.parse(currentHistory) : [];
+            }
+        }
+
+        function clearHistory() {
+             try {
+                 localStorage.removeItem(HISTORY_KEY);
+                 displayHistoryTable([]); // Update display to show empty table
+                 historyArea.classList.add('hidden'); // Hide the history section
+                 // Reset form fields to defaults
+                 promptInput.value = '';
+                 samplesInput.value = 3;
+                 temperatureInput.value = 0.7;
+                 console.log("History cleared.");
+             } catch (e) {
+                 console.error("Error clearing history from localStorage:", e);
+                 displayError("Could not clear history.");
+             }
+        }
+
+
+        function displayHistoryTable(history) {
+            if (!history || history.length === 0) {
+                historyTableContainer.innerHTML = '<p class="text-sm text-gray-500 p-4 text-center">No history yet.</p>';
+                historyArea.classList.add('hidden'); // Hide if no history
+                return;
+            }
+
+            let tableHtml = '<table class="w-full text-sm text-left text-gray-500 history-table"><thead><tr>';
+            tableHtml += '<th class="w-1/6">Timestamp</th>';
+            tableHtml += '<th class="w-2/6">Prompt</th>';
+            tableHtml += '<th class="w-1/12">Samples</th>'; // Adjusted width
+            tableHtml += '<th class="w-1/12">Temp.</th>';   // Added Temp column
+            tableHtml += '<th class="w-1/6">TF-IDF Div.</th>';
+            tableHtml += '<th class="w-1/6">USE Div.</th>';
+            tableHtml += '</tr></thead><tbody>';
+
+            // ** Display only the last MAX_DISPLAY_HISTORY entries **
+            const startIndex = Math.max(0, history.length - MAX_DISPLAY_HISTORY);
+            for (let i = history.length - 1; i >= startIndex; i--) {
+                const entry = history[i];
+                const timestamp = new Date(entry.timestamp).toLocaleString(); // Format timestamp
+                const promptSnippet = entry.prompt ? entry.prompt.substring(0, 50) + (entry.prompt.length > 50 ? '...' : '') : 'N/A';
+                const tempValue = typeof entry.temperature === 'number' ? entry.temperature.toFixed(1) : 'N/A'; // Format temperature
+                const tfidfScore = typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity) ? entry.tfidfDiversity.toFixed(3) : 'N/A';
+                const useScore = typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity) ? entry.useDiversity.toFixed(3) : 'N/A';
+
+                tableHtml += '<tr>';
+                tableHtml += `<td class="whitespace-nowrap">${timestamp}</td>`;
+                // Add title attribute for full prompt on hover
+                tableHtml += `<td class="prompt-cell" title="${entry.prompt || ''}">${promptSnippet}</td>`;
+                tableHtml += `<td>${entry.samples || 'N/A'}</td>`;
+                tableHtml += `<td>${tempValue}</td>`; // Display temperature
+                tableHtml += `<td>${tfidfScore}</td>`;
+                tableHtml += `<td>${useScore}</td>`;
+                tableHtml += '</tr>';
+            }
+
+            tableHtml += '</tbody></table>';
+            historyTableContainer.innerHTML = tableHtml;
+            historyArea.classList.remove('hidden'); // Show history section
+        }
+
+        // --- NEW: Export History to CSV ---
+        function escapeCsvValue(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            const stringValue = String(value);
+            // If the value contains a comma, double quote, or newline, enclose it in double quotes
+            // and escape any existing double quotes by doubling them
+            if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+                return `"${stringValue.replace(/"/g, '""')}"`;
+            }
+            return stringValue;
+        }
+
+        function exportHistoryToCSV() {
+            const history = loadHistory(); // Load the full history
+            if (history.length === 0) {
+                alert("No history to export.");
+                return;
+            }
+
+            const headers = ['Timestamp', 'Prompt', 'Samples', 'Temperature', 'TFIDF_Diversity', 'USE_Diversity'];
+            // Convert history data to CSV rows
+            const csvRows = history.map(entry => [
+                new Date(entry.timestamp).toISOString(), // Use ISO format for consistency
+                escapeCsvValue(entry.prompt),
+                entry.samples,
+                entry.temperature,
+                typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity) ? entry.tfidfDiversity.toFixed(5) : '', // More precision for CSV
+                typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity) ? entry.useDiversity.toFixed(5) : ''
+            ].join(',')); // Join values with commas
+
+            // Combine headers and rows
+            const csvString = [headers.join(','), ...csvRows].join('\n');
+
+            // Create a Blob and download link
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            if (link.download !== undefined) { // Feature detection
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "gemini_similarity_history.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url); // Clean up blob URL
+            } else {
+                 alert("CSV export is not supported in this browser.");
+            }
+        }
+
+
+        // --- Universal Sentence Encoder Logic ---
+        async function loadUseModel() {
+            if (useModelPromise) return useModelPromise; // Return existing promise if loading/loaded
+
+            displayStatus("Loading Universal Sentence Encoder model (approx. 90MB)...", true);
+            // Start loading and store the promise
+            useModelPromise = use.load(); // Standard model
+            try {
+                useModel = await useModelPromise; // Wait for loading to complete
+                console.log("USE model loaded successfully.");
+                displayStatus("USE model loaded.", false);
+            } catch (error) {
+                console.error("Error loading USE model:", error);
+                displayError("Failed to load the Universal Sentence Encoder model. USE similarities cannot be calculated.", error);
+                useModelPromise = null; // Reset promise on failure to allow retry
+                throw error; // Propagate error to stop USE calculations
+            }
+            return useModel; // Return the loaded model
+        }
+
+        async function getUseEmbeddings(sentences) {
+            // Ensure the model is loaded before proceeding
+            if (!useModel) {
+                displayStatus("Waiting for USE model to load...", true);
+                try {
+                    await loadUseModel(); // Await loading if not already started/finished
+                } catch (error) {
+                    // Error already displayed by loadUseModel
+                    return null; // Stop if loading failed
+                }
+                if (!useModel) return null; // Double-check loading succeeded
+            }
+
+            displayStatus("Generating USE embeddings...", true);
+            try {
+                // Call embed() outside of tf.tidy()
+                // Ensure input is an array of non-empty strings
+                const validSentences = sentences.map(s => (typeof s === 'string' ? s : '')).filter(Boolean);
+                if (validSentences.length === 0) {
+                     console.warn("USE embedding input is empty after validation.");
+                     return null; // Handle case where all sentences are invalid/empty
+                }
+
+                // Await the asynchronous embedding function
+                const embeddings = await useModel.embed(validSentences);
+
+                if (!embeddings) {
+                    console.warn("USE embedding resulted in null/undefined tensor.");
+                    return null;
+                }
+                displayStatus("USE embeddings generated.", false);
+                return embeddings; // Returns a tf.Tensor
+
+            } catch (error) {
+                console.error("Error generating USE embeddings:", error);
+                displayError("Failed to generate USE embeddings.", error);
+                return null;
+            }
+        }
+
+        // --- TF-IDF Logic ---
+        function tokenize(text) {
+            // Basic tokenizer: lowercase, split by non-word characters
+            if (typeof text !== 'string') return [];
+            return text.toLowerCase().match(/\b\w+\b/g) || [];
+        }
+
+        function calculateTfIdfVectors(documents) {
+            displayStatus("Calculating TF-IDF vectors...", true);
+            const tokenizedDocs = documents.map(tokenize);
+            const vocabulary = new Set(tokenizedDocs.flat());
+            const idf = {};
+            const vectors = [];
+            const numDocuments = documents.length;
+
+            if (numDocuments === 0 || vocabulary.size === 0) {
+                 displayStatus("Skipping TF-IDF (no documents or vocabulary).", false);
+                 return []; // Handle empty input
+            }
+
+            // Calculate IDF (Inverse Document Frequency) with smoothing
+            vocabulary.forEach(term => {
+                const docsContainingTerm = tokenizedDocs.filter(docTokens => docTokens.includes(term)).length;
+                idf[term] = Math.log((1 + numDocuments) / (1 + docsContainingTerm)) + 1; // Additive smoothing
+            });
+
+            // Calculate TF-IDF vectors
+            tokenizedDocs.forEach(docTokens => {
+                const vector = {};
+                const termCounts = {};
+                const docLength = docTokens.length;
+
+                // Calculate TF (Term Frequency) for each term in the document
+                docTokens.forEach(term => {
+                    termCounts[term] = (termCounts[term] || 0) + 1;
+                });
+
+                // Calculate TF-IDF score for each term in the vocabulary
+                vocabulary.forEach(term => {
+                    // Use logarithmic TF scaling: 1 + log(tf) if tf > 0, else 0
+                    const tf = termCounts[term] ? 1 + Math.log(termCounts[term]) : 0;
+                    vector[term] = tf * (idf[term] || 0); // Use 0 IDF if term not in vocab (shouldn't happen)
+                });
+                vectors.push(vector);
+            });
+
+            displayStatus("TF-IDF vectors calculated.", false);
+
+            // Convert sparse vectors (objects) to dense arrays based on a sorted vocabulary
+            const sortedVocab = Array.from(vocabulary).sort();
+            const denseVectors = vectors.map(sparseVec => {
+                return sortedVocab.map(term => sparseVec[term] || 0); // Map each term in vocab to its score in the doc vector
+            });
+
+            return denseVectors;
+        }
+
+        // --- Cosine Similarity Logic ---
+        function calculateCosineSimilarity(vecA, vecB) {
+            // Validate input vectors
+            if (!vecA || !vecB || vecA.length !== vecB.length) {
+                console.error("Invalid vectors for cosine similarity", vecA, vecB);
+                return 0; // Return 0 for invalid input
+            }
+
+            let dotProduct = 0;
+            let magnitudeA = 0;
+            let magnitudeB = 0;
+
+            // Calculate dot product and magnitudes
+            for (let i = 0; i < vecA.length; i++) {
+                dotProduct += vecA[i] * vecB[i];
+                magnitudeA += vecA[i] * vecA[i];
+                magnitudeB += vecB[i] * vecB[i];
+            }
+
+            magnitudeA = Math.sqrt(magnitudeA);
+            magnitudeB = Math.sqrt(magnitudeB);
+
+            // Handle potential division by zero if either vector has zero magnitude
+            if (magnitudeA === 0 || magnitudeB === 0) {
+                return 0;
+            } else {
+                const similarity = dotProduct / (magnitudeA * magnitudeB);
+                // Clamp similarity to [0, 1] range for easier interpretation (TF-IDF is non-negative)
+                // USE can be [-1, 1], but clamping to [0, 1] is often done.
+                return Math.max(0, Math.min(1, similarity));
+            }
+        }
+
+        // --- Calculate Average Dissimilarity ---
+        function calculateAverageDissimilarity(matrix) {
+            if (!matrix || !Array.isArray(matrix) || matrix.length < 2) {
+                return NaN; // Not enough data to calculate pairwise dissimilarity
+            }
+            let sumDissimilarity = 0;
+            let pairCount = 0;
+            const n = matrix.length;
+
+            // Iterate over the upper triangle of the matrix (excluding the diagonal)
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 1; j < n; j++) {
+                    // Ensure the similarity value is valid
+                    if (matrix[i] && typeof matrix[i][j] === 'number' && !isNaN(matrix[i][j])) {
+                        sumDissimilarity += (1 - matrix[i][j]); // Dissimilarity = 1 - Similarity
+                        pairCount++;
+                    } else {
+                         console.warn(`Invalid similarity value at [${i}, ${j}]`, matrix[i]?.[j]);
+                    }
+                }
+            }
+
+            // Avoid division by zero if no valid pairs were found
+            return pairCount > 0 ? sumDissimilarity / pairCount : NaN;
+        }
+
+
+         // --- Gemini API Call ---
+        async function callGeminiAPI(apiKey, promptText, temperature, attempt) { // Added temperature parameter
+            try {
+                // Ensure the main class is loaded
+                if (!GoogleGenAI) throw new Error("GoogleGenAI class not loaded from module.");
+
+                // Instantiate with API key in an object
+                const genAI = new GoogleGenAI({ apiKey: apiKey });
+
+                // Define generation configuration, including temperature
+                const generationConfig = {
+                     temperature: temperature, // Use the passed temperature
+                    // maxOutputTokens: 2048,
+                };
+
+                // Define safety settings, checking if constants were imported
+                const safeHarmCategory = typeof HarmCategory !== 'undefined' ? HarmCategory : {};
+                const safeHarmBlockThreshold = typeof HarmBlockThreshold !== 'undefined' ? HarmBlockThreshold : {};
+                const safetySettings = [
+                    { category: safeHarmCategory.HARM_CATEGORY_HARASSMENT, threshold: safeHarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+                    { category: safeHarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: safeHarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+                    { category: safeHarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: safeHarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+                    { category: safeHarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: safeHarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+                ].filter(setting => setting.category && setting.threshold);
+
+                // Use genAI.models.generateContent structure
+                // Specify the model name within this call
+                const result = await genAI.models.generateContent({
+                    model: "gemini-1.5-flash-latest", // Using the stable flash model
+                    contents: [{ role: "user", parts: [{ text: promptText }] }],
+                    generationConfig, // Pass the config with temperature
+                    safetySettings,
+                 });
+
+                // DEBUG: Log the full API result
+                // console.log(`Full API Result (Attempt ${attempt}):`, JSON.stringify(result, null, 2));
+
+                // ** FINAL Text Extraction - Access result directly **
+
+                // 1. Check if result exists
+                if (!result) {
+                    console.warn(`API result is missing (Attempt ${attempt})`);
+                    throw new Error(`Generation failed - incomplete API result (Attempt ${attempt}).`);
+                }
+
+                 // 2. Check for safety blocks directly on result.response
+                 const responseObj = result.response;
+                 if (responseObj?.promptFeedback?.blockReason) {
+                     const blockReason = responseObj.promptFeedback.blockReason;
+                     const safetyRatings = responseObj.promptFeedback.safetyRatings?.map(r => `${r.category.replace('HARM_CATEGORY_', '')}: ${r.probability}`).join(', ') || 'N/A';
+                     throw new Error(`Generation blocked: ${blockReason}. [${safetyRatings}] (Attempt ${attempt})`);
+                 }
+
+                 // 3. Check for candidates array directly on result object
+                 if (!result?.candidates || !Array.isArray(result.candidates) || result.candidates.length === 0) {
+                     console.warn(`No valid candidates array found directly on result (Attempt ${attempt}):`, result?.candidates);
+                     throw new Error(`Generation failed - no candidates found in response (Attempt ${attempt}).`);
+                 }
+                 const candidate = result.candidates[0];
+
+
+                // 4. Check for content object
+                if (!candidate.content) {
+                    console.warn(`No content object found in candidate (Attempt ${attempt}):`, candidate);
+                    throw new Error(`Generation failed - no content found in candidate (Attempt ${attempt}).`);
+                }
+
+                // 5. Check for parts array
+                if (!Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+                    console.warn(`No valid parts array found in content (Attempt ${attempt}):`, candidate.content.parts);
+                    throw new Error(`Generation failed - no parts found in content (Attempt ${attempt}).`);
+                }
+                const part = candidate.content.parts[0];
+
+                // 6. Check for text string within the first part
+                if (typeof part.text !== 'string' || part.text.length === 0) {
+                    // Sometimes the text might be empty but finishReason is STOP, which is okay for similarity calc
+                    if (candidate.finishReason === 'STOP' && part.text === '') {
+                         console.log(`Successfully extracted empty text (Attempt ${attempt})`);
+                         return ""; // Return empty string if generation finished but text is empty
+                    }
+                    console.warn(`No valid text string found in first part (Attempt ${attempt}):`, part.text);
+                    throw new Error(`Generation failed - no valid text found in response part (Attempt ${attempt}).`);
+                }
+
+                // 7. If all checks pass, return the text
+                console.log(`Successfully extracted text (Attempt ${attempt})`);
+                return part.text;
+
+
+            } catch (error) {
+                 console.error(`Error calling Gemini API (Attempt ${attempt}):`, error);
+                 // Handle specific errors (keep existing handlers)
+                 if (error.message.includes('API key not valid')) {
+                    throw new Error("API key not valid. Check key & Gemini API enablement.");
+                 }
+                 if (error.message.includes('429') || error.message.toLowerCase().includes('quota')) {
+                    throw new Error("Quota exceeded. Wait or reduce samples.");
+                 }
+                 if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
+                     throw new Error(`Network error (Attempt ${attempt}). Check connection.`);
+                 }
+                 if (error.message.includes('Generation blocked')) {
+                     throw error; // Re-throw safety block errors
+                 }
+                 if (error instanceof TypeError && error.message.includes("Cannot read properties of undefined (reading 'generateContent')")) {
+                     throw new Error("Internal Error: API structure mismatch (.models property not found). Needs code update.");
+                 }
+                 if (error.message.includes("GoogleGenAI class not loaded")) {
+                     throw new Error("Internal Error: Failed to load Google AI library.");
+                 }
+                 // Re-throw other errors (including the "no valid content" errors thrown above)
+                throw error;
+            }
+        }
+
+         // --- Display Logic ---
+        function displayStatus(message, showLoader = false) {
+            statusArea.textContent = message;
+            statusArea.className = 'mt-6 text-sm text-gray-600 text-center'; // Reset color, center align
+            loader.classList.toggle('hidden', !showLoader); // More concise toggle
+        }
+
+        function displayError(message, error = null) {
+            // Display primary error message
+            statusArea.innerHTML = `<span class="font-semibold">Error:</span> ${message}`;
+            statusArea.className = 'mt-6 text-sm text-red-600 text-center'; // Set error color, center align
+
+            // Log detailed error to console if provided
+            if (error) console.error("Detailed Error:", error);
+
+            // Ensure loader is hidden and button is re-enabled on error
+            loader.classList.add('hidden');
+            generateButton.disabled = false;
+        }
+
+        function createSimilarityTable(similarityMatrix, numSamples, method) {
+            // Handle cases where similarity calculation failed or returned invalid data
+             if (!similarityMatrix || !Array.isArray(similarityMatrix) || similarityMatrix.length !== numSamples) {
+                 console.warn(`Invalid similarity matrix for ${method}:`, similarityMatrix);
+                 return `<p class="text-red-500 text-sm p-2">Could not calculate ${method} similarities.</p>`;
+             }
+
+             // Build the HTML table string
+             let tableHtml = '<table class="w-full text-sm text-left text-gray-500 similarity-table"><thead><tr><th class="w-16"></th>'; // Header row start
+             // Add column headers (Resp 1, Resp 2, ...)
+             for (let i = 1; i <= numSamples; i++) {
+                 tableHtml += `<th>Resp ${i}</th>`;
+             }
+             tableHtml += '</tr></thead><tbody>'; // Header row end, body start
+
+             // Add table rows
+             for (let i = 0; i < numSamples; i++) {
+                 tableHtml += `<tr><th class="text-gray-900 bg-gray-50">Resp ${i + 1}</th>`; // Row header
+                 // Add data cells for the row
+                 for (let j = 0; j < numSamples; j++) {
+                     // Ensure the value exists and is a number before formatting
+                     const simValue = (similarityMatrix[i] && typeof similarityMatrix[i][j] === 'number') ? similarityMatrix[i][j] : NaN;
+                     const similarityText = !isNaN(simValue) ? simValue.toFixed(3) : 'N/A';
+                     // Apply background color for diagonal and high similarity
+                     const bgColor = i === j ? 'bg-blue-50' : (!isNaN(simValue) && simValue > 0.85 ? 'bg-green-50' : 'bg-white');
+                     tableHtml += `<td class="${bgColor}">${similarityText}</td>`;
+                 }
+                 tableHtml += '</tr>'; // Row end
+             }
+             tableHtml += '</tbody></table>'; // Body end, table end
+             return tableHtml;
+        }
+
+        function displayResults(responses, tfidfMatrix, useMatrix, tfidfDiversity, useDiversity) {
+             // Display Generated Responses
+             responsesList.innerHTML = responses.map((resp, index) => `
+                <div class="border border-gray-200 p-3 rounded-md bg-gray-50 shadow-sm mb-4">
+                    <p class="font-semibold text-gray-600 mb-1">Response ${index + 1}:</p>
+                    <p class="text-gray-800 text-sm whitespace-pre-wrap">${resp || "[Empty Response]"}</p>
+                </div>
+             `).join('');
+
+             // Display TF-IDF Similarities Table and Diversity Score
+             tfidfSimilarityDiv.innerHTML = createSimilarityTable(tfidfMatrix, responses.length, 'TF-IDF');
+             if (!isNaN(tfidfDiversity)) {
+                 tfidfDiversityScoreDiv.innerHTML = `<strong>Avg. TF-IDF Dissimilarity (Diversity):</strong> ${tfidfDiversity.toFixed(3)}`;
+                 tfidfDiversityScoreDiv.classList.remove('hidden');
+             } else {
+                 tfidfDiversityScoreDiv.classList.add('hidden');
+             }
+
+
+             // Display USE Similarities Table and Diversity Score
+             useSimilarityDiv.innerHTML = createSimilarityTable(useMatrix, responses.length, 'USE');
+              if (!isNaN(useDiversity)) {
+                 useDiversityScoreDiv.innerHTML = `<strong>Avg. USE Dissimilarity (Diversity):</strong> ${useDiversity.toFixed(3)}`;
+                 useDiversityScoreDiv.classList.remove('hidden');
+             } else {
+                  useDiversityScoreDiv.classList.add('hidden');
+             }
+
+             // Make the results area visible
+             resultsArea.classList.remove('hidden');
+
+             // Display history table (called separately now after saving)
+             // displayHistoryTable(loadHistory()); // Load and display fresh history
+        }
+
+        // --- Form Submit Handler ---
+        async function handleSubmit(event) {
+            event.preventDefault(); // Prevent default form submission
+            generateButton.disabled = true; // Disable button during processing
+            resultsArea.classList.add('hidden'); // Hide previous results
+            statusArea.innerHTML = ''; // Clear previous status/errors
+            displayStatus("Starting...", true); // Initial status update
+
+            // Get form values
+            const apiKey = document.getElementById('apiKey').value;
+            const promptText = document.getElementById('prompt').value;
+            const numSamples = parseInt(document.getElementById('samples').value, 10);
+            const temperature = parseFloat(document.getElementById('temperature').value); // Get temperature
+
+            // Basic validation
+            if (!apiKey || !promptText || isNaN(numSamples) || numSamples < 2 || isNaN(temperature) || temperature < 0.0 || temperature > 1.0) {
+                displayError("Please fill in all fields correctly (API Key, Prompt, Samples >= 2, Temperature 0.0-1.0).");
+                return;
+            }
+
+            // Initialize variables
+            let responses = [];
+            let tfidfVectors = null;
+            let useEmbeddingsTensor = null;
+            let tfidfSimilarityMatrix = null;
+            let useSimilarityMatrix = null;
+            let tfidfDiversity = NaN; // Initialize diversity scores
+            let useDiversity = NaN;
+
+            try {
+                // 1. Start loading USE model in parallel (don't await yet)
+                const useModelLoadingPromise = loadUseModel().catch(err => {
+                    console.warn("USE Model loading failed in background. Proceeding without USE.");
+                    return null; // Ensure promise resolves even on error
+                 });
+
+                // 2. Generate responses from Gemini API
+                displayStatus(`Generating ${numSamples} responses (Temp: ${temperature.toFixed(1)})...`, true);
+                const generationPromises = [];
+                for (let i = 0; i < numSamples; i++) {
+                    // Add a small delay between requests
+                    if (i > 0) await new Promise(resolve => setTimeout(resolve, 300));
+                    displayStatus(`Generating response ${i + 1} of ${numSamples}...`, true);
+                    // Call API for each sample, passing temperature
+                    generationPromises.push(
+                        callGeminiAPI(apiKey, promptText, temperature, i + 1) // Pass temperature here
+                            .catch(err => {
+                                console.error(`Error generating response ${i + 1}:`, err);
+                                displayError(`Failed response ${i + 1}: ${err.message}`);
+                                return null; // Return null for failed responses
+                            })
+                    );
+                }
+                // Wait for all API calls to settle
+                const results = await Promise.all(generationPromises);
+                // Filter out nulls (failed responses)
+                responses = results.filter(r => typeof r === 'string');
+
+                // Check if enough responses were generated
+                if (responses.length === 0) {
+                     throw new Error("All API calls failed. Cannot proceed.");
+                } else if (responses.length < numSamples) {
+                    displayStatus(`Successfully generated ${responses.length}/${numSamples} responses.`, false);
+                } else {
+                     displayStatus("All responses received.", false);
+                }
+
+                 // Need at least two responses to compare
+                 if (responses.length < 2) {
+                    displayError("Need at least two successful responses to calculate similarity.");
+                    displayResults(responses, null, null, NaN, NaN);
+                    return; // Exit handleSubmit early
+                 }
+
+                // --- Calculations (only run if responses.length >= 2) ---
+
+                // 3. Calculate TF-IDF Similarities & Diversity
+                tfidfVectors = calculateTfIdfVectors(responses);
+                tfidfSimilarityMatrix = [];
+                 if (tfidfVectors && tfidfVectors.length > 0) {
+                    for (let i = 0; i < responses.length; i++) {
+                        tfidfSimilarityMatrix[i] = [];
+                        for (let j = 0; j < responses.length; j++) {
+                            if (tfidfVectors[i] && tfidfVectors[j]) {
+                                tfidfSimilarityMatrix[i][j] = calculateCosineSimilarity(tfidfVectors[i], tfidfVectors[j]);
+                            } else { tfidfSimilarityMatrix[i][j] = NaN; }
+                        }
+                    }
+                    displayStatus("TF-IDF similarities calculated.", false);
+                    tfidfDiversity = calculateAverageDissimilarity(tfidfSimilarityMatrix);
+                    displayStatus("TF-IDF diversity calculated.", false);
+                 } else {
+                     displayStatus("Skipping TF-IDF calculation.", false);
+                 }
+
+                // 4. Calculate USE Embeddings & Similarities & Diversity
+                await useModelLoadingPromise;
+                if (useModel) {
+                    useEmbeddingsTensor = await getUseEmbeddings(responses);
+                    if (useEmbeddingsTensor) {
+                         displayStatus("Calculating USE similarities...", true);
+                         const useMatrixTensor = tf.tidy(() => {
+                             const norms = useEmbeddingsTensor.norm('euclidean', 1, true);
+                             const epsilon = tf.scalar(1e-12);
+                             const safeNorms = tf.maximum(norms, epsilon);
+                             const normalizedEmbeddings = tf.div(useEmbeddingsTensor, safeNorms);
+                             return tf.matMul(normalizedEmbeddings, normalizedEmbeddings, false, true);
+                         });
+                         useSimilarityMatrix = await useMatrixTensor.array();
+                         useEmbeddingsTensor.dispose();
+                         useMatrixTensor.dispose();
+                         displayStatus("USE similarities calculated.", false);
+                         useDiversity = calculateAverageDissimilarity(useSimilarityMatrix);
+                         displayStatus("USE diversity calculated.", false);
+                    } else { displayStatus("Skipping USE similarities (embedding error).", false); }
+                } else { displayStatus("Skipping USE similarities (model load failed).", false); }
+
+                // 5. Save results to history
+                const currentHistory = saveHistory({
+                    timestamp: Date.now(),
+                    prompt: promptText,
+                    samples: numSamples,
+                    temperature: temperature, // Save temperature
+                    tfidfDiversity: tfidfDiversity,
+                    useDiversity: useDiversity
+                });
+
+                // 6. Display all results including diversity scores and updated history
+                displayStatus("Displaying results...", false);
+                displayResults(responses, tfidfSimilarityMatrix, useSimilarityMatrix, tfidfDiversity, useDiversity);
+                displayHistoryTable(currentHistory); // Display the updated history table
+                displayStatus("Done.", false); // Clear status
+
+            } catch (error) {
+                // Catch any unhandled errors
+                console.error("Error in handleSubmit:", error);
+                displayError(error.message || "An unexpected error occurred.", error);
+                // Display history even if the current run failed
+                 displayHistoryTable(loadHistory());
+            } finally {
+                // Always re-enable button and hide loader
+                generateButton.disabled = false;
+                loader.classList.add('hidden');
+                // Clean up tensors if any were left hanging
+                if (useEmbeddingsTensor && !useEmbeddingsTensor.isDisposed) {
+                    useEmbeddingsTensor.dispose();
+                    console.log("Disposed leftover USE embeddings tensor in finally block.");
+                }
+                console.log("Final TF memory:", tf.memory());
+            }
+        }
+
+        // --- Event Listeners ---
+        form.addEventListener('submit', handleSubmit);
+        clearHistoryButton.addEventListener('click', clearHistory);
+        exportHistoryButton.addEventListener('click', exportHistoryToCSV); // Add listener for export
+
+
+        // --- Initial Page Load ---
+        loadHistory(); // Load history and populate form fields on page load
+        console.log("Initial TF memory:", tf.memory()); // Log initial memory usage
+
+    </script>
+</body>
+</html>
