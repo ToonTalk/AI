@@ -62,8 +62,8 @@
         textarea {
             resize: vertical;
         }
-        /* Styling for diversity score display */
-        .diversity-score, .api-call-count, .avg-similarity-score {
+        /* Styling for score displays */
+        .score-display {
             font-size: 0.875rem; /* text-sm */
             margin-top: 0.75rem; /* mt-3 */
             padding: 0.5rem 0.75rem; /* py-2 px-3 */
@@ -73,12 +73,12 @@
             display: inline-block; /* Allow inline display */
             margin-right: 0.5rem; /* mr-2 for spacing */
         }
-        .diversity-score strong, .api-call-count strong, .avg-similarity-score strong {
+        .score-display strong {
              font-weight: 600; /* font-semibold */
              color: #4b5563; /* cool-gray-600 */
         }
-         /* Styling for individual similarity-to-mean score */
-        .sim-to-mean-score {
+         /* Styling for individual dissimilarity-to-mean score */
+        .dissim-to-mean-score { /* Renamed class */
             font-size: 0.75rem; /* text-xs */
             color: #6b7280; /* cool-gray-500 */
             margin-top: 0.25rem; /* mt-1 */
@@ -101,7 +101,7 @@
          <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-r-md" role="alert">
             <p class="font-bold">API Usage Note</p>
             <p class="text-sm">Generating many samples may exceed the Gemini API <a href="https://ai.google.dev/pricing" target="_blank" class="underline hover:text-blue-600">free tier limits</a> (e.g., requests per minute). Use responsibly.</p>
-             <div id="apiCallCount" class="api-call-count mt-2"></div>
+             <div id="apiCallCount" class="score-display mt-2"></div>
         </div>
 
         <form id="promptForm" class="space-y-4">
@@ -162,17 +162,15 @@
                 <h2 class="text-xl font-semibold mb-3 text-gray-700">Cosine Similarity (TF-IDF):</h2>
                  <p class="text-xs text-gray-500 mb-2">Measures similarity based on shared keywords.</p>
                 <div id="tfidfSimilarity" class="overflow-x-auto bg-white p-2 rounded shadow"></div>
-                 <div id="tfidfDiversityScore" class="diversity-score hidden"></div>
-                 <div id="tfidfAvgSimilarityToMean" class="avg-similarity-score hidden"></div>
-            </div>
+                 <div id="tfidfDiversityScore" class="score-display hidden"></div>
+                 <div id="tfidfAvgDissimilarityToMean" class="score-display hidden"></div> </div>
 
             <div>
                 <h2 class="text-xl font-semibold mb-3 text-gray-700">Cosine Similarity (Universal Sentence Encoder):</h2>
                  <p class="text-xs text-gray-500 mb-2">Measures similarity based on semantic meaning (may take time to load model).</p>
                 <div id="useSimilarity" class="overflow-x-auto bg-white p-2 rounded shadow"></div>
-                 <div id="useDiversityScore" class="diversity-score hidden"></div>
-                 <div id="useAvgSimilarityToMean" class="avg-similarity-score hidden"></div>
-            </div>
+                 <div id="useDiversityScore" class="score-display hidden"></div>
+                 <div id="useAvgDissimilarityToMean" class="score-display hidden"></div> </div>
         </div>
 
         <div id="historyArea" class="mt-10 pt-6 border-t border-gray-300 hidden">
@@ -202,8 +200,8 @@
         const useSimilarityDiv = document.getElementById('useSimilarity');
         const tfidfDiversityScoreDiv = document.getElementById('tfidfDiversityScore');
         const useDiversityScoreDiv = document.getElementById('useDiversityScore');
-        const tfidfAvgSimilarityToMeanDiv = document.getElementById('tfidfAvgSimilarityToMean');
-        const useAvgSimilarityToMeanDiv = document.getElementById('useAvgSimilarityToMean');
+        const tfidfAvgDissimilarityToMeanDiv = document.getElementById('tfidfAvgDissimilarityToMean'); // Renamed
+        const useAvgDissimilarityToMeanDiv = document.getElementById('useAvgDissimilarityToMean');   // Renamed
         const historyArea = document.getElementById('historyArea');
         const historyTableContainer = document.getElementById('historyTableContainer');
         const clearHistoryButton = document.getElementById('clearHistoryButton');
@@ -225,6 +223,16 @@
         // --- Variables for models ---
         let useModel = null;
         let useModelPromise = null; // To prevent multiple load attempts
+
+        // --- Helper Function: Standard Deviation ---
+        function calculateStandardDeviation(values) {
+            const n = values.length;
+            if (n < 2) return NaN; // Standard deviation requires at least 2 values
+
+            const mean = values.reduce((a, b) => a + b, 0) / n;
+            const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / (n - 1); // Sample variance (n-1)
+            return Math.sqrt(variance);
+        }
 
         // --- Local Storage & History Logic ---
         function loadHistory() {
@@ -332,15 +340,15 @@
             }
 
             let tableHtml = '<table class="w-full text-sm text-left text-gray-500 history-table"><thead><tr>';
-            tableHtml += '<th class="w-[15%]">Timestamp</th>';
-            tableHtml += '<th class="w-[20%]">Prompt</th>';
-            tableHtml += '<th class="w-[15%]">Model</th>';
-            tableHtml += '<th class="w-[8%]">Samples</th>';
-            tableHtml += '<th class="w-[8%]">Temp.</th>';
-            tableHtml += '<th class="w-[11%]">TFIDF Div.</th>';
-            tableHtml += '<th class="w-[11%]">USE Div.</th>';
-            tableHtml += '<th class="w-[12%]">AvgSimMean TFIDF</th>';
-            tableHtml += '<th class="w-[10%]">AvgSimMean USE</th>';
+            tableHtml += '<th class="w-[14%]">Timestamp</th>'; // Adjusted widths
+            tableHtml += '<th class="w-[18%]">Prompt</th>';
+            tableHtml += '<th class="w-[14%]">Model</th>';
+            tableHtml += '<th class="w-[7%]">Samples</th>';
+            tableHtml += '<th class="w-[7%]">Temp.</th>';
+            tableHtml += '<th class="w-[10%]">TFIDF PairDiv (±SD)</th>'; // Renamed
+            tableHtml += '<th class="w-[10%]">USE PairDiv (±SD)</th>';   // Renamed
+            tableHtml += '<th class="w-[10%]">AvgDisMean TFIDF (±SD)</th>'; // Renamed
+            tableHtml += '<th class="w-[10%]">AvgDisMean USE (±SD)</th>';   // Renamed
             tableHtml += '</tr></thead><tbody>';
 
             // Display only the last MAX_DISPLAY_HISTORY entries
@@ -352,10 +360,20 @@
                 const modelName = entry.model || 'N/A';
                 const modelSnippet = modelName.length > 18 ? modelName.substring(0, 16) + '...' : modelName;
                 const tempValue = typeof entry.temperature === 'number' ? entry.temperature.toFixed(1) : 'N/A';
-                const tfidfDivScore = typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity) ? entry.tfidfDiversity.toFixed(3) : 'N/A';
-                const useDivScore = typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity) ? entry.useDiversity.toFixed(3) : 'N/A';
-                const tfidfAvgSimScore = typeof entry.tfidfAvgSimilarityToMean === 'number' && !isNaN(entry.tfidfAvgSimilarityToMean) ? entry.tfidfAvgSimilarityToMean.toFixed(3) : 'N/A';
-                const useAvgSimScore = typeof entry.useAvgSimilarityToMean === 'number' && !isNaN(entry.useAvgSimilarityToMean) ? entry.useAvgSimilarityToMean.toFixed(3) : 'N/A';
+
+                // Format scores with standard deviation
+                const tfidfDivText = (typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity))
+                    ? `${entry.tfidfDiversity.toFixed(3)} ± ${entry.tfidfDiversityStdDev?.toFixed(3) ?? 'N/A'}`
+                    : 'N/A';
+                const useDivText = (typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity))
+                    ? `${entry.useDiversity.toFixed(3)} ± ${entry.useDiversityStdDev?.toFixed(3) ?? 'N/A'}`
+                    : 'N/A';
+                const tfidfAvgDisText = (typeof entry.tfidfAvgDissimilarityToMean === 'number' && !isNaN(entry.tfidfAvgDissimilarityToMean)) // Use new name
+                    ? `${entry.tfidfAvgDissimilarityToMean.toFixed(3)} ± ${entry.tfidfAvgDissimToMeanStdDev?.toFixed(3) ?? 'N/A'}` // Use new name
+                    : 'N/A';
+                const useAvgDisText = (typeof entry.useAvgDissimilarityToMean === 'number' && !isNaN(entry.useAvgDissimilarityToMean)) // Use new name
+                    ? `${entry.useAvgDissimilarityToMean.toFixed(3)} ± ${entry.useAvgDissimToMeanStdDev?.toFixed(3) ?? 'N/A'}` // Use new name
+                    : 'N/A';
 
                 tableHtml += '<tr>';
                 tableHtml += `<td class="whitespace-nowrap">${timestamp}</td>`;
@@ -363,10 +381,10 @@
                 tableHtml += `<td class="model-cell" title="${modelName}">${modelSnippet}</td>`;
                 tableHtml += `<td>${entry.samples || 'N/A'}</td>`;
                 tableHtml += `<td>${tempValue}</td>`;
-                tableHtml += `<td>${tfidfDivScore}</td>`;
-                tableHtml += `<td>${useDivScore}</td>`;
-                tableHtml += `<td>${tfidfAvgSimScore}</td>`;
-                tableHtml += `<td>${useAvgSimScore}</td>`;
+                tableHtml += `<td>${tfidfDivText}</td>`;
+                tableHtml += `<td>${useDivText}</td>`;
+                tableHtml += `<td>${tfidfAvgDisText}</td>`; // Display new metric
+                tableHtml += `<td>${useAvgDisText}</td>`;   // Display new metric
                 tableHtml += '</tr>';
             }
 
@@ -419,18 +437,28 @@
                 return;
             }
 
-            const headers = ['Timestamp', 'Prompt', 'Model', 'Samples', 'Temperature', 'TFIDF_Diversity', 'USE_Diversity', 'AvgSimMean_TFIDF', 'AvgSimMean_USE']; // Added new headers
+            const headers = [ // Updated headers
+                'Timestamp', 'Prompt', 'Model', 'Samples', 'Temperature',
+                'TFIDF_Pairwise_Dissim_Avg', 'TFIDF_Pairwise_Dissim_StdDev',
+                'USE_Pairwise_Dissim_Avg', 'USE_Pairwise_Dissim_StdDev',
+                'Avg_Dissim_To_Mean_TFIDF', 'Avg_Dissim_To_Mean_TFIDF_StdDev',
+                'Avg_Dissim_To_Mean_USE', 'Avg_Dissim_To_Mean_USE_StdDev'
+            ];
             // Convert history data to CSV rows
             const csvRows = history.map(entry => [
-                new Date(entry.timestamp).toISOString(), // Use ISO format for consistency
+                new Date(entry.timestamp).toISOString(),
                 escapeCsvValue(entry.prompt),
-                escapeCsvValue(entry.model), // Export model name
+                escapeCsvValue(entry.model),
                 entry.samples,
                 entry.temperature,
-                typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity) ? entry.tfidfDiversity.toFixed(5) : '', // More precision for CSV
+                typeof entry.tfidfDiversity === 'number' && !isNaN(entry.tfidfDiversity) ? entry.tfidfDiversity.toFixed(5) : '',
+                typeof entry.tfidfDiversityStdDev === 'number' && !isNaN(entry.tfidfDiversityStdDev) ? entry.tfidfDiversityStdDev.toFixed(5) : '',
                 typeof entry.useDiversity === 'number' && !isNaN(entry.useDiversity) ? entry.useDiversity.toFixed(5) : '',
-                typeof entry.tfidfAvgSimilarityToMean === 'number' && !isNaN(entry.tfidfAvgSimilarityToMean) ? entry.tfidfAvgSimilarityToMean.toFixed(5) : '', // New score
-                typeof entry.useAvgSimilarityToMean === 'number' && !isNaN(entry.useAvgSimilarityToMean) ? entry.useAvgSimilarityToMean.toFixed(5) : ''      // New score
+                typeof entry.useDiversityStdDev === 'number' && !isNaN(entry.useDiversityStdDev) ? entry.useDiversityStdDev.toFixed(5) : '',
+                typeof entry.tfidfAvgDissimilarityToMean === 'number' && !isNaN(entry.tfidfAvgDissimilarityToMean) ? entry.tfidfAvgDissimilarityToMean.toFixed(5) : '', // Use new name
+                typeof entry.tfidfAvgDissimToMeanStdDev === 'number' && !isNaN(entry.tfidfAvgDissimToMeanStdDev) ? entry.tfidfAvgDissimToMeanStdDev.toFixed(5) : '', // Use new name
+                typeof entry.useAvgDissimilarityToMean === 'number' && !isNaN(entry.useAvgDissimilarityToMean) ? entry.useAvgDissimilarityToMean.toFixed(5) : '', // Use new name
+                typeof entry.useAvgDissimToMeanStdDev === 'number' && !isNaN(entry.useAvgDissimToMeanStdDev) ? entry.useAvgDissimToMeanStdDev.toFixed(5) : ''       // Use new name
             ].join(',')); // Join values with commas
 
             // Combine headers and rows
@@ -604,30 +632,30 @@
             }
         }
 
-        // --- Calculate Average Dissimilarity ---
-        function calculateAverageDissimilarity(matrix) {
+        // --- Calculate Average & Std Dev of Dissimilarity ---
+        function calculateDissimilarityStats(matrix) {
+            const results = { average: NaN, stdDev: NaN };
             if (!matrix || !Array.isArray(matrix) || matrix.length < 2) {
-                return NaN; // Not enough data to calculate pairwise dissimilarity
+                return results; // Not enough data
             }
-            let sumDissimilarity = 0;
-            let pairCount = 0;
+            const dissimilarities = [];
             const n = matrix.length;
 
-            // Iterate over the upper triangle of the matrix (excluding the diagonal)
             for (let i = 0; i < n; i++) {
                 for (let j = i + 1; j < n; j++) {
-                    // Ensure the similarity value is valid
                     if (matrix[i] && typeof matrix[i][j] === 'number' && !isNaN(matrix[i][j])) {
-                        sumDissimilarity += (1 - matrix[i][j]); // Dissimilarity = 1 - Similarity
-                        pairCount++;
+                        dissimilarities.push(1 - matrix[i][j]);
                     } else {
                          console.warn(`Invalid similarity value at [${i}, ${j}]`, matrix[i]?.[j]);
                     }
                 }
             }
 
-            // Avoid division by zero if no valid pairs were found
-            return pairCount > 0 ? sumDissimilarity / pairCount : NaN;
+            if (dissimilarities.length > 0) {
+                results.average = dissimilarities.reduce((a, b) => a + b, 0) / dissimilarities.length;
+                results.stdDev = calculateStandardDeviation(dissimilarities);
+            }
+            return results;
         }
 
         // --- Calculate Mean Vector ---
@@ -653,10 +681,20 @@
             return meanVector;
         }
 
-        // --- Calculate Similarities to Mean ---
-        function calculateSimilaritiesToMean(vectors, meanVector) {
-            if (!vectors || !meanVector || vectors.length === 0) return [];
-            return vectors.map(vec => calculateCosineSimilarity(vec, meanVector));
+        // --- Calculate Dissimilarities to Mean & Stats --- // Renamed function
+        function calculateDissimilaritiesToMeanStats(vectors, meanVector) {
+             const results = { average: NaN, stdDev: NaN, individuals: [] };
+            if (!vectors || !meanVector || vectors.length === 0) return results;
+
+            // Calculate individual dissimilarities (1 - similarity)
+            results.individuals = vectors.map(vec => 1 - calculateCosineSimilarity(vec, meanVector));
+            const validDissims = results.individuals.filter(d => !isNaN(d)); // Filter out NaN
+
+            if (validDissims.length > 0) {
+                results.average = validDissims.reduce((a, b) => a + b, 0) / validDissims.length;
+                results.stdDev = calculateStandardDeviation(validDissims);
+            }
+            return results;
         }
 
 
@@ -687,11 +725,10 @@
 
                 // Use genAI.models.generateContent structure
                 // Specify the selected model name within this call
-                // ** CORRECTED: Pass generationConfig to 'generationConfig' property **
                 const result = await genAI.models.generateContent({
                     model: modelName, // Use the selected model name
                     contents: [{ role: "user", parts: [{ text: promptText }] }],
-                    config: generationConfig, // Pass the config object here
+                    generationConfig: generationConfig, // Pass the config object here
                     safetySettings,
                  });
 
@@ -830,55 +867,59 @@
              return tableHtml;
         }
 
-        function displayResults(responses, tfidfMatrix, useMatrix, tfidfDiversity, useDiversity, tfidfAvgSimToMean, useAvgSimToMean, tfidfSimilaritiesToMean, useSimilaritiesToMean) { // Added individual scores
-             // Display Generated Responses with individual similarity to mean
+        function displayResults(responses, tfidfMatrix, useMatrix, tfidfDiversityStats, useDiversityStats, tfidfDissimToMeanStats, useDissimToMeanStats) { // Use stats objects, renamed params
+             // Display Generated Responses with individual dissimilarity to mean
              responsesList.innerHTML = responses.map((resp, index) => {
-                 const tfidfSimMeanText = (tfidfSimilaritiesToMean && !isNaN(tfidfSimilaritiesToMean[index]))
-                     ? `TF-IDF Sim to Mean: ${tfidfSimilaritiesToMean[index].toFixed(3)}`
-                     : 'TF-IDF Sim to Mean: N/A';
-                 const useSimMeanText = (useSimilaritiesToMean && !isNaN(useSimilaritiesToMean[index]))
-                     ? `USE Sim to Mean: ${useSimilaritiesToMean[index].toFixed(3)}`
-                     : 'USE Sim to Mean: N/A';
+                 const tfidfDissimMeanText = (tfidfDissimToMeanStats?.individuals && !isNaN(tfidfDissimToMeanStats.individuals[index]))
+                     ? `TF-IDF Dissim to Mean: ${tfidfDissimToMeanStats.individuals[index].toFixed(3)}`
+                     : 'TF-IDF Dissim to Mean: N/A';
+                 const useDissimMeanText = (useDissimToMeanStats?.individuals && !isNaN(useDissimToMeanStats.individuals[index]))
+                     ? `USE Dissim to Mean: ${useDissimToMeanStats.individuals[index].toFixed(3)}`
+                     : 'USE Dissim to Mean: N/A';
 
                  return `
                     <div class="border border-gray-200 p-3 rounded-md bg-gray-50 shadow-sm mb-4">
                         <p class="font-semibold text-gray-600 mb-1">Response ${index + 1}:</p>
                         <p class="text-gray-800 text-sm whitespace-pre-wrap">${resp || "[Empty Response]"}</p>
-                        <span class="sim-to-mean-score">${tfidfSimMeanText}</span>
-                        <span class="sim-to-mean-score">${useSimMeanText}</span>
+                        <span class="dissim-to-mean-score">${tfidfDissimMeanText}</span>
+                        <span class="dissim-to-mean-score">${useDissimMeanText}</span>
                     </div>
                  `;
              }).join('');
 
              // Display TF-IDF Similarities Table and Scores
              tfidfSimilarityDiv.innerHTML = createSimilarityTable(tfidfMatrix, responses.length, 'TF-IDF');
-             if (!isNaN(tfidfDiversity)) {
-                 tfidfDiversityScoreDiv.innerHTML = `<strong>Avg. Pairwise Dissimilarity:</strong> ${tfidfDiversity.toFixed(3)}`;
+             if (!isNaN(tfidfDiversityStats?.average)) {
+                 const stdDevText = !isNaN(tfidfDiversityStats?.stdDev) ? ` ± ${tfidfDiversityStats.stdDev.toFixed(3)}` : '';
+                 tfidfDiversityScoreDiv.innerHTML = `<strong>Avg. Pairwise Dissimilarity:</strong> ${tfidfDiversityStats.average.toFixed(3)}${stdDevText}`;
                  tfidfDiversityScoreDiv.classList.remove('hidden');
              } else {
                  tfidfDiversityScoreDiv.classList.add('hidden');
              }
-             if (!isNaN(tfidfAvgSimToMean)) { // Display new score
-                 tfidfAvgSimilarityToMeanDiv.innerHTML = `<strong>Avg. Similarity to Mean:</strong> ${tfidfAvgSimToMean.toFixed(3)}`;
-                 tfidfAvgSimilarityToMeanDiv.classList.remove('hidden');
+             if (!isNaN(tfidfDissimToMeanStats?.average)) { // Display new score
+                 const stdDevText = !isNaN(tfidfDissimToMeanStats?.stdDev) ? ` ± ${tfidfDissimToMeanStats.stdDev.toFixed(3)}` : '';
+                 tfidfAvgDissimilarityToMeanDiv.innerHTML = `<strong>Avg. Dissimilarity to Mean:</strong> ${tfidfDissimToMeanStats.average.toFixed(3)}${stdDevText}`; // Updated label
+                 tfidfAvgDissimilarityToMeanDiv.classList.remove('hidden');
              } else {
-                 tfidfAvgSimilarityToMeanDiv.classList.add('hidden');
+                 tfidfAvgDissimilarityToMeanDiv.classList.add('hidden');
              }
 
 
              // Display USE Similarities Table and Scores
              useSimilarityDiv.innerHTML = createSimilarityTable(useMatrix, responses.length, 'USE');
-              if (!isNaN(useDiversity)) {
-                 useDiversityScoreDiv.innerHTML = `<strong>Avg. Pairwise Dissimilarity:</strong> ${useDiversity.toFixed(3)}`;
+              if (!isNaN(useDiversityStats?.average)) {
+                 const stdDevText = !isNaN(useDiversityStats?.stdDev) ? ` ± ${useDiversityStats.stdDev.toFixed(3)}` : '';
+                 useDiversityScoreDiv.innerHTML = `<strong>Avg. Pairwise Dissimilarity:</strong> ${useDiversityStats.average.toFixed(3)}${stdDevText}`;
                  useDiversityScoreDiv.classList.remove('hidden');
              } else {
                   useDiversityScoreDiv.classList.add('hidden');
              }
-              if (!isNaN(useAvgSimToMean)) { // Display new score
-                 useAvgSimilarityToMeanDiv.innerHTML = `<strong>Avg. Similarity to Mean:</strong> ${useAvgSimToMean.toFixed(3)}`;
-                 useAvgSimilarityToMeanDiv.classList.remove('hidden');
+              if (!isNaN(useDissimToMeanStats?.average)) { // Display new score
+                 const stdDevText = !isNaN(useDissimToMeanStats?.stdDev) ? ` ± ${useDissimToMeanStats.stdDev.toFixed(3)}` : '';
+                 useAvgDissimilarityToMeanDiv.innerHTML = `<strong>Avg. Dissimilarity to Mean:</strong> ${useDissimToMeanStats.average.toFixed(3)}${stdDevText}`; // Updated label
+                 useAvgDissimilarityToMeanDiv.classList.remove('hidden');
              } else {
-                 useAvgSimilarityToMeanDiv.classList.add('hidden');
+                 useAvgDissimilarityToMeanDiv.classList.add('hidden');
              }
 
              // Make the results area visible
@@ -916,12 +957,10 @@
             let useEmbeddingsTensor = null;
             let tfidfSimilarityMatrix = null;
             let useSimilarityMatrix = null;
-            let tfidfDiversity = NaN;
-            let useDiversity = NaN;
-            let tfidfAvgSimilarityToMean = NaN;
-            let useAvgSimilarityToMean = NaN;
-            let tfidfSimilaritiesToMean = []; // Store individual scores
-            let useSimilaritiesToMean = [];   // Store individual scores
+            let tfidfDiversityStats = { average: NaN, stdDev: NaN };
+            let useDiversityStats = { average: NaN, stdDev: NaN };
+            let tfidfDissimToMeanStats = { average: NaN, stdDev: NaN, individuals: [] }; // Renamed
+            let useDissimToMeanStats = { average: NaN, stdDev: NaN, individuals: [] };   // Renamed
             let currentFullHistory = [];
 
             try {
@@ -955,7 +994,7 @@
 
                  if (responses.length < 2) {
                     displayError("Need at least two successful responses to calculate similarity.");
-                    displayResults(responses, null, null, NaN, NaN, NaN, NaN, [], []); // Pass empty arrays
+                    displayResults(responses, null, null, null, null, null, null, [], []); // Pass nulls/empty
                     currentFullHistory = loadHistory();
                     return;
                  }
@@ -975,18 +1014,14 @@
                         }
                     }
                     displayStatus("TF-IDF similarities calculated.", false);
-                    tfidfDiversity = calculateAverageDissimilarity(tfidfSimilarityMatrix);
+                    tfidfDiversityStats = calculateDissimilarityStats(tfidfSimilarityMatrix); // Get stats object
                     displayStatus("TF-IDF diversity calculated.", false);
 
-                    // Calculate TF-IDF similarity to mean
+                    // Calculate TF-IDF dissimilarity to mean
                     const tfidfMeanVector = calculateMeanVector(tfidfVectors);
                     if (tfidfMeanVector) {
-                        tfidfSimilaritiesToMean = calculateSimilaritiesToMean(tfidfVectors, tfidfMeanVector); // Store individual scores
-                        const validSims = tfidfSimilaritiesToMean.filter(s => !isNaN(s));
-                        if (validSims.length > 0) {
-                            tfidfAvgSimilarityToMean = validSims.reduce((a, b) => a + b, 0) / validSims.length;
-                        }
-                         displayStatus("TF-IDF similarity to mean calculated.", false);
+                        tfidfDissimToMeanStats = calculateDissimilaritiesToMeanStats(tfidfVectors, tfidfMeanVector); // Get stats object
+                         displayStatus("TF-IDF dissimilarity to mean calculated.", false);
                     }
 
                  } else {
@@ -1010,20 +1045,16 @@
                          useSimilarityMatrix = await useMatrixTensor.array();
                          useMatrixTensor.dispose();
                          displayStatus("USE similarities calculated.", false);
-                         useDiversity = calculateAverageDissimilarity(useSimilarityMatrix);
+                         useDiversityStats = calculateDissimilarityStats(useSimilarityMatrix); // Get stats object
                          displayStatus("USE diversity calculated.", false);
 
-                         // Calculate USE similarity to mean
+                         // Calculate USE dissimilarity to mean
                          useEmbeddingsArray = await useEmbeddingsTensor.array();
                          useEmbeddingsTensor.dispose(); // Dispose original tensor after getting array
                          const useMeanVector = calculateMeanVector(useEmbeddingsArray);
                          if (useMeanVector) {
-                             useSimilaritiesToMean = calculateSimilaritiesToMean(useEmbeddingsArray, useMeanVector); // Store individual scores
-                             const validSims = useSimilaritiesToMean.filter(s => !isNaN(s));
-                             if (validSims.length > 0) {
-                                 useAvgSimilarityToMean = validSims.reduce((a, b) => a + b, 0) / validSims.length;
-                             }
-                             displayStatus("USE similarity to mean calculated.", false);
+                             useDissimToMeanStats = calculateDissimilaritiesToMeanStats(useEmbeddingsArray, useMeanVector); // Get stats object
+                             displayStatus("USE dissimilarity to mean calculated.", false);
                          }
 
                     } else { displayStatus("Skipping USE similarities (embedding error).", false); }
@@ -1036,15 +1067,27 @@
                     model: modelName,
                     samples: numSamples,
                     temperature: temperature,
-                    tfidfDiversity: tfidfDiversity,
-                    useDiversity: useDiversity,
-                    tfidfAvgSimilarityToMean: tfidfAvgSimilarityToMean, // Save new metric
-                    useAvgSimilarityToMean: useAvgSimilarityToMean     // Save new metric
+                    tfidfDiversity: tfidfDiversityStats.average, // Save average
+                    tfidfDiversityStdDev: tfidfDiversityStats.stdDev, // Save std dev
+                    useDiversity: useDiversityStats.average,
+                    useDiversityStdDev: useDiversityStats.stdDev,
+                    tfidfAvgDissimilarityToMean: tfidfDissimToMeanStats.average, // Save new metric
+                    tfidfAvgDissimToMeanStdDev: tfidfDissimToMeanStats.stdDev, // Save new std dev
+                    useAvgDissimilarityToMean: useDissimToMeanStats.average,     // Save new metric
+                    useAvgDissimToMeanStdDev: useDissimToMeanStats.stdDev      // Save new std dev
                 });
 
                 // 6. Display all results including diversity scores and updated history
                 displayStatus("Displaying results...", false);
-                displayResults(responses, tfidfSimilarityMatrix, useSimilarityMatrix, tfidfDiversity, useDiversity, tfidfAvgSimilarityToMean, useAvgSimilarityToMean, tfidfSimilaritiesToMean, useSimilaritiesToMean); // Pass individual scores
+                // Pass stats objects and individual scores to displayResults
+                displayResults(
+                    responses,
+                    tfidfSimilarityMatrix, useSimilarityMatrix,
+                    tfidfDiversityStats, useDiversityStats,
+                    tfidfDissimToMeanStats, useDissimToMeanStats, // Pass dissimilarity stats
+                    tfidfDissimToMeanStats.individuals, // Pass individual TF-IDF dissim-to-mean scores
+                    useDissimToMeanStats.individuals    // Pass individual USE dissim-to-mean scores
+                );
                 displayHistoryTable(currentFullHistory); // Display the updated history table
                 displayApiCallCount(currentFullHistory); // Update API call count
                 displayStatus("Done.", false); // Clear status
