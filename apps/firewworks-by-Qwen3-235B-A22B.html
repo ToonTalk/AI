@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Colorful Fireworks</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden;
+            background: black;
+        }
+        canvas { 
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="fireworks"></canvas>
+    <script>
+        const canvas = document.getElementById('fireworks');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let particles = [];
+
+        function createFirework() {
+            const hue = Math.floor(Math.random() * 360);
+            const centerX = Math.random() * canvas.width;
+            const centerY = canvas.height * 0.3 - Math.random() * canvas.height * 0.2; // Higher explosion point
+        
+            // Rocket trail (optional visual effect)
+            particles.push({
+                x: centerX,
+                y: canvas.height,
+                vx: 0,
+                vy: -5 - Math.random() * 2, // Upward motion
+                alpha: 1,
+                color: "white",
+                life: 40,
+                isRocket: true
+            });
+        
+            // Explosion particles
+            for (let i = 0; i < 100; i++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const speed = Math.random() * 8; // Faster spread
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+        
+                particles.push({
+                    x: centerX,
+                    y: centerY,
+                    vx: vx,
+                    vy: vy,
+                    alpha: 1,
+                    color: `hsl(${hue}, 100%, 50%)`,
+                    life: 100 + Math.random() * 50
+                });
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.05; // Gravity
+                p.alpha -= 0.01;
+                p.life--;
+
+                if (p.life <= 0 || p.alpha <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.globalAlpha = p.alpha;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // Launch fireworks more frequently
+        setInterval(createFirework, 150);
+        createFirework(); // Initial firework
+        animate(); // Start animation loop
+    </script>
+</body>
+</html>
