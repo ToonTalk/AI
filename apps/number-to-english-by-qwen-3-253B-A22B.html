@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Integer Expression Evaluator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    input, button {
+      padding: 8px;
+      margin-top: 10px;
+      width: 100%;
+    }
+    .output {
+      margin-top: 20px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Integer Expression Evaluator</h1>
+  <form id="inputForm">
+    <label for="expression">Enter an integer expression (e.g., 2^1000):</label><br />
+    <input type="text" id="expression" name="expression" required />
+    <button type="submit">Evaluate</button>
+  </form>
+
+  <div class="output" id="output"></div>
+
+  <script>
+    // Function to generate scale names like unvigintillion, trigintillion, etc.
+    function generateScaleName(groupIndex) {
+      const predefined = [
+        '', // index 0 unused
+        'thousand', 'million', 'billion', 'trillion',
+        'quadrillion', 'quintillion', 'sextillion', 'septillion',
+        'octillion', 'nonillion', 'decillion',
+        'undecillion', 'duodecillion', 'tredecillion',
+        'quattuordecillion', 'quindecillion', 'sexdecillion',
+        'septendecillion', 'octodecillion', 'novemdecillion',
+        'vigintillion'
+      ];
+
+      if (groupIndex < predefined.length) return predefined[groupIndex];
+
+      const unitStems = ['', 'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'];
+      const tensStems = ['', '', 'viginti', 'triginta', 'quadraginta', 'quinquaginta', 'sexaginta', 'septuaginta', 'octoginta', 'nonaginta'];
+
+      const tens = Math.floor(groupIndex / 10);
+      const units = groupIndex % 10;
+
+      const tensStem = tensStems[tens] || '';
+      const unitStem = unitStems[units] || '';
+
+      return (units === 0) ? tensStem + 'llion' : unitStem + tensStem + 'llion';
+    }
+
+    // Converts a number string to English words
+    function numberToEnglish(numStr) {
+      const units = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+      const teens = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+      const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+      function threeDigitsToWord(digits) {
+        let words = [];
+        const h = digits.length >= 3 ? parseInt(digits[digits.length - 3], 10) : 0;
+        const t = digits.length >= 2 ? parseInt(digits[digits.length - 2], 10) : 0;
+        const u = parseInt(digits[digits.length - 1], 10);
+
+        if (h > 0) words.push(units[h] + ' hundred');
+        if (t === 1) words.push(teens[u]);
+        else if (t > 0) words.push(tens[t]);
+        if (u > 0 && t !== 1) words.push(units[u]);
+
+        return words.join(' ').replace(/\s+/g, ' ').trim();
+      }
+
+      function splitIntoGroups(str) {
+        const groups = [];
+        let i = str.length - 1;
+        while (i >= 0) {
+          let start = Math.max(i - 2, 0);
+          groups.push(str.slice(start, i + 1));
+          i -= 3;
+        }
+        return groups.reverse();
+      }
+
+      let isNegative = false;
+      if (numStr.startsWith('-')) {
+        isNegative = true;
+        numStr = numStr.slice(1);
+      }
+
+      if (numStr === '0') return 'zero';
+
+      const groups = splitIntoGroups(numStr);
+      const words = [];
+
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
+        const word = threeDigitsToWord(group);
+        if (word) {
+          const scaleIndex = groups.length - i - 1;
+          const scaleName = generateScaleName(scaleIndex);
+          words.push(word + (scaleName ? ' ' + scaleName : ''));
+        }
+      }
+
+      let result = words.join(' ').replace(/\s+/g, ' ').trim();
+      if (isNegative) result = 'negative ' + result;
+
+      return result || 'zero';
+    }
+
+    // Main form handler
+    document.getElementById('inputForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const input = document.getElementById('expression').value.trim();
+
+      // Input validation: allow only digits, operators, parentheses, and whitespace
+      if (!/^[-+*/%^()0-9\s]+$/.test(input)) {
+        document.getElementById('output').innerHTML = '<p>Invalid input. Only integer expressions with operators +, -, *, /, %, ^, parentheses, and whitespace are allowed.</p>';
+        return;
+      }
+
+      // Replace ^ with ** and wrap numbers in BigInt
+      let expr = input.replace(/(-?\d+)/g, 'BigInt($1)').replace(/\^/g, '**');
+
+      let resultBigInt;
+      try {
+        resultBigInt = eval(expr);
+      } catch (err) {
+        document.getElementById('output').innerHTML = `<p>Error evaluating expression: ${err.message}</p>`;
+        return;
+      }
+
+      const canonicalStr = resultBigInt.toString();
+
+      if (!/^[-+]?\d+$/.test(canonicalStr)) {
+        document.getElementById('output').innerHTML = '<p>The expression did not evaluate to a valid integer.</p>';
+        return;
+      }
+
+      const digitCount = canonicalStr.replace('-', '').length;
+      const english = numberToEnglish(canonicalStr);
+
+      document.getElementById('output').innerHTML = `
+        <p>Number of digits: ${digitCount}</p>
+        <p>The number: ${canonicalStr}</p>
+        <p>In English: ${english}</p>
+      `;
+    });
+  </script>
+</body>
+</html>
