@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GPT-2 neuron interaction (nightly bundle)</title>
+<style>
+ body{margin:0;font-family:sans-serif}
+ #controls{padding:.7em;background:#f2f2f2;display:flex;gap:.8em;flex-wrap:wrap}
+ #cy{width:100vw;height:78vh;border-top:1px solid #ccc}
+ #info{height:18vh;overflow:auto;padding:.6em;font-family:monospace;
+       background:#fafafa;border-top:1px solid #ddd}
+ input,select,button{font-size:1em;padding:.35em} .lbl{font-weight:bold}
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <label>Prompt
+    <input id="prompt" size="46"
+           value="The quick brown fox jumps over the lazy dog">
+  </label>
+
+  <label>Layer
+    <select id="layer"></select>
+  </label>
+
+  <label># neurons
+    <select id="count"><option>8</option><option selected>16</option><option>32</option></select>
+  </label>
+
+  <button id="run">Graph</button>
+</div>
+
+<div id="cy"></div>
+<div id="info">Open DevTools → Console. Choose layer 6-9 and click <b>Graph</b>.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.24.0/dist/cytoscape.min.js"></script>
+
+<script type="module">
+/* nightly bundle with working hook API */
+import {
+  AutoTokenizer,
+  AutoModelForCausalLM,
+  Tensor
+} from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@3.5.0-alpha.4/dist/transformers.esm.js';
+
+/* ---------- load model + tokenizer (fp32) ---------- */
+const MODEL = 'Xenova/gpt2';
+console.log('loading model …');
+const tok   = await AutoTokenizer.from_pretrained(MODEL);
+const model = await AutoModelForCausalLM.from_pretrained(MODEL,{dtype:'fp32'});
+console.log('model loaded (nightly build)');
+
+const nLayer = model.config.n_layer ?? model.config.num_hidden_layers ?? 12;
+const sel=document.getElementById('layer');
+for(let i=0;i<nLayer;i++){ const o=document.createElement('option');o.textContent=i;sel.appendChild(o);}
+sel.value=7;
+
+const cy=window.cytoscape, out=document.getElementById('info'), show=h=>out.innerHTML=h;
+
+/* colour helper */
+const colour=(v,m)=>`hsl(${v>=0?140:0}deg ${60+40*Math.min(1,Math.abs(v)/m)}% 45%)`;
+
+/* hook builder */
+const zero=(L,ids)=>{const S=new Set(ids);
+  return(t,meta)=>{
+    if(meta.layer_index!==L||meta.name!=='mlp')return;
+    const a=t.data.slice(), [ ,s,h]=t.dims;
+    for(let p=0;p<s;p++)for(const id of S)a[p*h+id]=0;
+    return new Tensor('float32',a,t.dims);
+  };
+};
+
+/* main */
+document.getElementById('run').onclick=async()=>{
+  const text=document.getElementById('prompt').value;
+  const L=+sel.value, N=+document.getElementById('count').value;
+  show('computing … see console');
+
+  const {input_ids}=await tok(text,{addSpecialTokens:true});
+  const base=await model.forward({input_ids});
+  const [ ,seq,vocab]=base.logits.dims;
+  const row=base.logits.data.slice((seq-1)*vocab,(seq)*vocab);
+  let top=0;for(let i=1;i<vocab;i++)if(row[i]>row[top])top=i;
+  const baseLog=row[top]; console.log('baseline',baseLog);
+
+  /* solo */
+  const imp=new Float32Array(N);
+  for(let n=0;n<N;n++){
+    const out=await model.forward({input_ids},{hooks:{mlp:{after:zero(L,[n])}}});
+    const log=out.logits.data[(seq-1)*vocab+top];
+    imp[n]=baseLog-log; console.log('solo',n,imp[n]);
+  }
+  const maxImp=Math.max(...imp.map(Math.abs))||1;
+
+  /* pairs */
+  const pairs=[];
+  for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){
+    const out=await model.forward({input_ids},{hooks:{mlp:{after:zero(L,[i,j])}}});
+    const log=out.logits.data[(seq-1)*vocab+top];
+    pairs.push({i,j,w:baseLog-log});
+  }
+  pairs.sort((a,b)=>Math.abs(b.w)-Math.abs(a.w));
+  const keep=pairs.slice(0,Math.min(2*N,pairs.length));
+  const maxEdge=Math.max(...keep.map(e=>Math.abs(e.w)))||1;
+
+  /* graph */
+  const nodes=[...Array(N)].map((_,k)=>({
+    data:{id:`n${k}`,v:imp[k]},
+    style:{'background-color':colour(imp[k],maxImp)}
+  }));
+  const edges=keep.map(e=>({
+    data:{id:`e${e.i}-${e.j}`,source:`n${e.i}`,target:`n${e.j}`,w:e.w},
+    style:{'width':1+8*Math.abs(e.w)/maxEdge,
+           'line-color':e.w>=0?'#2fb344':'#e5493d'}
+  }));
+
+  cy({container:document.getElementById('cy'),
+      elements:{nodes,edges},
+      style:[
+        {selector:'node',style:{label:'data(id)','text-valign':'center',
+          color:'#fff','font-size':'11px',width:26,height:26}},
+        {selector:'edge',style:{'curve-style':'bezier'}}],
+      layout:{name:'cose',padding:30,animate:false}})
+  .on('tap','node',e=>show(`<span class="lbl">${e.target.id()}</span><br>Δ=${e.target.data('v').toExponential(4)}`))
+  .on('tap','edge',e=>show(`<span class="lbl">${e.target.id()}</span><br>Δ=${e.target.data('w').toExponential(4)}`));
+
+  show('done – console shows “solo … Δ” lines, graph uses non-zero values.');
+};
+</script>
+</body>
+</html>
