@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chrome AI API Tester</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #1a73e8;
+    }
+    .section {
+      margin-bottom: 20px;
+      padding: 15px;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+    }
+    .api-status {
+      font-weight: bold;
+    }
+    .available {
+      color: green;
+    }
+    .not-available {
+      color: red;
+    }
+    button {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    button:hover {
+      background-color: #174ea6;
+    }
+    pre {
+      background-color: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      max-height: 300px;
+    }
+    .test-area {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      margin-bottom: 10px;
+    }
+    .logs {
+      font-family: monospace;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chrome AI API Tester</h1>
+  
+  <div class="section">
+    <h2>Browser Information</h2>
+    <div id="browser-info"></div>
+  </div>
+  
+  <div class="section">
+    <h2>API Availability</h2>
+    <div id="api-status"></div>
+  </div>
+  
+  <div class="section">
+    <h2>Available AI Methods</h2>
+    <div id="ai-methods"></div>
+  </div>
+  
+  <div class="test-area">
+    <h2>Test API</h2>
+    <input type="text" id="prompt-input" placeholder="Enter a prompt to test the API" value="Define the word 'test' in 10 words or less.">
+    <div id="test-buttons"></div>
+    <h3>Result:</h3>
+    <pre id="test-result">Results will appear here.</pre>
+    <h3>Logs:</h3>
+    <div id="test-logs" class="logs"></div>
+  </div>
+  
+  <script>
+    // Function to log both to console and to the UI
+    function logMessage(message) {
+      console.log(message);
+      const logsArea = document.getElementById('test-logs');
+      logsArea.innerHTML += message + '\n';
+      logsArea.scrollTop = logsArea.scrollHeight;
+    }
+    
+    // Display browser information
+    function displayBrowserInfo() {
+      const info = document.getElementById('browser-info');
+      info.innerHTML = `
+        <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
+        <p><strong>Chrome Version:</strong> ${/Chrome\/([0-9.]+)/.exec(navigator.userAgent)?.[1] || "Unknown"}</p>
+        <p><strong>Platform:</strong> ${navigator.platform}</p>
+      `;
+    }
+    
+    // Check API availability
+    async function checkAPIAvailability() {
+      const status = document.getElementById('api-status');
+      let html = '';
+      
+      // Standard Web ML API
+      const hasWebML = navigator.ml !== undefined;
+      html += `<p>Web Machine Learning Prompt API (navigator.ml): <span class="api-status ${hasWebML ? 'available' : 'not-available'}">${hasWebML ? 'Available' : 'Not Available'}</span></p>`;
+      
+      if (hasWebML) {
+        const hasCreateTextGenerator = typeof navigator.ml.createTextGenerator === 'function';
+        html += `<p>- createTextGenerator: <span class="api-status ${hasCreateTextGenerator ? 'available' : 'not-available'}">${hasCreateTextGenerator ? 'Available' : 'Not Available'}</span></p>`;
+      }
+      
+      // Global AI object
+      const hasGlobalAI = typeof window.ai !== 'undefined';
+      html += `<p>Global AI object (window.ai): <span class="api-status ${hasGlobalAI ? 'available' : 'not-available'}">${hasGlobalAI ? 'Available' : 'Not Available'}</span></p>`;
+      
+      // Chrome ML API
+      const hasChromeML = typeof chrome !== 'undefined' && chrome.ml !== undefined;
+      html += `<p>Chrome ML API (chrome.ml): <span class="api-status ${hasChromeML ? 'available' : 'not-available'}">${hasChromeML ? 'Available' : 'Not Available'}</span></p>`;
+      
+      status.innerHTML = html;
+      
+      // Find and display available AI methods
+      await findAIMethods();
+    }
+    
+    // Find all AI-related methods in the browser
+    async function findAIMethods() {
+      const methodsDiv = document.getElementById('ai-methods');
+      const testButtonsDiv = document.getElementById('test-buttons');
+      let html = '';
+      let buttonsHtml = '';
+      
+      // A list to store discovered objects for testing
+      const aiObjectsToTest = [];
+      
+      // Check navigator.ml
+      if (navigator.ml) {
+        const methods = Object.getOwnPropertyNames(navigator.ml).filter(m => typeof navigator.ml[m] === 'function');
+        html += `<p><strong>navigator.ml:</strong> ${methods.join(', ')}</p>`;
+        
+        aiObjectsToTest.push({
+          name: 'navigator.ml',
+          methods: methods,
+          obj: navigator.ml
+        });
+        
+        // Add a button for createTextGenerator if it exists
+        if (methods.includes('createTextGenerator')) {
+          buttonsHtml += `<button onclick="testAPIMethod('navigator.ml.createTextGenerator')">Test createTextGenerator</button>`;
+        }
+      }
+      
+      // Check window.ai
+      if (typeof window.ai !== 'undefined') {
+        const methods = Object.getOwnPropertyNames(window.ai).filter(m => typeof window.ai[m] === 'function');
+        html += `<p><strong>window.ai:</strong> ${methods.join(', ')}</p>`;
+        
+        aiObjectsToTest.push({
+          name: 'window.ai',
+          methods: methods,
+          obj: window.ai
+        });
+        
+        // Add buttons for common ai methods
+        for (const method of methods) {
+          buttonsHtml += `<button onclick="testAPIMethod('window.ai.${method}')">Test ai.${method}</button>`;
+        }
+        
+        // Check nested objects in window.ai
+        for (const prop in window.ai) {
+          if (typeof window.ai[prop] === 'object' && window.ai[prop] !== null) {
+            try {
+              const nestedMethods = Object.getOwnPropertyNames(window.ai[prop]).filter(m => typeof window.ai[prop][m] === 'function');
+              if (nestedMethods.length > 0) {
+                html += `<p><strong>window.ai.${prop}:</strong> ${nestedMethods.join(', ')}</p>`;
+                
+                aiObjectsToTest.push({
+                  name: `window.ai.${prop}`,
+                  methods: nestedMethods,
+                  obj: window.ai[prop]
+                });
+                
+                // Add buttons for nested methods
+                for (const method of nestedMethods) {
+                  buttonsHtml += `<button onclick="testAPIMethod('window.ai.${prop}.${method}')">Test ai.${prop}.${method}</button>`;
+                }
+              }
+            } catch (e) {}
+          }
+        }
+      }
+      
+      // Check chrome.ml
+      if (typeof chrome !== 'undefined' && chrome.ml) {
+        const methods = Object.getOwnPropertyNames(chrome.ml).filter(m => typeof chrome.ml[m] === 'function');
+        html += `<p><strong>chrome.ml:</strong> ${methods.join(', ')}</p>`;
+        
+        aiObjectsToTest.push({
+          name: 'chrome.ml',
+          methods: methods,
+          obj: chrome.ml
+        });
+        
+        // Add buttons for chrome.ml methods
+        for (const method of methods) {
+          buttonsHtml += `<button onclick="testAPIMethod('chrome.ml.${method}')">Test chrome.ml.${method}</button>`;
+        }
+      }
+      
+      if (html === '') {
+        html = '<p>No AI methods found in common locations.</p>';
+      }
+      
+      methodsDiv.innerHTML = html;
+      testButtonsDiv.innerHTML = buttonsHtml;
+      
+      // Store the AI objects for testing
+      window.aiObjectsToTest = aiObjectsToTest;
+    }
+    
+    // Test an API method
+    async function testAPIMethod(methodPath) {
+      logMessage(`Testing ${methodPath}...`);
+      const resultArea = document.getElementById('test-result');
+      const promptInput = document.getElementById('prompt-input').value;
+      
+      try {
+        // Parse the method path
+        const parts = methodPath.split('.');
+        let obj = window;
+        for (let i = 0; i < parts.length - 1; i++) {
+          obj = obj[parts[i]];
+        }
+        const method = parts[parts.length - 1];
+        
+        // Special case for createTextGenerator
+        if (methodPath === 'navigator.ml.createTextGenerator') {
+          try {
+            logMessage('Creating text generator...');
+            const generator = await navigator.ml.createTextGenerator();
+            logMessage('Text generator created successfully.');
+            logMessage('Generator methods: ' + Object.getOwnPropertyNames(generator).filter(m => typeof generator[m] === 'function').join(', '));
+            
+            logMessage('Generating text...');
+            const result = await generator.generateText(promptInput);
+            logMessage('Text generated successfully.');
+            
+            resultArea.textContent = JSON.stringify(result, null, 2);
+          } catch (e) {
+            logMessage(`Error testing ${methodPath}: ${e.message}`);
+            resultArea.textContent = `Error: ${e.message}`;
+          }
+          return;
+        }
+        
+        // Try direct method call
+        logMessage(`Calling ${methodPath} with prompt: "${promptInput}"`);
+        const result = await obj[method](promptInput);
+        logMessage('Method call successful.');
+        
+        resultArea.textContent = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+      } catch (e) {
+        logMessage(`Error testing ${methodPath}: ${e.message}`);
+        resultArea.textContent = `Error: ${e.message}`;
+      }
+    }
+    
+    // Initialize
+    window.onload = function() {
+      displayBrowserInfo();
+      checkAPIAvailability();
+    };
+  </script>
+</body>
+</html>
