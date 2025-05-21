@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colorless Green Ideas Sleep Furiously</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111827; /* bg-gray-900 */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .video-container {
+            position: absolute;
+            cursor: move;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            /* Updated transition for explosion and general movements */
+            transition: transform 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease-out;
+        }
+        .video-container.dragging {
+            transition: none; /* Crucial for smooth dragging */
+        }
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .btn { /* This class is for buttons WITHIN video controls */
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            width: 30px; 
+            height: 30px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+        .btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .video-title {
+            position: absolute;
+            bottom: 40px; /* Height of controls-bar */
+            left: 0;
+            right: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 8px;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .global-controls {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 1000;
+            display: flex;
+            gap: 8px; /* Use gap for spacing between global buttons */
+        }
+         /* Styling for the larger global buttons */
+        .global-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #374151; /* bg-gray-700 */
+            color: white;
+            border: none;
+            border-radius: 9999px; /* rounded-full */
+            padding: 1rem; /* p-4, makes buttons larger */
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .global-btn:hover {
+            background-color: #4B5563; /* bg-gray-600 */
+        }
+
+        .info-panel {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 1000;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            max-width: 300px; /* Panel width */
+        }
+        .video-info-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(17, 24, 39, 0.95); 
+            border-radius: 8px;
+            padding: 20px;
+            z-index: 2000;
+            width: 500px;
+            max-width: 90vw;
+            color: white;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        }
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1999;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script type="text/babel">
+        // Icons (no changes)
+        const PlayIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+        );
+        const PauseIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+        );
+        const MaximizeIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            </svg>
+        );
+        const MinimizeIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
+            </svg>
+        );
+        const InfoIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+        );
+        const VolumeOnIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+        );
+        const VolumeOffIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <line x1="23" y1="9" x2="17" y2="15"></line>
+                <line x1="17" y1="9" x2="23" y2="15"></line>
+            </svg>
+        );
+        const ResetIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 2v6h6"></path>
+                <path d="M3 13a9 9 0 1 0 3-7.7L3 8"></path>
+            </svg>
+        );
+
+        // DraggableVideo Component
+        const DraggableVideo = ({ video, onDrag, onScale, onRotate, bringToFront }) => {
+            const [isDragging, setIsDragging] = React.useState(false);
+            const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 });
+            const [isPlaying, setIsPlaying] = React.useState(false);
+            const [isExpanded, setIsExpanded] = React.useState(false);
+            const [showInfo, setShowInfo] = React.useState(false);
+            const [videoError, setVideoError] = React.useState(false);
+            const videoRef = React.useRef(null);
+            const componentRef = React.useRef(null);
+
+            const [animatedProps, setAnimatedProps] = React.useState(() => {
+                const initialVideoWidth = 300; 
+                const initialVideoHeight = initialVideoWidth * 9 / 16;
+                const centerX = typeof window !== 'undefined' ? window.innerWidth / 2 - initialVideoWidth / 2 : video.position.x;
+                const centerY = typeof window !== 'undefined' ? window.innerHeight / 2 - initialVideoHeight / 2 : video.position.y;
+                return {
+                    transform: `translate(${centerX}px, ${centerY}px) scale(0.01) rotate(0deg)`,
+                    opacity: 0,
+                    hasAnimatedIn: false 
+                };
+            });
+
+            React.useEffect(() => {
+                // This effect runs once on mount due to empty dependency array,
+                // or when the component remounts (e.g. due to key change on reset)
+                // console.log(`Animating video ID: ${video.id} to X:${video.position.x}, Y:${video.position.y}`);
+                const timer = setTimeout(() => {
+                    setAnimatedProps({
+                        transform: `translate(${video.position.x}px, ${video.position.y}px) scale(${video.scale}) rotate(${video.rotation}deg)`,
+                        opacity: 1,
+                        hasAnimatedIn: true
+                    });
+                }, 50); // Short delay for CSS transition to catch up
+                return () => clearTimeout(timer);
+            }, []); // Runs only on mount / remount
+
+            React.useEffect(() => {
+                // Sync with props if they change AFTER initial animation and not dragging
+                if (animatedProps.hasAnimatedIn && !isDragging) {
+                     setAnimatedProps(prevProps => ({
+                        ...prevProps, 
+                        transform: `translate(${video.position.x}px, ${video.position.y}px) scale(${video.scale}) rotate(${video.rotation}deg)`,
+                    }));
+                }
+            }, [video.position.x, video.position.y, video.scale, video.rotation, animatedProps.hasAnimatedIn, isDragging]);
+
+
+            const handleMouseDown = (e) => {
+                if (videoError) return; 
+                bringToFront(video.id);
+                setIsDragging(true);
+                const rect = componentRef.current.getBoundingClientRect();
+                setDragOffset({
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                });
+                if (componentRef.current) {
+                    componentRef.current.classList.add('dragging');
+                }
+            };
+            
+            const handleMouseMove = React.useCallback((e) => { 
+                if (isDragging) {
+                    const newX = e.clientX - dragOffset.x;
+                    const newY = e.clientY - dragOffset.y;
+                    if (componentRef.current) {
+                        componentRef.current.style.transform = `translate(${newX}px, ${newY}px) rotate(${video.rotation}deg) scale(${video.scale})`;
+                        if(animatedProps.hasAnimatedIn) componentRef.current.style.opacity = '1';
+                    }
+                    onDrag(video.id, { x: newX, y: newY });
+                }
+            }, [isDragging, dragOffset, video.rotation, video.scale, onDrag, video.id, animatedProps.hasAnimatedIn]);
+            
+            const handleMouseUp = React.useCallback(() => { 
+                if (isDragging) {
+                    setIsDragging(false);
+                    if (componentRef.current) {
+                        componentRef.current.classList.remove('dragging');
+                    }
+                }
+            }, [isDragging]);
+            
+            React.useEffect(() => {
+                if (isDragging) {
+                    window.addEventListener('mousemove', handleMouseMove);
+                    window.addEventListener('mouseup', handleMouseUp);
+                }
+                return () => {
+                    window.removeEventListener('mousemove', handleMouseMove);
+                    window.removeEventListener('mouseup', handleMouseUp);
+                };
+            }, [isDragging, handleMouseMove, handleMouseUp]);
+
+             const togglePlay = (e) => {
+                e.stopPropagation();
+                if (videoRef.current) {
+                    if (isPlaying) {
+                        videoRef.current.pause();
+                    } else {
+                        videoRef.current.play().catch(err => {
+                            console.error(`Error playing video ${video.src}:`, err);
+                            setVideoError(true);
+                        });
+                    }
+                    setIsPlaying(!isPlaying);
+                }
+            };
+            
+            const handleScale = (e, factor) => {
+                e.stopPropagation();
+                onScale(video.id, factor); 
+            };
+            
+            const handleRotate = (e, degrees) => {
+                e.stopPropagation();
+                onRotate(video.id, degrees); 
+            };
+            
+            const toggleExpand = (e) => {
+                e.stopPropagation();
+                setIsExpanded(!isExpanded);
+                bringToFront(video.id);
+            };
+            
+            const toggleInfo = (e) => {
+                e.stopPropagation();
+                setShowInfo(!showInfo);
+                if (!showInfo) { 
+                    bringToFront(video.id);
+                }
+            };
+            
+            const handleVideoError = (e) => {
+                console.error(`Error loading video: ${video.src}`, e);
+                setVideoError(true);
+            };
+
+            const currentWidth = isExpanded ? '500px' : '300px';
+
+            const containerStyle = {
+                transform: animatedProps.transform,
+                opacity: animatedProps.opacity,
+                zIndex: video.z,
+                width: currentWidth,
+            };
+            
+            return (
+                <>
+                    <div 
+                        ref={componentRef}
+                        className={`video-container`} 
+                        style={containerStyle}
+                        onMouseDown={handleMouseDown}
+                    >
+                        {videoError ? (
+                            <div className="w-full aspect-video bg-red-900 flex items-center justify-center text-white p-4 text-center">
+                                <div>
+                                    <p className="font-bold">Video Error</p>
+                                    <p className="text-sm mt-2">Could not load: {video.src}</p>
+                                    <p className="text-xs mt-1">(Check file exists & path is correct)</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <video 
+                                ref={videoRef}
+                                src={video.src}
+                                width="100%"
+                                loop
+                                muted={!isPlaying} 
+                                onEnded={() => setIsPlaying(false)}
+                                onError={handleVideoError}
+                                preload="metadata"
+                            />
+                        )}
+                        
+                        <div className="video-title">{video.title}</div>
+                        
+                        <div className="controls-bar">
+                            <button className="btn" onClick={togglePlay} disabled={videoError} title={isPlaying ? "Pause" : "Play"}>
+                                {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                            </button>
+                            
+                            <div className="flex space-x-1">
+                                <button className="btn" onClick={toggleInfo} title="Info">
+                                    <InfoIcon />
+                                </button>
+                                <button className="btn" onClick={(e) => handleRotate(e, -15)} title="Rotate Left">↺</button>
+                                <button className="btn" onClick={(e) => handleRotate(e, 15)} title="Rotate Right">↻</button>
+                                <button className="btn" onClick={(e) => handleScale(e, 0.8)} title="Zoom Out">-</button>
+                                <button className="btn" onClick={(e) => handleScale(e, 1.2)} title="Zoom In">+</button>
+                                <button className="btn" onClick={toggleExpand} title={isExpanded ? "Minimize" : "Maximize"}>
+                                    {isExpanded ? <MinimizeIcon /> : <MaximizeIcon />}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {showInfo && (
+                        <>
+                            <div className="modal-backdrop" onClick={toggleInfo}></div>
+                            <div className="video-info-modal">
+                                <div className="modal-header">
+                                    <h2 className="text-xl font-bold">{video.title}</h2>
+                                    <button className="modal-close-btn" onClick={toggleInfo} title="Close">&times;</button>
+                                </div>
+                                <div className="modal-content">
+                                    <p className="mb-4 text-sm">{video.description}</p>
+                                    <p className="text-xs text-gray-400">Filename: {video.src}</p>
+                                    <p className="text-xs text-gray-400">Category: {video.category}</p>
+                                    <p className="text-xs text-gray-400">ID: {video.id}, Scale: {video.scale.toFixed(2)}, Rotation: {video.rotation}°</p>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            const getInitialVideos = () => {
+                const basePositions = [
+                    {x: 100, y: 100}, {x: 300, y: 150}, {x: 500, y: 100}, {x: 200, y: 300},
+                    {x: 400, y: 350}, {x: 600, y: 300}, {x: 150, y: 500}, {x: 350, y: 550}, {x: 550, y: 500},
+                    {x: 700, y: 150}, {x: 850, y: 350}, {x: 700, y: 550} 
+                ];
+                const getRandomOffset = () => Math.floor(Math.random() * 80) - 40; 
+
+                const allVideosData = [ 
+                    { id: 1, src: "veo-direct.mp4", title: "Veo - Direct Prompt", description: "This video was generated by Veo AI when prompted with the famous linguistic example 'Colorless green ideas sleep furiously'. This sentence, created by Noam Chomsky, demonstrates that a grammatically correct sentence can still be semantically nonsensical.", position: { x: 370, y: 50 }, rotation: 0, scale: 1, z: 33, category: "direct"}, // Moved right of panel
+                    { id: 2, src: "sora-direct-1.mp4", title: "Sora - Direct Prompt 1", description: "This is the first response from OpenAI's Sora video generation model when prompted with 'Colorless green ideas sleep furiously'. Sora attempts to visualize this grammatically correct but semantically nonsensical phrase through abstract imagery.", rotation: -5, scale: 1, z: 2, category: "direct" },
+                    { id: 3, src: "sora-direct-2.mp4", title: "Sora - Direct Prompt 2", description: "This is the second response from OpenAI's Sora video generation model when prompted with 'Colorless green ideas sleep furiously'. It offers an alternative visual interpretation of Chomsky's famous example sentence.", rotation: 5, scale: 1, z: 3, category: "direct"},
+                    { id: 4, src: "Veo_Dreamlike_Ideas.mp4", title: "Veo - Dreamlike", description: "This video was generated by Veo AI with the prompt: 'Surreal, shifting dreamscape. Colorless, translucent green geometric shapes (the 'ideas') are tossing and turning violently in an unseen bed (representing 'sleep'). The scene is filled with frantic, silent energy. Use words like 'paradoxical,' 'nonsensical,' 'dreamlike.'", rotation: 0, scale: 1, z: 4, category: "dreamlike"},
+                    { id: 5, src: "Sora_Dreamlike-1.mp4", title: "Sora - Dreamlike 1", description: "This is the first response from OpenAI's Sora model with the prompt: 'Surreal, shifting dreamscape. Colorless, translucent green geometric shapes (the 'ideas') are tossing and turning violently in an unseen bed (representing 'sleep'). The scene is filled with frantic, silent energy. Use words like 'paradoxical,' 'nonsensical,' 'dreamlike.'", rotation: -3, scale: 1, z: 5, category: "dreamlike"},
+                    { id: 6, src: "Sora_Dreamlike-2.mp4", title: "Sora - Dreamlike 2", description: "This is the second response from OpenAI's Sora model with the prompt: 'Surreal, shifting dreamscape. Colorless, translucent green geometric shapes (the 'ideas') are tossing and turning violently in an unseen bed (representing 'sleep'). The scene is filled with frantic, silent energy. Use words like 'paradoxical,' 'nonsensical,' 'dreamlike.'", rotation: 3, scale: 1, z: 6, category: "dreamlike"},
+                    { id: 7, src: "Veo-abstract.mp4", title: "Veo - Abstract", description: "This video was generated by Veo AI with the prompt: 'An abstract animation where the concept of 'green' is presented without color, perhaps as shimmering colorless forms. These forms, representing 'ideas,' are depicted in a restless, agitated state of 'sleep,' moving and vibrating 'furiously.' Emphasize a dreamlike, illogical, and visually paradoxical atmosphere.'", rotation: 2, scale: 1, z: 7, category: "abstract"},
+                    { id: 8, src: "Sora-abstract-1.mp4", title: "Sora - Abstract 1", description: "This is the first response from OpenAI's Sora model with the prompt: 'An abstract animation where the concept of 'green' is presented without color, perhaps as shimmering colorless forms. These forms, representing 'ideas,' are depicted in a restless, agitated state of 'sleep,' moving and vibrating 'furiously.' Emphasize a dreamlike, illogical, and visually paradoxical atmosphere.'", rotation: -2, scale: 1, z: 8, category: "abstract"},
+                    { id: 9, src: "Sora-abstract-2.mp4", title: "Sora - Abstract 2", description: "This is the second response from OpenAI's Sora model with the prompt: 'An abstract animation where the concept of 'green' is presented without color, perhaps as shimmering colorless forms. These forms, representing 'ideas,' are depicted in a restless, agitated state of 'sleep,' moving and vibrating 'furiously.' Emphasize a dreamlike, illogical, and visually paradoxical atmosphere.'", rotation: 4, scale: 1, z: 9, category: "abstract"},
+                    { id: 10, src: "Veo-poem.mp4", title: "Veo - Visual Poem", description: "This video was generated by Veo AI with the prompt: 'A visual poem depicting the impossible: Show the essence of the color green, but rendered in monochrome or greyscale. Abstract representations of 'ideas' (perhaps lightbulbs, thought bubbles, or flowing lines) are shown in a state of agitated, furious slumber. The overall mood should be unsettling yet mesmerizing.'", rotation: -1, scale: 1, z: 10, category: "poem"},
+                    { id: 11, src: "Sora-poem-1.mp4", title: "Sora - Visual Poem 1", description: "This is the first response from OpenAI's Sora model with the prompt: 'A visual poem depicting the impossible: Show the essence of the color green, but rendered in monochrome or greyscale. Abstract representations of 'ideas' (perhaps lightbulbs, thought bubbles, or flowing lines) are shown in a state of agitated, furious slumber. The overall mood should be unsettling yet mesmerizing.'", rotation: 6, scale: 1, z: 11, category: "poem"},
+                    { id: 12, src: "Sora-poem-2.mp4", title: "Sora - Visual Poem 2", description: "This is the second response from OpenAI's Sora model with the prompt: 'A visual poem depicting the impossible: Show the essence of the color green, but rendered in monochrome or greyscale. Abstract representations of 'ideas' (perhaps lightbulbs, thought bubbles, or flowing lines) are shown in a state of agitated, furious slumber. The overall mood should be unsettling yet mesmerizing.'", rotation: -4, scale: 1, z: 12, category: "poem"},
+                    { id: 13, src: "veo-split-screen.mp4", title: "Veo - Split Screen", description: "This video was generated by Veo AI with the prompt: 'A split screen. On one side, depict the word 'GREEN' in bold, vibrant green letters. On the other side, show abstract, colorless (greyscale or translucent) organic shapes that pulse and twitch erratically, representing 'ideas sleeping furiously.' The 'sleep' could be conveyed by a dark, subdued background, and the 'furiously' by the rapid, agitated movements.'", rotation: 1, scale: 1, z: 13, category: "split"},
+                    { id: 14, src: "sora-split-screen-1.mp4", title: "Sora - Split Screen 1", description: "This is the first response from OpenAI's Sora model with the prompt: 'A split screen. On one side, depict the word 'GREEN' in bold, vibrant green letters. On the other side, show abstract, colorless (greyscale or translucent) organic shapes that pulse and twitch erratically, representing 'ideas sleeping furiously.' The 'sleep' could be conveyed by a dark, subdued background, and the 'furiously' by the rapid, agitated movements.'", rotation: -6, scale: 1, z: 14, category: "split"},
+                    { id: 15, src: "sora-split-screen-2.mp4", title: "Sora - Split Screen 2", description: "This is the second response from OpenAI's Sora model with the prompt: 'A split screen. On one side, depict the word 'GREEN' in bold, vibrant green letters. On the other side, show abstract, colorless (greyscale or translucent) organic shapes that pulse and twitch erratically, representing 'ideas sleeping furiously.' The 'sleep' could be conveyed by a dark, subdued background, and the 'furiously' by the rapid, agitated movements.'", rotation: 2, scale: 1, z: 15, category: "split"},
+                    { id: 16, src: "Veo_brain.mp4", title: "Veo - Brain Prompt", description: "Visualize a brain, glowing with a faint, colorless green light. Inside, abstract thought-forms (perhaps like swirling smoke or energy patterns) are shown in a highly agitated, rapid-eye-movement-like sleep state. The fury should be evident in the speed and intensity of their movement, despite the 'sleep' context.", rotation: -2, scale: 1, z: 16, category: "brain"},
+                    { id: 17, src: "Sora-brain-1.mp4", title: "Sora - Brain Prompt 1", description: "Visualize a brain, glowing with a faint, colorless green light. Inside, abstract thought-forms (perhaps like swirling smoke or energy patterns) are shown in a highly agitated, rapid-eye-movement-like sleep state. The fury should be evident in the speed and intensity of their movement, despite the 'sleep' context.", rotation: 3, scale: 1, z: 17, category: "brain"},
+                    { id: 18, src: "Sora-brain-2.mp4", title: "Sora - Brain Prompt 2", description: "Visualize a brain, glowing with a faint, colorless green light. Inside, abstract thought-forms (perhaps like swirling smoke or energy patterns) are shown in a highly agitated, rapid-eye-movement-like sleep state. The fury should be evident in the speed and intensity of their movement, despite the 'sleep' context.", rotation: -5, scale: 1, z: 18, category: "brain"},
+                    { id: 19, src: "Sora-brain-3.mp4", title: "Sora - Brain Prompt 3", description: "Visualize a brain, glowing with a faint, colorless green light. Inside, abstract thought-forms (perhaps like swirling smoke or energy patterns) are shown in a highly agitated, rapid-eye-movement-like sleep state. The fury should be evident in the speed and intensity of their movement, despite the 'sleep' context.", rotation: 1, scale: 1, z: 19, category: "brain"},
+                    { id: 20, src: "Sora-brain-4.mp4", title: "Sora - Brain Prompt 4", description: "Visualize a brain, glowing with a faint, colorless green light. Inside, abstract thought-forms (perhaps like swirling smoke or energy patterns) are shown in a highly agitated, rapid-eye-movement-like sleep state. The fury should be evident in the speed and intensity of their movement, despite the 'sleep' context.", rotation: -3, scale: 1, z: 20, category: "brain"},
+                    { id: 21, src: "Veo-swatch.mp4", title: "Veo - Swatch Prompt", description: "A sequence starting with a vibrant green color swatch. This swatch then loses its color, becoming greyscale or transparent, while morphing into abstract representations of 'ideas' (e.g., interconnected neurons, flowing script). These colorless ideas then begin to vibrate and shake intensely, as if in a furious sleep. Cinematic, high contrast.", rotation: 4, scale: 1, z: 21, category: "swatch"},
+                    { id: 22, src: "Sora-swatch-1.mp4", title: "Sora - Swatch Prompt 1", description: "A sequence starting with a vibrant green color swatch. This swatch then loses its color, becoming greyscale or transparent, while morphing into abstract representations of 'ideas' (e.g., interconnected neurons, flowing script). These colorless ideas then begin to vibrate and shake intensely, as if in a furious sleep. Cinematic, high contrast.", rotation: -1, scale: 1, z: 22, category: "swatch"},
+                    { id: 23, src: "Sora-swatch-2.mp4", title: "Sora - Swatch Prompt 2", description: "A sequence starting with a vibrant green color swatch. This swatch then loses its color, becoming greyscale or transparent, while morphing into abstract representations of 'ideas' (e.g., interconnected neurons, flowing script). These colorless ideas then begin to vibrate and shake intensely, as if in a furious sleep. Cinematic, high contrast.", rotation: 5, scale: 1, z: 23, category: "swatch"},
+                    { id: 24, src: "Veo-figures.mp4", title: "Veo - Figures Prompt", description: "Pale green, almost translucent figures representing 'ideas' are thrashing about in their sleep. The scene is desaturated, emphasizing the 'colorless' aspect of the green. The 'furious' nature of their sleep should be the main focus, with exaggerated movements.", rotation: 0, scale: 1, z: 24, category: "figures"},
+                    { id: 25, src: "Sora-figures-1.mp4", title: "Sora - Figures Prompt 1", description: "Pale green, almost translucent figures representing 'ideas' are thrashing about in their sleep. The scene is desaturated, emphasizing the 'colorless' aspect of the green. The 'furious' nature of their sleep should be the main focus, with exaggerated movements.", rotation: -5, scale: 1, z: 25, category: "figures"},
+                    { id: 26, src: "Sora-figures-2.mp4", title: "Sora - Figures Prompt 2", description: "Pale green, almost translucent figures representing 'ideas' are thrashing about in their sleep. The scene is desaturated, emphasizing the 'colorless' aspect of the green. The 'furious' nature of their sleep should be the main focus, with exaggerated movements.", rotation: 3, scale: 1, z: 26, category: "figures"},
+                    { id: 27, src: "Veo-field.mp4", title: "Veo - Field Prompt", description: "A field of pale green, ghostly plants (the 'ideas') that are tossing and turning violently as if in a storm, under a dark, dreamlike sky. The green is muted and almost devoid of color. The 'sleep' is implied by the closed state of any 'flowers' or 'leaves,' while 'furiously' is shown by their wild movement.", rotation: -2, scale: 1, z: 27, category: "field"},
+                    { id: 28, src: "Sora-field-1.mp4", title: "Sora - Field Prompt 1", description: "A field of pale green, ghostly plants (the 'ideas') that are tossing and turning violently as if in a storm, under a dark, dreamlike sky. The green is muted and almost devoid of color. The 'sleep' is implied by the closed state of any 'flowers' or 'leaves,' while 'furiously' is shown by their wild movement.", rotation: 2, scale: 1, z: 28, category: "field"},
+                    { id: 29, src: "Sora-field-2.mp4", title: "Sora - Field Prompt 2", description: "A field of pale green, ghostly plants (the 'ideas') that are tossing and turning violently as if in a storm, under a dark, dreamlike sky. The green is muted and almost devoid of color. The 'sleep' is implied by the closed state of any 'flowers' or 'leaves,' while 'furiously' is shown by their wild movement.", rotation: -4, scale: 1, z: 29, category: "field"},
+                    { id: 30, src: "Veo-claymation.mp4", title: "Veo - Claymation Prompt", description: "Hand-sculpted claymation scene: lumpy, moss-green brain-shaped creatures (‘ideas’) doze inside a child’s shoebox diorama, yet their eyelids flutter in rapid, angry stop-motion bursts—overhead desk-lamp lighting, 12 fps, tactile imperfections, 1970s Rankin/Bass style.", rotation: 0, scale: 1, z: 30, category: "claymation"},
+                    { id: 31, src: "Sora-claymation-1.mp4", title: "Sora - Claymation Prompt 1", description: "Hand-sculpted claymation scene: lumpy, moss-green brain-shaped creatures (‘ideas’) doze inside a child’s shoebox diorama, yet their eyelids flutter in rapid, angry stop-motion bursts—overhead desk-lamp lighting, 12 fps, tactile imperfections, 1970s Rankin/Bass style.", rotation: 5, scale: 1, z: 31, category: "claymation"},
+                    { id: 32, src: "Sora-claymation-2.mp4", title: "Sora - Claymation Prompt 2", description: "Hand-sculpted claymation scene: lumpy, moss-green brain-shaped creatures (‘ideas’) doze inside a child’s shoebox diorama, yet their eyelids flutter in rapid, angry stop-motion bursts—overhead desk-lamp lighting, 12 fps, tactile imperfections, 1970s Rankin/Bass style.", rotation: -5, scale: 1, z: 32, category: "claymation"}
+                ];
+
+                return allVideosData.map((video, index) => {
+                    if (video.id === 1) return video; 
+                    const base = basePositions[index % basePositions.length];
+                    const finalX = Math.max(50, Math.min(base.x + getRandomOffset(), (typeof window !== 'undefined' ? window.innerWidth - 350 : 900))); // Keep within bounds
+                    const finalY = Math.max(50, Math.min(base.y + getRandomOffset(), (typeof window !== 'undefined' ? window.innerHeight - 250 : 600)));
+                    return {
+                        ...video,
+                        position: { x: finalX, y: finalY },
+                        z: video.z || (32 - index) // Simple z-ordering, ensure ID 1 stays high
+                    };
+                });
+            };
+
+            const [videos, setVideos] = React.useState(getInitialVideos());
+            const [soundEnabled, setSoundEnabled] = React.useState(false);
+            const [synth, setSynth] = React.useState(null);
+            const [activeFilter, setActiveFilter] = React.useState('all');
+            const [resetNonce, setResetNonce] = React.useState(0); // For forcing remount on reset
+            
+            React.useEffect(() => {
+                let currentSynth = synth; 
+                let currentLoop = null;
+                if (soundEnabled) {
+                    try {
+                        if (!currentSynth || currentSynth.disposed) { 
+                            currentSynth = new Tone.PolySynth().toDestination();
+                            setSynth(currentSynth);
+                        }
+                        const notes = ['C2', 'F#2', 'D#3', 'G3', 'B3', 'C4', 'F#4'];
+                        currentLoop = new Tone.Loop((time) => {
+                            if (currentSynth && !currentSynth.disposed) {
+                                const note = notes[Math.floor(Math.random() * notes.length)];
+                                currentSynth.triggerAttackRelease(note, '4n', time, 0.1);
+                            }
+                        }, '8n').start(0);
+                        if (Tone.Transport.state !== "started") Tone.Transport.start();
+                    } catch (error) { console.error("Audio initialization error:", error); setSoundEnabled(false); }
+                }
+                return () => { if (currentLoop) currentLoop.dispose(); };
+            }, [soundEnabled, synth]); 
+            
+            const toggleSound = () => {
+                if (!soundEnabled) {
+                    try { Tone.context.resume().then(() => { Tone.start(); setSoundEnabled(true); }); }
+                    catch (error) { console.error("Error starting audio:", error); }
+                } else {
+                    if (synth && !synth.disposed) { synth.releaseAll(); synth.dispose(); setSynth(null); }
+                    if (Tone.Transport.state === "started") { Tone.Transport.stop(); Tone.Transport.cancel(); }
+                    setSoundEnabled(false);
+                }
+            };
+            
+            const resetPositions = () => {
+                 setVideos(getInitialVideos()); 
+                 setResetNonce(prev => prev + 1); // Increment nonce to change keys
+            };
+            
+            const filterVideos = (category) => setActiveFilter(category);
+            const handleDrag = (id, newPosition) => setVideos(prev => prev.map(v => v.id === id ? { ...v, position: newPosition } : v));
+            const handleScale = (id, factor) => {
+                setVideos(prev => prev.map(v => v.id === id ? { ...v, scale: Math.max(0.1, v.scale * factor) } : v));
+                if (soundEnabled && synth && !synth.disposed) synth.triggerAttackRelease(factor > 1 ? 'G4' : 'C3', '16n', Tone.now(), 0.2);
+            };
+            const handleRotate = (id, degrees) => {
+                setVideos(prev => prev.map(v => v.id === id ? { ...v, rotation: (v.rotation + degrees) % 360 } : v));
+                if (soundEnabled && synth && !synth.disposed) synth.triggerAttackRelease(degrees > 0 ? 'E4' : 'A3', '16n', Tone.now(), 0.1);
+            };
+            const bringToFront = (id) => {
+                setVideos(prev => {
+                    if (prev.length === 0) return prev;
+                    const maxZ = Math.max(...prev.map(v_ => v_.z), 0);
+                    return prev.map(v => v.id === id ? { ...v, z: maxZ + 1 } : v);
+                });
+            };
+            
+            return (
+                <div className="min-h-screen bg-gray-900" style={{ width: '100vw', height: '100vh'}}> 
+                    <div className="info-panel">
+                        <h1 className="text-xl font-bold mb-2">Colorless Green Ideas Sleep Furiously</h1>
+                        <p className="text-sm mb-2">An interactive gallery of AI interpretations.</p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                            {/* Filter buttons remain the same */}
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'all' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('all')}>All Videos</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'direct' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('direct')}>Direct Prompt</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'dreamlike' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('dreamlike')}>Dreamlike</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'abstract' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('abstract')}>Abstract</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'poem' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('poem')}>Visual Poem</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'split' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('split')}>Split Screen</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'brain' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('brain')}>Brain</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'swatch' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('swatch')}>Swatch</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'figures' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('figures')}>Figures</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'field' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('field')}>Field</button>
+                            <button className={`text-xs px-2 py-1 rounded ${activeFilter === 'claymation' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => filterVideos('claymation')}>Claymation</button>
+                        </div>
+                    </div>
+                    
+                    <div className="global-controls">
+                        <button 
+                            className="global-btn" // Use new class for larger global buttons
+                            onClick={resetPositions}
+                            title="Reset All Videos"
+                        >
+                            <ResetIcon />
+                        </button>
+                        <button 
+                            className="global-btn" // Use new class
+                            onClick={toggleSound}
+                            title={soundEnabled ? "Mute Ambient Sound" : "Play Ambient Sound"}
+                        >
+                            {soundEnabled ? <VolumeOnIcon /> : <VolumeOffIcon />}
+                        </button>
+                    </div>
+                    
+                    {videos
+                        .filter(video => activeFilter === 'all' || video.category === activeFilter)
+                        .map(video => (
+                            <DraggableVideo 
+                                key={`${video.id}-${resetNonce}`} // Ensure key changes on reset
+                                video={video}
+                                onDrag={handleDrag}
+                                onScale={handleScale}
+                                onRotate={handleRotate}
+                                bringToFront={bringToFront}
+                            />
+                        ))
+                    }
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('app'));
+    </script>
+</body>
+</html>
