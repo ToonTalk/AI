@@ -1,7 +1,9 @@
-// background.js — Chrome Extension service worker (Manifest V3)
-// v2 — 2025‑05‑18
-// Adds support for the **new Prompt‑API shape** (window.ai.assistant.create)
-// while keeping the Origin‑Trial path and the older createTextSession fallback.
+// background.js — Chrome Extension service worker (Manifest V3)
+// v3.1 — 2025‑05‑19
+// * Drops the capabilities() probe entirely — some 136‑138 builds expose it as
+//   a non‑callable object, causing TypeError. We now jump straight to create()
+//   and rely on its exception if the model isn’t ready.
+// * Everything else unchanged (Prompt‑API fallbacks remain).
 
 /* global chrome */
 
@@ -28,7 +30,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== MENU_ID || !tab?.id) return;
   console.log('Context menu clicked:', MENU_ID);
 
-  // 2‑A Grab the selected word + its sentence from the page’s MAIN world
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     world: 'MAIN',
@@ -65,47 +66,33 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────────
-// 3 AI helper (Gemini Nano via Origin‑Trial → Prompt‑API fallbacks)
+// 3 AI helper (Origin‑Trial → Prompt‑API fallbacks)
 // ───────────────────────────────────────────────────────────────────────────────
-/**
- * Get the definition of a word in context.
- * Tries, in order:
- *   1. chrome.aiOriginTrial.languageModel    (stable Origin‑Trial)
- *   2. window.ai.assistant.create            (Prompt‑API ≥ Chromium 129)
- *   3. window.ai.createTextSession           (early Prompt‑API ≤ 128)
- * @param {string} word
- * @param {string} sentence
- * @param {number} tabId
- * @returns {Promise<{success:boolean, meaning?:string, error?:string, method?:string}>}
- */
 async function fetchMeaning(word, sentence, tabId) {
   const SYSTEM_PROMPT =
     'You are a concise dictionary. Reply with ≤15 words, no examples.';
 
-  // 3‑A Preferred path: chrome.aiOriginTrial.languageModel
-  if (chrome?.aiOriginTrial?.languageModel) {
+  // 3‑A  Origin‑Trial path
+  const lm = chrome?.aiOriginTrial?.languageModel;
+  if (lm && typeof lm.create === 'function') {
     try {
-      const caps = await chrome.aiOriginTrial.languageModel.capabilities();
-      if (caps.available !== 'no') {
-        const session = await chrome.aiOriginTrial.languageModel.create({
-          systemPrompt: SYSTEM_PROMPT
-        });
-        const reply = await session.prompt(
-          `Define “${word}” as used in: “${sentence}”`
-        );
-        await session.destroy?.();
-        return {
-          success: true,
-          meaning: reply,
-          method: 'chrome.aiOriginTrial.languageModel'
-        };
-      }
+      const session = await lm.create({ systemPrompt: SYSTEM_PROMPT });
+      const reply = await session.prompt(
+        `Define “${word}” as used in: “${sentence}”`
+      );
+      await session.destroy?.();
+      return {
+        success: true,
+        meaning: reply,
+        method: 'chrome.aiOriginTrial.languageModel'
+      };
     } catch (err) {
-      console.warn('aiOriginTrial failed:', err);
+      console.warn('aiOriginTrial create() failed:', err);
+      // fall through to window.ai paths
     }
   }
 
-  // 3‑B Prompt‑API in the page context
+  // 3‑B  Prompt‑API fallback inside page
   try {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId },
@@ -114,7 +101,6 @@ async function fetchMeaning(word, sentence, tabId) {
         const ai = window.ai;
         if (!ai) return { ok: false, err: 'window.ai undefined' };
 
-        // helper to run a prompt with any session‑creation function
         async function tryCreate(createFn, label) {
           try {
             const session = await createFn({ systemPrompt: sysPrompt });
@@ -126,27 +112,21 @@ async function fetchMeaning(word, sentence, tabId) {
           }
         }
 
-        // Newest API: ai.languageModel (post‑129)
         if (ai?.languageModel?.create) {
           const r = await tryCreate(ai.languageModel.create.bind(ai.languageModel),
                                     'window.ai.languageModel.create');
           if (r.ok) return r;
         }
-
-        // Next‑newer API: ai.assistant.create()
         if (ai?.assistant?.create) {
           const r = await tryCreate(ai.assistant.create.bind(ai.assistant),
                                     'window.ai.assistant.create');
           if (r.ok) return r;
         }
-
-        // Older API: ai.createTextSession()
         if (ai?.createTextSession) {
           const r = await tryCreate(ai.createTextSession.bind(ai),
                                     'window.ai.createTextSession');
           if (r.ok) return r;
         }
-
         return { ok: false, err: 'No supported window.ai APIs' };
       },
       args: [word, sentence, SYSTEM_PROMPT]
@@ -159,7 +139,6 @@ async function fetchMeaning(word, sentence, tabId) {
         method: result.label
       };
     }
-
     return { success: false, error: result?.err || 'Unknown Prompt‑API error' };
   } catch (err) {
     return { success: false, error: err.toString() };
@@ -167,7 +146,7 @@ async function fetchMeaning(word, sentence, tabId) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
-// 4 Utility helpers
+// 4 Notify helper
 // ───────────────────────────────────────────────────────────────────────────────
 function notify(message) {
   chrome.notifications?.create({
