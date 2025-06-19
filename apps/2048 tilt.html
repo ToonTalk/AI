@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2048 Game - Threes Version</title>
+    <style>
+        :root {
+            --board-bg: #bbada0;
+            --grid-cell-bg: #ccc0b3;
+            --text-dark: #776e65;
+            --text-light: #f9f6f2;
+            --bg-2: #eee4da;
+            --bg-4: #ede0c8;
+            --bg-8: #f2b179;
+            --bg-16: #f59563;
+            --bg-32: #f67c5f;
+            --bg-64: #f65e3b;
+            --bg-128: #edcf72;
+            --bg-256: #edcc61;
+            --bg-512: #edc850;
+            --bg-1024: #edc53f;
+            --bg-2048: #edc22e;
+            --bg-super: #3c3a32;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #faf8ef;
+            color: var(--text-dark);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            -webkit-touch-callout: none; /* iOS Safari */
+            -webkit-user-select: none; /* Safari, Chrome, Opera, Edge */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently supported by Chrome, Opera and Firefox */
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            margin: 0;
+            color: var(--text-dark);
+        }
+        
+        .controls-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .score-container, .high-score-container {
+            background-color: var(--board-bg);
+            padding: 5px 20px;
+            border-radius: 5px;
+            text-align: center;
+            color: white;
+        }
+        
+        .score-container .label, .high-score-container .label {
+            font-size: 0.9rem;
+            color: var(--grid-cell-bg);
+        }
+        
+        #score, #high-score {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .buttons-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        button {
+            background-color: var(--text-dark);
+            color: var(--text-light);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #9f8d77;
+        }
+        
+        button#undo-btn:disabled {
+            background-color: #9e948a;
+            cursor: not-allowed;
+        }
+
+        .game-board {
+            width: 90vw;
+            height: 90vw;
+            max-width: 500px;
+            max-height: 500px;
+            background-color: var(--board-bg);
+            border-radius: 6px;
+            padding: 15px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 15px;
+            position: relative;
+        }
+
+        .grid-cell {
+            background-color: var(--grid-cell-bg);
+            border-radius: 3px;
+        }
+        
+        .tile {
+            position: absolute;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            border-radius: 3px;
+            transition: all 0.15s ease-in-out;
+            color: var(--text-dark);
+        }
+
+        /* Tile Colors */
+        .tile.tile-3 { background-color: var(--bg-2); }
+        .tile.tile-6 { background-color: var(--bg-4); }
+        .tile.tile-12 { background-color: var(--bg-8); color: var(--text-light); }
+        .tile.tile-24 { background-color: var(--bg-16); color: var(--text-light); }
+        .tile.tile-48 { background-color: var(--bg-32); color: var(--text-light); }
+        .tile.tile-96 { background-color: var(--bg-64); color: var(--text-light); }
+        .tile.tile-192 { background-color: var(--bg-128); color: var(--text-light); }
+        .tile.tile-384 { background-color: var(--bg-256); color: var(--text-light); }
+        .tile.tile-768 { background-color: var(--bg-512); color: var(--text-light); }
+        .tile.tile-1536 { background-color: var(--bg-1024); color: var(--text-light); }
+        .tile.tile-3072 { background-color: var(--bg-2048); color: var(--text-light); }
+        .tile.tile-super { background-color: var(--bg-super); color: var(--text-light); }
+        
+        /* Animation for new tiles */
+        .tile-new {
+            animation: appear 0.2s ease 0.1s;
+            animation-fill-mode: backwards;
+        }
+
+        @keyframes appear {
+            from { transform: scale(0); }
+            to { transform: scale(1); }
+        }
+        
+        .game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(238, 228, 218, 0.73);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            text-align: center;
+            animation: fade-in 0.5s;
+        }
+        
+        .game-over-overlay h2 {
+            font-size: 3rem;
+            color: var(--text-dark);
+            margin: 0;
+        }
+        
+        #tilt-status {
+            text-align: center;
+            margin-top: 10px;
+            color: var(--text-dark);
+            font-weight: bold;
+            min-height: 40px; /* Reserve space for two lines of text */
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @media (max-width: 520px) {
+            .header-container {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            h1 {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="header-container">
+        <h1>2048</h1>
+        <div class="controls-container">
+            <div class="score-container">
+                <div class="label">SCORE</div>
+                <div id="score">0</div>
+            </div>
+             <div class="high-score-container">
+                <div class="label">BEST</div>
+                <div id="high-score">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="buttons-container">
+        <button id="new-game-btn">New Game</button>
+        <button id="undo-btn">Undo</button>
+        <button id="enable-tilt-btn">Enable Tilt</button>
+    </div>
+    <div id="tilt-status" style="display: none;"></div>
+    <div class="game-board" id="game-board">
+        <!-- Game tiles will be dynamically inserted here -->
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // DOM Elements
+    const boardElement = document.getElementById('game-board');
+    const scoreElement = document.getElementById('score');
+    const highScoreElement = document.getElementById('high-score');
+    const newGameBtn = document.getElementById('new-game-btn');
+    const undoBtn = document.getElementById('undo-btn');
+    const enableTiltBtn = document.getElementById('enable-tilt-btn');
+    const tiltStatusElement = document.getElementById('tilt-status');
+
+    // Game variables
+    const gridSize = 4;
+    let grid = [];
+    let score = 0;
+    let highScore = localStorage.getItem('highScore2048') || 0;
+
+    // Undo state variables
+    let previousGrid = null;
+    let previousScore = 0;
+
+    // Touch event variables
+    let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
+
+    // Tilt control variables
+    let tiltLock = false;
+    const TILT_THRESHOLD = 25; // Degrees to trigger a move
+    const NEUTRAL_THRESHOLD = 10; // Degrees to unlock the tilt
+
+    /**
+     * Initializes the game state and starts a new game.
+     */
+    function newGame() {
+        grid = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+        score = 0;
+        previousGrid = null;
+        
+        addRandomTile();
+        addRandomTile();
+
+        updateBoard();
+        updateScores();
+        undoBtn.disabled = true;
+    }
+
+    /** Updates the score and high score displays. */
+    function updateScores() {
+        scoreElement.textContent = score;
+        highScoreElement.textContent = highScore;
+        if (score > highScore) {
+            highScore = score;
+            highScoreElement.textContent = highScore;
+            localStorage.setItem('highScore2048', highScore);
+        }
+    }
+
+    /** Renders the game board and tiles based on the current grid state. */
+    function updateBoard() {
+        boardElement.innerHTML = ''; // Clear previous state
+
+        for (let i = 0; i < gridSize * gridSize; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('grid-cell');
+            boardElement.appendChild(cell);
+        }
+        
+        for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+                if (grid[r][c] !== 0) {
+                    createTile(r, c);
+                }
+            }
+        }
+    }
+    
+    /** Creates a single tile element and adds it to the board. */
+    function createTile(r, c) {
+        const value = grid[r][c];
+        const tile = document.createElement('div');
+        const boardWidth = boardElement.clientWidth;
+        const cellSize = (boardWidth - 15 * (gridSize + 1)) / gridSize;
+        const gap = 15;
+
+        tile.textContent = value;
+        tile.classList.add('tile');
+        
+        tile.classList.add(value > 3072 ? `tile-super` : `tile-${value}`);
+        
+        tile.style.width = `${cellSize}px`;
+        tile.style.height = `${cellSize}px`;
+        tile.style.top = `${r * (cellSize + gap) + gap}px`;
+        tile.style.left = `${c * (cellSize + gap) + gap}px`;
+        
+        let fontSize = cellSize * 0.5;
+        if (value > 999) fontSize = cellSize * 0.3;
+        else if (value > 99) fontSize = cellSize * 0.4;
+        tile.style.fontSize = `${fontSize}px`;
+        
+        tile.classList.add('tile-new');
+
+        boardElement.appendChild(tile);
+    }
+
+    /** Adds a new tile (3) to a random empty cell on the grid. */
+    function addRandomTile() {
+        const emptyCells = [];
+        for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+                if (grid[r][c] === 0) emptyCells.push({ r, c });
+            }
+        }
+
+        if (emptyCells.length > 0) {
+            const { r, c } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            grid[r][c] = 3;
+        }
+    }
+
+    /** Main function to handle player moves. */
+    function handleMove(direction) {
+        if (isGameOver()) return;
+
+        previousGrid = JSON.parse(JSON.stringify(grid));
+        previousScore = score;
+        undoBtn.disabled = false;
+
+        let moved = false;
+        let newGrid = JSON.parse(JSON.stringify(grid));
+
+        if (direction === 'ArrowUp' || direction === 'ArrowDown') {
+            for (let c = 0; c < gridSize; c++) {
+                let col = newGrid.map(row => row[c]);
+                let newCol = transformLine(col, direction === 'ArrowUp');
+                for (let r = 0; r < gridSize; r++) {
+                    if (newGrid[r][c] !== newCol[r]) moved = true;
+                    newGrid[r][c] = newCol[r];
+                }
+            }
+        } else if (direction === 'ArrowLeft' || direction === 'ArrowRight') {
+            for (let r = 0; r < gridSize; r++) {
+                let row = newGrid[r];
+                let newRow = transformLine(row, direction === 'ArrowLeft');
+                if (JSON.stringify(newGrid[r]) !== JSON.stringify(newRow)) moved = true;
+                newGrid[r] = newRow;
+            }
+        }
+        
+        grid = newGrid;
+
+        if (moved) {
+            addRandomTile();
+            updateBoard();
+            updateScores();
+        } else {
+            previousGrid = null;
+            undoBtn.disabled = true;
+        }
+        
+        if (isGameOver()) {
+            setTimeout(() => showGameOver(), 500);
+        }
+        return moved;
+    }
+
+    /** Slides and merges a single line (row or column). */
+    function transformLine(line, slideTowardsStart) {
+        if (!slideTowardsStart) line.reverse();
+
+        let slidLine = line.filter(val => val !== 0);
+        
+        for (let i = 0; i < slidLine.length - 1; i++) {
+            if (slidLine[i] === slidLine[i + 1]) {
+                slidLine[i] *= 2;
+                score += slidLine[i];
+                slidLine.splice(i + 1, 1);
+            }
+        }
+        
+        while (slidLine.length < gridSize) slidLine.push(0);
+        if (!slideTowardsStart) slidLine.reverse();
+        return slidLine;
+    }
+    
+    /** Reverts the game state to the previous move. */
+    function undoMove() {
+        if (previousGrid) {
+            grid = JSON.parse(JSON.stringify(previousGrid));
+            score = previousScore;
+            updateBoard();
+            updateScores();
+            previousGrid = null;
+            undoBtn.disabled = true;
+        }
+    }
+    
+    /** Checks if the game is over. */
+    function isGameOver() {
+        for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+                if (grid[r][c] === 0) return false;
+                if (c < gridSize - 1 && grid[r][c] === grid[r][c + 1]) return false;
+                if (r < gridSize - 1 && grid[r][c] === grid[r + 1][c]) return false;
+            }
+        }
+        return true;
+    }
+
+    /** Displays the game over overlay. */
+    function showGameOver() {
+        const overlay = document.createElement('div');
+        overlay.classList.add('game-over-overlay');
+        overlay.innerHTML = `<h2>Game Over!</h2><p>Your final score is ${score}</p>`;
+        boardElement.appendChild(overlay);
+    }
+    
+    // --- Event Listeners ---
+
+    newGameBtn.addEventListener('click', newGame);
+    undoBtn.addEventListener('click', undoMove);
+    window.addEventListener('resize', updateBoard);
+
+    // Keyboard controls
+    document.addEventListener('keydown', e => {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+            handleMove(e.key);
+        }
+    });
+
+    // Touch controls
+    boardElement.addEventListener('touchstart', e => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    });
+    boardElement.addEventListener('touchmove', e => e.preventDefault());
+    boardElement.addEventListener('touchend', e => {
+        touchEndX = e.changedTouches[0].clientX;
+        touchEndY = e.changedTouches[0].clientY;
+        handleSwipe();
+    });
+
+    function handleSwipe() {
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = touchEndY - touchStartY;
+        const minSwipeDistance = 50;
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            if (Math.abs(deltaX) > minSwipeDistance) handleMove(deltaX > 0 ? 'ArrowRight' : 'ArrowLeft');
+        } else {
+            if (Math.abs(deltaY) > minSwipeDistance) handleMove(deltaY > 0 ? 'ArrowDown' : 'ArrowUp');
+        }
+    }
+    
+    // --- Tilt Controls ---
+
+    function handleOrientation(event) {
+        // beta: front-to-back tilt (-180 to 180)
+        // gamma: left-to-right tilt (-90 to 90)
+        const { beta, gamma } = event;
+
+        // *** DEBUGGING: Display sensor values ***
+        tiltStatusElement.innerHTML = `Beta (front/back): ${beta.toFixed(2)}<br>Gamma (left/right): ${gamma.toFixed(2)}`;
+
+        // If a move was just made, wait for device to return to neutral
+        if (tiltLock) {
+            if (Math.abs(beta) < NEUTRAL_THRESHOLD && Math.abs(gamma) < NEUTRAL_THRESHOLD) {
+                tiltLock = false;
+            }
+            return;
+        }
+        
+        let direction = null;
+        if (gamma > TILT_THRESHOLD) direction = 'ArrowRight';
+        else if (gamma < -TILT_THRESHOLD) direction = 'ArrowLeft';
+        else if (beta > TILT_THRESHOLD) direction = 'ArrowDown';
+        else if (beta < -TILT_THRESHOLD) direction = 'ArrowUp';
+        
+        if (direction) {
+            const moved = handleMove(direction);
+            if (moved) {
+                tiltLock = true;
+            }
+        }
+    }
+    
+    function enableTiltControls() {
+        tiltStatusElement.style.display = 'block'; // Show the status element
+        enableTiltBtn.style.display = 'none'; // Hide button after it's clicked
+
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(permissionState => {
+                    if (permissionState === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        tiltStatusElement.textContent = 'Tilt controls enabled. Move your device.';
+                    } else {
+                        tiltStatusElement.textContent = 'Permission for tilt controls was denied.';
+                    }
+                })
+                .catch((error) => {
+                    tiltStatusElement.textContent = 'Error requesting permission.';
+                    console.error(error);
+                });
+        } else {
+            if ('DeviceOrientationEvent' in window) {
+                window.addEventListener('deviceorientation', handleOrientation);
+                tiltStatusElement.textContent = 'Tilt controls enabled. Move your device.';
+            } else {
+                tiltStatusElement.textContent = 'Sorry, your browser does not support tilt controls.';
+            }
+        }
+    }
+    
+    enableTiltBtn.addEventListener('click', enableTiltControls);
+    
+    // Start the first game
+    newGame();
+});
+</script>
+
+</body>
+</html>
