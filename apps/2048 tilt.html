@@ -198,7 +198,6 @@
             margin-top: 10px;
             color: var(--text-dark);
             font-weight: bold;
-            min-height: 40px; /* Reserve space for two lines of text */
         }
 
         @keyframes fade-in {
@@ -504,15 +503,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // gamma: left-to-right tilt (-90 to 90)
         const { beta, gamma } = event;
 
-        // *** DEBUGGING: Display sensor values ***
-        tiltStatusElement.innerHTML = `Beta (front/back): ${beta.toFixed(2)}<br>Gamma (left/right): ${gamma.toFixed(2)}`;
-
         // If a move was just made, wait for device to return to neutral
         if (tiltLock) {
             if (Math.abs(beta) < NEUTRAL_THRESHOLD && Math.abs(gamma) < NEUTRAL_THRESHOLD) {
-                tiltLock = false;
+                tiltLock = false; // Unlock when device is level again
             }
-            return;
+            return; // Don't process further until unlocked
         }
         
         let direction = null;
@@ -524,37 +520,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if (direction) {
             const moved = handleMove(direction);
             if (moved) {
-                tiltLock = true;
+                tiltLock = true; // Lock after a successful move
             }
         }
     }
     
     function enableTiltControls() {
-        tiltStatusElement.style.display = 'block'; // Show the status element
-        enableTiltBtn.style.display = 'none'; // Hide button after it's clicked
-
+        // For iOS 13+ devices, we must request permission
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission()
                 .then(permissionState => {
                     if (permissionState === 'granted') {
                         window.addEventListener('deviceorientation', handleOrientation);
-                        tiltStatusElement.textContent = 'Tilt controls enabled. Move your device.';
+                        tiltStatusElement.textContent = 'Tilt controls are active!';
+                        tiltStatusElement.style.display = 'block';
                     } else {
                         tiltStatusElement.textContent = 'Permission for tilt controls was denied.';
+                        tiltStatusElement.style.display = 'block';
                     }
                 })
-                .catch((error) => {
-                    tiltStatusElement.textContent = 'Error requesting permission.';
-                    console.error(error);
-                });
+                .catch(console.error);
         } else {
+            // For other devices (like Android)
             if ('DeviceOrientationEvent' in window) {
                 window.addEventListener('deviceorientation', handleOrientation);
-                tiltStatusElement.textContent = 'Tilt controls enabled. Move your device.';
+                tiltStatusElement.textContent = 'Tilt controls are active!';
+                tiltStatusElement.style.display = 'block';
             } else {
                 tiltStatusElement.textContent = 'Sorry, your browser does not support tilt controls.';
+                tiltStatusElement.style.display = 'block';
             }
         }
+        enableTiltBtn.style.display = 'none'; // Hide button after it's clicked
     }
     
     enableTiltBtn.addEventListener('click', enableTiltControls);
