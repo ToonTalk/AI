@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Girl and Her Laptop in Ancient Sumer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', serif;
+            background: linear-gradient(135deg, #8B4513 0%, #D2691E 50%, #F4A460 100%);
+            min-height: 100vh;
+            color: #2F1B14;
+        }
+
+        .game-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+            min-height: 100vh;
+        }
+
+        .main-panel {
+            background: rgba(255, 248, 220, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 3px solid #8B4513;
+        }
+
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .stats-panel, .diary-panel, .ai-panel {
+            background: rgba(255, 248, 220, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            border: 2px solid #8B4513;
+        }
+
+        .game-title {
+            text-align: center;
+            color: #8B4513;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .api-setup {
+            background: #FFF8DC;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #D2691E;
+            margin-bottom: 20px;
+        }
+
+        .api-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #8B4513;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #8B4513, #D2691E);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .story-text {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.7);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #8B4513;
+        }
+
+        .choices {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .choice-btn {
+            background: linear-gradient(45deg, #4682B4, #5F9EA0);
+            text-align: left;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .choice-btn:hover {
+            background: linear-gradient(45deg, #5F9EA0, #4682B4);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 10px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 8px;
+            border: 1px solid #8B4513;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #8B4513;
+            font-weight: bold;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            color: #2F1B14;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #DDD;
+            border-radius: 4px;
+            margin: 5px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #8B4513, #D2691E);
+            transition: width 0.3s ease;
+        }
+
+        .diary-entry {
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 3px solid #8B4513;
+            font-style: italic;
+            font-size: 14px;
+        }
+
+        .ai-chat {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 2px solid #4682B4;
+        }
+
+        .ai-input {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #4682B4;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .ai-message {
+            margin: 8px 0;
+            padding: 8px;
+            border-radius: 5px;
+        }
+
+        .ai-message.user {
+            background: #E6F3FF;
+            text-align: right;
+        }
+
+        .ai-message.ai {
+            background: #F0F8F0;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #8B4513;
+            font-style: italic;
+        }
+
+        .day-header {
+            background: linear-gradient(45deg, #8B4513, #D2691E);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .game-container {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="main-panel">
+            <h1 class="game-title">A Girl and Her Laptop in Ancient Sumer</h1>
+            
+            <div class="api-setup" id="apiSetup">
+                <h3>🤖 AI Partnership Setup</h3>
+                <p>To experience the full AI collaboration, enter your Gemini API key:</p>
+                <input type="password" class="api-input" id="apiKey" placeholder="Enter your Gemini API key...">
+                <button class="btn" onclick="setupAPI()">Connect AI Partner</button>
+                <p style="font-size: 12px; margin-top: 10px; color: #666;">
+                    Get your free API key at <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>
+                </p>
+            </div>
+
+            <div id="gameContent" style="display: none;">
+                <div class="day-header" id="dayHeader">Day 1 - Through the Portal</div>
+                <div class="story-text" id="storyText"></div>
+                <div class="choices" id="choices"></div>
+                <div class="loading" id="loading">🔮 The AI is thinking...</div>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <div class="stats-panel">
+                <h3>📊 Status</h3>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-label">SURVIVAL</div>
+                        <div class="stat-value" id="survival">85</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="survivalBar" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">KING'S FAVOR</div>
+                        <div class="stat-value" id="kingsFavor">60</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="kingsFavorBar" style="width: 60%"></div>
+                        </div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">CREATIVITY</div>
+                        <div class="stat-value" id="creativity">70</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="creativityBar" style="width: 70%"></div>
+                        </div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">RELATIONSHIPS</div>
+                        <div class="stat-value" id="relationships">40</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="relationshipsBar" style="width: 40%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat" style="margin-top: 15px;">
+                    <div class="stat-label">LAPTOP BATTERY</div>
+                    <div class="stat-value" id="battery">60%</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="batteryBar" style="width: 60%"></div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">DAYS SURVIVED</div>
+                    <div class="stat-value" id="dayCount">1</div>
+                </div>
+            </div>
+
+            <div class="diary-panel">
+                <h3>📖 Sherry's Diary</h3>
+                <div id="diaryEntries">
+                    <div class="diary-entry">
+                        <strong>Day 1:</strong> I can't believe this is real. I'm trapped in ancient Sumer and I'm going to die tomorrow night if I can't entertain the King. My laptop might be my only hope...
+                    </div>
+                </div>
+            </div>
+
+            <div class="ai-panel">
+                <h3>🤖 AI Partner</h3>
+                <div class="ai-chat" id="aiChat">
+                    <div class="ai-message ai">Hello! I'm your AI partner. Together we can solve any challenge in ancient Sumer. What would you like to work on?</div>
+                </div>
+                <input type="text" class="ai-input" id="aiInput" placeholder="Ask your AI partner for help..." onkeypress="handleAIInput(event)" disabled>
+                <button class="btn" onclick="sendAIMessage()" id="aiSendBtn" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let gameState = {
+            day: 1,
+            survival: 85,
+            kingsFavor: 60,
+            creativity: 70,
+            relationships: 40,
+            battery: 60,
+            apiKey: null,
+            currentScene: 'start'
+        };
+
+        const scenes = {
+            start: {
+                title: "Day 1 - Through the Portal",
+                text: "You're standing in the King's throne room, trembling with fear. The enormous chamber is lit by hundreds of oil lamps casting dancing shadows on the walls. The King sits on his throne, looking bored and impatient. Three people have already been thrown from the window tonight for failing to entertain him.\n\nYour laptop is in your backpack. The battery shows 60%. This might be your only chance to survive until tomorrow. What do you do?",
+                choices: [
+                    {
+                        text: "Immediately show the laptop and hope the light impresses him",
+                        effects: { kingsFavor: 15, battery: -10, survival: 10 },
+                        next: "laptop_reveal"
+                    },
+                    {
+                        text: "Try to speak to him first in broken Sumerian",
+                        effects: { relationships: 10, survival: -5 },
+                        next: "language_attempt"
+                    },
+                    {
+                        text: "Look around the room for Ku-Baba, the old woman who might help",
+                        effects: { relationships: 15, survival: 5 },
+                        next: "seek_kubaba"
+                    },
+                    {
+                        text: "Ask your AI partner for advice on how to approach this",
+                        effects: { creativity: 10 },
+                        next: "ai_consultation",
+                        requiresAI: true
+                    }
+                ]
+            },
+            laptop_reveal: {
+                title: "Day 1 - The Magic Box",
+                text: "You pull out your laptop with shaking hands. As the screen lights up in the dark throne room, everyone goes completely silent. The startup sound echoes through the chamber, and you see the King's eyes widen with curiosity rather than anger.\n\nHe leans forward, fascinated by the glowing screen. 'What sorcery is this?' he asks in accented English. You realize this moment could determine whether you live or die.",
+                choices: [
+                    {
+                        text: "Show him simple programs - paint, calculator, basic games",
+                        effects: { kingsFavor: 20, battery: -15, creativity: 10 },
+                        next: "basic_programs"
+                    },
+                    {
+                        text: "Try to explain what a computer is using simple words",
+                        effects: { kingsFavor: 10, relationships: 10, survival: 5 },
+                        next: "computer_explanation"
+                    },
+                    {
+                        text: "Let him touch the screen and discover it himself",
+                        effects: { kingsFavor: 25, battery: -10, survival: 15 },
+                        next: "interactive_discovery"
+                    }
+                ]
+            }
+        };
+
+        function setupAPI() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) {
+                alert('Please enter your Gemini API key');
+                return;
+            }
+            
+            gameState.apiKey = apiKey;
+            document.getElementById('apiSetup').style.display = 'none';
+            document.getElementById('gameContent').style.display = 'block';
+            document.getElementById('aiInput').disabled = false;
+            document.getElementById('aiSendBtn').disabled = false;
+            
+            loadScene('start');
+        }
+
+        function loadScene(sceneKey) {
+            const scene = scenes[sceneKey];
+            if (!scene) return;
+
+            gameState.currentScene = sceneKey;
+            document.getElementById('dayHeader').textContent = scene.title;
+            document.getElementById('storyText').textContent = scene.text;
+            
+            const choicesDiv = document.getElementById('choices');
+            choicesDiv.innerHTML = '';
+            
+            scene.choices.forEach((choice, index) => {
+                if (choice.requiresAI && !gameState.apiKey) return;
+                
+                const button = document.createElement('button');
+                button.className = 'btn choice-btn';
+                button.textContent = choice.text;
+                button.onclick = () => makeChoice(choice);
+                choicesDiv.appendChild(button);
+            });
+        }
+
+        function makeChoice(choice) {
+            // Apply effects
+            Object.keys(choice.effects).forEach(stat => {
+                if (gameState.hasOwnProperty(stat)) {
+                    gameState[stat] = Math.max(0, Math.min(100, gameState[stat] + choice.effects[stat]));
+                }
+            });
+            
+            updateUI();
+            
+            if (choice.next === 'ai_consultation') {
+                handleAIConsultation();
+            } else if (scenes[choice.next]) {
+                loadScene(choice.next);
+            } else {
+                generateNewScene(choice);
+            }
+            
+            // Add diary entry
+            addDiaryEntry(choice.text);
+        }
+
+        async function generateNewScene(choice) {
+            if (!gameState.apiKey) {
+                alert('AI features require an API key');
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'block';
+            
+            const prompt = `Continue this adventure story. The player just chose: "${choice.text}"
+            
+            Current game state:
+            - Day: ${gameState.day}
+            - Survival: ${gameState.survival}%
+            - King's Favor: ${gameState.kingsFavor}%
+            - Creativity: ${gameState.creativity}%
+            - Relationships: ${gameState.relationships}%
+            - Battery: ${gameState.battery}%
+            
+            Generate the next scene with:
+            1. A compelling narrative continuation (2-3 paragraphs)
+            2. 3-4 meaningful choices that affect different stats
+            3. Keep it historically accurate to ancient Sumer
+            4. Include opportunities for AI collaboration and creativity
+            
+            Format as JSON: {
+                "title": "Day X - Scene Title",
+                "text": "narrative text",
+                "choices": [
+                    {"text": "choice text", "effects": {"survival": 10, "kingsFavor": -5}, "description": "what this choice leads to"}
+                ]
+            }`;
+
+            try {
+                const response = await callGeminiAPI(prompt);
+                const newScene = JSON.parse(response);
+                
+                document.getElementById('dayHeader').textContent = newScene.title;
+                document.getElementById('storyText').textContent = newScene.text;
+                
+                const choicesDiv = document.getElementById('choices');
+                choicesDiv.innerHTML = '';
+                
+                newScene.choices.forEach(choice => {
+                    const button = document.createElement('button');
+                    button.className = 'btn choice-btn';
+                    button.textContent = choice.text;
+                    button.onclick = () => {
+                        Object.keys(choice.effects).forEach(stat => {
+                            if (gameState.hasOwnProperty(stat)) {
+                                gameState[stat] = Math.max(0, Math.min(100, gameState[stat] + choice.effects[stat]));
+                            }
+                        });
+                        updateUI();
+                        generateNewScene(choice);
+                    };
+                    choicesDiv.appendChild(button);
+                });
+                
+            } catch (error) {
+                console.error('Error generating scene:', error);
+                alert('Error generating new scene. Please check your API key.');
+            }
+            
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        async function handleAIConsultation() {
+            const consultation = `You're asking your AI partner for advice about approaching the King. What specific help do you need?
+
+            Your situation:
+            - You're a 12-year-old girl in ancient Sumer
+            - The King kills people who bore him
+            - You have a laptop with ${gameState.battery}% battery
+            - This is your first encounter with him
+
+            Your AI partner responds: "I understand this is terrifying. Let's think strategically. What does this King value most? Power, entertainment, or knowledge? Based on what you've observed, I can help you choose the right approach. What have you noticed about him so far?"`;
+
+            addAIMessage(consultation, 'ai');
+        }
+
+        function handleAIInput(event) {
+            if (event.key === 'Enter') {
+                sendAIMessage();
+            }
+        }
+
+        async function sendAIMessage() {
+            const input = document.getElementById('aiInput');
+            const message = input.value.trim();
+            if (!message || !gameState.apiKey) return;
+
+            addAIMessage(message, 'user');
+            input.value = '';
+
+            const prompt = `You are Sherry's AI partner in ancient Sumer. Respond to her message: "${message}"
+            
+            Context:
+            - Day ${gameState.day} of 1001
+            - Survival: ${gameState.survival}%
+            - King's Favor: ${gameState.kingsFavor}%
+            - Battery: ${gameState.battery}%
+            
+            Be supportive, creative, and historically aware. Offer practical solutions that a 12-year-old could implement with a laptop in ancient Sumer. Keep responses under 100 words.`;
+
+            try {
+                const response = await callGeminiAPI(prompt);
+                addAIMessage(response, 'ai');
+            } catch (error) {
+                addAIMessage("I'm having trouble connecting right now. Try again in a moment.", 'ai');
+            }
+        }
+
+        async function callGeminiAPI(prompt) {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${gameState.apiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('API call failed');
+            }
+
+            const data = await response.json();
+            return data.candidates[0].content.parts[0].text;
+        }
+
+        function addAIMessage(message, sender) {
+            const chatDiv = document.getElementById('aiChat');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `ai-message ${sender}`;
+            messageDiv.textContent = message;
+            chatDiv.appendChild(messageDiv);
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+        }
+
+        function addDiaryEntry(choice) {
+            const diaryDiv = document.getElementById('diaryEntries');
+            const entry = document.createElement('div');
+            entry.className = 'diary-entry';
+            entry.innerHTML = `<strong>Day ${gameState.day}:</strong> ${choice} I hope I made the right choice...`;
+            diaryDiv.appendChild(entry);
+        }
+
+        function updateUI() {
+            // Update stats
+            document.getElementById('survival').textContent = gameState.survival;
+            document.getElementById('kingsFavor').textContent = gameState.kingsFavor;
+            document.getElementById('creativity').textContent = gameState.creativity;
+            document.getElementById('relationships').textContent = gameState.relationships;
+            document.getElementById('battery').textContent = gameState.battery + '%';
+            document.getElementById('dayCount').textContent = gameState.day;
+
+            // Update progress bars
+            document.getElementById('survivalBar').style.width = gameState.survival + '%';
+            document.getElementById('kingsFavorBar').style.width = gameState.kingsFavor + '%';
+            document.getElementById('creativityBar').style.width = gameState.creativity + '%';
+            document.getElementById('relationshipsBar').style.width = gameState.relationships + '%';
+            document.getElementById('batteryBar').style.width = gameState.battery + '%';
+        }
+
+        // Initialize the game
+        updateUI();
+    </script>
+</body>
+</html>
