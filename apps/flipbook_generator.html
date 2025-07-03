@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flip Book Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .title-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .help-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+            cursor: pointer;
+            color: #667eea;
+            transition: all 0.3s ease;
+        }
+        
+        .help-btn:hover {
+            background: #e0e0e0;
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+
+        .control-group:hover {
+            transform: translateY(-2px);
+            transition: transform 0.3s ease;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .control-group h3 {
+            margin-top: 0;
+            color: #667eea;
+            font-size: 1.3em;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        label {
+            flex: 1;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input[type="number"], textarea {
+            flex: 2;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="number"]:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            min-height: 200px;
+            line-height: 1.4;
+        }
+
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(-1px);
+        }
+
+        .preview-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 30px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .preview-container h3 {
+            color: #667eea;
+            margin-top: 0;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .page {
+            border: 2px dashed #ccc;
+            margin: 20px 0;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 10px;
+        }
+
+        .page-info {
+            background: #667eea;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .download-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .download-btn {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            margin: 0 10px;
+            padding: 12px 30px;
+            font-size: 14px;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+
+        /* Modal Styles */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 20px 30px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .modal-content h2 {
+            color: #667eea;
+        }
+
+        .modal-content ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .modal-content li {
+            margin-bottom: 10px;
+            line-height: 1.5;
+            font-size: 15px;
+        }
+        
+        .modal-content li b {
+            display: inline-block;
+            width: 200px;
+            color: #333;
+        }
+
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-btn:hover,
+        .close-btn:focus {
+            color: black;
+        }
+
+        @media (max-width: 768px) {
+            .controls { grid-template-columns: 1fr; }
+            .container { padding: 20px; }
+            h1 { font-size: 2em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="title-container">
+            <h1>🐢 Flip Book Generator</h1>
+            <button id="helpBtn" class="help-btn" title="Help">?</button>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h3>📐 Frame Settings</h3>
+                <div class="input-row">
+                    <label for="numFrames">Number of Frames:</label>
+                    <input type="number" id="numFrames" value="10" min="1" max="1000">
+                </div>
+                <div class="input-row">
+                    <label for="frameWidth">Frame Width (cm):</label>
+                    <input type="number" id="frameWidth" value="9" min="1" max="50">
+                </div>
+                <div class="input-row">
+                    <label for="frameHeight">Frame Height (cm):</label>
+                    <input type="number" id="frameHeight" value="5" min="1" max="50">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>🐢 Logo Code</h3>
+                <textarea id="logoCode" placeholder="Enter your Logo code here. Use 'frame' reporter to get current frame number (0-based).">
+; Simple animation example
+setpenwidth 5
+repeat 4 [
+  forward frame * 10
+  right 90
+]</textarea>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <button onclick="generateFlipbook()">🎬 Generate Flip Book</button>
+        </div>
+        
+        <div id="status"></div>
+        <div id="preview" class="preview-container" style="display: none;"></div>
+    </div>
+
+    <div id="helpModal" class="modal">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h2>Logo Command Reference</h2>
+        <ul>
+          <li><b>forward &lt;value&gt;</b> or <b>fd</b>: Moves the turtle forward.</li>
+          <li><b>backward &lt;value&gt;</b> or <b>bk</b>: Moves the turtle backward.</li>
+          <li><b>right &lt;value&gt;</b> or <b>rt</b>: Turns the turtle right by degrees.</li>
+          <li><b>left &lt;value&gt;</b> or <b>lt</b>: Turns the turtle left by degrees.</li>
+          <li><b>penup</b> or <b>pu</b>: Lifts the pen, so moving doesn't draw.</li>
+          <li><b>pendown</b> or <b>pd</b>: Puts the pen down, so moving will draw.</li>
+          <li><b>home</b>: Resets turtle to the center and points it up.</li>
+          <li><b>setxy &lt;x&gt; &lt;y&gt;</b>: Moves turtle to coordinate (x, y) from the center.</li>
+          <li><b>setheading &lt;value&gt;</b> or <b>seth</b>: Sets the turtle's absolute angle (0 is up).</li>
+          <li><b>setpenwidth &lt;value&gt;</b>: Sets the drawing line thickness in pixels.</li>
+          <li><b>repeat &lt;count&gt; [ ... ]</b>: Repeats commands in brackets <count> times.</li>
+          <li><b>frame</b>: A special variable for the current frame number (0-based).</li>
+          <li><b>; ...</b>: A comment. Any text after a semicolon is ignored.</li>
+          <br>
+          <li>Arguments for commands can be a number, the word <b>frame</b>, or a simple arithmetic expression like <b>frame * 10</b> or <b>20 + 5</b>.</li>
+        </ul>
+      </div>
+    </div>
+
+
+    <script>
+        // Modal Logic
+        const helpModal = document.getElementById("helpModal");
+        const helpBtn = document.getElementById("helpBtn");
+        const closeBtn = document.querySelector(".modal .close-btn");
+
+        helpBtn.onclick = () => { helpModal.style.display = "block"; }
+        closeBtn.onclick = () => { helpModal.style.display = "none"; }
+        window.onclick = (event) => {
+            if (event.target == helpModal) {
+                helpModal.style.display = "none";
+            }
+        }
+
+        // Simple Logo interpreter for turtle graphics
+        class TurtleInterpreter {
+            constructor(canvas, ctx) {
+                this.canvas = canvas;
+                this.ctx = ctx;
+                this.reset();
+            }
+            
+            reset() {
+                this.x = (this.canvas.width / 3) * 2; // Start 2/3 of the way to the right
+                this.y = this.canvas.height / 2;
+                this.angle = 0; // degrees, 0 = up
+                this.penDown = true;
+                this.frameNumber = 0;
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.strokeStyle = '#000';
+                this.ctx.lineWidth = 2;
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+            }
+            
+            setFrame(frameNum) {
+                this.frameNumber = frameNum;
+            }
+            
+            forward(distance) {
+                const radians = (this.angle - 90) * Math.PI / 180;
+                const newX = this.x + distance * Math.cos(radians);
+                const newY = this.y + distance * Math.sin(radians);
+                
+                if (this.penDown) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(this.x, this.y);
+                    this.ctx.lineTo(newX, newY);
+                    this.ctx.stroke();
+                }
+                
+                this.x = newX;
+                this.y = newY;
+            }
+            
+            backward(distance) {
+                this.forward(-distance);
+            }
+            
+            right(degrees) {
+                this.angle += degrees;
+                this.angle = this.angle % 360;
+            }
+            
+            left(degrees) {
+                this.right(-degrees);
+            }
+            
+            penup() {
+                this.penDown = false;
+            }
+            
+            pendown() {
+                this.penDown = true;
+            }
+            
+            setxy(x, y) {
+                this.x = x + this.canvas.width / 2;
+                this.y = y + this.canvas.height / 2;
+            }
+
+            setHeading(degrees) {
+                this.angle = degrees % 360;
+            }
+
+            setPenWidth(width) {
+                this.ctx.lineWidth = Math.max(1, width); // Ensure width is at least 1
+            }
+            
+            home() {
+                this.setxy(0, 0);
+                this.angle = 0;
+            }
+        }
+        
+        class LogoParser {
+            constructor(turtle) {
+                this.turtle = turtle;
+                this.variables = {};
+            }
+            
+            parse(code) {
+                const tokens = this.tokenize(code);
+                this.execute(tokens);
+            }
+            
+            tokenize(code) {
+                code = code.replace(/;[^\n\r]*/g, '');
+                return code.toLowerCase()
+                    .replace(/\[/g, ' [ ')
+                    .replace(/\]/g, ' ] ')
+                    .split(/\s+/)
+                    .filter(token => token.length > 0);
+            }
+            
+            execute(tokens) {
+                let i = 0;
+                while (i < tokens.length) {
+                    i = this.executeCommand(tokens, i);
+                }
+            }
+
+            // Gets a single value (a number or the frame variable)
+            getSingleValue(token) {
+                if (!token) {
+                    throw new Error("Unexpected end of code. A command is missing its value.");
+                }
+                if (token === 'frame') {
+                    return this.turtle.frameNumber;
+                }
+                if (token in this.variables) {
+                    return this.variables[token];
+                }
+                const num = parseFloat(token);
+                if (isNaN(num)) {
+                    throw new Error(`Expected a number but got '${token}'.`);
+                }
+                return num;
+            }
+
+            // Parses a simple expression, e.g., "10" or "frame * 10"
+            parseExpression(tokens, startIndex) {
+                const value1 = this.getSingleValue(tokens[startIndex]);
+                const operator = tokens[startIndex + 1];
+
+                if (['*', '/', '+', '-'].includes(operator)) {
+                    const value2 = this.getSingleValue(tokens[startIndex + 2]);
+                    switch (operator) {
+                        case '*': return { value: value1 * value2, newIndex: startIndex + 3 };
+                        case '/': return { value: value1 / value2, newIndex: startIndex + 3 };
+                        case '+': return { value: value1 + value2, newIndex: startIndex + 3 };
+                        case '-': return { value: value1 - value2, newIndex: startIndex + 3 };
+                    }
+                }
+                // If no operator, it's just a single value
+                return { value: value1, newIndex: startIndex + 1 };
+            }
+            
+            executeCommand(tokens, index) {
+                const command = tokens[index];
+                
+                switch (command) {
+                    case 'forward':
+                    case 'fd': {
+                        const res = this.parseExpression(tokens, index + 1);
+                        this.turtle.forward(res.value);
+                        return res.newIndex;
+                    }
+                    case 'backward':
+                    case 'bk': {
+                        const res = this.parseExpression(tokens, index + 1);
+                        this.turtle.backward(res.value);
+                        return res.newIndex;
+                    }
+                    case 'right':
+                    case 'rt': {
+                        const res = this.parseExpression(tokens, index + 1);
+                        this.turtle.right(res.value);
+                        return res.newIndex;
+                    }
+                    case 'left':
+                    case 'lt': {
+                        const res = this.parseExpression(tokens, index + 1);
+                        this.turtle.left(res.value);
+                        return res.newIndex;
+                    }
+                    case 'penup':
+                    case 'pu':
+                        this.turtle.penup();
+                        return index + 1;
+                    
+                    case 'pendown':
+                    case 'pd':
+                        this.turtle.pendown();
+                        return index + 1;
+                    
+                    case 'home':
+                        this.turtle.home();
+                        return index + 1;
+                    
+                    case 'setxy': {
+                        const resX = this.parseExpression(tokens, index + 1);
+                        const resY = this.parseExpression(tokens, resX.newIndex);
+                        this.turtle.setxy(resX.value, resY.value);
+                        return resY.newIndex;
+                    }
+                    case 'setheading':
+                    case 'seth': {
+                        const res = this.parseExpression(tokens, index + 1);
+                        this.turtle.setHeading(res.value);
+                        return res.newIndex;
+                    }
+                    case 'setpenwidth': {
+                        const res = this.parseExpression(tokens, index + 1);
+                        this.turtle.setPenWidth(res.value);
+                        return res.newIndex;
+                    }
+                    case 'repeat': {
+                        const res = this.parseExpression(tokens, index + 1);
+                        const count = Math.round(res.value);
+                        const blockStart = this.findBlockStart(tokens, res.newIndex);
+                        const blockEnd = this.findBlockEnd(tokens, blockStart);
+                        const blockTokens = tokens.slice(blockStart + 1, blockEnd);
+                        
+                        for (let i = 0; i < count; i++) {
+                            this.execute(blockTokens);
+                        }
+                        return blockEnd + 1;
+                    }
+                    default:
+                        throw new Error(`Unknown command: '${command}'`);
+                }
+            }
+            
+            findBlockStart(tokens, startIndex) {
+                for (let i = startIndex; i < tokens.length; i++) {
+                    if (tokens[i] === '[') return i;
+                }
+                throw new Error("Cannot find '[' for repeat command.");
+            }
+            
+            findBlockEnd(tokens, startIndex) {
+                let depth = 0;
+                for (let i = startIndex; i < tokens.length; i++) {
+                    if (tokens[i] === '[') depth++;
+                    if (tokens[i] === ']') depth--;
+                    if (depth === 0) return i;
+                }
+                throw new Error("Cannot find matching ']' for repeat command.");
+            }
+        }
+        
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+        
+        function generateFrames(numFrames, frameWidth, frameHeight, logoCode) {
+            const frames = [];
+            
+            for (let i = 0; i < numFrames; i++) {
+                const canvas = document.createElement('canvas');
+                canvas.width = frameWidth;
+                canvas.height = frameHeight;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, frameWidth, frameHeight);
+                
+                const turtle = new TurtleInterpreter(canvas, ctx);
+                turtle.setFrame(i);
+                
+                const parser = new LogoParser(turtle);
+                parser.parse(logoCode);
+                
+                frames.push(canvas);
+            }
+            
+            return frames;
+        }
+        
+        function arrangeFramesOnPages(frames, frameWidth, frameHeight) {
+            const pageWidth = 1240;
+            const pageHeight = 1754;
+            const margin = 50;
+            const spacing = 0;
+            
+            const availableWidth = pageWidth - (2 * margin);
+            const availableHeight = pageHeight - (2 * margin);
+            
+            const framesPerRow = Math.floor((availableWidth + spacing) / (frameWidth + spacing));
+            const framesPerCol = Math.floor((availableHeight + spacing) / (frameHeight + spacing));
+            const framesPerPage = framesPerRow * framesPerCol;
+            
+            const pages = [];
+            
+            for (let pageIndex = 0; pageIndex < Math.ceil(frames.length / framesPerPage); pageIndex++) {
+                const pageCanvas = document.createElement('canvas');
+                pageCanvas.width = pageWidth;
+                pageCanvas.height = pageHeight;
+                const ctx = pageCanvas.getContext('2d');
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, pageWidth, pageHeight);
+                
+                const startFrame = pageIndex * framesPerPage;
+                const endFrame = Math.min(startFrame + framesPerPage, frames.length);
+                
+                for (let frameIndex = startFrame; frameIndex < endFrame; frameIndex++) {
+                    const relativeIndex = frameIndex - startFrame;
+                    const row = Math.floor(relativeIndex / framesPerRow);
+                    const col = relativeIndex % framesPerRow;
+                    
+                    const x = margin + col * (frameWidth + spacing);
+                    const y = margin + row * (frameHeight + spacing);
+                    
+                    ctx.drawImage(frames[frameIndex], x, y);
+                    
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x, y, frameWidth, frameHeight);
+                }
+                
+                pages.push({
+                    canvas: pageCanvas,
+                    pageNumber: pageIndex + 1,
+                    frameCount: endFrame - startFrame,
+                    framesPerRow,
+                    framesPerCol
+                });
+            }
+            
+            return pages;
+        }
+        
+        function displayPreview(pages, frameWidth, frameHeight) {
+            const previewContainer = document.getElementById('preview');
+            previewContainer.style.display = 'block';
+            
+            let html = '<h3>📄 Preview & Download</h3>';
+            
+            html += '<div class="download-container">';
+            for (let i = 0; i < pages.length; i++) {
+                html += `<button class="download-btn" onclick="downloadPage(${i})">📥 Download Page ${i + 1}</button>`;
+            }
+            html += '<button class="download-btn" id="downloadPdfBtn">📄 Download All as PDF</button>';
+            html += '</div>';
+            
+            pages.forEach((page, index) => {
+                html += `
+                    <div class="page">
+                        <div class="page-info">
+                            Page ${page.pageNumber} - ${page.frameCount} frames 
+                            (${page.framesPerRow} × ${page.framesPerCol} grid)
+                        </div>
+                        <div style="text-align: center;">
+                            <canvas id="page-${index}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 5px;"></canvas>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            previewContainer.innerHTML = html;
+            
+            document.getElementById('downloadPdfBtn').addEventListener('click', downloadAllAsPdf);
+
+            pages.forEach((page, index) => {
+                const previewCanvas = document.getElementById(`page-${index}`);
+                const scale = Math.min(800 / page.canvas.width, 600 / page.canvas.height);
+                previewCanvas.width = page.canvas.width * scale;
+                previewCanvas.height = page.canvas.height * scale;
+                
+                const ctx = previewCanvas.getContext('2d');
+                ctx.scale(scale, scale);
+                ctx.drawImage(page.canvas, 0, 0);
+            });
+        }
+        
+        let generatedPages = [];
+        
+        function generateFlipbook() {
+            const numFrames = parseInt(document.getElementById('numFrames').value);
+            const logoCode = document.getElementById('logoCode').value;
+
+            const frameWidthCm = parseFloat(document.getElementById('frameWidth').value);
+            const frameHeightCm = parseFloat(document.getElementById('frameHeight').value);
+
+            const dpi = 150;
+            const frameWidth = Math.round((frameWidthCm / 2.54) * dpi);
+            const frameHeight = Math.round((frameHeightCm / 2.54) * dpi);
+            
+            if (!logoCode.trim()) {
+                showStatus('Please enter some Logo code!', 'error');
+                return;
+            }
+            
+            showStatus('Generating frames...', 'info');
+            
+            try {
+                const frames = generateFrames(numFrames, frameWidth, frameHeight, logoCode);
+                generatedPages = arrangeFramesOnPages(frames, frameWidth, frameHeight);
+                displayPreview(generatedPages, frameWidth, frameHeight);
+                showStatus(`Successfully generated ${numFrames} frames on ${generatedPages.length} page(s)!`, 'success');
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        function downloadPage(pageIndex) {
+            try {
+                const page = generatedPages[pageIndex];
+                
+                page.canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `flipbook-page-${page.pageNumber}.png`;
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    URL.revokeObjectURL(url);
+                }, 'image/png');
+                
+                showStatus(`Downloaded page ${page.pageNumber}!`, 'success');
+            } catch (error) {
+                console.error('Download error:', error);
+                showStatus('Download failed. Try right-clicking the preview image and "Save image as..."', 'error');
+            }
+        }
+        
+        function downloadAllAsPdf() {
+            if (generatedPages.length === 0) {
+                showStatus('No pages to download. Please generate the flipbook first!', 'error');
+                return;
+            }
+            showStatus('Generating PDF... This may take a moment.', 'info');
+            
+            setTimeout(() => {
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+
+                    generatedPages.forEach((page, index) => {
+                        const imgData = page.canvas.toDataURL('image/png');
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = pdf.internal.pageSize.getHeight();
+                        
+                        if (index > 0) {
+                            pdf.addPage();
+                        }
+                        
+                        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    });
+
+                    pdf.save('flipbook.pdf');
+                    showStatus(`Successfully created PDF with ${generatedPages.length} page(s)!`, 'success');
+
+                } catch (error) {
+                    showStatus(`Error creating PDF: ${error.message}`, 'error');
+                    console.error(error);
+                }
+            }, 50);
+        }
+    </script>
+</body>
+</html>
