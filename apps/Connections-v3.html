@@ -3,7 +3,7 @@
 <head>
     <title>Connection Games Maker</title>
     <!-- Origin Trial Token -->
-    <meta http-equiv="origin-trial" content="AmeZQMmtn8sZlSC/xvdTlnZ3bXGXKbGzEGlUVPctP9fpZ2pKUdOvIQXtdw3+fWuvBbyyydasX/4mfsMle0tvWgQAAAB4eyJvcmlnaW4iOiJodHRwczovL2dlbWluaS5nb29nbGUuY29tOjQ0MyIsImZlYXR1cmUiOiJBSVByb21wdEFQSU11bHRpbW9kYWxJbnB1dCIsImV4cGlyeSI6MTc3NDMxMDQwMCwiaXNTdWJkb21haW4iOnRydWV9">
+    <meta http-equiv="origin-trial" content="AnB1V2Uy4ZT/Ge1GqIjYvP9bSyvCdiMmlrU0e7i/LHK4plbkJ99G0J6C5KZlfpoC/mf3dW7+T39YrXmEia033Q8AAAB5eyJvcmlnaW4iOiJodHRwczovL3Rvb250YWxrLmdpdGh1Yi5pbzo0NDMiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzU3ViZG9tYWluIjp0cnVlfQ==">
     <style>
         body {
             font-family: sans-serif;
@@ -349,9 +349,8 @@
 
     <label for="apiChoice">Choose AI Provider:</label>
     <select id="apiChoice">
-      <option value="gemini-flash" selected>Gemini 2.0 Flash (No Key Needed)</option>
+      <option value="gemini" selected>Gemini Nano (Local)</option>
       <option value="openai">OpenAI GPT-4 Turbo</option>
-      <option value="gemini">Gemini Nano (Local)</option>
     </select>
     
     <div id="apiKeyContainer" style="display: none;">
@@ -580,7 +579,7 @@ Or something else about the words independent of their meaning.
 
         // ### AI Interaction and Game Initialization ###
 
-        // MODIFIED: Initializes the local AI session (Gemini Nano) with better error handling
+        // Initializes the local AI session (Gemini Nano)
         async function initializeAI(showUserFeedback = false) {
             if (typeof LanguageModel === 'undefined') {
                 if (showUserFeedback) {
@@ -623,9 +622,8 @@ Or something else about the words independent of their meaning.
             } catch (error) {
                 console.error('Error initializing AI:', error);
                 if (showUserFeedback) {
-                    // Handle the specific permission error for sandboxed environments
                     if (error.name === 'NotAllowedError') {
-                         updateStatusMessage('Gemini Nano cannot run in this preview environment due to security restrictions. Please select another AI provider.', 'invalid-message');
+                         updateStatusMessage('Gemini Nano cannot run in this environment due to security restrictions. Please select another AI provider.', 'invalid-message');
                     } else {
                          updateStatusMessage(`Error initializing AI: ${error.message}.`, 'invalid-message');
                     }
@@ -650,35 +648,6 @@ Or something else about the words independent of their meaning.
             }
         }
         
-        // Calls the Gemini Flash API that doesn't require a user-provided key
-        async function callGeminiFlashNoKey(fullPrompt) {
-            const payload = {
-                contents: [{ role: "user", parts: [{ text: fullPrompt }] }]
-            };
-            const apiKey = ""; // API key is handled by the environment for this specific model
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await response.json();
-                if (result.candidates && result.candidates.length > 0) {
-                    return result.candidates[0].content.parts[0].text;
-                } else if (result.error) {
-                     throw new Error(`API Error: ${result.error.message}`);
-                } else {
-                    throw new Error("Invalid response format from Gemini Flash API.");
-                }
-            } catch (error) {
-                console.error('Error calling Gemini Flash:', error);
-                updateStatusMessage(`Error communicating with Gemini Flash: ${error.message}`, 'invalid-message');
-                throw error;
-            }
-        }
-
         // Calls the OpenAI API
         async function callOpenAI(apiKey, fullPrompt) {
             try {
@@ -742,7 +711,6 @@ Or something else about the words independent of their meaning.
                     let result;
                     switch (apiConfig.choice) {
                         case 'openai': result = await callOpenAI(apiConfig.key, newFullPrompt); break;
-                        case 'gemini-flash': result = await callGeminiFlashNoKey(newFullPrompt); break;
                         case 'gemini': result = await geminiNano(newFullPrompt); break;
                     }
                     await handleApiResponse(result, originalUserPrompt, apiConfig, attempt + 1);
@@ -846,7 +814,6 @@ Or something else about the words independent of their meaning.
                         let result;
                         switch (apiChoice) {
                             case 'openai': result = await callOpenAI(apiKey, fullPrompt); break;
-                            case 'gemini-flash': result = await callGeminiFlashNoKey(fullPrompt); break;
                             case 'gemini': result = await geminiNano(fullPrompt); break;
                             default: 
                                 updateStatusMessage('Please select an AI Provider.', 'invalid-message');
@@ -892,10 +859,14 @@ Or something else about the words independent of their meaning.
             const clearBtn = document.getElementById('clearBtn');
             if (clearBtn) clearBtn.addEventListener('click', clearSelection);
 
-            // Trigger the game initialization on page load
-            if (initializeGameBtn) {
-                initializeGameBtn.click();
-            }
+            // Set default categories and initialize game without AI
+            categories = {
+                'FISH': ['Bass', 'Flounder', 'Salmon', 'Trout'],
+                'PLANETS': ['Earth', 'Mars', 'Jupiter', 'Venus'],
+                'COLORS': ['Red', 'Blue', 'Green', 'Yellow'],
+                'FRUITS': ['Apple', 'Banana', 'Cherry', 'Date']
+            };
+            initGame();
             
             // Attempt to initialize Gemini Nano on load, but don't block or show errors
             initializeAI(false).catch(e => console.log("Pre-initialization of local AI failed, will try again on first use if selected."));
