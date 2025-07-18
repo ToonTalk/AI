@@ -3,7 +3,7 @@
 <head>
     <title>Connection Games Maker</title>
     <!-- Origin Trial Token -->
-    <meta http-equiv="origin-trial" content="AnB1V2Uy4ZT/Ge1GqIjYvP9bSyvCdiMmlrU0e7i/LHK4plbkJ99G0J6C5KZlfpoC/mf3dW7+T39YrXmEia033Q8AAAB5eyJvcmlnaW4iOiJodHRwczovL3Rvb250YWxrLmdpdGh1Yi5pbzo0NDMiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzU3ViZG9tYWluIjp0cnVlfQ==">
+    <meta http-equiv="origin-trial" content="AoKPJltg5nlVza9cgI7c5mkWgtZ+rIE0Gmfp0AB3UqNwpEuOErI99n9xm7jGQrV7BsGdyaiSFRGkeB5h56rZbwMAAABweyJvcmlnaW4iOiJodHRwczovL2NsYXVkZS5haTo0NDMiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzU3ViZG9tYWluIjp0cnVlfQ==">
     <style>
         body {
             font-family: sans-serif;
@@ -581,6 +581,15 @@ Or something else about the words independent of their meaning.
 
         // Initializes the local AI session (Gemini Nano)
         async function initializeAI(showUserFeedback = false) {
+            // A more robust check for Google Chrome
+            const isChrome = !!window.chrome && (navigator.userAgent.indexOf("Chrome") > -1 && navigator.userAgent.indexOf("Edg") === -1 && navigator.userAgent.indexOf("OPR") === -1);
+            if (!isChrome) {
+                if (showUserFeedback) {
+                    updateStatusMessage('Gemini Nano is only available in Google Chrome.', 'invalid-message');
+                }
+                throw new Error("Browser is not Chrome.");
+            }
+            
             if (typeof LanguageModel === 'undefined') {
                 if (showUserFeedback) {
                     const infoPanel = document.getElementById('gemini-info-panel');
@@ -635,9 +644,8 @@ Or something else about the words independent of their meaning.
         // Calls local Gemini Nano with the provided prompt
         async function geminiNano(prompt) {
             if (!aiSession) {
-                try {
-                    await initializeAI(true); // Show feedback on explicit use
-                } catch (error) { return; }
+                // This call will now throw an error if it fails, which will be caught by the caller
+                await initializeAI(true);
             }
             try {
                 return await aiSession.prompt(prompt);
@@ -820,7 +828,10 @@ Or something else about the words independent of their meaning.
                                 toggleLoadingIcon(false);
                                 return;
                         }
-                        await handleApiResponse(result, userPrompt, apiConfig);
+                        // Only proceed if the AI call was successful
+                        if (result) {
+                            await handleApiResponse(result, userPrompt, apiConfig);
+                        }
 
                     } catch (error) {
                         console.error('Error during API interaction:', error);
