@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Emotional Reflections - Healing Companion</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        .canvas-container { display: flex; justify-content: center; gap: 20px; margin: 20px 0; }
+        .canvas-section { text-align: center; }
+        .canvas-section h3 { margin-bottom: 10px; color: #333; }
+        canvas { border: 2px solid #ccc; cursor: crosshair; }
+        .healing-canvas { border-color: #4CAF50; }
+        .instructions { margin: 20px auto; padding: 15px; background-color: #f0f0f0; border-radius: 8px; max-width: 700px; }
+        button { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; border-radius: 5px; }
+        .audio-enabled { background-color: #4CAF50; color: white; }
+    </style>
+</head>
+<body>
+    <h1>Emotional Reflections</h1>
+    <p>Paint your emotions on the left - watch your healing companion emerge on the right!</p>
+    
+    <button id="audioToggle">Enable Synesthetic Symphony Mode</button>
+    
+    <div class="canvas-container">
+        <div class="canvas-section">
+            <h3>Your Emotions</h3>
+            <canvas id="emotionalCanvas" width="400" height="600"></canvas>
+        </div>
+        <div class="canvas-section">
+            <h3>Healing Companion</h3>
+            <canvas id="healingCanvas" width="400" height="600" class="healing-canvas"></canvas>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        <h3>How it works:</h3>
+        <p>Paint your current emotional state on the left canvas. The healing companion on the right will respond with therapeutic colors and patterns to help you visualize emotional balance.</p>
+        <p>Right-click on either canvas to save your emotional artwork!</p>
+    </div>
+    
+    <script>
+        const emotionalCanvas = document.getElementById('emotionalCanvas');
+        const healingCanvas = document.getElementById('healingCanvas');
+        const emotionalCtx = emotionalCanvas.getContext('2d');
+        const healingCtx = healingCanvas.getContext('2d');
+        const audioToggle = document.getElementById('audioToggle');
+        
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+        let audioContext;
+        let isAudioEnabled = false;
+        
+        // Audio setup
+        audioToggle.addEventListener('click', () => {
+            if (!isAudioEnabled) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                isAudioEnabled = true;
+                audioToggle.textContent = 'Synesthetic Symphony Mode - ON';
+                audioToggle.classList.add('audio-enabled');
+            } else {
+                isAudioEnabled = false;
+                audioToggle.textContent = 'Enable Synesthetic Symphony Mode';
+                audioToggle.classList.remove('audio-enabled');
+            }
+        });
+        
+        function playEmotionalTone(speed, hue) {
+            if (!isAudioEnabled) return;
+            const frequency = 100 + (speed * 15);
+            const volume = Math.min(0.15, speed * 0.01);
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = frequency;
+            oscillator.type = 'sine';
+            gainNode.gain.value = volume;
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        function generateImmediateHealing(emotionalHue, speed, x, y) {
+            const healingHue = (emotionalHue + 120) % 360;
+            const healingSize = Math.max(8, 20 - speed/2);
+            
+            // Add fade effect to healing canvas
+            healingCtx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+            healingCtx.fillRect(0, 0, healingCanvas.width, healingCanvas.height);
+            
+            // Draw gentle healing response
+            healingCtx.fillStyle = `hsla(${healingHue}, 60%, 70%, 0.6)`;
+            healingCtx.beginPath();
+            healingCtx.arc(x, y, healingSize, 0, Math.PI * 2);
+            healingCtx.fill();
+            
+            // Add gentle trailing effects
+            for(let i = 1; i <= 2; i++) {
+                healingCtx.fillStyle = `hsla(${healingHue}, 60%, 70%, ${0.3/i})`;
+                healingCtx.beginPath();
+                healingCtx.arc(x, y, healingSize + i*5, 0, Math.PI * 2);
+                healingCtx.fill();
+            }
+        }
+        
+        emotionalCanvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            lastX = e.offsetX;
+            lastY = e.offsetY;
+        });
+        
+        emotionalCanvas.addEventListener('mouseup', () => isDrawing = false);
+        
+        emotionalCanvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            
+            // Emotional canvas fade effect
+            emotionalCtx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+            emotionalCtx.fillRect(0, 0, emotionalCanvas.width, emotionalCanvas.height);
+            
+            const speed = Math.sqrt(Math.pow(e.offsetX - lastX, 2) + Math.pow(e.offsetY - lastY, 2));
+            const hue = Math.max(0, Math.min(300, 260 - speed * 8));
+            const size = Math.max(3, Math.min(20, speed / 2));
+            
+            // Paint emotional brushstroke
+            emotionalCtx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+            emotionalCtx.fillRect(e.offsetX - size/2, e.offsetY - size/2, size, size);
+            
+            // Generate immediate healing response
+            generateImmediateHealing(hue, speed, e.offsetX, e.offsetY);
+            
+            // Play audio
+            playEmotionalTone(speed, hue);
+            
+            lastX = e.offsetX;
+            lastY = e.offsetY;
+        });
+    </script>
+</body>
+</html>

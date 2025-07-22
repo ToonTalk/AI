@@ -1,158 +1,112 @@
-// background.js — Chrome Extension service worker (Manifest V3)
-// v3.1 — 2025‑05‑19
-// * Drops the capabilities() probe entirely — some 136‑138 builds expose it as
-//   a non‑callable object, causing TypeError. We now jump straight to create()
-//   and rely on its exception if the model isn’t ready.
-// * Everything else unchanged (Prompt‑API fallbacks remain).
+// background.js — Chrome Extension service worker (Manifest V3)
+// v6.0 — Corrected according to official documentation
+// Uses the global LanguageModel object.
 
-/* global chrome */
+/* global LanguageModel, chrome */
 
-// ───────────────────────────────────────────────────────────────────────────────
-// 1 Context‑menu setup
-// ───────────────────────────────────────────────────────────────────────────────
 const MENU_ID = 'getMeaning';
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create(
-    {
-      id: MENU_ID,
-      title: 'Get meaning of "%s"',
-      contexts: ['selection']
-    },
-    () => console.log('Context menu created successfully.')
-  );
+  chrome.contextMenus.create({
+    id: MENU_ID,
+    title: 'Get meaning of "%s"',
+    contexts: ['selection']
+  });
 });
 
-// ───────────────────────────────────────────────────────────────────────────────
-// 2 Context‑menu click handler
-// ───────────────────────────────────────────────────────────────────────────────
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== MENU_ID || !tab?.id) return;
-  console.log('Context menu clicked:', MENU_ID);
 
-  const [{ result }] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    world: 'MAIN',
-    func: () => {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) {
-        return { word: '', sentence: '', error: 'Nothing selected' };
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: 'MAIN',
+      func: () => {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) {
+          return null;
+        }
+        const text = sel.toString().trim();
+        const range = sel.getRangeAt(0);
+        let containerText = range.startContainer.textContent || '';
+        containerText = containerText.replace(/\s+/g, ' ');
+        return { word: text, sentence: containerText };
       }
-      const text = sel.toString().trim();
-      const range = sel.getRangeAt(0);
-      let containerText = range.startContainer.textContent || '';
-      containerText = containerText.replace(/\s+/g, ' ');
-      const sentences = containerText.match(/[^.!?]*[.!?]/g) || [containerText];
-      const sentence =
-        sentences.find((s) => s.includes(text))?.trim() || containerText.trim();
-      return { word: text, sentence };
+    });
+
+    if (result && result.word) {
+      const meaningRes = await fetchMeaning(result.word, result.sentence);
+      if (meaningRes.success) {
+        notify(`“${result.word}” — ${meaningRes.meaning}`);
+      } else {
+        notify(`Error: ${meaningRes.error}`);
+      }
+    } else {
+      notify('Please select a single word first.');
     }
-  });
-  console.log('Got selection result:', result);
-
-  if (!result.word) {
-    notify('Please select a single word first.');
-    return;
-  }
-
-  const meaningRes = await fetchMeaning(result.word, result.sentence, tab.id);
-  console.log('AI object result:', meaningRes);
-
-  if (meaningRes.success) {
-    notify(`“${result.word}” — ${meaningRes.meaning}`);
-  } else {
-    notify(`Error: ${meaningRes.error}`);
+  } catch (e) {
+    console.error("Error processing context menu click:", e);
+    notify("An error occurred. Please try again.");
   }
 });
 
-// ───────────────────────────────────────────────────────────────────────────────
-// 3 AI helper (Origin‑Trial → Prompt‑API fallbacks)
-// ───────────────────────────────────────────────────────────────────────────────
-async function fetchMeaning(word, sentence, tabId) {
-  const SYSTEM_PROMPT =
-    'You are a concise dictionary. Reply with ≤15 words, no examples.';
-
-  // 3‑A  Origin‑Trial path
-  const lm = chrome?.aiOriginTrial?.languageModel;
-  if (lm && typeof lm.create === 'function') {
-    try {
-      const session = await lm.create({ systemPrompt: SYSTEM_PROMPT });
-      const reply = await session.prompt(
-        `Define “${word}” as used in: “${sentence}”`
-      );
-      await session.destroy?.();
-      return {
-        success: true,
-        meaning: reply,
-        method: 'chrome.aiOriginTrial.languageModel'
-      };
-    } catch (err) {
-      console.warn('aiOriginTrial create() failed:', err);
-      // fall through to window.ai paths
-    }
+async function fetchMeaning(word, sentence) {
+  // Check for the global LanguageModel object's existence.
+  if (typeof LanguageModel === 'undefined') {
+    return { success: false, error: 'The LanguageModel API is not available in this browser.' };
   }
 
-  // 3‑B  Prompt‑API fallback inside page
   try {
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId },
-      world: 'MAIN',
-      func: async (w, s, sysPrompt) => {
-        const ai = window.ai;
-        if (!ai) return { ok: false, err: 'window.ai undefined' };
+    // Check if the model is available or downloadable.
+    const availability = await LanguageModel.availability();
+    if (availability === 'unavailable') {
+      return { success: false, error: 'AI model is unavailable on this device.' };
+    }
 
-        async function tryCreate(createFn, label) {
-          try {
-            const session = await createFn({ systemPrompt: sysPrompt });
-            const answer = await session.prompt(`Define “${w}” as used in: “${s}”`);
-            await session.destroy?.();
-            return { ok: true, answer, label };
-          } catch (e) {
-            return { ok: false, err: e.toString() };
-          }
-        }
-
-        if (ai?.languageModel?.create) {
-          const r = await tryCreate(ai.languageModel.create.bind(ai.languageModel),
-                                    'window.ai.languageModel.create');
-          if (r.ok) return r;
-        }
-        if (ai?.assistant?.create) {
-          const r = await tryCreate(ai.assistant.create.bind(ai.assistant),
-                                    'window.ai.assistant.create');
-          if (r.ok) return r;
-        }
-        if (ai?.createTextSession) {
-          const r = await tryCreate(ai.createTextSession.bind(ai),
-                                    'window.ai.createTextSession');
-          if (r.ok) return r;
-        }
-        return { ok: false, err: 'No supported window.ai APIs' };
-      },
-      args: [word, sentence, SYSTEM_PROMPT]
+    // Create a session, setting the persona with an initial system prompt.
+    const session = await LanguageModel.create({
+      initialPrompts: [{ role: 'system', content: 'You are a concise dictionary.' }]
     });
 
-    if (result?.ok) {
-      return {
-        success: true,
-        meaning: result.answer,
-        method: result.label
-      };
-    }
-    return { success: false, error: result?.err || 'Unknown Prompt‑API error' };
+    const response = await session.prompt(
+      `In 15 words or less, define "${word}" as used in the sentence: "${sentence}"`
+    );
+    
+    // Terminate the session to free up resources.
+    await session.destroy();
+
+    return { success: true, meaning: response };
+
   } catch (err) {
-    return { success: false, error: err.toString() };
+    console.error('AI session failed:', err);
+    return { success: false, error: err.message };
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────────────
-// 4 Notify helper
-// ───────────────────────────────────────────────────────────────────────────────
 function notify(message) {
   chrome.notifications?.create({
     type: 'basic',
     iconUrl: 'icon.png',
-    title: 'Meaning of Words',
+    title: 'Word Meaning Finder',
     message
   });
 }
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'checkAIAvailability') {
+    (async () => {
+      if (typeof LanguageModel === 'undefined') {
+        sendResponse({ available: false, details: 'LanguageModel API not found.' });
+        return;
+      }
+      try {
+        const availability = await LanguageModel.availability(); //
+        const isAvailable = availability === "available";
+        sendResponse({ available: isAvailable, details: `Model status: ${availability}` });
+      } catch (e) {
+        sendResponse({ available: false, details: e.message });
+      }
+    })();
+    return true; // Keep message channel open for async response.
+  }
+});
