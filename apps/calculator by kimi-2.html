@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Big-Int / Exact-Rational Calculator</title>
+<style>
+    :root{--bg:#111827;--panel:#1f2937;--text:#f9fafb;--op:#f59e0b;--num:#374151;--accent:#38bdf8}
+    *{box-sizing:border-box;font-family:"Segoe UI",sans-serif}
+    body{margin:0;height:100vh;display:flex;justify-content:center;align-items:center;background:var(--bg)}
+    #calc{background:var(--panel);padding:20px;border-radius:12px;width:320px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+    #screen{background:#000;color:var(--text);padding:15px;border-radius:8px;margin-bottom:15px;font-size:1.2em;text-align:right;word-break:break-all;min-height:60px;line-height:1.3}
+    #fracView{font-size:.9em;color:var(--accent)}
+    #buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    button{padding:18px 0;font-size:1.3em;border:none;border-radius:8px;cursor:pointer;transition:.2s;color:#fff}
+    .num{background:var(--num)}.op{background:var(--op)}.wide{grid-column:span 2}
+    button:hover{filter:brightness(1.2)}.modeBtn{background:#4ade80;color:#000}
+</style>
+</head>
+<body>
+
+<div id="calc">
+    <div id="screen">
+        <div id="mainDisplay">0</div>
+        <div id="fracView"></div>
+    </div>
+    <div id="buttons">
+        <button class="op" onclick="clearAll()">C</button>
+        <button class="op" onclick="backspace()">⌫</button>
+        <button class="modeBtn" onclick="toggleMode()">≈/:</button>
+        <button class="op" onclick="appendOp('^')">^</button>
+
+        <button class="num" onclick="appendDigit('7')">7</button>
+        <button class="num" onclick="appendDigit('8')">8</button>
+        <button class="num" onclick="appendDigit('9')">9</button>
+        <button class="op" onclick="appendOp('/')">÷</button>
+
+        <button class="num" onclick="appendDigit('4')">4</button>
+        <button class="num" onclick="appendDigit('5')">5</button>
+        <button class="num" onclick="appendDigit('6')">6</button>
+        <button class="op" onclick="appendOp('*')">×</button>
+
+        <button class="num" onclick="appendDigit('1')">1</button>
+        <button class="num" onclick="appendDigit('2')">2</button>
+        <button class="num" onclick="appendDigit('3')">3</button>
+        <button class="op" onclick="appendOp('-')">−</button>
+
+        <button class="num wide" onclick="appendDigit('0')">0</button>
+        <button class="num" onclick="appendDigit('.')">.</button>
+        <button class="op" onclick="appendOp('+')">+</button>
+
+        <button class="modeBtn wide" onclick="sayInEnglish()">🔊 English</button>
+        <button class="op wide" onclick="compute()">=</button>
+    </div>
+</div>
+
+<script>
+/* ---------- Big-int core ---------- */
+const ZERO=0n,ONE=1n,TEN=10n;
+function gcd(a,b){a=a<0n?-a:a;b=b<0n?-b:b;while(b!==ZERO){[a,b]=[b,a%b]}return a;}
+function bigIntPow(base,exp){let res=ONE;while(exp>0n){if(exp&1n)res*=base;base*=base;exp>>=1n}return res;}
+
+/* ---------- Rational numbers ---------- */
+class Rat{
+    constructor(n,d=ONE){if(d===0n)throw"Division by zero";if(d<0n){n=-n;d=-d}const g=gcd(n,d);this.num=n/g;this.den=d/g}
+    add(b){return new Rat(this.num*b.den+b.num*this.den,this.den*b.den)}
+    sub(b){return new Rat(this.num*b.den-b.num*this.den,this.den*b.den)}
+    mul(b){return new Rat(this.num*b.num,this.den*b.den)}
+    div(b){return new Rat(this.num*b.den,this.den*b.num)}
+    pow(exp){if(exp.den!==ONE)throw"Integer exponents only";const e=exp.num;return e>=0n?new Rat(bigIntPow(this.num,e),bigIntPow(this.den,e)):new Rat(bigIntPow(this.den,-e),bigIntPow(this.num,-e))}
+    toString(){return this.den===ONE?this.num.toString():`${this.num}/${this.den}`}
+}
+
+/* ---------- Decimal with overline ---------- */
+function fractionToRepeatingDecimal(num,den){
+    if(den===1n)return num.toString();
+    let sign='';
+    if(num<0n){sign='-';num=-num}
+    let intPart=num/den;
+    let rem=num%den;
+    if(rem===0n)return sign+intPart.toString();
+    let decimals='';
+    const seen=new Map();
+    let pos=0;
+    while(rem!==0n){
+        if(seen.has(rem)){
+            const start=seen.get(rem);
+            const nonRep=decimals.slice(0,start);
+            const rep=decimals.slice(start);
+            return sign+intPart.toString()+'.'+nonRep+'<span style="text-decoration:overline;">'+rep+'</span>';
+        }
+        seen.set(rem,pos++);
+        rem*=10n;
+        decimals+=(rem/den).toString();
+        rem%=den;
+    }
+    return sign+intPart.toString()+'.'+decimals;
+}
+
+/* ---------- English helpers ---------- */
+const ones=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+const tens=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+const illions=['','thousand','million','billion','trillion','quadrillion','quintillion','sextillion','septillion','octillion','nonillion','decillion','undecillion','duodecillion','tredecillion','quattuordecillion','quindecillion','sexdecillion','septendecillion','octodecillion','novemdecillion','vigintillion','unvigintillion','duovigintillion','trevigintillion','quattuorvigintillion','quinvigintillion','sexvigintillion','septenvigintillion','octovigintillion','novemvigintillion','trigintillion','untrigintillion','duotrigintillion','tretrigintillion','quattuortrigintillion','quintrigintillion','sextrigintillion','septentrigintillion','octotrigintillion','novemtrigintillion','quadragintillion','quinquadragintillion','sexagintillion','septuagintillion','octogintillion','nonagintillion','centillion']; // extend as needed
+
+function chunkToWords(n){
+    let words='';
+    if(n>=100){words+=ones[Math.floor(n/100)]+' hundred'; n%=100; if(n)words+=' '}
+    if(n>=20){words+=tens[Math.floor(n/10)]; if(n%10)words+='-'+ones[n%10]}
+    else if(n>0){words+=ones[n]}
+    return words;
+}
+
+function bigIntToEnglish(n){
+    if(n===0n) return 'zero';
+    let neg=false;
+    if(n<0n){neg=true; n=-n}
+    const s=n.toString();
+    // pad to multiple of 3
+    const pad=s.padStart(s.length+(3-s.length%3)%3,'0');
+    const parts=[];
+    for(let i=0;i<pad.length;i+=3){
+        const chunk=parseInt(pad.slice(i,i+3),10);
+        const idx=(pad.length-i)/3 - 1;
+        if(chunk){
+            let part=chunkToWords(chunk);
+            if(idx>0) part+=' '+illions[idx];
+            parts.push(part);
+        }
+    }
+    return (neg?'negative ':'')+parts.join(' ');
+}
+
+function sayInEnglish(){
+    try{
+        const r=parse(current);
+        const whole=r.num/r.den;
+        const rem=r.num%r.den;
+        let eng='';
+        if(rem===0n){
+            eng=bigIntToEnglish(whole);
+        }else{
+            if(whole!==0n) eng=bigIntToEnglish(whole)+' and ';
+            eng+=bigIntToEnglish(rem)+' over '+bigIntToEnglish(r.den);
+        }
+        alert(eng);
+    }catch(e){alert('Invalid number')}
+}
+
+/* ---------- Parsing ---------- */
+function parse(str){
+    if(str.includes('/')){const[n,d]=str.split('/');return new Rat(BigInt(n),BigInt(d))}
+    const dot=str.indexOf('.');
+    if(dot===-1)return new Rat(BigInt(str));
+    const intPart=BigInt(str.slice(0,dot));
+    const frac=str.slice(dot+1);
+    const denom=bigIntPow(TEN,BigInt(frac.length));
+    const numer=intPart*denom+BigInt(frac);
+    return new Rat(numer,denom)
+}
+
+/* ---------- UI ---------- */
+let current='0',prev=null,op=null,fresh=true,showExact=true
+const main=document.getElementById('mainDisplay')
+const fracView=document.getElementById('fracView')
+
+function render(){
+    main.textContent=current
+    try{
+        const r=parse(current)
+        if(showExact){
+            fracView.innerHTML = r.den===ONE ? '' : `exact: ${r}`
+        }else{
+            fracView.innerHTML = fractionToRepeatingDecimal(r.num,r.den)
+        }
+    }catch{fracView.innerHTML=''}
+}
+function toggleMode(){showExact=!showExact;render()}
+function appendDigit(d){
+    if(fresh){current='';fresh=false}
+    if(d==='.'&&current.includes('.'))return
+    current+=d;render()
+}
+function appendOp(o){if(prev!==null)compute();prev=current;current='0';op=o;fresh=true}
+function clearAll(){current='0';prev=null;op=null;fresh=true;render()}
+function backspace(){if(current.length===1){current='0';fresh=true}else{current=current.slice(0,-1)}render()}
+function compute(){
+    if(prev===null||op===null)return
+    try{
+        const a=parse(prev),b=parse(current)
+        let res
+        switch(op){
+            case '+':res=a.add(b);break
+            case '-':res=a.sub(b);break
+            case '*':res=a.mul(b);break
+            case '/':res=a.div(b);break
+            case '^':res=a.pow(b);break
+        }
+        current=res.toString()
+    }catch{current='Error'}
+    prev=null;op=null;fresh=true;render()
+}
+window.addEventListener('keydown',e=>{
+    if(e.key>='0'&&e.key<='9')appendDigit(e.key)
+    if(e.key==='.')appendDigit('.')
+    if('+-*/^'.includes(e.key))appendOp(e.key)
+    if(e.key==='Enter'||e.key==='=')compute()
+    if(e.key==='Backspace')backspace()
+    if(e.key==='Escape')clearAll()
+})
+render()
+</script>
+</body>
+</html>
