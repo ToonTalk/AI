@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Flying Rainbow Unicorn Game – Transparent Frames</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000; /* fallback while images load */
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="960" height="540"></canvas>
+  <script>
+    // Paths to the transparent unicorn frames. These PNGs have the green
+    // background removed so they can be composited over any background.
+    const frameSources = [
+      'frame1.png',
+      'frame2.png',
+      'frame3.png',
+      'frame4.png',
+      'frame5.png',
+      'frame6.png'
+    ];
+
+    // Background image path. This is a colourful sky scene that fills
+    // the entire canvas.
+    const backgroundSrc = 'background.png';
+
+    // Butterfly image path. The butterfly sprite has a transparent background.
+    const butterflySrc = 'butterfly.png';
+
+    // Sound effect file that plays when the unicorn catches the butterfly.
+    const collectSoundSrc = 'collect.wav';
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Load background image
+    const background = new Image();
+    background.src = backgroundSrc;
+
+    // Load butterfly image
+    const butterflyImg = new Image();
+    butterflyImg.src = butterflySrc;
+
+    // Prepare audio for collecting the butterfly. Using the Audio constructor
+    // avoids needing an <audio> element in the DOM. We reset currentTime
+    // before each play to allow rapid re‑triggering.
+    const collectSound = new Audio(collectSoundSrc);
+
+    // Preload frames
+    const frames = [];
+    let loaded = 0;
+    function checkLoaded() {
+      loaded++;
+      // We must wait for all unicorn frames, the background and the butterfly image
+      if (loaded === frameSources.length + 2) {
+        requestAnimationFrame(loop);
+      }
+    }
+    // Hook up onload handlers
+    background.onload = checkLoaded;
+    butterflyImg.onload = checkLoaded;
+    frameSources.forEach(src => {
+      const img = new Image();
+      img.src = src;
+      img.onload = checkLoaded;
+      frames.push(img);
+    });
+
+    // Unicorn state
+    const unicorn = {
+      x: canvas.width / 2 - 150,
+      y: canvas.height / 2 - 150,
+      width: 300,
+      height: 300,
+      frameIndex: 0,
+      frameSpeed: 0.15,
+      vx: 0,
+      vy: 0
+      ,facing: 'right' // 'right' or 'left' depending on last horizontal movement
+    };
+
+    // Butterfly state. The butterfly has its own position, size, angle and
+    // flutter timer. It moves with a slightly erratic path to mimic
+    // realistic butterfly motion.
+    const butterfly = {
+      x: Math.random() * (canvas.width - 100) + 50,
+      y: Math.random() * (canvas.height - 100) + 50,
+      width: 120,
+      height: 120,
+      angle: Math.random() * Math.PI * 2,
+      speed: 2.5,
+      time: 0
+    };
+
+    // Score counter for catching the butterfly
+    let score = 0;
+
+    // Keyboard handling
+    const keys = {};
+    window.addEventListener('keydown', e => {
+      keys[e.key] = true;
+    });
+    window.addEventListener('keyup', e => {
+      keys[e.key] = false;
+    });
+
+    function update() {
+      const speed = 5;
+      unicorn.vx = 0;
+      unicorn.vy = 0;
+      if (keys['ArrowUp'] || keys['w'] || keys['W']) unicorn.vy = -speed;
+      if (keys['ArrowDown'] || keys['s'] || keys['S']) unicorn.vy = speed;
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) unicorn.vx = -speed;
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) unicorn.vx = speed;
+      unicorn.x += unicorn.vx;
+      unicorn.y += unicorn.vy;
+
+      // Update facing direction based on horizontal velocity. The unicorn
+      // retains its last facing direction if it is not moving horizontally.
+      if (unicorn.vx < 0) {
+        unicorn.facing = 'left';
+      } else if (unicorn.vx > 0) {
+        unicorn.facing = 'right';
+      }
+      // Boundaries
+      const minX = -unicorn.width * 0.5;
+      const maxX = canvas.width - unicorn.width * 0.5;
+      const minY = -unicorn.height * 0.5;
+      const maxY = canvas.height - unicorn.height * 0.5;
+      if (unicorn.x < minX) unicorn.x = minX;
+      if (unicorn.x > maxX) unicorn.x = maxX;
+      if (unicorn.y < minY) unicorn.y = minY;
+      if (unicorn.y > maxY) unicorn.y = maxY;
+      // Advance animation frame
+      unicorn.frameIndex += unicorn.frameSpeed;
+      if (unicorn.frameIndex >= frames.length) unicorn.frameIndex = 0;
+
+      // Update butterfly movement to flutter around erratically. The angle is
+      // perturbed slightly each frame to produce a jittery path. We also
+      // apply a sine wave to the vertical motion for a flutter effect.
+      butterfly.time += 0.05;
+      // Slight random change in direction
+      butterfly.angle += (Math.random() - 0.5) * 0.15;
+      // Apply movement based on current angle and speed
+      butterfly.x += Math.cos(butterfly.angle) * butterfly.speed;
+      butterfly.y += Math.sin(butterfly.angle) * butterfly.speed + Math.sin(butterfly.time * 6) * 1.5;
+      // Bounce off canvas edges to keep the butterfly in view
+      if (butterfly.x < 0) {
+        butterfly.x = 0;
+        butterfly.angle = Math.PI - butterfly.angle;
+      }
+      if (butterfly.x > canvas.width - butterfly.width) {
+        butterfly.x = canvas.width - butterfly.width;
+        butterfly.angle = Math.PI - butterfly.angle;
+      }
+      if (butterfly.y < 0) {
+        butterfly.y = 0;
+        butterfly.angle = -butterfly.angle;
+      }
+      if (butterfly.y > canvas.height - butterfly.height) {
+        butterfly.y = canvas.height - butterfly.height;
+        butterfly.angle = -butterfly.angle;
+      }
+
+      // Collision detection between unicorn and butterfly. If they overlap
+      // (simple bounding box check) increment the score and reposition
+      // the butterfly randomly on the canvas with a new direction.
+      const colliding =
+        unicorn.x < butterfly.x + butterfly.width &&
+        unicorn.x + unicorn.width > butterfly.x &&
+        unicorn.y < butterfly.y + butterfly.height &&
+        unicorn.y + unicorn.height > butterfly.y;
+      if (colliding) {
+        score++;
+        // Move butterfly to a new random location
+        butterfly.x = Math.random() * (canvas.width - butterfly.width);
+        butterfly.y = Math.random() * (canvas.height - butterfly.height);
+        butterfly.angle = Math.random() * Math.PI * 2;
+        // Play the collection sound effect. Reset playback position so the
+        // sound can trigger multiple times in quick succession.
+        collectSound.currentTime = 0;
+        collectSound.play();
+      }
+    }
+
+    function draw() {
+      // Draw the background scaled to fit the canvas. The background
+      // image is larger than the canvas so it fills completely even if
+      // the aspect ratios differ.
+      ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+      // Draw the butterfly first so the unicorn appears on top of it
+      ctx.drawImage(butterflyImg, butterfly.x, butterfly.y, butterfly.width, butterfly.height);
+
+      // Draw the unicorn. Flip horizontally when facing left by using
+      // a negative scale transform. We adjust the x coordinate when
+      // flipping because scaling changes the drawing direction.
+      const frame = frames[Math.floor(unicorn.frameIndex)];
+      if (unicorn.facing === 'right') {
+        ctx.drawImage(frame, unicorn.x, unicorn.y, unicorn.width, unicorn.height);
+      } else {
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.drawImage(frame, -(unicorn.x + unicorn.width), unicorn.y, unicorn.width, unicorn.height);
+        ctx.restore();
+      }
+
+      // Draw the score in the top-left corner. Use a shadow for better contrast.
+      ctx.font = '24px sans-serif';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillText('Score: ' + score, 12, 32);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('Score: ' + score, 10, 30);
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic Touch Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            touch-action: none;
+            font-family: Arial, sans-serif;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        #player {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background-color: #1E90FF;
+            border-radius: 30px;
+            bottom: 150px;
+            left: 100px;
+            z-index: 2;
+            transform-origin: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #player-face {
+            position: relative;
+            width: 40px;
+            height: 30px;
+            z-index: 3;
+            pointer-events: none;
+        }
+        
+        .eye {
+            position: absolute;
+            width: 12px;
+            height: 16px;
+            background-color: white;
+            border-radius: 50%;
+            top: 5px;
+        }
+        
+        .eye-left {
+            left: 5px;
+        }
+        
+        .eye-right {
+            right: 5px;
+        }
+        
+        .pupil {
+            position: absolute;
+            width: 6px;
+            height: 8px;
+            background-color: black;
+            border-radius: 50%;
+            top: 4px;
+            left: 3px;
+        }
+        
+        .mouth {
+            position: absolute;
+            width: 22px;
+            height: 10px;
+            border-bottom: 3px solid white;
+            border-radius: 0 0 10px 10px;
+            bottom: 2px;
+            left: 9px;
+        }
+        
+        .player-running {
+            animation: spin 0.5s infinite linear;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #ground {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 150px;
+            background-color: #8B4513;
+            z-index: 1;
+        }
+        
+        .grass {
+            position: absolute;
+            bottom: 150px;
+            width: 100%;
+            height: 10px;
+            background-color: #32CD32;
+            z-index: 1;
+        }
+        
+        .obstacle {
+            position: absolute;
+            width: 40px;
+            height: 60px;
+            background-color: #FF4500;
+            border-radius: 5px;
+            bottom: 150px;
+        }
+        
+        .coin {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #FFD700;
+            border-radius: 50%;
+            bottom: 170px;
+            z-index: 1;
+        }
+        
+        .cloud {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            opacity: 0.9;
+            z-index: 0;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 3;
+        }
+        
+        .control-btn {
+            width: 80px;
+            height: 80px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            user-select: none;
+        }
+        
+        #score-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 20px;
+            z-index: 3;
+        }
+        
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            z-index: 4;
+        }
+        
+        #restart-btn {
+            background-color: #1E90FF;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 18px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="player">
+            <div id="player-face">
+                <div class="eye eye-left"><div class="pupil"></div></div>
+                <div class="eye eye-right"><div class="pupil"></div></div>
+                <div class="mouth"></div>
+            </div>
+        </div>
+        <div id="ground"></div>
+        <div class="grass"></div>
+        <div id="score-container">Score: <span id="score">0</span></div>
+        <div id="controls">
+            <div id="left-btn" class="control-btn">←</div>
+            <div id="jump-btn" class="control-btn">↑</div>
+            <div id="right-btn" class="control-btn">→</div>
+        </div>
+        <div id="game-over">
+            <h1>Game Over!</h1>
+            <p>Your score: <span id="final-score">0</span></p>
+            <button id="restart-btn">Play Again</button>
+        </div>
+    </div>
+    
+    <script>
+        const player = document.getElementById('player');
+        const ground = document.getElementById('ground');
+        const scoreElement = document.getElementById('score');
+        const finalScoreElement = document.getElementById('final-score');
+        const gameOverScreen = document.getElementById('game-over');
+        const restartBtn = document.getElementById('restart-btn');
+        const leftBtn = document.getElementById('left-btn');
+        const jumpBtn = document.getElementById('jump-btn');
+        const rightBtn = document.getElementById('right-btn');
+        const gameContainer = document.getElementById('game-container');
+        
+        // Game state
+        let isGameOver = false;
+        let score = 0;
+        let playerPos = { x: 100, y: 0 };
+        let playerVelocity = { x: 0, y: 0 };
+        let playerSpeed = 8;
+        let gravity = 0.8;
+        let jumpStrength = 20;
+        let isJumping = false;
+        let gameSpeed = 5;
+        let obstacles = [];
+        let coins = [];
+        let clouds = [];
+        let lastObstacleTime = 0;
+        let lastCoinTime = 0;
+        let lastCloudTime = 0;
+        let keys = { left: false, right: false, jump: false };
+        
+        // Sound effects
+        let soundEnabled = false;
+        
+        // Auto-enable sounds on first interaction
+        document.addEventListener('click', function enableSounds() {
+            if (!soundEnabled) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                window.audioContext = new AudioContext();
+                soundEnabled = true;
+                // Remove this listener after first click
+                document.removeEventListener('click', enableSounds);
+            }
+        }, { once: false });
+        
+        // Generate coin collection sound
+        function playCoinSound() {
+            if (!soundEnabled) return;
+            
+            const oscillator = window.audioContext.createOscillator();
+            const gainNode = window.audioContext.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, window.audioContext.currentTime); // A5
+            oscillator.frequency.exponentialRampToValueAtTime(1760, window.audioContext.currentTime + 0.1); // A6
+            
+            gainNode.gain.setValueAtTime(0.3, window.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, window.audioContext.currentTime + 0.2);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(window.audioContext.destination);
+            
+            oscillator.start();
+            oscillator.stop(window.audioContext.currentTime + 0.2);
+        }
+        
+        // Generate hit sound
+        function playHitSound() {
+            if (!soundEnabled) return;
+            
+            const oscillator = window.audioContext.createOscillator();
+            const gainNode = window.audioContext.createGain();
+            
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(220, window.audioContext.currentTime); // A3
+            oscillator.frequency.exponentialRampToValueAtTime(110, window.audioContext.currentTime + 0.2); // A2
+            
+            gainNode.gain.setValueAtTime(0.3, window.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, window.audioContext.currentTime + 0.3);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(window.audioContext.destination);
+            
+            oscillator.start();
+            oscillator.stop(window.audioContext.currentTime + 0.3);
+        }
+        
+        // Initialize the game
+        function init() {
+            isGameOver = false;
+            score = 0;
+            playerPos = { x: 100, y: 0 };
+            playerVelocity = { x: 0, y: 0 };
+            gameSpeed = 5;
+            obstacles = [];
+            coins = [];
+            clouds = [];
+            lastObstacleTime = 0;
+            lastCoinTime = 0;
+            lastCloudTime = 0;
+            scoreElement.textContent = '0';
+            gameOverScreen.style.display = 'none';
+            player.style.display = 'block';
+            
+            // Create initial clouds
+            for (let i = 0; i < 5; i++) {
+                createCloud();
+            }
+            
+            gameLoop();
+        }
+        
+        // Game loop
+        function gameLoop() {
+            if (isGameOver) return;
+            
+            updatePlayer();
+            updateObstacles();
+            updateCoins();
+            updateClouds();
+            checkCollisions();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Update player position
+        function updatePlayer() {
+            // Apply horizontal movement
+            if (keys.left) {
+                playerVelocity.x = -playerSpeed;
+                player.classList.add('player-running');
+            } else if (keys.right) {
+                playerVelocity.x = playerSpeed;
+                player.classList.add('player-running');
+            } else {
+                playerVelocity.x = 0;
+                player.classList.remove('player-running');
+            }
+            
+            // Fixed jump mechanics - only allow jump when on the ground
+            if (keys.jump && !isJumping && playerPos.y === 0) {
+                playerVelocity.y = jumpStrength;
+                isJumping = true;
+            }
+            
+            // Always apply gravity
+            playerVelocity.y -= gravity;
+            
+            // Update position
+            playerPos.x += playerVelocity.x;
+            playerPos.y += playerVelocity.y;
+            
+            // Ground collision (player is at bottom)
+            if (playerPos.y <= 0) {
+                playerPos.y = 0;
+                playerVelocity.y = 0;
+                isJumping = false; // Reset jumping state only when on the ground
+            }
+            
+            // Ceiling collision - limit maximum height
+            if (playerPos.y >= 300) {
+                playerPos.y = 300;
+                playerVelocity.y = 0;
+            }
+            
+            // Screen boundaries
+            const maxX = gameContainer.clientWidth - player.clientWidth;
+            if (playerPos.x < 0) playerPos.x = 0;
+            if (playerPos.x > maxX) playerPos.x = maxX;
+            
+            // Update player element position
+            player.style.left = `${playerPos.x}px`;
+            player.style.bottom = `${150 + playerPos.y}px`; // Fixed positioning relative to ground
+        }
+        
+        // Create and update obstacles
+        function updateObstacles() {
+            const currentTime = Date.now();
+            
+            // Create new obstacles
+            if (currentTime - lastObstacleTime > 2000 + Math.random() * 1000) {
+                const obstacle = document.createElement('div');
+                obstacle.className = 'obstacle';
+                obstacle.style.left = `${gameContainer.clientWidth}px`;
+                
+                gameContainer.appendChild(obstacle);
+                obstacles.push({
+                    element: obstacle,
+                    position: gameContainer.clientWidth
+                });
+                
+                lastObstacleTime = currentTime;
+            }
+            
+            // Move obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].position -= gameSpeed;
+                obstacles[i].element.style.left = `${obstacles[i].position}px`;
+                
+                // Remove off-screen obstacles
+                if (obstacles[i].position < -50) {
+                    gameContainer.removeChild(obstacles[i].element);
+                    obstacles.splice(i, 1);
+                }
+            }
+        }
+        
+        // Create and update coins
+        function updateCoins() {
+            const currentTime = Date.now();
+            
+            // Create new coins
+            if (currentTime - lastCoinTime > 1000 + Math.random() * 1500) {
+                const coin = document.createElement('div');
+                coin.className = 'coin';
+                coin.style.left = `${gameContainer.clientWidth}px`;
+                
+                // Randomize vertical position
+                const yPos = 20 + Math.random() * 100;
+                coin.style.bottom = `${150 + yPos}px`;
+                
+                gameContainer.appendChild(coin);
+                coins.push({
+                    element: coin,
+                    position: gameContainer.clientWidth,
+                    yPos: yPos,
+                    collected: false
+                });
+                
+                lastCoinTime = currentTime;
+            }
+            
+            // Move coins
+            for (let i = coins.length - 1; i >= 0; i--) {
+                if (coins[i].collected) continue;
+                
+                coins[i].position -= gameSpeed;
+                coins[i].element.style.left = `${coins[i].position}px`;
+                
+                // Remove off-screen coins
+                if (coins[i].position < -50) {
+                    gameContainer.removeChild(coins[i].element);
+                    coins.splice(i, 1);
+                }
+            }
+        }
+        
+        // Create and update clouds
+        function createCloud() {
+            const cloud = document.createElement('div');
+            cloud.className = 'cloud';
+            
+            const size = 50 + Math.random() * 100;
+            cloud.style.width = `${size}px`;
+            cloud.style.height = `${size * 0.6}px`;
+            
+            const yPos = 200 + Math.random() * 150;
+            cloud.style.bottom = `${yPos}px`;
+            cloud.style.left = `${gameContainer.clientWidth}px`;
+            
+            gameContainer.appendChild(cloud);
+            clouds.push({
+                element: cloud,
+                position: gameContainer.clientWidth,
+                speed: 1 + Math.random() * 1.5
+            });
+        }
+        
+        function updateClouds() {
+            const currentTime = Date.now();
+            
+            // Create new clouds
+            if (currentTime - lastCloudTime > 5000 + Math.random() * 5000) {
+                createCloud();
+                lastCloudTime = currentTime;
+            }
+            
+            // Move clouds
+            for (let i = clouds.length - 1; i >= 0; i--) {
+                clouds[i].position -= clouds[i].speed;
+                clouds[i].element.style.left = `${clouds[i].position}px`;
+                
+                // Remove off-screen clouds
+                if (clouds[i].position < -150) {
+                    gameContainer.removeChild(clouds[i].element);
+                    clouds.splice(i, 1);
+                }
+            }
+        }
+        
+        // Fixed collision detection
+        function checkCollisions() {
+            const playerRect = {
+                left: playerPos.x,
+                right: playerPos.x + 60,
+                top: 150 + playerPos.y,
+                bottom: 150 + playerPos.y + 60
+            };
+            
+            // Check obstacle collisions
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacleRect = {
+                    left: obstacles[i].position,
+                    right: obstacles[i].position + 40,
+                    top: 150,
+                    bottom: 150 + 60
+                };
+                
+                if (
+                    playerRect.left < obstacleRect.right &&
+                    playerRect.right > obstacleRect.left &&
+                    playerRect.top < obstacleRect.bottom &&
+                    playerRect.bottom > obstacleRect.top
+                ) {
+                    // Lose points when hitting an obstacle
+                    score -= 10;
+                    if (score < 0) score = 0;
+                    scoreElement.textContent = score;
+                    
+                    // Play hit sound
+                    playHitSound();
+                    
+                    // Remove the obstacle
+                    gameContainer.removeChild(obstacles[i].element);
+                    obstacles.splice(i, 1);
+                    
+                    // Flash the screen red
+                    const flash = document.createElement('div');
+                    flash.style.position = 'absolute';
+                    flash.style.top = '0';
+                    flash.style.left = '0';
+                    flash.style.width = '100%';
+                    flash.style.height = '100%';
+                    flash.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+                    flash.style.zIndex = '10';
+                    gameContainer.appendChild(flash);
+                    
+                    setTimeout(() => {
+                        gameContainer.removeChild(flash);
+                    }, 300);
+                    
+                    break;
+                }
+            }
+            
+            // Check coin collisions
+            for (let i = 0; i < coins.length; i++) {
+                if (coins[i].collected) continue;
+                
+                const coinRect = {
+                    left: coins[i].position,
+                    right: coins[i].position + 30,
+                    top: 150 + coins[i].yPos,
+                    bottom: 150 + coins[i].yPos + 30
+                };
+                
+                if (
+                    playerRect.left < coinRect.right &&
+                    playerRect.right > coinRect.left &&
+                    playerRect.top < coinRect.bottom &&
+                    playerRect.bottom > coinRect.top
+                ) {
+                    collectCoin(i);
+                }
+            }
+        }
+        
+        // Collect coin
+        function collectCoin(index) {
+            coins[index].collected = true;
+            coins[index].element.style.display = 'none';
+            
+            // Play coin sound
+            playCoinSound();
+            
+            // Add points
+            score += 5;
+            scoreElement.textContent = score;
+            
+            // Create visual effect
+            const coinEffect = document.createElement('div');
+            coinEffect.textContent = '+5';
+            coinEffect.style.position = 'absolute';
+            coinEffect.style.left = `${coins[index].position}px`;
+            coinEffect.style.bottom = `${150 + coins[index].yPos + 30}px`;
+            coinEffect.style.color = '#FFD700';
+            coinEffect.style.fontWeight = 'bold';
+            coinEffect.style.fontSize = '20px';
+            coinEffect.style.zIndex = '5';
+            gameContainer.appendChild(coinEffect);
+            
+            // Animate and remove
+            let opacity = 1;
+            let posY = parseInt(coinEffect.style.bottom);
+            
+            const animateEffect = () => {
+                opacity -= 0.05;
+                posY += 2;
+                coinEffect.style.opacity = opacity;
+                coinEffect.style.bottom = `${posY}px`;
+                
+                if (opacity > 0) {
+                    requestAnimationFrame(animateEffect);
+                } else {
+                    gameContainer.removeChild(coinEffect);
+                }
+            };
+            
+            requestAnimationFrame(animateEffect);
+            
+            // Increase game speed slightly
+            gameSpeed += 0.05;
+            if (gameSpeed > 12) gameSpeed = 12;
+        }
+        
+        // Game over
+        function gameOver() {
+            isGameOver = true;
+            finalScoreElement.textContent = score;
+            gameOverScreen.style.display = 'block';
+            player.style.display = 'none';
+        }
+        
+        // Touch controls
+        function setupTouchControls() {
+            // Left button
+            leftBtn.addEventListener('touchstart', () => {
+                keys.left = true;
+            });
+            
+            leftBtn.addEventListener('touchend', () => {
+                keys.left = false;
+            });
+            
+            // Right button
+            rightBtn.addEventListener('touchstart', () => {
+                keys.right = true;
+            });
+            
+            rightBtn.addEventListener('touchend', () => {
+                keys.right = false;
+            });
+            
+            // Jump button
+            jumpBtn.addEventListener('touchstart', () => {
+                keys.jump = true;
+            });
+            
+            jumpBtn.addEventListener('touchend', () => {
+                keys.jump = false;
+            });
+            
+            // Mouse controls (for testing on desktop)
+            leftBtn.addEventListener('mousedown', () => {
+                keys.left = true;
+            });
+            
+            leftBtn.addEventListener('mouseup', () => {
+                keys.left = false;
+            });
+            
+            rightBtn.addEventListener('mousedown', () => {
+                keys.right = true;
+            });
+            
+            rightBtn.addEventListener('mouseup', () => {
+                keys.right = false;
+            });
+            
+            jumpBtn.addEventListener('mousedown', () => {
+                keys.jump = true;
+            });
+            
+            jumpBtn.addEventListener('mouseup', () => {
+                keys.jump = false;
+            });
+            
+            // Prevent scrolling when touching game buttons
+            leftBtn.addEventListener('touchmove', (e) => e.preventDefault());
+            rightBtn.addEventListener('touchmove', (e) => e.preventDefault());
+            jumpBtn.addEventListener('touchmove', (e) => e.preventDefault());
+        }
+        
+        // Restart button
+        restartBtn.addEventListener('click', init);
+        restartBtn.addEventListener('touchstart', init);
+        
+        // Setup controls and start game
+        setupTouchControls();
+        init();
+    </script>
+</body>
+</html>
