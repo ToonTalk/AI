@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Floating Island of Instruments</title>
+  <style>
+    html, body { margin:0; height:100%; background:#111a3a; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+class Note {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.x = Math.random()*canvas.width;
+    this.y = canvas.height + Math.random()*100;
+    this.vy = -0.6 - Math.random()*0.4;
+    this.size = 4 + Math.random()*4;
+    this.color = `rgba(${200+Math.random()*55},${150+Math.random()*105},${200+Math.random()*55},0.8)`;
+  }
+  update() {
+    this.y += this.vy;
+    if (this.y < -this.size) this.reset();
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.fillStyle = this.color;
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+    ctx.fill();
+    // draw stem
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.size, this.y);
+    ctx.lineTo(this.x + this.size, this.y - this.size*3);
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+const notes = Array.from({length:60}, () => new Note());
+
+function drawIsland() {
+  const cx = canvas.width/2;
+  const cy = canvas.height*0.6;
+  ctx.fillStyle = '#483e2b';
+  ctx.beginPath();
+  ctx.moveTo(cx - 200, cy);
+  ctx.quadraticCurveTo(cx, cy - 100, cx + 200, cy);
+  ctx.lineTo(cx + 150, cy + 40);
+  ctx.lineTo(cx - 150, cy + 40);
+  ctx.closePath();
+  ctx.fill();
+  // Draw simple instruments as colored shapes
+  const instruments = [
+    {x: cx - 100, y: cy - 40, w: 30, h: 80, color: '#c98db2'}, // violin
+    {x: cx + 40, y: cy - 50, w: 40, h: 100, color: '#f7c775'}, // horn
+    {x: cx - 20, y: cy - 30, w: 60, h: 60, color: '#7cc8d5'}, // piano
+  ];
+  instruments.forEach(instr => {
+    ctx.fillStyle = instr.color;
+    ctx.fillRect(instr.x, instr.y + Math.sin((Date.now()/500 + instr.x)*0.005)*5, instr.w, instr.h);
+  });
+}
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // sky gradient
+  const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+  grad.addColorStop(0, '#0d1c40');
+  grad.addColorStop(1, '#2a3b80');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  notes.forEach(n => { n.update(); n.draw(); });
+  drawIsland();
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

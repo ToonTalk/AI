@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Echo Mandala</title>
+  <style>
+    html,body{margin:0;height:100%;overflow:hidden;background:#0e142a;}
+    canvas{display:block;cursor:pointer;}
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+window.addEventListener('resize',resize);resize();
+
+const AudioContext=window.AudioContext||window.webkitAudioContext;
+const audioCtx=new AudioContext();
+
+class Mandala{
+  constructor(x,y){
+    this.x=x;this.y=y;
+    this.radius=10;
+    this.rotation=0;
+    this.segs=6+Math.floor(Math.random()*6);
+    this.life=0;
+    // create repeating ping sound
+    this.interval=setInterval(()=>{
+      const osc=audioCtx.createOscillator();
+      const gain=audioCtx.createGain();
+      osc.type='triangle';
+      osc.frequency.value=400+Math.random()*300;
+      osc.connect(gain).connect(audioCtx.destination);
+      const now=audioCtx.currentTime;
+      gain.gain.setValueAtTime(0.001,now);
+      gain.gain.linearRampToValueAtTime(0.25,now+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001,now+0.3);
+      osc.start(now);
+      osc.stop(now+0.3);
+    },300);
+  }
+  update(){
+    this.radius+=1.5;
+    this.rotation+=0.02;
+    this.life++;
+    if(this.life>150){
+      clearInterval(this.interval);
+      return true; // mark for removal
+    }
+    return false;
+  }
+  draw(){
+    ctx.save();
+    ctx.translate(this.x,this.y);
+    ctx.rotate(this.rotation);
+    const colors=['#6372c3','#a17dc3','#c58ddf','#f0c0ff'];
+    for(let i=0;i<this.segs;i++){
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      const start=(Math.PI*2/this.segs)*i;
+      const end=start+Math.PI*2/this.segs*0.7;
+      ctx.arc(0,0,this.radius,start,end);
+      ctx.closePath();
+      ctx.fillStyle=colors[i%colors.length];
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+const mandalas=[];
+canvas.addEventListener('click',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left;const y=e.clientY-rect.top;
+  mandalas.push(new Mandala(x,y));
+});
+
+function animate(){
+  ctx.fillStyle='rgba(14,20,42,0.15)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  for(let i=mandalas.length-1;i>=0;i--){
+    if(mandalas[i].update()) mandalas.splice(i,1);
+    else mandalas[i].draw();
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Prismatic Rain</title>
+  <style>
+    html,body{margin:0;height:100%;overflow:hidden;background:#0a1023;}
+    canvas{display:block;cursor:crosshair;}
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+window.addEventListener('resize',resize);resize();
+
+const AudioContext=window.AudioContext||window.webkitAudioContext;
+const audioCtx=new AudioContext();
+
+class Drop{
+  constructor(x,y){
+    this.x=x;this.y=y;
+    this.r=5;
+    this.speed=2+Math.random()*2;
+    this.hue=Math.random()*360;
+    // Create audio
+    const osc=audioCtx.createOscillator();
+    const gain=audioCtx.createGain();
+    const freq=200+400*((canvas.height-y)/canvas.height);
+    osc.frequency.value=freq;
+    osc.type='sine';
+    osc.connect(gain).connect(audioCtx.destination);
+    const now=audioCtx.currentTime;
+    gain.gain.setValueAtTime(0.001,now);
+    gain.gain.linearRampToValueAtTime(0.3,now+0.05);
+    gain.gain.linearRampToValueAtTime(0.0,now+0.5);
+    osc.start(now);
+    osc.stop(now+0.5);
+  }
+  update(){this.y+=this.speed;this.r+=0.02;this.hue+=1;}
+  draw(){
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${this.hue},80%,60%,0.8)`;
+    ctx.fill();
+  }
+}
+const drops=[];
+canvas.addEventListener('mousemove',e=>{
+  if(!audioCtx) return;
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left;
+  const y=e.clientY-rect.top;
+  drops.push(new Drop(x,y));
+});
+
+function animate(){
+  ctx.fillStyle='rgba(10,16,35,0.2)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  for(let i=drops.length-1;i>=0;i--){
+    const d=drops[i];
+    d.update();
+    d.draw();
+    if(d.y-d.r>canvas.height) drops.splice(i,1);
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

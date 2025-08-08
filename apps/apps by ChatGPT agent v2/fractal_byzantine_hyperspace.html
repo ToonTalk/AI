@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fractal Byzantine Hyperspace</title>
+  <style>
+    html, body { margin:0; height:100%; background:#0f0d21; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Ring class: a ring composed of mosaic pieces (arcs) that rotates
+class Ring {
+  constructor(radius, segments, speed, color) {
+    this.radius = radius;
+    this.segments = segments;
+    this.speed = speed;
+    this.angle = Math.random() * Math.PI*2;
+    this.color = color;
+  }
+  update() {
+    this.angle += this.speed;
+  }
+  draw() {
+    const cx = canvas.width/2;
+    const cy = canvas.height/2;
+    const segAngle = (Math.PI*2)/this.segments;
+    for (let i=0; i<this.segments; i++) {
+      const start = this.angle + segAngle * i;
+      const end = start + segAngle * 0.8;
+      ctx.beginPath();
+      ctx.arc(cx, cy, this.radius, start, end);
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = this.radius*0.05;
+      ctx.lineCap = 'butt';
+      ctx.stroke();
+    }
+  }
+}
+
+const rings = [];
+const colors = ['rgba(255,215,0,0.8)','rgba(255,192,108,0.6)','rgba(255,240,180,0.5)','rgba(255,140,40,0.7)'];
+for (let i=0; i<4; i++) {
+  const radius = 80 + i*60;
+  const segs = 20 + i*10;
+  const speed = 0.002 + i*0.001;
+  rings.push(new Ring(radius, segs, speed, colors[i]));
+}
+
+// Twinkling stars in the background
+class Star {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random()*canvas.width;
+    this.y = Math.random()*canvas.height;
+    this.r = Math.random()*2 + 0.5;
+    this.alpha = Math.random()*0.5 + 0.2;
+    this.pulse = Math.random()*0.05 + 0.02;
+  }
+  update() {
+    this.alpha += this.pulse;
+    if (this.alpha > 0.8 || this.alpha < 0.2) this.pulse *= -1;
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255,255,200,${this.alpha})`;
+    ctx.fill();
+  }
+}
+const stars = [];
+for (let i=0; i<100; i++) stars.push(new Star());
+
+function animate() {
+  ctx.fillStyle = '#0f0d21';
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  // draw stars
+  stars.forEach(s => { s.update(); s.draw(); });
+  // draw rings
+  rings.forEach(r => { r.update(); r.draw(); });
+  // central glow
+  const cx = canvas.width/2;
+  const cy = canvas.height/2;
+  const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 150);
+  glowGrad.addColorStop(0, 'rgba(255,220,160,0.9)');
+  glowGrad.addColorStop(1, 'rgba(255,220,160,0)');
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 150, 0, Math.PI*2);
+  ctx.fill();
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

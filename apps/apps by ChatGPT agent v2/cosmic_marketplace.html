@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cosmic Marketplace</title>
+  <style>
+    body, html { margin:0; height:100%; background:#000014; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+class Star {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.x = Math.random()*canvas.width;
+    this.y = Math.random()*canvas.height;
+    this.vx = -0.5 + Math.random()*1;
+    this.vy = -0.5 + Math.random()*1;
+    this.size = Math.random()*2 + 1;
+    this.color = `rgba(${200+Math.random()*55},${200+Math.random()*55},${255},${0.5+Math.random()*0.5})`;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    if (this.x<0 || this.x>canvas.width || this.y<0 || this.y>canvas.height) this.reset();
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.fillStyle = this.color;
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+const stars = Array.from({length:120}, () => new Star());
+
+class Stall {
+  constructor(x,y,width,height) {
+    this.x=x; this.y=y; this.w=width; this.h=height;
+    this.offset = Math.random()*2*Math.PI;
+  }
+  draw() {
+    const floatY = this.y + Math.sin(Date.now()/1000 + this.offset)*10;
+    ctx.fillStyle = '#2f2963';
+    ctx.fillRect(this.x, floatY, this.w, this.h);
+    // jar of stars
+    ctx.fillStyle = '#453a84';
+    ctx.fillRect(this.x+10, floatY+10, this.w-20, this.h-20);
+    ctx.fillStyle = '#8fa5ff';
+    for (let i=0; i<5; i++) {
+      const sx = this.x+15 + Math.random()*(this.w-30);
+      const sy = floatY+15 + Math.random()*(this.h-30);
+      ctx.fillRect(sx, sy, 3, 3);
+    }
+  }
+}
+const stalls = [];
+function initStalls() {
+  stalls.length=0;
+  const rows = 2;
+  const cols = 4;
+  const sw = canvas.width/(cols+1);
+  const sh = 80;
+  for (let r=0; r<rows; r++) {
+    for (let c=0; c<cols; c++) {
+      const x = sw*0.5 + c*sw;
+      const y = canvas.height*0.5 + r*100;
+      stalls.push(new Stall(x-40,y-40,80,60));
+    }
+  }
+}
+initStalls();
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // cosmic gradient background
+  const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 50, canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height)*0.7);
+  grad.addColorStop(0, '#120c3f');
+  grad.addColorStop(1, '#010016');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  stars.forEach(s => { s.update(); s.draw(); });
+  stalls.forEach(st => st.draw());
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Labyrinth of Light and Shadow</title>
+  <style>
+    body, html { margin:0; height:100%; background:#000; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+// generate labyrinth lines: concentric squares with connecting bridges
+const paths = [];
+function initPaths() {
+  paths.length = 0;
+  const cx = canvas.width/2;
+  const cy = canvas.height/2;
+  const max = Math.min(canvas.width, canvas.height)/2 * 0.8;
+  for (let i=0; i<6; i++) {
+    const s = (i+1)/6;
+    const half = max * s;
+    const square = [
+      {x:cx-half, y:cy-half},
+      {x:cx+half, y:cy-half},
+      {x:cx+half, y:cy+half},
+      {x:cx-half, y:cy+half},
+    ];
+    for (let j=0; j<4; j++) {
+      paths.push({a:square[j], b:square[(j+1)%4], t:Math.random()});
+    }
+  }
+}
+initPaths();
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // draw dark background
+  ctx.fillStyle = '#01010a';
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  ctx.strokeStyle = '#222256';
+  ctx.lineWidth = 2;
+  paths.forEach(path => {
+    ctx.beginPath();
+    ctx.moveTo(path.a.x, path.a.y);
+    ctx.lineTo(path.b.x, path.b.y);
+    ctx.stroke();
+    // update moving dot along path
+    path.t += 0.002;
+    if (path.t > 1) path.t = 0;
+    const x = path.a.x + (path.b.x - path.a.x)*path.t;
+    const y = path.a.y + (path.b.y - path.a.y)*path.t;
+    const r = 3 + 2*Math.sin(Date.now()*0.005);
+    const grad = ctx.createRadialGradient(x,y,0,x,y,r*5);
+    grad.addColorStop(0, 'rgba(100,200,255,0.8)');
+    grad.addColorStop(1, 'rgba(100,200,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fill();
+  });
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

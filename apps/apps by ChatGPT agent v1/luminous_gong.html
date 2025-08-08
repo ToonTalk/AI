@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Luminous Gong</title>
+  <style>
+    html,body{margin:0;height:100%;overflow:hidden;background:#121212;}
+    canvas{display:block;cursor:pointer;}
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+window.addEventListener('resize',resize);resize();
+
+const AudioContext=window.AudioContext||window.webkitAudioContext;
+const audioCtx=new AudioContext();
+
+let ripples=[];
+function playGong(){
+  const osc=audioCtx.createOscillator();
+  const gain=audioCtx.createGain();
+  osc.type='sine';
+  osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime+1.5);
+  osc.connect(gain).connect(audioCtx.destination);
+  gain.gain.setValueAtTime(0.001,audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.4,audioCtx.currentTime+0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+2);
+  osc.start();
+  osc.stop(audioCtx.currentTime+2);
+}
+
+canvas.addEventListener('click',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left;
+  const y=e.clientY-rect.top;
+  ripples.push({x,y,r:0,alpha:1});
+  playGong();
+});
+
+function animate(){
+  ctx.fillStyle='rgba(18,18,18,0.1)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  // draw central gong
+  const cx=canvas.width/2; const cy=canvas.height/2; const radius=Math.min(canvas.width,canvas.height)*0.2;
+  const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,radius);
+  grad.addColorStop(0,'#ffd280');
+  grad.addColorStop(1,'#443322');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(cx,cy,radius,0,Math.PI*2);ctx.fill();
+  // handle ripples
+  for(let i=ripples.length-1;i>=0;i--){
+    const r=ripples[i];
+    ctx.beginPath();
+    ctx.arc(r.x,r.y,r.r,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,215,150,${r.alpha})`;
+    ctx.lineWidth=4;
+    ctx.stroke();
+    r.r+=3;
+    r.alpha*=0.96;
+    if(r.alpha<0.02) ripples.splice(i,1);
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

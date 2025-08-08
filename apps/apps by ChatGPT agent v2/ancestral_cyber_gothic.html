@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ancestral Cyber Gothic</title>
+  <style>
+    body, html { margin:0; height:100%; background:#0a0a1a; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Draw gothic arch outlines
+function drawGothic() {
+  const centerX = canvas.width/2;
+  const baseY = canvas.height * 0.65;
+  const height = canvas.height * 0.6;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(100,255,255,0.5)';
+  // draw multiple arches decreasing size
+  for (let i=0; i<5; i++) {
+    const scale = 1 - i*0.1;
+    const w = canvas.width * 0.5 * scale;
+    const h = height * scale;
+    ctx.beginPath();
+    // pointed arch using quadratic curves
+    ctx.moveTo(centerX - w/2, baseY);
+    ctx.quadraticCurveTo(centerX - w/4, baseY - h, centerX, baseY - h*1.1);
+    ctx.quadraticCurveTo(centerX + w/4, baseY - h, centerX + w/2, baseY);
+    ctx.lineTo(centerX - w/2, baseY);
+    ctx.stroke();
+  }
+}
+
+// Circuit particles traveling horizontally across bottom
+class CircuitLine {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.y = canvas.height * 0.8 + Math.random() * canvas.height * 0.2;
+    this.x = -Math.random() * canvas.width;
+    this.length = 50 + Math.random()*200;
+    this.speed = 1 + Math.random()*2;
+    this.color = `rgba(${50+Math.random()*50}, ${180+Math.random()*75}, ${250}, ${0.7})`;
+  }
+  update() {
+    this.x += this.speed;
+    if (this.x - this.length > canvas.width) this.reset();
+  }
+  draw() {
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y);
+    ctx.lineTo(this.x + this.length, this.y);
+    ctx.stroke();
+    // draw little nodes
+    for (let i=0; i< this.length; i+=20) {
+      ctx.beginPath();
+      ctx.arc(this.x + i, this.y, 3, 0, Math.PI*2);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+    }
+  }
+}
+const circuits = [];
+for (let i=0; i<30; i++) circuits.push(new CircuitLine());
+
+let time = 0;
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // dark gradient background
+  const bg = ctx.createLinearGradient(0,0,0,canvas.height);
+  bg.addColorStop(0, '#0a0a1a');
+  bg.addColorStop(1, '#081e35');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  // glowing aura behind arches
+  ctx.save();
+  ctx.shadowBlur = 50;
+  ctx.shadowColor = 'rgba(0,150,200,0.3)';
+  drawGothic();
+  ctx.restore();
+  // highlight edges with pulsating neon
+  ctx.save();
+  const pulse = (Math.sin(time*0.02)+1)/2;
+  ctx.strokeStyle = `rgba(${50+205*pulse}, ${100+155*pulse}, 255, 0.6)`;
+  ctx.lineWidth = 2 + pulse*2;
+  drawGothic();
+  ctx.restore();
+  // circuits update
+  circuits.forEach(c => { c.update(); c.draw(); });
+  time++;
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cosmic Whale City</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #030412; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Particle for stars and jellyfish
+class Particle {
+  constructor(x, y, vx, vy, r, color) {
+    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+    this.r = r; this.color = color;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.y < -this.r) this.y = canvas.height + this.r;
+    if (this.x > canvas.width + this.r) this.x = -this.r;
+  }
+  draw() {
+    ctx.beginPath();
+    const grd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r);
+    grd.addColorStop(0, this.color);
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+const stars = [];
+for (let i = 0; i < 120; i++) {
+  stars.push(new Particle(Math.random()*canvas.width,
+    Math.random()*canvas.height,
+    0.02 + Math.random()*0.2,
+    -0.02 - Math.random()*0.1,
+    Math.random()*2 + 1,
+    'rgba(255,255,255,' + (0.2 + Math.random()*0.5) + ')'));
+}
+const jellies = [];
+for (let i = 0; i < 8; i++) {
+  jellies.push(new Particle(Math.random()*canvas.width,
+    Math.random()*canvas.height,
+    0.1 + Math.random()*0.2,
+    -0.3 - Math.random()*0.1,
+    15 + Math.random()*20,
+    'rgba(150,200,255,0.5)'));
+}
+
+function drawWhale() {
+  const midX = canvas.width/2;
+  const midY = canvas.height/2;
+  ctx.strokeStyle = 'rgba(200,220,255,0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  // simple whale skeleton shape
+  ctx.moveTo(midX - 200, midY);
+  for (let i= -200; i<=200; i+=20) {
+    const y = midY + Math.sin(i/80)*40;
+    ctx.lineTo(midX + i, y);
+  }
+  ctx.stroke();
+  // ribs
+  for (let i = -180; i <= 180; i += 40) {
+    ctx.beginPath();
+    ctx.moveTo(midX + i, midY);
+    ctx.lineTo(midX + i, midY + Math.sign(i) * 80);
+    ctx.stroke();
+  }
+}
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // draw nebulous background
+  const gradient = ctx.createLinearGradient(0,0, canvas.width, canvas.height);
+  gradient.addColorStop(0, '#0a1030');
+  gradient.addColorStop(1, '#1e0453');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0,0, canvas.width, canvas.height);
+  // update and draw particles
+  stars.forEach(p => { p.update(); p.draw(); });
+  jellies.forEach(p => { p.update(); p.draw(); });
+  // draw whale
+  drawWhale();
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

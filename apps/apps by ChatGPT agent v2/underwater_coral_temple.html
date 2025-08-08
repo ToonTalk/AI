@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Underwater Coral Temple</title>
+  <style>
+    body, html { margin:0; height:100%; background:#011d2b; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+class Fish {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.x = -50;
+    this.y = Math.random()*canvas.height*0.6 + canvas.height*0.3;
+    this.vx = 1.5 + Math.random();
+    this.size = 10 + Math.random()*10;
+    const r = 100 + Math.floor(Math.random()*155);
+    const g = 80 + Math.floor(Math.random()*175);
+    const b = 130 + Math.floor(Math.random()*125);
+    this.color = `rgba(${r},${g},${b},0.8)`;
+  }
+  update() {
+    this.x += this.vx;
+    if (this.x - this.size > canvas.width) this.reset();
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.fillStyle = this.color;
+    ctx.ellipse(this.x, this.y, this.size, this.size*0.5, 0, 0, Math.PI*2);
+    ctx.fill();
+    // tail
+    ctx.beginPath();
+    ctx.moveTo(this.x - this.size, this.y);
+    ctx.lineTo(this.x - this.size*1.5, this.y - this.size*0.5);
+    ctx.lineTo(this.x - this.size*1.5, this.y + this.size*0.5);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+const fishList = Array.from({length:20}, () => new Fish());
+
+function drawTemple() {
+  const w = canvas.width;
+  const h = canvas.height;
+  const baseY = h*0.7;
+  ctx.fillStyle = '#18344a';
+  ctx.fillRect(0, baseY, w, h-baseY);
+  // columns
+  for (let i = 0; i < 5; i++) {
+    const cx = w*0.2 + i* w*0.15;
+    ctx.fillStyle = '#2a5c6f';
+    ctx.fillRect(cx - 10, baseY - 120, 20, 120);
+    ctx.fillRect(cx - 15, baseY - 120, 30, 10);
+  }
+  // roof
+  ctx.beginPath();
+  ctx.moveTo(w*0.15, baseY - 120);
+  ctx.lineTo(w*0.5, baseY - 180);
+  ctx.lineTo(w*0.85, baseY - 120);
+  ctx.closePath();
+  ctx.fillStyle = '#2d687d';
+  ctx.fill();
+}
+
+function drawAlgae() {
+  ctx.strokeStyle = 'rgba(0,150,100,0.4)';
+  ctx.lineWidth = 2;
+  for (let i=0; i<30; i++) {
+    const x = (i/30) * canvas.width;
+    ctx.beginPath();
+    ctx.moveTo(x, canvas.height);
+    for (let y = canvas.height; y > canvas.height*0.7; y -= 10) {
+      const offset = Math.sin((Date.now()/1000 + x*0.001 + y*0.005)) * 5;
+      ctx.lineTo(x + offset, y - 10);
+    }
+    ctx.stroke();
+  }
+}
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // water gradient
+  const grad = ctx.createLinearGradient(0,0,0, canvas.height);
+  grad.addColorStop(0, '#043d57');
+  grad.addColorStop(1, '#021d30');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  drawTemple();
+  drawAlgae();
+  fishList.forEach(f => { f.update(); f.draw();});
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

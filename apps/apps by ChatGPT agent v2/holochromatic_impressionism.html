@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Holochromatic Impressionism</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b0f23; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// A brush stroke composed of an elliptical blotch that slowly moves
+class Stroke {
+  constructor() {
+    this.reset(true);
+  }
+  // If init flag, randomize starting hue
+  reset(init) {
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+    // random small velocities to simulate slow drift
+    this.vx = (Math.random() - 0.5) * 0.5;
+    this.vy = (Math.random() - 0.5) * 0.5;
+    // size of stroke
+    this.rx = 40 + Math.random() * 60;
+    this.ry = 20 + Math.random() * 40;
+    this.life = 0;
+    // base hue between 0 and 360
+    this.baseHue = init ? Math.random() * 360 : this.baseHue;
+    // unique speed at which the hue cycles
+    this.hueSpeed = 0.2 + Math.random() * 0.5;
+    // transparency factor
+    this.alpha = 0.4 + Math.random() * 0.4;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.life += 1;
+    // bounce off edges to keep strokes on screen
+    if (this.x < -this.rx) this.x = canvas.width + this.rx;
+    if (this.x > canvas.width + this.rx) this.x = -this.rx;
+    if (this.y < -this.ry) this.y = canvas.height + this.ry;
+    if (this.y > canvas.height + this.ry) this.y = -this.ry;
+  }
+  draw() {
+    // calculate current hue by cycling baseHue
+    const hue = (this.baseHue + this.hueSpeed * this.life) % 360;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    // random rotation for impressionistic feel
+    ctx.rotate(Math.sin((this.x + this.y) * 0.001));
+    // use blend mode to lighten overlapping strokes
+    ctx.globalCompositeOperation = 'lighter';
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(this.rx, this.ry));
+    gradient.addColorStop(0, `hsla(${hue}, 80%, 60%, ${this.alpha})`);
+    gradient.addColorStop(1, `hsla(${(hue+30)%360}, 80%, 40%, 0)`);
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, this.rx, this.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+const strokes = [];
+const STROKE_COUNT = 80;
+for (let i = 0; i < STROKE_COUNT; i++) {
+  strokes.push(new Stroke());
+}
+
+function animate() {
+  // draw a dark canvas to gradually fade previous strokes (for trailing effect)
+  ctx.fillStyle = 'rgba(11, 15, 35, 0.1)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  strokes.forEach(s => {
+    s.update();
+    s.draw();
+  });
+  requestAnimationFrame(animate);
+}
+// Initial fill of the background
+ctx.fillStyle = '#0b0f23';
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+animate();
+</script>
+</body>
+</html>

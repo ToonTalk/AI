@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Kaleidoscopic Ukiyo‑e Futurism</title>
+  <style>
+    html, body { margin:0; height:100%; background:#020816; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+let angle = 0;
+const segments = 8;
+// Precompute pattern: path representing a wave and mountain motif
+function drawMotif(scale) {
+  ctx.save();
+  // draw wave as series of arcs
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  for (let i=0; i<5; i++) {
+    const dx = i * 40 * scale;
+    ctx.quadraticCurveTo(dx + 20*scale, -20*scale, dx + 40*scale, 0);
+  }
+  ctx.strokeStyle = `rgba(100,160,255,0.7)`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // mountain
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.lineTo(60*scale, -80*scale);
+  ctx.lineTo(120*scale, 0);
+  ctx.closePath();
+  ctx.fillStyle = `rgba(180,100,200,0.5)`;
+  ctx.fill();
+  ctx.restore();
+}
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // dark radial background
+  const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)/2);
+  grad.addColorStop(0, '#041e42');
+  grad.addColorStop(1, '#01081a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  ctx.translate(canvas.width/2, canvas.height/2);
+  // rotate slowly for kaleidoscope effect
+  angle += 0.003;
+  for (let i=0; i<segments; i++) {
+    ctx.save();
+    const segAngle = (Math.PI*2/segments) * i + angle;
+    ctx.rotate(segAngle);
+    // mirror effect by flipping every other segment
+    if (i % 2 === 1) ctx.scale(1,-1);
+    drawMotif(1.0);
+    ctx.restore();
+  }
+  ctx.setTransform(1,0,0,1,0,0);
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

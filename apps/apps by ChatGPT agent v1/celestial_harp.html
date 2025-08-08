@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Celestial Harp</title>
+  <style>
+    html,body{margin:0;height:100%;overflow:hidden;background:#05081a;color:white;}
+    canvas{display:block;cursor:pointer;}
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+
+// FIX: Declare strings BEFORE calling resize
+const strings=[];
+
+// Setup WebAudio context
+const AudioContext=window.AudioContext||window.webkitAudioContext;
+const audioCtx=new AudioContext();
+
+// Strings positions and frequencies (C major scale)
+const notes=[261.63,293.66,329.63,349.23,392.00,440.00,493.88,523.25];
+
+function drawStrings(){
+  strings.length=0;
+  const gap=canvas.height/(notes.length+1);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let i=0;i<notes.length;i++){
+    const y=gap*(i+1);
+    strings.push({y,amplitude:0});
+    ctx.strokeStyle='rgba(200,200,255,0.5)';
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();
+  }
+}
+
+function resize(){
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+  drawStrings();
+}
+window.addEventListener('resize', resize);
+resize();
+
+function pluckString(idx){
+  const freq=notes[idx];
+  const oscillator=audioCtx.createOscillator();
+  const gainNode=audioCtx.createGain();
+  oscillator.frequency.value=freq;
+  oscillator.type='sine';
+  oscillator.connect(gainNode).connect(audioCtx.destination);
+  const now=audioCtx.currentTime;
+  gainNode.gain.setValueAtTime(0.001,now);
+  gainNode.gain.exponentialRampToValueAtTime(0.3,now+0.01);
+  gainNode.gain.exponentialRampToValueAtTime(0.001,now+2);
+  oscillator.start(now);
+  oscillator.stop(now+2);
+  strings[idx].amplitude=1;
+}
+
+canvas.addEventListener('click',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const y=e.clientY-rect.top;
+  let closest=0;let minDist=Infinity;
+  strings.forEach((s,i)=>{const d=Math.abs(s.y-y);if(d<minDist){minDist=d;closest=i;}});
+  pluckString(closest);
+});
+
+function animate(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#05081a';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  for(let i=0;i<strings.length;i++){
+    const s=strings[i];
+    s.amplitude*=0.96;
+    const offset=Math.sin(Date.now()*0.01)*(s.amplitude*10);
+    ctx.strokeStyle=`rgba(${150+50*Math.sin(i)},${150+100*Math.cos(i)},255,0.7)`;
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(0,s.y+offset);
+    ctx.lineTo(canvas.width,s.y-offset);
+    ctx.stroke();
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

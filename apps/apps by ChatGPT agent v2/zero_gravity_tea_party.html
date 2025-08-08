@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zero-Gravity Tea Party</title>
+  <style>
+    body,html { margin:0; height:100%; background:#05152c; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+class Floater {
+  constructor(type) {
+    this.type = type; // 'cup' or 'sphere'
+    this.reset();
+  }
+  reset() {
+    this.x = Math.random()*canvas.width;
+    this.y = Math.random()*canvas.height;
+    this.vx = -0.5 + Math.random();
+    this.vy = -0.5 + Math.random();
+    this.size = 20 + Math.random()*20;
+    this.color = `rgba(${200+Math.random()*55},${150+Math.random()*105},${200+Math.random()*55},0.8)`;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    if (this.x < -50) this.x = canvas.width+50;
+    if (this.x > canvas.width+50) this.x = -50;
+    if (this.y < -50) this.y = canvas.height+50;
+    if (this.y > canvas.height+50) this.y = -50;
+  }
+  draw() {
+    ctx.fillStyle = this.color;
+    if (this.type === 'sphere') {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size*0.5, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      // cup body
+      ctx.fillRect(this.x - this.size*0.4, this.y - this.size*0.3, this.size*0.8, this.size*0.6);
+      // handle
+      ctx.beginPath();
+      ctx.arc(this.x + this.size*0.5, this.y, this.size*0.3, Math.PI/2, -Math.PI/2, true);
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      // saucer
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y + this.size*0.4, this.size*0.6, this.size*0.2, 0, 0, Math.PI*2);
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+}
+const floaters = [];
+for (let i=0; i<20; i++) {
+  floaters.push(new Floater(Math.random()<0.4 ? 'cup' : 'sphere'));
+}
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // background stars
+  ctx.fillStyle = '#05152c'; ctx.fillRect(0,0,canvas.width, canvas.height);
+  for (let i=0; i<100; i++) {
+    const x = Math.random()*canvas.width;
+    const y = Math.random()*canvas.height;
+    ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.1})`;
+    ctx.fillRect(x,y,1,1);
+  }
+  floaters.forEach(f => { f.update(); f.draw(); });
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

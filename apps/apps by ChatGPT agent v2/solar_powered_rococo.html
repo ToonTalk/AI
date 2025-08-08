@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Solar‑Powered Rococo</title>
+  <style>
+    html, body { margin:0; height:100%; background:#f6f3f2; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Rococo swirl class: draws a curling bezier path that animates along its length
+class Swirl {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.startX = Math.random() * canvas.width;
+    this.startY = canvas.height + Math.random() * canvas.height * 0.5;
+    this.ctrlX = this.startX + (Math.random() - 0.5) * 200;
+    this.ctrlY = this.startY - (100 + Math.random()*200);
+    this.endX = this.startX + (Math.random() - 0.5) * 300;
+    this.endY = this.startY - (300 + Math.random()*300);
+    this.t = 0;
+    this.speed = 0.002 + Math.random() * 0.004;
+    this.width = 2 + Math.random()*2;
+    this.color = `hsla(${40 + Math.random()*30}, 70%, 60%, 0.7)`;
+  }
+  update() {
+    this.t += this.speed;
+    if (this.t > 1) this.reset();
+  }
+  draw() {
+    // Draw partial bezier path based on t
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = this.width;
+    ctx.beginPath();
+    ctx.moveTo(this.startX, this.startY);
+    // using incremental segments to approximate partial curve
+    const steps = 30;
+    for (let i=1; i<=steps * this.t; i++) {
+      const t = i/steps;
+      const x = (1-t)*(1-t)*this.startX + 2*(1-t)*t*this.ctrlX + t*t*this.endX;
+      const y = (1-t)*(1-t)*this.startY + 2*(1-t)*t*this.ctrlY + t*t*this.endY;
+      ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+}
+
+// Solar panels: small squares that float upward like leaves
+class Panel {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random() * canvas.width;
+    this.y = canvas.height + Math.random() * canvas.height;
+    this.size = 10 + Math.random()*15;
+    this.speed = 0.3 + Math.random()*0.7;
+    this.tilt = Math.random()*Math.PI;
+    this.color = 'rgba(50, 80, 120, 0.6)';
+  }
+  update() {
+    this.y -= this.speed;
+    this.tilt += 0.01;
+    if (this.y < -this.size) this.reset();
+  }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.tilt);
+    ctx.fillStyle = this.color;
+    ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+    // grid lines to indicate photovoltaic cells
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    for (let i=1; i<3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-this.size/2 + i*this.size/3, -this.size/2);
+      ctx.lineTo(-this.size/2 + i*this.size/3, this.size/2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+const swirls = [];
+for (let i=0; i<12; i++) swirls.push(new Swirl());
+const panels = [];
+for (let i=0; i<30; i++) panels.push(new Panel());
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // soft background gradient from cream to pale pink
+  const gradient = ctx.createLinearGradient(0,0,0,canvas.height);
+  gradient.addColorStop(0, '#f9f8f5');
+  gradient.addColorStop(1, '#ffe3ef');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  // draw glowing sun at top
+  const sunX = canvas.width * 0.5;
+  const sunY = canvas.height * 0.2;
+  const sunR = canvas.height * 0.15;
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR);
+  sunGrad.addColorStop(0, 'rgba(255,220,100,1)');
+  sunGrad.addColorStop(1, 'rgba(255,220,100,0)');
+  ctx.fillStyle = sunGrad;
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, sunR, 0, Math.PI*2);
+  ctx.fill();
+  // update and draw solar panels
+  panels.forEach(p => { p.update(); p.draw(); });
+  // update and draw swirling rococo curves
+  swirls.forEach(s => { s.update(); s.draw(); });
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

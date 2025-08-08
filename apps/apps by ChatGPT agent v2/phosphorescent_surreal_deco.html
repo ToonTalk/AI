@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Phosphorescent Surreal Deco</title>
+  <style>
+    html, body { margin:0; height:100%; background:#0d0f24; overflow:hidden; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+let t = 0;
+function drawDeco() {
+  ctx.save();
+  const w = canvas.width;
+  const h = canvas.height;
+  // center symmetrical columns
+  const cols = 6;
+  for (let i=0; i<=cols; i++) {
+    const x = (i/cols - 0.5) * w;
+    const amplitude = 50 + 20*Math.sin(t*0.02 + i);
+    ctx.save();
+    ctx.translate(w/2, h/2);
+    // vertical pulsating rectangle representing deco column
+    const columnW = 20 + 10*Math.sin(t*0.01 + i);
+    ctx.fillStyle = `hsla(${200 + 80*Math.sin(t*0.01 + i)}, 60%, 55%, 0.6)`;
+    ctx.fillRect(x - columnW/2, -h*0.4, columnW, h*0.8);
+    ctx.restore();
+  }
+  // art deco sunburst arcs
+  const levels = 8;
+  for (let j=0; j<levels; j++) {
+    const radius = 100 + j*30 + 5*Math.sin(t*0.03 + j);
+    ctx.save();
+    ctx.translate(w/2, h*0.4);
+    ctx.rotate((Math.sin(t*0.02 + j) * Math.PI/10));
+    ctx.strokeStyle = `hsla(${280 + 30*j}, 70%, 60%, 0.5)`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, Math.PI, 2*Math.PI);
+    ctx.stroke();
+    ctx.restore();
+  }
+  // glowing central disc
+  const discR = 40 + 10*Math.sin(t*0.05);
+  const discGrad = ctx.createRadialGradient(w/2, h*0.4, 0, w/2, h*0.4, discR*3);
+  discGrad.addColorStop(0, 'rgba(200,180,255,1)');
+  discGrad.addColorStop(1, 'rgba(100,80,180,0)');
+  ctx.fillStyle = discGrad;
+  ctx.beginPath();
+  ctx.arc(w/2, h*0.4, discR*3, 0, Math.PI*2);
+  ctx.fill();
+  // horizontal lines that ascend gradually
+  for (let k=0; k<30; k++) {
+    const y = h - ((t*0.5 + k*30) % (h + 60));
+    ctx.strokeStyle = `rgba(80,110,180,0.4)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function animate() {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  drawDeco();
+  t++;
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
