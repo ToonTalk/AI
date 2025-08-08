@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>BigInt Rational Calculator – Decimal with Repeating Bar</title>
+
+<style>
+body{
+    font-family:Arial,Helvetica,sans-serif;
+    margin:2rem;
+}
+#calc{
+    width:100%;
+    max-width:500px;
+    margin:auto;
+}
+input[type=text]{
+    width:100%; height:40px; font-size:1.4em;
+    padding:.3rem .5rem;
+    box-sizing:border-box;
+}
+.buttons{display:flex; flex-wrap:wrap; gap:0.2rem;margin-top:.5rem;}
+button{
+    flex:1 1 20%;
+    min-width:60px;
+    height:50px;
+    font-size:1.3em;
+}
+.result{margin-top:1rem;font-size:1.4em;}
+.fullnum{
+    cursor:pointer;
+    color:#0066cc;
+    text-decoration:underline;
+}
+</style>
+</head>
+
+<body>
+<h1>BigInt Rational Calculator – Decimal with Repeating Bar</h1>
+<div id="calc">
+  <input type="text" id="expr" placeholder="Type expression here…"/>
+  <div class="buttons">
+    <!-- digits -->
+    <button data-val="7">7</button><button data-val="8">8</button><button data-val="9">9</button>
+    <button data-val="/">÷</button>
+    <button data-val="4">4</button><button data-val="5">5</button><button data-val="6">6</button>
+    <button data-val="*">*</button>
+    <button data-val="1">1</button><button data-val="2">2</button><button data-val="3">3</button>
+    <button data-val="-">−</button>
+    <button data-val="0">0</button><button data-val=".">.</button><button id="frac" title="Fraction (e.g. 1/2)">½</button>
+    <button data-val="+">+</button>
+    <button data-val="^">^</button>
+    <button data-val="(">(</button><button data-val=")">)</button>
+    <button id="clear">C</button>
+    <button id="equals" style="background:#4caf50;color:white;">=</button>
+  </div>
+  <div class="result" id="output"></div>
+</div>
+
+<script>
+// ---------- Utility functions ----------
+function formatBigInt(bi){
+    const s = bi.toString();
+    if(s.length<=30) return {html:s.replace(/\B(?=(\d{3})+(?!\d))/g,","),
+                            full:null};
+    // Truncated view with ellipsis – clickable
+    const first=s.slice(0,12);
+    const last=s.slice(-12);
+    const truncated = `${first}…${last}`;
+    return {html:`<span class="fullnum" data-full="${s}">${truncated}</span>`,
+            full:s};
+}
+function gcd(a,b){ // Euclidean algorithm for BigInt
+    while(b!==0n){
+        const t=b;
+        b=a%b;
+        a=t;
+    }
+    return a>=0n?a:-a;
+}
+
+// ---------- Fraction class ----------
+class Fraction{
+    constructor(num,den=1n){
+        if(den===0n) throw new Error("Division by zero");
+        // Keep denominator positive
+        if(den<0n){ num=-num; den=-den;}
+        const g=gcd(num,den);
+        this.num=num/g;
+        this.den=den/g;
+    }
+    static fromString(str){
+        str=str.trim();
+        if(str.includes('/')){
+            const [a,b]=str.split('/');
+            return new Fraction(BigInt(a),BigInt(b));
+        }else{
+            return new Fraction(BigInt(str));
+        }
+    }
+    add(o){ return new Fraction(this.num*o.den + o.num*this.den, this.den*o.den);}
+    sub(o){ return new Fraction(this.num*o.den - o.num*this.den, this.den*o.den);}
+    mul(o){ return new Fraction(this.num*o.num, this.den*o.den);}
+    div(o){
+        if(o.num===0n) throw new Error("Division by zero");
+        return new Fraction(this.num*o.den, this.den*o.num);
+    }
+    pow(exp){ // exp is a JavaScript Number (int)
+        let e=BigInt(exp);
+        if(e<0n) return new Fraction(1n,1n).div(this.pow(-e));
+        if(e===0n) return new Fraction(1n,1n);
+        let base=this;
+        let result=new Fraction(1n,1n);
+        while(e>0){
+            if(e%2n===1n) result=result.mul(base);
+            base=base.mul(base);
+            e/=2n;
+        }
+        return result;
+    }
+
+    // ---------- Decimal with repeating bar ----------
+    toDecimal(){
+        const n=this.num;
+        const d=this.den;
+        const sign = (n<0n) ? '-' : '';
+        let num = n>=0n? n:-n;   // absolute value
+
+        const intPart = num / d;
+        let remainder = num % d;
+
+        if(remainder===0n){
+            return `${sign}${formatBigInt(intPart).html}`;
+        }
+
+        const decimals=[];
+        const seen=new Map(); // remainder -> index
+        let idx=0;
+        while(remainder!==0n && !seen.has(remainder)){
+            seen.set(remainder,idx);
+            remainder*=10n;
+            const digit = remainder / d;
+            decimals.push(digit.toString());
+            remainder %= d;
+            idx++;
+            if(idx>10000) break; // safety guard
+        }
+
+        const intStr=formatBigInt(intPart).html;
+
+        let nonRep='', rep='';
+        if(remainder===0n){
+            nonRep=decimals.join('');
+        }else{
+            const start = seen.get(remainder);
+            nonRep=decimals.slice(0,start).join('');
+            rep=decimals.slice(start).join('');
+        }
+
+        let html=`${sign}${intStr}.`;
+        if(nonRep) html+=nonRep;
+        if(rep){
+            html+=`<span style="text-decoration:overline;">${rep}</span>`;
+        }
+        return html;
+    }
+
+    toString(){
+        return this.toDecimal();
+    }
+}
+
+// ---------- Parser (Shunting‑Yard) ----------
+function tokenize(expr){
+    const tokens=[];
+    let i=0;
+    while(i<expr.length){
+        const c=expr[i];
+        if(/\s/.test(c)){i++;continue;}
+        if(/[0-9.]/.test(c)){
+            let num=c; i++;
+            while(i<expr.length && /[0-9.]/.test(expr[i])){num+=expr[i];i++;}
+            tokens.push(num);
+        }else{
+            // operators or parentheses
+            tokens.push(c); i++;
+        }
+    }
+    return tokens;
+}
+function precedence(op){
+    if(op==='+'||op==='-')return 1;
+    if(op==='*'||op==='/')return 2;
+    if(op==='^')return 3;
+    return 0;
+}
+function shuntingYard(tokens){
+    const output=[];
+    const ops=[];
+    for(const token of tokens){
+        if(/[0-9.]/.test(token[0])){ // number
+            output.push(token);
+        }else if(['+','-','*','/','^'].includes(token)){
+            while(ops.length && precedence(ops[ops.length-1])>=precedence(token)){
+                output.push(ops.pop());
+            }
+            ops.push(token);
+        }else if(token==='('){
+            ops.push(token);
+        }else if(token===')'){
+            while(ops.length && ops[ops.length-1]!== '('){
+                output.push(ops.pop());
+            }
+            ops.pop(); // pop '('
+        }
+    }
+    while(ops.length) output.push(ops.pop());
+    return output;
+}
+function evalRPN(rpn){
+    const stack=[];
+    for(const token of rpn){
+        if(/[0-9.]/.test(token[0])){
+            stack.push(Fraction.fromString(token));
+        }else{
+            const b=stack.pop(), a=stack.pop();
+            let res;
+            switch(token){
+                case '+':res=a.add(b);break;
+                case '-':res=a.sub(b);break;
+                case '*':res=a.mul(b);break;
+                case '/':res=a.div(b);break;
+                case '^':
+                    if(b.den!==1n) throw new Error("Exponent must be integer");
+                    res=a.pow(Number(b.num));
+                    break;
+            }
+            stack.push(res);
+        }
+    }
+    return stack[0];
+}
+function evaluate(expr){
+    const tokens=tokenize(expr);
+    const rpn=shuntingYard(tokens);
+    return evalRPN(rpn);
+}
+
+/* --------------------------------------------------------------------
+   1️⃣  Convert an arbitrary BigInt into its English wording.
+   -------------------------------------------------------------------- */
+const SCALE_NAMES = [
+    '',          // 10^0
+    'thousand',  // 10^3
+    'million',   // 10^6
+    'billion',   // 10^9
+    'trillion',  // 10^12
+    'quadrillion',
+    'quintillion',
+    'sextillion',
+    'septillion',
+    'octillion',
+    'nonillion',
+    'decillion',
+    'undecillion',
+    'duodecillion',
+    'tredecillion',
+    'quattuordecillion',
+    'quindecillion',
+    'sexdecillion',
+    'septendecillion',
+    'octodecillion',
+    'novemdecillion',
+    'vigintillion',          // 10^63
+    // … you can keep extending the array if you need more.
+];
+
+const UNITS = ['', 'one','two','three','four','five','six','seven','eight','nine'];
+const TEENS = ['ten','eleven','twelve','thirteen','fourteen',
+               'fifteen','sixteen','seventeen','eighteen','nineteen'];
+const TENS  = ['', '', 'twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+
+/* --------------------------------------------------------------------
+   1️⃣  Scale names – helper for group indices (0 → units, 1 → thousand, …)
+-------------------------------------------------------------------- */
+/* --------------------------------------------------------------------
+   1️⃣  Scale names – helper that works with *group index*
+-------------------------------------------------------------------- */
+const ORDINALS = [
+    '',            // unused placeholder so that idx 0 → empty string
+    'un',          // group 12 → undecillion (10^36)
+    'duo',
+    'tre',
+    'quattuor',
+    'quin',
+    'sex',
+    'septen',
+    'octo',
+    'novem'        // group 20 → novemdeciillion
+];
+
+/**
+ * Return the English scale name for a given 3‑digit group index.
+ *
+ * @param {number} idx - 0 = units, 1 = thousand, 2 = million, …
+ */
+function getScaleName(idx) {
+    /* ---------- 1️⃣  Groups 1–10 (hard‑coded) --------------------- */
+    switch (idx) {
+        case 1: return 'thousand';
+        case 2: return 'million';
+        case 3: return 'billion';
+        case 4: return 'trillion';
+        case 5: return 'quadrillion';
+        case 6: return 'quintillion';
+        case 7: return 'sextillion';
+        case 8: return 'septillion';
+        case 9: return 'octillion';
+        case10: return 'nonillion';
+        case11: return 'decillion';          // 10³³
+    }
+
+    /* ---------- 2️⃣  Groups 12–20 → “un‑deci”, …, “novem‑deci” ---- */
+    if (idx >= 12 && idx <= 20) {
+        const ordIdx = idx - 12;           // 0…8
+        const prefix = ORDINALS[ordIdx + 1]; // skip the empty placeholder
+        return `${prefix}deciillion`;       // e.g., 'un' → 'undecillion'
+    }
+
+    /* ---------- 3️⃣  Group 21 (vigintillion) ----------------------- */
+    if (idx === 21) return 'vigintillion';
+
+    /* ---------- 4️⃣  Beyond – you can extend further as needed --------- */
+    return '';   // fallback: no scale name
+}
+
+/**
+ * Convert a number <1000 into words.
+ */
+function chunkToWords(n) {
+    let word = '';
+    const hundred = Math.floor(n / 100);
+    const rem     = n % 100;
+    if (hundred > 0) word += UNITS[hundred] + ' hundred';
+    if (rem >= 20) {
+        const ten = Math.floor(rem / 10);
+        const unit = rem % 10;
+        if (word) word += ' ';
+        word += TENS[ten];
+        if (unit > 0) word += '-' + UNITS[unit];
+    } else if (rem >= 10) {
+        if (word) word += ' ';
+        word += TEENS[rem - 10];
+    } else if (rem > 0) {   // 1‑9
+        if (word) word += ' ';
+        word += UNITS[rem];
+    }
+    return word;
+}
+
+/**
+ * Convert an arbitrary BigInt to its English wording.
+ */
+function bigIntToEnglish(bi) {
+    if (bi === 0n) return 'zero';
+    const negative = bi < 0n;
+    let num = negative ? -bi : bi;
+
+    // Split into groups of three digits
+    const chunks = [];
+    while (num > 0n) {
+        chunks.push(Number(num % 1000n));
+        num /= 1000n;
+    }
+
+    const words = [];
+    for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        if (chunk === 0) continue;               // skip empty groups
+        let w = chunkToWords(chunk);
+        const scale = getScaleName(i); // i = group index (0 for units)
+        if(scale) w += ' ' + scale;
+        words.unshift(w);                       // higher scales first
+    }
+
+    return (negative ? 'minus ' : '') + words.join(' ');
+}
+
+
+// ---------- UI ----------
+const exprInput=document.getElementById('expr');
+const outputDiv=document.getElementById('output');
+
+document.querySelectorAll('.buttons button[data-val]').forEach(b=>{
+    b.addEventListener('click',()=>{exprInput.value+=b.dataset.val;});
+});
+
+document.getElementById('frac').addEventListener('click',()=>{
+    exprInput.value+='1/2'; // quick insert
+});
+document.getElementById('clear').addEventListener('click',()=>{exprInput.value='';outputDiv.innerHTML='';});
+/* --------------------------------------------------------------------
+   3️⃣  Append English words after the numeric output
+-------------------------------------------------------------------- */
+document.getElementById('equals').addEventListener('click',()=>{
+    try{
+        const result=evaluate(exprInput.value);
+        // Grab the english string from the fraction object (it already uses toDecimal)
+        const eng = bigIntToEnglish(result.num);   // because Fraction holds num/den
+        outputDiv.innerHTML=`Result: ${result.toString()} <span class="english">${eng}</span>`;
+        // Attach click listeners to all truncated numbers
+        outputDiv.querySelectorAll('.fullnum').forEach(el=>{
+            el.addEventListener('click',()=>{window.open('', '_blank')
+                .document.write(`<pre>${el.dataset.full}</pre>`);
+            });
+        });
+    }catch(e){
+        outputDiv.innerHTML=`<span style="color:red;">Error: ${e.message}</span>`;
+    }
+});
+
+
+</script>
+</body>
+</html>

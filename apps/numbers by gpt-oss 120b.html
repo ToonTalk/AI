@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Big‑Integer & Exact‑Rational Calculator</title>
+<style>
+    body {
+        font-family: Arial, Helvetica, sans-serif;
+        background:#f9f9f9;
+        margin:0;
+        padding:0 1rem;
+    }
+    h1 {
+        text-align:center;
+        margin-top:1rem;
+    }
+    #calculator {
+        max-width:800px;
+        margin:2rem auto;
+        background:#fff;
+        padding:1.5rem;
+        box-shadow:0 0 10px rgba(0,0,0,0.1);
+        border-radius:8px;
+    }
+    #expression {
+        width:100%;
+        font-size:1.2rem;
+        padding:0.5rem;
+        border:1px solid #ccc;
+        border-radius:4px;
+    }
+    button {
+        font-size:1rem;
+        margin:0.3rem 0.2rem;
+        padding:0.5rem 1rem;
+        border:none;
+        border-radius:4px;
+        background:#007bff;
+        color:#fff;
+        cursor:pointer;
+    }
+    button:hover {
+        background:#0056b3;
+    }
+    #result {
+        margin-top:1rem;
+        padding:1rem;
+        border:1px solid #ddd;
+        background:#fafafa;
+        min-height:2rem;
+        font-family:monospace;
+        overflow-x:auto;
+        word-break:break-all;
+    }
+    .result-integer,
+    .result-fraction,
+    .result-large,
+    .result-fraction-large {
+        margin:0.5rem 0;
+    }
+    .result-integer {
+        font-size:1.5rem;
+    }
+    .result-fraction .exact,
+    .result-fraction .approx {
+        margin-top:0.3rem;
+    }
+    details {
+        border-left:2px solid #007bff;
+        padding-left:0.5rem;
+        margin:0.5rem 0;
+    }
+    summary {
+        cursor:pointer;
+        font-weight:bold;
+        margin-bottom:0.3rem;
+    }
+    pre {
+        background:#eee;
+        padding:0.5rem;
+        overflow:auto;
+    }
+    .copy-btn {
+        margin-left:0.5rem;
+        font-size:0.9rem;
+        background:#28a745;
+    }
+    .copy-btn:hover {
+        background:#218838;
+    }
+    .error {
+        color:#c00;
+        font-weight:bold;
+    }
+    #history {
+        margin-top:1rem;
+        list-style:none;
+        padding-left:0;
+        max-height:200px;
+        overflow-y:auto;
+        border-top:1px solid #ccc;
+        padding-top:0.5rem;
+    }
+    #history li {
+        padding:0.3rem 0;
+        border-bottom:1px dotted #ddd;
+        word-break:break-all;
+    }
+    #history code {
+        background:#f4f4f4;
+        padding:2px 4px;
+        border-radius:3px;
+        cursor:pointer;
+    }
+    .english-result {
+        margin-top:0.8rem;
+    }
+</style>
+</head>
+<body>
+<h1>Big‑Integer & Exact‑Rational Calculator</h1>
+<div id="calculator">
+    <input type="text" id="expression" placeholder="e.g. (12345678901234567890/3)^2 + 5/7">
+    <div>
+        <button id="calculate">Calculate</button>
+        <button id="clear">Clear</button>
+    </div>
+    <div id="result"></div>
+
+    <h2>History</h2>
+    <ul id="history"></ul>
+</div>
+
+<script>
+/* ---------- Utility ---------- */
+function escapeHtml(text){
+    return text.replace(/&/g,'&amp;')
+               .replace(/</g,'&lt;')
+               .replace(/>/g,'&gt;')
+               .replace(/"/g,'&quot;')
+               .replace(/'/g,'&#039;');
+}
+function isDigit(ch){ return ch>='0' && ch<='9'; }
+
+/* ---------- Word tables (used for English conversion) ---------- */
+const SMALL = {
+    0:"zero",1:"one",2:"two",3:"three",4:"four",5:"five",6:"six",7:"seven",8:"eight",9:"nine",
+    10:"ten",11:"eleven",12:"twelve",13:"thirteen",14:"fourteen",15:"fifteen",
+    16:"sixteen",17:"seventeen",18:"eighteen",19:"nineteen"
+};
+const TENS = {
+    20:"twenty",30:"thirty",40:"forty",50:"fifty",60:"sixty",
+    70:"seventy",80:"eighty",90:"ninety"
+};
+
+/* ---------- Rational (exact fractions) ---------- */
+class Rational{
+    constructor(num, den=1n){
+        if (den===0n) throw new Error('Denominator cannot be zero');
+        if (den<0n){
+            num=-num;
+            den=-den;
+        }
+        const g = Rational.gcd(Rational.abs(num), den);
+        this.num = num/g;
+        this.den = den/g;
+    }
+    static abs(x){ return x<0n ? -x : x; }
+    static gcd(a,b){
+        a = Rational.abs(a);
+        b = Rational.abs(b);
+        while(b!==0n){
+            const t=b;
+            b=a% b;
+            a=t;
+        }
+        return a;
+    }
+    add(o){ return new Rational(this.num*o.den + this.den*o.num, this.den*o.den); }
+    sub(o){ return new Rational(this.num*o.den - this.den*o.num, this.den*o.den); }
+    mul(o){ return new Rational(this.num*o.num, this.den*o.den); }
+    div(o){
+        if (o.num===0n) throw new Error('Division by zero');
+        return new Rational(this.num*o.den, this.den*o.num);
+    }
+    // exponent must be an integer Rational (den==1)
+    pow(exp){
+        if (exp.den!==1n) throw new Error('Exponent must be an integer');
+        let e = exp.num;
+        if (e===0n){
+            if (this.num===0n) throw new Error('0^0 is undefined');
+            return new Rational(1n,1n);
+        }
+        if (e<0n){
+            if (this.num===0n) throw new Error('Division by zero in negative exponent');
+            const inv = new Rational(this.den, this.num);
+            e = -e;
+            return inv.pow(new Rational(e,1n));
+        }
+        let resultNum = 1n;
+        let resultDen = 1n;
+        let baseNum = this.num;
+        let baseDen = this.den;
+        while(e>0n){
+            if (e & 1n){
+                resultNum *= baseNum;
+                resultDen *= baseDen;
+            }
+            e >>= 1n;
+            if (e>0n){
+                baseNum *= baseNum;
+                baseDen *= baseDen;
+            }
+        }
+        return new Rational(resultNum, resultDen);
+    }
+    // decimal approximation (maxDigits after decimal point)
+    toDecimal(maxDigits=20){
+        let sign = (this.num<0n) !== (this.den<0n) ? '-' : '';
+        let a = Rational.abs(this.num);
+        let b = Rational.abs(this.den);
+        const intPart = a / b;
+        let rem = a % b;
+        if (rem===0n) return sign + intPart.toString();
+        let digits = '';
+        for(let i=0;i<maxDigits && rem!==0n;i++){
+            rem *= 10n;
+            const d = rem / b;
+            digits += d.toString();
+            rem = rem % b;
+        }
+        return sign + intPart.toString() + '.' + digits;
+    }
+    // short scientific notation (used for very large integers)
+    toScientific(sigDigits=6){
+        const dec = this.toDecimal(sigDigits+5);
+        const s = dec.trim();
+        const sign = s.startsWith('-') ? '-' : '';
+        const abs = sign ? s.slice(1) : s;
+        const parts = abs.split('.');
+        const intPart = parts[0];
+        const fracPart = parts[1]||'';
+        if (intPart !== '0'){
+            const sig = intPart.slice(0,sigDigits);
+            const mant = sig.charAt(0) + (sig.length>1 ? '.'+sig.slice(1) : '');
+            const exp = intPart.length-1;
+            return sign + mant + '×10^' + exp;
+        }else{
+            let i=0;
+            while(i<fracPart.length && fracPart[i]==='0') i++;
+            if (i===fracPart.length) return '0';
+            const sig = fracPart.slice(i,i+sigDigits);
+            const mant = sig.charAt(0) + (sig.length>1 ? '.'+sig.slice(1) : '');
+            const exp = -(i+1);
+            return sign + mant + '×10^' + exp;
+        }
+    }
+    toString(){ return this.den===1n ? this.num.toString() : `${this.num}/${this.den}`; }
+}
+
+/* ---------- Parsing ---------- */
+function parseRational(str){
+    str = str.trim();
+    if (str.includes('/')){
+        const parts = str.split('/');
+        if (parts.length!==2) throw new Error(`Invalid fraction: ${str}`);
+        const num = BigInt(parts[0]);
+        const den = BigInt(parts[1]);
+        return new Rational(num,den);
+    }else{
+        return new Rational(BigInt(str),1n);
+    }
+}
+
+/* Tokeniser */
+function tokenize(expr){
+    const tokens=[];
+    let i=0;
+    const len=expr.length;
+    let expectNumber=true; // at start we expect a number or '('
+    while(i<len){
+        const ch=expr[i];
+        if (/\s/.test(ch)){ i++; continue; }
+        if (expectNumber){
+            if (ch==='('){
+                tokens.push({type:'paren',value:'('});
+                i++;
+                continue;
+            }
+            let sign='';
+            if (ch==='+'||ch==='-'){
+                sign=ch;
+                i++;
+            }
+            if (i>=len || !isDigit(expr[i])){
+                throw new Error(`Number expected at position ${i}`);
+            }
+            const startDigits=i;
+            while(i<len && isDigit(expr[i])) i++;
+            const intPart=expr.slice(startDigits,i);
+            let numStr=sign+intPart;
+            if (i<len && expr[i]==='/'){
+                i++; // skip '/'
+                let denSign='';
+                if (i<len && (expr[i]=='+'||expr[i]=='-')){
+                    denSign=expr[i];
+                    i++;
+                }
+                if (i>=len || !isDigit(expr[i])){
+                    throw new Error(`Denominator digits expected at position ${i}`);
+                }
+                const startDen=i;
+                while(i<len && isDigit(expr[i])) i++;
+                const denPart=expr.slice(startDen,i);
+                numStr += '/' + denSign + denPart;
+            }
+            tokens.push({type:'number',value:numStr});
+            expectNumber=false;
+            continue;
+        }else{
+            if (ch===')'){
+                tokens.push({type:'paren',value:')'});
+                i++;
+                continue;
+            }
+            if ('+-*/^'.includes(ch)){
+                tokens.push({type:'operator',value:ch});
+                i++;
+                expectNumber=true;
+                continue;
+            }
+            if (ch==='('){
+                throw new Error(`Missing operator before '(' at position ${i}`);
+            }
+            throw new Error(`Unexpected character '${ch}' at position ${i}`);
+        }
+    }
+    return tokens;
+}
+
+/* Shunting‑Yard – convert to Reverse Polish Notation */
+function toRPN(tokens){
+    const output=[];
+    const opStack=[];
+    const prec={ '^':4, '*':3, '/':3, '+':2, '-':2 };
+    const rightAssoc={ '^':true };
+    for(const token of tokens){
+        if (token.type==='number'){
+            output.push(token);
+        }else if (token.type==='operator'){
+            const o1=token.value;
+            while(opStack.length){
+                const top=opStack[opStack.length-1];
+                if (top.type!=='operator') break;
+                const o2=top.value;
+                const p1=prec[o1];
+                const p2=prec[o2];
+                if ( (rightAssoc[o1] && p1<p2) || (!rightAssoc[o1] && p1<=p2) ){
+                    output.push(opStack.pop());
+                }else break;
+            }
+            opStack.push(token);
+        }else if (token.type==='paren'){
+            if (token.value==='('){
+                opStack.push(token);
+            }else{
+                // ')'
+                let found=false;
+                while(opStack.length){
+                    const top=opStack.pop();
+                    if (top.type==='paren' && top.value==='('){
+                        found=true;
+                        break;
+                    }else{
+                        output.push(top);
+                    }
+                }
+                if (!found) throw new Error('Mismatched parentheses');
+            }
+        }
+    }
+    while(opStack.length){
+        const top=opStack.pop();
+        if (top.type==='paren') throw new Error('Mismatched parentheses');
+        output.push(top);
+    }
+    return output;
+}
+
+/* Evaluation of RPN */
+function evaluateRPN(rpn){
+    const stack=[];
+    for(const token of rpn){
+        if (token.type==='number'){
+            stack.push(parseRational(token.value));
+        }else if (token.type==='operator'){
+            const op=token.value;
+            const right=stack.pop();
+            const left=stack.pop();
+            if (right===undefined||left===undefined){
+                throw new Error(`Insufficient operands for '${op}'`);
+            }
+            let res;
+            if (op==='+')      res=left.add(right);
+            else if (op==='-') res=left.sub(right);
+            else if (op==='*') res=left.mul(right);
+            else if (op==='/') res=left.div(right);
+            else if (op==='^'){
+                if (right.den!==1n) throw new Error('Exponent must be an integer');
+                res=left.pow(right);
+            }else{
+                throw new Error(`Unknown operator '${op}'`);
+            }
+            stack.push(res);
+        }
+    }
+    if (stack.length!==1) throw new Error('Invalid expression');
+    return stack[0];
+}
+
+/* ---------- Scale‑name generation ---------- */
+const SCALE = [
+    "",               // 10^0
+    "thousand",       // 10^3
+    "million",        // 10^6
+    "billion",        // 10^9
+    "trillion",       // 10^12
+    "quadrillion",    // 10^15
+    "quintillion",    // 10^18
+    "sextillion",     // 10^21
+    "septillion",     // 10^24
+    "octillion",      // 10^27
+    "nonillion",      // 10^30
+    "decillion",      // 10^33
+    "undecillion",    // 10^36
+    "duodecillion",   // 10^39
+    "tredecillion",   // 10^42
+    "quattuordecillion", // 10^45
+    "quindecillion",  // 10^48
+    "sexdecillion",   // 10^51
+    "septendecillion",// 10^54
+    "octodecillion",  // 10^57
+    "novemdecillion", // 10^60
+    "vigintillion"    // 10^63
+];
+
+/* -----  Latin building blocks  ----- */
+const UNIT_PREFIXES = ["","un","duo","tre","quattuor","quin","sex","septen","octo","novem"];
+const TEEN_PREFIXES = {
+    10:"dec",
+    11:"undec",
+    12:"duodec",
+    13:"tredec",
+    14:"quattuordec",
+    15:"quindec",
+    16:"sexdec",
+    17:"septendec",
+    18:"octodec",
+    19:"novemdec"
+};
+const TEN_PREFIXES  = ["","dec","vigint","trigint","quadragint","quinquagint","sexagint","septuagint","octogint","nonagint"];
+const HUNDRED_PREFIXES = ["","cent","ducent","trecent","quadringent","quingent","sescent","septingent","octingent","nongent"];
+
+/* -----  0‑999 → simple Latin prefix  ----- */
+function prefixUnderThousand(num){
+    // 0 → "" (should never be called with 0 when building a scale name)
+    let p = "";
+    const hundreds = Math.floor(num/100);
+    const remainder = num % 100;
+
+    // ---- units / teens / tens ----
+    if (remainder>0){
+        if (remainder < 10){
+            // 1‑9 → unit prefix
+            p += UNIT_PREFIXES[remainder];
+        }else if (remainder < 20){
+            // 10‑19 → teen prefix
+            p += TEEN_PREFIXES[remainder] || "";
+        }else{
+            const tens = Math.floor(remainder/10);
+            const units = remainder % 10;
+            if (units>0){
+                p += UNIT_PREFIXES[units] + TEN_PREFIXES[tens];
+            }else{
+                p += TEN_PREFIXES[tens];
+            }
+        }
+    }
+
+    // ---- hundreds ----
+    if (hundreds>0){
+        p += HUNDRED_PREFIXES[hundreds];
+    }
+    return p;
+}
+
+/* -----  Recursive Latin prefix for any positive integer  ----- */
+function cardinalToPrefix(num){
+    if (num===0) return "";
+    if (num < 1000){
+        return prefixUnderThousand(num);
+    }
+    // num ≥ 1000 → split into thousands + remainder
+    const high   = Math.floor(num / 1000);   // how many thousands
+    const low    = num % 1000;              // the leftover part (<1000)
+
+    // “milli” is the Latin word for a thousand.  When the high part is 1 we
+    // omit the leading “un”.  All larger high‑parts get their own prefix.
+    const highPart = (high===1) ? "milli" : cardinalToPrefix(high) + "milli";
+    const lowPart  = low ? prefixUnderThousand(low) : "";
+    return highPart + lowPart;
+}
+
+/* -----  Public API – return the proper scale name for 10^(3·idx)  ----- */
+function getScaleName(idx){
+    // The static table covers the most common names (up to vigintillion)
+    if (idx < SCALE.length) return SCALE[idx];
+
+    // For idx ≥ static length we build a Latin prefix from the cardinal
+    // number (idx − 1) and append “illion”.
+    const cardinal = idx - 1;          // 2 → 1 (= million), 22 → 21 (= unvigintillion), …
+    if (cardinal===0) return "";
+    const prefix = cardinalToPrefix(cardinal);
+    return prefix + "illion";
+}
+
+/* ---------- Three‑digit → English words (used by the full conversion) ---------- */
+function threeDigitToWords(num){
+    if (num===0) return "";
+    let words = "";
+    const h = Math.floor(num/100);
+    const rem = num%100;
+    if (h>0){
+        words += SMALL[h] + " hundred";
+        if (rem>0) words += " ";
+    }
+    if (rem>0){
+        if (rem<20){
+            words += SMALL[rem];
+        }else{
+            const t = Math.floor(rem/10);
+            const u = rem%10;
+            words += TENS[t*10];
+            if (u>0) words += "-" + SMALL[u];
+        }
+    }
+    return words;
+}
+
+/* ---------- Result display (numeric) ---------- */
+function formatResult(r){
+    const THRESH = 15; // length before we abbreviate
+    const esc = escapeHtml;
+    const copyBtn = (txt)=>`<button class="copy-btn" data-copy="${esc(txt)}">Copy</button>`;
+
+    /* ----- exact integer ----- */
+    if (r.den===1n){
+        const nStr = r.num.toString();
+        if (nStr.length<=THRESH){
+            return `<div class="result-integer">${esc(nStr)} ${copyBtn(nStr)}</div>`;
+        }else{
+            const sign = r.num<0n ? '-' : '';
+            const absStr = (r.num<0n ? -r.num : r.num).toString();
+            const groups = Math.ceil(absStr.length/3);
+            const leadingLen = absStr.length - (groups-1)*3;
+            const leadingDigits = absStr.slice(0, leadingLen);
+            const scaleName = getScaleName(groups-1);
+            const summary = sign + leadingDigits + (scaleName ? ' '+scaleName : '');
+            const abbrev = `${absStr.slice(0,6)}…${absStr.slice(-6)}`;
+            const full = `<pre>${esc(r.num.toString())}</pre>`;
+            return `<details class="result-large"><summary>${summary} (${abbrev})</summary>${full} ${copyBtn(r.num.toString())}</details>`;
+        }
+    }
+
+    /* ----- exact fraction ----- */
+    const nStr = r.num.toString();
+    const dStr = r.den.toString();
+    const exact = `${nStr}/${dStr}`;
+    const approxDec = r.toDecimal(20);
+    const isLarge = nStr.length>THRESH || dStr.length>THRESH;
+
+    if (!isLarge){
+        const exactHtml = `<span class="fraction">${esc(nStr)}/${esc(dStr)}</span> ${copyBtn(exact)}`;
+        const approxHtml = `≈ ${esc(approxDec)}`;
+        return `<div class="result-fraction"><div class="exact">Exact: ${exactHtml}</div><div class="approx">Approximation: ${approxHtml}</div></div>`;
+    }else{
+        const abbrevNum = `${nStr.slice(0,6)}…${nStr.slice(-6)}`;
+        const abbrevDen = `${dStr.slice(0,6)}…${dStr.slice(-6)}`;
+
+        // Approximate the whole value for the short view
+        const decApprox = r.toDecimal(6);
+        const groups = Math.ceil(decApprox.replace('-','').split('.')[0].length/3);
+        const leadingLen = decApprox.replace('-','').split('.')[0].length - (groups-1)*3;
+        const leadingDigits = decApprox.replace('-','').split('.')[0].slice(0, leadingLen);
+        const scaleName = getScaleName(groups-1);
+        const shortApprox = leadingDigits + (scaleName ? ' '+scaleName : '');
+
+        const summary = `Exact: ${abbrevNum}/${abbrevDen} (≈ ${esc(shortApprox)})`;
+        const full = `<pre>${esc(nStr)}/${esc(dStr)}</pre>`;
+        const approxHtml = `<div class="approx">Approximation: ${esc(approxDec)}</div>`;
+        return `<details class="result-fraction-large"><summary>${summary}</summary>${full} ${copyBtn(exact)} ${approxHtml}</details>`;
+    }
+}
+
+/* ---------- English conversion (now with a collapsible full version) ---------- */
+function bigIntToEnglishString(bi){
+    const sign = bi<0n ? "negative " : "";
+    const abs = bi<0n ? -bi : bi;
+    const s = abs.toString();
+
+    if (s==="0") return {short:"zero", full:"zero"};
+
+    // Small numbers (≤ 999) → write them out completely
+    if (s.length <= 3){
+        const words = threeDigitToWords(Number(s));
+        const full = sign + words;
+        return {short:full, full};
+    }
+
+    const groups = Math.ceil(s.length/3);
+    // --- full wording -------------------------------------------------
+    const groupsArr=[];
+    for(let i=s.length; i>0; i-=3){
+        const start=Math.max(0,i-3);
+        groupsArr.push(parseInt(s.slice(start,i),10));
+    }
+    const fullParts=[];
+    for(let i=0;i<groupsArr.length;i++){
+        const val = groupsArr[i];
+        if (val===0) continue;
+        const w = threeDigitToWords(val);
+        const scale = getScaleName(i);
+        fullParts.unshift(scale ? w + " " + scale : w);
+    }
+    const full = sign + fullParts.join(" ");
+
+    // --- short wording (leading three digits + highest scale) ----------
+    const leadingDigits = s.slice(0, Math.min(3,s.length));
+    const scaleName = getScaleName(groups-1);
+    const short = sign + leadingDigits + (scaleName ? " " + scaleName : "");
+
+    return {short, full};
+}
+
+function formatEnglishResult(r){
+    const esc = escapeHtml;
+    let desc;
+    if (r.den===1n){
+        desc = bigIntToEnglishString(r.num);
+    }else{
+        const n = bigIntToEnglishString(r.num);
+        const d = bigIntToEnglishString(r.den);
+        desc = {
+            short: `${n.short} over ${d.short}`,
+            full:  `${n.full} over ${d.full}`
+        };
+    }
+    const copyBtn = `<button class="copy-btn" data-copy="${esc(desc.full)}">Copy</button>`;
+    return `<details class="english-result"><summary>${esc(desc.short)}</summary><pre>${esc(desc.full)}</pre> ${copyBtn}</details>`;
+}
+
+/* ---------- UI interaction ---------- */
+function displayError(msg){
+    const rDiv = document.getElementById('result');
+    rDiv.innerHTML = `<div class="error">Error: ${escapeHtml(msg)}</div>`;
+}
+function addHistory(expr, resultHTML){
+    const li = document.createElement('li');
+    const escExpr = escapeHtml(expr);
+    li.innerHTML = `<code>${escExpr}</code> = ${resultHTML}`;
+    li.querySelector('code').addEventListener('click',()=>{
+        document.getElementById('expression').value = expr;
+    });
+    document.getElementById('history').appendChild(li);
+}
+
+/* Main calculation routine */
+function calculate(){
+    const exprInput = document.getElementById('expression');
+    const expr = exprInput.value.trim();
+    if (!expr) return;
+    try{
+        const tokens = tokenize(expr);
+        const rpn = toRPN(tokens);
+        const result = evaluateRPN(rpn);
+        const resultHTML = formatResult(result) + formatEnglishResult(result);
+        document.getElementById('result').innerHTML = resultHTML;
+        addHistory(expr, resultHTML);
+    }catch(e){
+        displayError(e.message);
+    }
+}
+
+/* Event listeners */
+document.getElementById('calculate').addEventListener('click', calculate);
+document.getElementById('clear').addEventListener('click',()=>{
+    document.getElementById('expression').value='';
+    document.getElementById('result').innerHTML='';
+});
+document.getElementById('expression').addEventListener('keydown',e=>{
+    if (e.key==='Enter'){
+        e.preventDefault();
+        calculate();
+    }
+});
+document.addEventListener('click', e=>{
+    if (e.target && e.target.matches('.copy-btn')){
+        const txt = e.target.getAttribute('data-copy');
+        if (!txt) return;
+        navigator.clipboard.writeText(txt).then(()=>{
+            const old = e.target.textContent;
+            e.target.textContent='Copied!';
+            setTimeout(()=>{ e.target.textContent=old; },1500);
+        }).catch(()=>{
+            // fallback for older browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = txt;
+            textarea.style.position='fixed';
+            textarea.style.left='-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try{
+                document.execCommand('copy');
+                e.target.textContent='Copied!';
+                setTimeout(()=>{ e.target.textContent='Copy'; },1500);
+            }catch(err){
+                console.error('Fallback copy failed', err);
+            }
+            document.body.removeChild(textarea);
+        });
+    }
+});
+</script>
+</body>
+</html>
