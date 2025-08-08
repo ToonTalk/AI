@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Metamorphic Voices</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: radial-gradient(circle, #0a0c1f 0%, #010308 100%); }
+    #canvas { width: 100%; height: 100%; display: block; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0,0,0,0.6); padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #ffcf6b; text-decoration: none; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Click anywhere to allow microphone access. Speak into your device and watch your voice morph into light. Use headphones to avoid feedback.</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    let analyser = null;
+    let started = false;
+    const overlay = document.getElementById('overlay');
+
+    function start() {
+      if (started) return;
+      started = true;
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        const source = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1200;
+        source.connect(filter);
+        filter.connect(analyser);
+        // connect filter to destination so user hears voice
+        filter.connect(audioCtx.destination);
+        overlay.style.display = 'none';
+        animate();
+      }).catch(() => {
+        overlay.textContent = 'Microphone access denied. Reload and allow microphone to experience this piece.';
+      });
+    }
+    canvas.addEventListener('click', () => {
+      audioCtx.resume();
+      start();
+    });
+
+    function animate() {
+      if (!analyser) {
+        requestAnimationFrame(animate);
+        return;
+      }
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      analyser.getByteFrequencyData(dataArray);
+      ctx.clearRect(0, 0, width, height);
+      const cx = width / 2;
+      const cy = height / 2;
+      const bars = bufferLength;
+      const maxLen = Math.min(width, height) * 0.4;
+      for (let i = 0; i < bars; i++) {
+        const amp = dataArray[i] / 255;
+        const innerRadius = Math.min(width, height) * 0.12;
+        const length = amp * maxLen;
+        const angle = (i / bars) * Math.PI * 2;
+        const x1 = cx + Math.cos(angle) * innerRadius;
+        const y1 = cy + Math.sin(angle) * innerRadius;
+        const x2 = cx + Math.cos(angle) * (innerRadius + length);
+        const y2 = cy + Math.sin(angle) * (innerRadius + length);
+        ctx.strokeStyle = `hsla(${i * 3}, 80%, 60%, 0.8)`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      requestAnimationFrame(animate);
+    }
+  })();
+  </script>
+</body>
+</html>

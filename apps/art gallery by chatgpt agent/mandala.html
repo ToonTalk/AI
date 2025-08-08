@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pulse Mandala</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: radial-gradient(circle, #010209 0%, #000307 100%); }
+    #canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0,0,0,0.6); padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #ffcf6b; text-decoration: none; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Click or press space to tap a beat. Rings bloom with each pulse. Press R to reset.</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.2) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    const pulses = [];
+    function addPulse() {
+      const now = performance.now();
+      pulses.push({ t0: now, freq: 200 + Math.random() * 400 });
+      beep(pulses[pulses.length - 1].freq);
+    }
+    canvas.addEventListener('click', () => {
+      audioCtx.resume();
+      addPulse();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        audioCtx.resume();
+        addPulse();
+      } else if (e.key.toLowerCase() === 'r') {
+        pulses.length = 0;
+      }
+    });
+
+    let last = performance.now();
+    function animate(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      ctx.fillStyle = 'rgba(0,1,5,0.25)';
+      ctx.fillRect(0, 0, width, height);
+      const cx = width / 2;
+      const cy = height / 2;
+      for (let i = pulses.length - 1; i >= 0; i--) {
+        const p = pulses[i];
+        const age = (now - p.t0) / 1000;
+        const radius = age * Math.min(width, height) * 0.4;
+        const alpha = Math.max(0, 1 - age / 1.2);
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(255, 215, 0, ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        if (alpha <= 0) {
+          pulses.splice(i, 1);
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+    animate(last);
+  })();
+  </script>
+</body>
+</html>

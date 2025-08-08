@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Luminous Origami Garden</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: radial-gradient(circle, #011017 0%, #010408 100%); }
+    #canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0,0,0,0.6); padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #ffcf6b; text-decoration: none; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Click to fold the glowing paper. After the star is formed, click its flaps to play notes.</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.3) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    let step = 0; // 0: square, 1: diamond, 2: star emerging, 3: interactive star
+    let highlightSector = -1;
+    let highlightUntil = 0;
+    canvas.addEventListener('click', (e) => {
+      audioCtx.resume();
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const cx = width / 2;
+      const cy = height / 2;
+      const outerR = Math.min(width, height) * 0.25;
+      if (step < 3) {
+        step++;
+        beep(400 + step * 100);
+        return;
+      }
+      // interactive star: determine sector
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < outerR * 0.3 || dist > outerR) return;
+      let angle = Math.atan2(dy, dx);
+      angle += Math.PI / 2; // rotate so sector 0 starts at top
+      if (angle < 0) angle += Math.PI * 2;
+      const sector = Math.floor(angle / (Math.PI * 2 / 5));
+      highlightSector = sector;
+      highlightUntil = performance.now() + 400;
+      beep(500 + sector * 100);
+    });
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+      const cx = width / 2;
+      const cy = height / 2;
+      const size = Math.min(width, height) * 0.3;
+      ctx.save();
+      ctx.translate(cx, cy);
+      // draw shapes according to step
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      if (step === 0) {
+        // square
+        ctx.beginPath();
+        const d = size / Math.sqrt(2);
+        ctx.rect(-d, -d, d * 2, d * 2);
+        ctx.stroke();
+      } else if (step === 1) {
+        // diamond (rotated square)
+        ctx.beginPath();
+        const r = size;
+        ctx.moveTo(0, -r);
+        ctx.lineTo(r, 0);
+        ctx.lineTo(0, r);
+        ctx.lineTo(-r, 0);
+        ctx.closePath();
+        ctx.stroke();
+      } else {
+        // star shape (5 points)
+        const outerR = size;
+        const innerR = size * 0.4;
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+          const r = (i % 2 === 0) ? outerR : innerR;
+          const x = Math.cos(ang) * r;
+          const y = Math.sin(ang) * r;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        if (step >= 3) {
+          // draw highlight if any
+          const now = performance.now();
+          if (highlightSector >= 0 && highlightUntil > now) {
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+            const sectorAngle = (Math.PI * 2) / 5;
+            const startAng = -Math.PI / 2 + highlightSector * sectorAngle;
+            const endAng = startAng + sectorAngle;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, outerR, startAng, endAng);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+      }
+      ctx.restore();
+    }
+    function loop() {
+      draw();
+      requestAnimationFrame(loop);
+    }
+    loop();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Gravity Paint Orchestra</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at center, #02030a 0%, #01010f 100%); }
+    #canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0,0,0,0.6); padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #ffcf6b; text-decoration: none; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Click anywhere to drop a colorful orb. They bounce around and chime when they hit the walls.</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    const dpr = window.devicePixelRatio || 1;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Audio context
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.3) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    class Orb {
+      constructor(x, y, vx, vy, radius, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = radius;
+        this.color = color;
+      }
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        let collided = false;
+        if (this.x - this.radius < 0) {
+          this.x = this.radius;
+          this.vx *= -1;
+          collided = true;
+        }
+        if (this.x + this.radius > width) {
+          this.x = width - this.radius;
+          this.vx *= -1;
+          collided = true;
+        }
+        if (this.y - this.radius < 0) {
+          this.y = this.radius;
+          this.vy *= -1;
+          collided = true;
+        }
+        if (this.y + this.radius > height) {
+          this.y = height - this.radius;
+          this.vy *= -1;
+          collided = true;
+        }
+        if (collided) {
+          const freq = 200 + (30 - this.radius) * 12;
+          beep(freq);
+        }
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.fillStyle = this.color;
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    const orbs = [];
+    function spawnOrb(x, y) {
+      const radius = 10 + Math.random() * 20;
+      const speed = 40 + Math.random() * 60;
+      const angle = Math.random() * Math.PI * 2;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+      const hue = Math.floor(Math.random() * 360);
+      const color = `hsl(${hue},70%,60%)`;
+      orbs.push(new Orb(x, y, vx, vy, radius, color));
+    }
+    canvas.addEventListener('click', (e) => {
+      audioCtx.resume(); // ensure context starts on user interaction
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      spawnOrb(x, y);
+    });
+
+    let last = performance.now();
+    function animate(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      // fade background for trailing effect
+      ctx.fillStyle = 'rgba(2,3,15,0.3)';
+      ctx.fillRect(0, 0, width, height);
+      for (const orb of orbs) {
+        orb.update(dt);
+        orb.draw();
+      }
+      requestAnimationFrame(animate);
+    }
+    animate(last);
+  })();
+  </script>
+</body>
+</html>

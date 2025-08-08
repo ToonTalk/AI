@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chalkboard Universe</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: radial-gradient(circle, #010913 0%, #010308 100%); }
+    #canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0,0,0,0.6); padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #ffcf6b; text-decoration: none; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Drag outward from the center to create orbiting planets. Each completes its orbit with a chime. Press C to clear.</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.2) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    const orbits = [];
+    let drawing = false;
+    let startX, startY;
+    canvas.addEventListener('mousedown', (e) => {
+      audioCtx.resume();
+      drawing = true;
+      const rect = canvas.getBoundingClientRect();
+      startX = e.clientX - rect.left;
+      startY = e.clientY - rect.top;
+    });
+    canvas.addEventListener('mouseup', (e) => {
+      if (!drawing) return;
+      drawing = false;
+      const rect = canvas.getBoundingClientRect();
+      const endX = e.clientX - rect.left;
+      const endY = e.clientY - rect.top;
+      const cx = width / 2;
+      const cy = height / 2;
+      const dx = endX - cx;
+      const dy = endY - cy;
+      const r = Math.hypot(dx, dy);
+      if (r > 20) {
+        const maxR = Math.min(width, height) / 2 - 20;
+        const radius = Math.min(r, maxR);
+        const speed = 0.5 + Math.random() * 0.5;
+        const hue = Math.floor((radius / maxR) * 300);
+        orbits.push({ radius, angle: Math.random() * Math.PI * 2, speed, hue, lastChime: 0 });
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'c') {
+        orbits.length = 0;
+      }
+    });
+
+    let last = performance.now();
+    function animate(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      ctx.fillStyle = 'rgba(1,2,10,0.3)';
+      ctx.fillRect(0, 0, width, height);
+      // draw center
+      ctx.beginPath();
+      ctx.fillStyle = '#ffd700';
+      ctx.arc(width / 2, height / 2, 6, 0, Math.PI * 2);
+      ctx.fill();
+      for (const orb of orbits) {
+        orb.angle += orb.speed * dt;
+        if (orb.angle > Math.PI * 2) {
+          orb.angle -= Math.PI * 2;
+          // chime on completion
+          const freq = 200 + (orb.radius / (Math.min(width, height) / 2)) * 600;
+          beep(freq);
+        }
+        const x = width / 2 + Math.cos(orb.angle) * orb.radius;
+        const y = height / 2 + Math.sin(orb.angle) * orb.radius;
+        // draw orbit path
+        ctx.beginPath();
+        ctx.strokeStyle = `hsla(${orb.hue},70%,40%,0.3)`;
+        ctx.lineWidth = 1;
+        ctx.arc(width / 2, height / 2, orb.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // draw planet
+        ctx.beginPath();
+        ctx.fillStyle = `hsl(${orb.hue},80%,60%)`;
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      requestAnimationFrame(animate);
+    }
+    animate(last);
+  })();
+  </script>
+</body>
+</html>
