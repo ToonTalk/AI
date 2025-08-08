@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Candy Rain Symphony</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    #canvas { width: 100%; height: 100%; display: block; cursor: none; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.8); color: #4a3d99; padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Move your mouse to catch the falling sweets and make music!</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.2) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    class Candy {
+      constructor() {
+        this.reset();
+      }
+      reset() {
+        this.x = Math.random() * width;
+        this.y = -Math.random() * height;
+        this.speed = 50 + Math.random() * 80;
+        this.radius = 12 + Math.random() * 12;
+        const hues = [0, 30, 60, 120, 180, 200, 260, 300];
+        this.hue = hues[Math.floor(Math.random() * hues.length)];
+      }
+      update(dt) {
+        this.y += this.speed * dt;
+        if (this.y - this.radius > height) {
+          this.reset();
+        }
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.fillStyle = `hsl(${this.hue}, 80%, 60%)`;
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    const candies = [];
+    for (let i = 0; i < 15; i++) {
+      candies.push(new Candy());
+    }
+
+    const pointer = { x: width / 2, y: height / 2 };
+    let pointerActive = false;
+    canvas.addEventListener('mousemove', (e) => {
+      audioCtx.resume();
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = e.clientX - rect.left;
+      pointer.y = e.clientY - rect.top;
+      pointerActive = true;
+    });
+    // hide default cursor and draw our own
+
+    let last = performance.now();
+    function animate(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      ctx.clearRect(0, 0, width, height);
+      // draw candies
+      for (const candy of candies) {
+        candy.update(dt);
+        candy.draw();
+        if (pointerActive) {
+          const dx = candy.x - pointer.x;
+          const dy = candy.y - pointer.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < candy.radius + 20) {
+            // catch candy
+            const freq = 300 + candy.hue; // map hue to pitch
+            beep(freq);
+            candy.reset();
+          }
+        }
+      }
+      // draw pointer circle
+      if (pointerActive) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#ff7f50';
+        ctx.lineWidth = 2;
+        ctx.arc(pointer.x, pointer.y, 20, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      requestAnimationFrame(animate);
+    }
+    animate(last);
+  })();
+  </script>
+</body>
+</html>

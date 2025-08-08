@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Weather Whistle</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    #canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+    #canvas.dragging { cursor: grabbing; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.8); color: #4a3d99; padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Drag the sun, cloud and rain to change the sky's song.</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    // Sun oscillator
+    const toneOsc = audioCtx.createOscillator();
+    toneOsc.type = 'sine';
+    const toneGain = audioCtx.createGain();
+    toneGain.gain.value = 0.15;
+    toneOsc.connect(toneGain);
+    // Wind oscillator (cloud)
+    const windOsc = audioCtx.createOscillator();
+    windOsc.type = 'triangle';
+    const windGain = audioCtx.createGain();
+    windGain.gain.value = 0.0;
+    windOsc.connect(windGain);
+    // Connect to destination
+    toneGain.connect(audioCtx.destination);
+    windGain.connect(audioCtx.destination);
+    toneOsc.start();
+    windOsc.start();
+
+    function beep(freq, dur = 0.15) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    // Weather icons
+    const icons = [
+      { type: 'sun', x: width * 0.25, y: height * 0.35, r: 40 },
+      { type: 'cloud', x: width * 0.5, y: height * 0.35, r: 50 },
+      { type: 'rain', x: width * 0.75, y: height * 0.35, r: 40 }
+    ];
+    let dragIndex = -1;
+    let offsetX = 0, offsetY = 0;
+
+    function drawSun(x, y, r) {
+      ctx.fillStyle = '#ffd700';
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      // rays
+      for (let i = 0; i < 8; i++) {
+        const ang = i * Math.PI / 4;
+        const rx = x + Math.cos(ang) * (r + 20);
+        const ry = y + Math.sin(ang) * (r + 20);
+        ctx.strokeStyle = '#ffb800';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(ang) * (r + 5), y + Math.sin(ang) * (r + 5));
+        ctx.lineTo(rx, ry);
+        ctx.stroke();
+      }
+    }
+    function drawCloud(x, y, r) {
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth = 2;
+      // three overlapping circles
+      const radii = [r * 0.6, r * 0.7, r * 0.5];
+      const offsets = [-r * 0.4, 0, r * 0.4];
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(x + offsets[i], y, radii[i], 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    function drawRain(x, y, r) {
+      ctx.fillStyle = '#00bfff';
+      // raindrop shape: circle and triangle
+      ctx.beginPath();
+      ctx.arc(x, y - r * 0.2, r * 0.5, Math.PI, 0);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.5, y - r * 0.2);
+      ctx.lineTo(x, y + r * 0.8);
+      ctx.lineTo(x + r * 0.5, y - r * 0.2);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+      // draw sky background gradient depending on sun height
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      const sunY = icons[0].y / height;
+      const skyTop = `hsl(${200 - sunY * 50}, 70%, ${80 - sunY * 30}%)`;
+      const skyBottom = `hsl(${220 - sunY * 40}, 80%, ${90 - sunY * 20}%)`;
+      grad.addColorStop(0, skyTop);
+      grad.addColorStop(1, skyBottom);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+      // draw icons
+      for (const ic of icons) {
+        if (ic.type === 'sun') drawSun(ic.x, ic.y, ic.r);
+        if (ic.type === 'cloud') drawCloud(ic.x, ic.y, ic.r);
+        if (ic.type === 'rain') drawRain(ic.x, ic.y, ic.r);
+      }
+    }
+
+    function updateAudio() {
+      // update sun frequency: map x position to pitch
+      const sun = icons[0];
+      const freq = 200 + (sun.x / width) * 400;
+      toneOsc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.1);
+      // update wind: based on cloud's y position
+      const cloud = icons[1];
+      const gainVal = 0.2 * Math.min(1, cloud.y / height);
+      windGain.gain.setTargetAtTime(gainVal, audioCtx.currentTime, 0.1);
+      windOsc.frequency.setTargetAtTime(80 + (cloud.x / width) * 200, audioCtx.currentTime, 0.1);
+      // rain: random plinks depending on rain icon's position
+      const rain = icons[2];
+      const probability = Math.min(0.05, rain.y / height * 0.05);
+      if (Math.random() < probability) {
+        const f = 400 + Math.random() * 200;
+        beep(f, 0.1);
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      audioCtx.resume();
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      for (let i = icons.length - 1; i >= 0; i--) {
+        const ic = icons[i];
+        const dx = x - ic.x;
+        const dy = y - ic.y;
+        if (Math.hypot(dx, dy) < ic.r) {
+          dragIndex = i;
+          offsetX = dx;
+          offsetY = dy;
+          canvas.classList.add('dragging');
+          break;
+        }
+      }
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      if (dragIndex >= 0) {
+        const rect = canvas.getBoundingClientRect();
+        let x = e.clientX - rect.left - offsetX;
+        let y = e.clientY - rect.top - offsetY;
+        // clamp within bounds
+        const ic = icons[dragIndex];
+        x = Math.max(ic.r, Math.min(width - ic.r, x));
+        y = Math.max(ic.r, Math.min(height - ic.r, y));
+        ic.x = x;
+        ic.y = y;
+      }
+    });
+    window.addEventListener('mouseup', () => {
+      dragIndex = -1;
+      canvas.classList.remove('dragging');
+    });
+
+    function loop() {
+      draw();
+      updateAudio();
+      requestAnimationFrame(loop);
+    }
+    loop();
+  })();
+  </script>
+</body>
+</html>

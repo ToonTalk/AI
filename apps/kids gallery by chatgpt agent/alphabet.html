@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Space Alphabet Jam</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    #canvas { width: 100%; height: 100%; display: block; cursor: pointer; background: radial-gradient(circle, #0d1b2a 0%, #1b263b 100%); }
+    #overlayMsg { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); color: #ffdd57; font-size: 3rem; font-weight: bold; pointer-events: none; opacity: 0; transition: opacity 0.3s ease; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.8); color: #4a3d99; padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlayMsg"></div>
+  <div id="overlay">Click the floating letters to hear their sound and see them shine.</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const overlayMsg = document.getElementById('overlayMsg');
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.25) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    // create letters A through G for variety
+    const chars = 'ABCDEFG'.split('');
+    const letters = chars.map((ch, i) => {
+      return {
+        char: ch,
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 80,
+        vy: (Math.random() - 0.5) * 80,
+        color: `hsl(${i * 40},80%,60%)`,
+        size: 40
+      };
+    });
+
+    canvas.addEventListener('click', (e) => {
+      audioCtx.resume();
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      for (const letter of letters) {
+        const metric = ctx.measureText(letter.char);
+        const halfW = letter.size * 0.4;
+        const halfH = letter.size * 0.5;
+        if (x > letter.x - halfW && x < letter.x + halfW && y > letter.y - halfH && y < letter.y + halfH) {
+          // highlight message
+          overlayMsg.textContent = letter.char;
+          overlayMsg.style.opacity = '1';
+          setTimeout(() => { overlayMsg.style.opacity = '0'; }, 700);
+          // beep frequency based on char position
+          const idx = chars.indexOf(letter.char);
+          beep(300 + idx * 80);
+          break;
+        }
+      }
+    });
+
+    let last = performance.now();
+    function animate(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      ctx.clearRect(0, 0, width, height);
+      // draw stars background subtle (optional)
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      for (let i = 0; i < 20; i++) {
+        const sx = Math.random() * width;
+        const sy = Math.random() * height;
+        ctx.fillRect(sx, sy, 2, 2);
+      }
+      ctx.font = 'bold 40px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const letter of letters) {
+        letter.x += letter.vx * dt;
+        letter.y += letter.vy * dt;
+        // bounce at edges
+        if (letter.x < 0) { letter.x = 0; letter.vx *= -1; }
+        if (letter.x > width) { letter.x = width; letter.vx *= -1; }
+        if (letter.y < 0) { letter.y = 0; letter.vy *= -1; }
+        if (letter.y > height) { letter.y = height; letter.vy *= -1; }
+        ctx.fillStyle = letter.color;
+        ctx.fillText(letter.char, letter.x, letter.y);
+      }
+      requestAnimationFrame(animate);
+    }
+    animate(last);
+  })();
+  </script>
+</body>
+</html>

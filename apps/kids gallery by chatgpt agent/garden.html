@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Magic Garden Melody</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    #canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.8); color: #4a3d99; padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Click to plant a seed. Watch it grow into a flower that plays its own melody.</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.2) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    const plants = [];
+    canvas.addEventListener('click', (e) => {
+      audioCtx.resume();
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // ignore planting too high
+      if (y < height * 0.2) return;
+      plants.push({ x, y, start: performance.now(), stage: 0, lastSound: 0 });
+      beep(350 + Math.random() * 100);
+    });
+
+    function drawPlant(p, now) {
+      const age = (now - p.start) / 1000;
+      // update stage
+      if (age > 1.5 && p.stage === 0) {
+        p.stage = 1;
+        beep(400);
+      }
+      if (age > 3 && p.stage === 1) {
+        p.stage = 2;
+        p.lastSound = now;
+        beep(500);
+      }
+      // beep periodically for flowers
+      if (p.stage === 2 && now - p.lastSound > 4000) {
+        beep(500 + Math.random() * 100);
+        p.lastSound = now;
+      }
+      // draw based on stage
+      if (p.stage === 0) {
+          ctx.fillStyle = '#8b4513';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+          ctx.fill();
+      } else if (p.stage === 1) {
+          // sprout
+          ctx.strokeStyle = '#228b22';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x, p.y - 20);
+          ctx.stroke();
+          // leaves
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y - 10);
+          ctx.lineTo(p.x - 8, p.y - 15);
+          ctx.lineTo(p.x, p.y - 12);
+          ctx.closePath();
+          ctx.fillStyle = '#32cd32';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y - 10);
+          ctx.lineTo(p.x + 8, p.y - 15);
+          ctx.lineTo(p.x, p.y - 12);
+          ctx.closePath();
+          ctx.fill();
+      } else {
+          // flower
+          const petalCount = 6;
+          const radius = 15;
+          const hue = (p.x / width) * 360;
+          for (let i = 0; i < petalCount; i++) {
+            const ang = (i / petalCount) * Math.PI * 2;
+            const px = p.x + Math.cos(ang) * radius;
+            const py = p.y - 25 + Math.sin(ang) * radius;
+            ctx.fillStyle = `hsl(${hue + i * 20}, 80%, 70%)`;
+            ctx.beginPath();
+            ctx.arc(px, py, 8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // center
+          ctx.fillStyle = '#ffdb58';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y - 25, 8, 0, Math.PI * 2);
+          ctx.fill();
+      }
+    }
+
+    function animate(now) {
+      ctx.fillStyle = '#f0fff0';
+      ctx.fillRect(0, 0, width, height);
+      // draw ground
+      ctx.fillStyle = '#98fb98';
+      ctx.fillRect(0, height * 0.8, width, height * 0.2);
+      // update and draw plants
+      for (const p of plants) {
+        drawPlant(p, now);
+      }
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  })();
+  </script>
+</body>
+</html>

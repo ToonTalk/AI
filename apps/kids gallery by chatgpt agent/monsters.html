@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Monster Mural Music</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Full‑screen drawing area */
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    #canvas { width: 100%; height: 100%; display: block; background: #faf8ef; cursor: crosshair; }
+    #overlay {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.9);
+      color: #2e4a7d;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Click and drag to draw. Friendly monsters will appear along your doodles and sing silly songs!</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Audio setup
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.25) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    // Track drawing state and path
+    let drawing = false;
+    let lastX = 0;
+    let lastY = 0;
+    let distSinceLastMonster = 0;
+    const monsters = [];
+    // Store scribble segments so we can redraw them each frame
+    const scribbles = [];
+
+    // Monster class
+    class Monster {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.baseY = y;
+        this.size = 30 + Math.random() * 30;
+        this.hue = Math.random() * 360;
+        this.bobPhase = Math.random() * Math.PI * 2;
+        this.beepTimer = 1 + Math.random() * 2; // seconds until next beep
+      }
+      update(dt) {
+        // gentle bobbing motion
+        this.bobPhase += dt * 2;
+        this.y = this.baseY + Math.sin(this.bobPhase) * 5;
+        // countdown to beep
+        this.beepTimer -= dt;
+        if (this.beepTimer <= 0) {
+          const freq = 200 + Math.random() * 400;
+          beep(freq, 0.3);
+          this.beepTimer = 1 + Math.random() * 2;
+        }
+      }
+      draw() {
+        // draw irregular blob
+        const points = 7;
+        const angleStep = (Math.PI * 2) / points;
+        ctx.beginPath();
+        for (let i = 0; i < points; i++) {
+          const angle = i * angleStep;
+          const radVar = this.size * (0.8 + Math.random() * 0.4);
+          const px = this.x + Math.cos(angle) * radVar;
+          const py = this.y + Math.sin(angle) * radVar;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = `hsl(${this.hue}, 70%, 70%)`;
+        ctx.fill();
+        // eyes
+        const eyeOffsetX = this.size * 0.3;
+        const eyeOffsetY = this.size * 0.1;
+        const eyeRadius = this.size * 0.15;
+        // left eye
+        ctx.beginPath();
+        ctx.fillStyle = '#fff';
+        ctx.arc(this.x - eyeOffsetX, this.y - eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+        ctx.arc(this.x + eyeOffsetX, this.y - eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+        ctx.fill();
+        // pupils
+        const pupilRadius = eyeRadius * 0.5;
+        const pupilOffset = eyeRadius * 0.3;
+        ctx.beginPath();
+        ctx.fillStyle = '#333';
+        ctx.arc(this.x - eyeOffsetX + pupilOffset, this.y - eyeOffsetY, pupilRadius, 0, Math.PI * 2);
+        ctx.arc(this.x + eyeOffsetX + pupilOffset, this.y - eyeOffsetY, pupilRadius, 0, Math.PI * 2);
+        ctx.fill();
+        // mouth
+        ctx.beginPath();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        const mouthWidth = this.size * 0.5;
+        ctx.arc(this.x, this.y + this.size * 0.15, mouthWidth / 2, 0, Math.PI);
+        ctx.stroke();
+      }
+    }
+
+    function spawnMonster(x, y) {
+      monsters.push(new Monster(x, y));
+    }
+
+    function handleStart(evt) {
+      audioCtx.resume();
+      drawing = true;
+      const rect = canvas.getBoundingClientRect();
+      const x = (evt.touches ? evt.touches[0].clientX : evt.clientX) - rect.left;
+      const y = (evt.touches ? evt.touches[0].clientY : evt.clientY) - rect.top;
+      lastX = x;
+      lastY = y;
+      distSinceLastMonster = 0;
+    }
+    function handleMove(evt) {
+      if (!drawing) return;
+      evt.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const x = (evt.touches ? evt.touches[0].clientX : evt.clientX) - rect.left;
+      const y = (evt.touches ? evt.touches[0].clientY : evt.clientY) - rect.top;
+      // Add segment to scribble list
+      scribbles.push({ x0: lastX, y0: lastY, x1: x, y1: y });
+      // update distance traveled
+      const dx = x - lastX;
+      const dy = y - lastY;
+      const d = Math.hypot(dx, dy);
+      distSinceLastMonster += d;
+      if (distSinceLastMonster > 80) {
+        spawnMonster(x, y);
+        distSinceLastMonster = 0;
+      }
+      lastX = x;
+      lastY = y;
+    }
+    function handleEnd(evt) {
+      drawing = false;
+    }
+
+    canvas.addEventListener('mousedown', handleStart);
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('mouseup', handleEnd);
+    canvas.addEventListener('mouseleave', handleEnd);
+    // touch events for mobile
+    canvas.addEventListener('touchstart', handleStart);
+    canvas.addEventListener('touchmove', handleMove);
+    canvas.addEventListener('touchend', handleEnd);
+    canvas.addEventListener('touchcancel', handleEnd);
+
+    let lastTime = performance.now();
+    function animate(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      // Clear the canvas each frame
+      ctx.clearRect(0, 0, width, height);
+      // Draw stored scribble segments
+      if (scribbles.length) {
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 2;
+        for (const seg of scribbles) {
+          ctx.moveTo(seg.x0, seg.y0);
+          ctx.lineTo(seg.x1, seg.y1);
+        }
+        ctx.stroke();
+      }
+      // Update and draw monsters
+      for (const monster of monsters) {
+        monster.update(dt);
+        monster.draw();
+      }
+      requestAnimationFrame(animate);
+    }
+    animate(lastTime);
+  })();
+  </script>
+</body>
+</html>

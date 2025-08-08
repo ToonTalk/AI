@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shape Drummer</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    #canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
+    #overlay { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.8); color: #4a3d99; padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Click a shape from the palette to add it to the stage. Each shape makes its own beat!</div>
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function beep(freq, dur = 0.15) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+
+    const palette = [
+      { type: 'circle', x: 60, y: 80, size: 30, color: '#ff6b6b', freq: 500, period: 0.8 },
+      { type: 'square', x: 60, y: 160, size: 30, color: '#6bc5d2', freq: 300, period: 1.6 },
+      { type: 'triangle', x: 60, y: 240, size: 30, color: '#ffd93d', freq: 400, period: 1.2 }
+    ];
+    const placed = [];
+    // placed shapes: {type, x, baseY, size, color, freq, period, startTime, lastBeat}
+
+    canvas.addEventListener('click', (e) => {
+      audioCtx.resume();
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // check palette
+      for (const item of palette) {
+        const dx = x - item.x;
+        const dy = y - item.y;
+        if (Math.hypot(dx, dy) < item.size) {
+          // add new shape to stage at random location
+          const px = 150 + Math.random() * (width - 200);
+          const py = height * 0.4 + Math.random() * (height * 0.5);
+          placed.push({ type: item.type, x: px, baseY: py, y: py, size: item.size, color: item.color, freq: item.freq, period: item.period, startTime: performance.now() / 1000, lastBeat: -1 });
+          beep(item.freq);
+          return;
+        }
+      }
+    });
+
+    function drawShape(type, x, y, size, color) {
+      ctx.fillStyle = color;
+      if (type === 'circle') {
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (type === 'square') {
+        ctx.beginPath();
+        ctx.rect(x - size, y - size, size * 2, size * 2);
+        ctx.fill();
+      } else if (type === 'triangle') {
+        ctx.beginPath();
+        ctx.moveTo(x, y - size);
+        ctx.lineTo(x + size, y + size);
+        ctx.lineTo(x - size, y + size);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+      // draw palette
+      for (const item of palette) {
+        ctx.strokeStyle = '#4a3d99';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, item.size + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        drawShape(item.type, item.x, item.y, item.size, item.color);
+      }
+      const nowSec = performance.now() / 1000;
+      // draw placed shapes and animate them
+      for (const s of placed) {
+        // vertical bounce
+        const phase = (nowSec - s.startTime) / s.period;
+        const offset = Math.sin(phase * Math.PI * 2) * s.size * 0.4;
+        s.y = s.baseY + offset;
+        drawShape(s.type, s.x, s.y, s.size, s.color);
+        // play beat on upward crossing of sine wave
+        const currentBeat = Math.floor(phase);
+        if (currentBeat !== s.lastBeat) {
+          beep(s.freq, 0.1);
+          s.lastBeat = currentBeat;
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+    animate();
+  })();
+  </script>
+</body>
+</html>
