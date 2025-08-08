@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Quantum Fireflies v15 – Meteors</title>
+  <link rel="stylesheet" href="../art-gallery/style.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at center, #01020a 0%, #02020f 100%); }
+    #canvas { width: 100%; height: 100%; display: block; cursor: crosshair; transition: transform 0.1s linear; }
+    #overlay { position: fixed; bottom: 2.5rem; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0,0,0,0.6); padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; text-align: center; }
+    #hueSlider { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); width: 200px; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #ffcf6b; text-decoration: none; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back</a>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">Occasional meteors streak across the sky with bright tones.</div>
+  <input type="range" id="hueSlider" min="0" max="360" value="220">
+  <script>
+  (function() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+    let canvasScale = 1;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.1 : -0.1;
+      canvasScale = Math.min(Math.max(canvasScale + delta, 0.5), 2);
+      canvas.style.transformOrigin = 'center center';
+      canvas.style.transform = `scale(${canvasScale})`;
+      audioCtx.resume();
+    });
+    const droneOsc = audioCtx.createOscillator();
+    droneOsc.type = 'sine';
+    const droneGain = audioCtx.createGain();
+    droneGain.gain.value = 0.1;
+    droneOsc.connect(droneGain).connect(audioCtx.destination);
+    droneOsc.start();
+    const scale = [220.00, 247.00, 294.00, 330.00, 392.00, 440.00, 494.00, 523.25, 587.33, 659.26, 784.00];
+    function quantize(freq) {
+      let closest = scale[0];
+      let minDiff = Math.abs(freq - closest);
+      for (const note of scale) {
+        const diff = Math.abs(freq - note);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = note;
+        }
+      }
+      return closest;
+    }
+    function beep(freq, dur = 0.2, pan = 0) {
+      const qFreq = quantize(freq);
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const panner = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+      osc.frequency.value = qFreq;
+      osc.type = 'triangle';
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      if (panner) {
+        panner.pan.setValueAtTime(pan, audioCtx.currentTime);
+        osc.connect(gain).connect(panner).connect(audioCtx.destination);
+      } else {
+        osc.connect(gain).connect(audioCtx.destination);
+      }
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }
+    const stars = [];
+    const starCount = 120;
+    for (let i = 0; i < starCount; i++) {
+      stars.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        baseAlpha: 0.2 + Math.random() * 0.3,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+    let bgHue = 220;
+    const hueSlider = document.getElementById('hueSlider');
+    function updateBackground() {
+      document.body.style.background = `radial-gradient(circle at center, hsl(${bgHue},30%,2%) 0%, hsl(${bgHue},30%,8%) 100%)`;
+    }
+    updateBackground();
+    hueSlider.addEventListener('input', () => {
+      bgHue = parseInt(hueSlider.value);
+      updateBackground();
+    });
+    class Particle {
+      constructor() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.radius = 2 + Math.random() * 3;
+        this.mass = this.radius;
+        const angle = Math.random() * Math.PI * 2;
+        const baseSpeed = 20 + Math.random() * 30;
+        const speedFactor = 3 / this.radius;
+        this.vx = Math.cos(angle) * baseSpeed * speedFactor;
+        this.vy = Math.sin(angle) * baseSpeed * speedFactor;
+        this.hue = Math.floor(Math.random() * 360);
+        this.history = [];
+      }
+      update(dt) {
+        let sumHue = 0;
+        let sumWeight = 0;
+        for (const a of attractors) {
+          const dx = a.x - this.x;
+          const dy = a.y - this.y;
+          const distSq = dx * dx + dy * dy + 50;
+          const force = 1500 / distSq;
+          this.vx += (dx * force * dt) / this.mass;
+          this.vy += (dy * force * dt) / this.mass;
+          const weight = 1 / distSq;
+          sumHue += a.hue * weight;
+          sumWeight += weight;
+        }
+        for (const r of repellers) {
+          const dx = r.x - this.x;
+          const dy = r.y - this.y;
+          const distSq = dx * dx + dy * dy + 50;
+          const force = -1500 / distSq;
+          this.vx += (dx * force * dt) / this.mass;
+          this.vy += (dy * force * dt) / this.mass;
+        }
+        if (sumWeight > 0) {
+          const targetHue = sumHue / sumWeight;
+          let diff = targetHue - this.hue;
+          if (diff > 180) diff -= 360;
+          if (diff < -180) diff += 360;
+          this.hue = (this.hue + diff * 0.05 + 360) % 360;
+        }
+        this.vx *= 0.99;
+        this.vy *= 0.99;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        if (this.x < 0) { this.x = 0; this.vx *= -1; }
+        if (this.x > width) { this.x = width; this.vx *= -1; }
+        if (this.y < 0) { this.y = 0; this.vy *= -1; }
+        if (this.y > height) { this.y = height; this.vy *= -1; }
+        this.history.push({ x: this.x, y: this.y });
+        if (this.history.length > 12) this.history.shift();
+      }
+      draw() {
+        for (let i = 0; i < this.history.length; i++) {
+          const pos = this.history[i];
+          const alpha = (i + 1) / this.history.length * 0.5;
+          ctx.beginPath();
+          ctx.fillStyle = `hsla(${this.hue},70%,70%,${alpha})`;
+          ctx.arc(pos.x, pos.y, this.radius * 0.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${this.hue},70%,70%,0.8)`;
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    const particles = Array.from({ length: 60 }, () => new Particle());
+    const attractors = [];
+    const repellers = [];
+    // meteors
+    const meteors = [];
+    function spawnMeteor() {
+      // choose a side: 0=left,1=right,2=top,3=bottom
+      const side = Math.floor(Math.random() * 4);
+      let x, y, vx, vy;
+      const speed = 200 + Math.random() * 200;
+      if (side === 0) {
+        x = 0;
+        y = Math.random() * height;
+        vx = speed;
+        vy = (Math.random() - 0.5) * speed * 0.4;
+      } else if (side === 1) {
+        x = width;
+        y = Math.random() * height;
+        vx = -speed;
+        vy = (Math.random() - 0.5) * speed * 0.4;
+      } else if (side === 2) {
+        x = Math.random() * width;
+        y = 0;
+        vx = (Math.random() - 0.5) * speed * 0.4;
+        vy = speed;
+      } else {
+        x = Math.random() * width;
+        y = height;
+        vx = (Math.random() - 0.5) * speed * 0.4;
+        vy = -speed;
+      }
+      meteors.push({ x, y, vx, vy, life: 1.2, lastX: x, lastY: y });
+      const pan = (x / width) * 2 - 1;
+      beep(500 + Math.random() * 500, 0.2, pan);
+    }
+    canvas.addEventListener('click', (e) => {
+      audioCtx.resume();
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const hue = Math.floor(Math.random() * 360);
+      const life = 12 + Math.random() * 8;
+      attractors.push({ x, y, hue, life, initialLife: life });
+      const pan = (x / width) * 2 - 1;
+      beep(200 + hue * 1.5, 0.25, pan);
+    });
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      audioCtx.resume();
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const life = 12 + Math.random() * 8;
+      repellers.push({ x, y, life, initialLife: life });
+      const pan = (x / width) * 2 - 1;
+      beep(120 + Math.random() * 80, 0.3, pan);
+    });
+    let last = performance.now();
+    function animate(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      ctx.fillStyle = 'rgba(1,2,8,0.2)';
+      ctx.fillRect(0, 0, width, height);
+      for (const star of stars) {
+        const twinkle = star.baseAlpha + 0.4 * Math.sin(now / 1000 + star.phase);
+        ctx.fillStyle = `rgba(255,255,255,${Math.max(0, Math.min(1, twinkle)) * 0.5})`;
+        ctx.fillRect(star.x, star.y, 2, 2);
+      }
+      let totalSpeed = 0;
+      for (const p of particles) {
+        p.update(dt);
+        totalSpeed += Math.hypot(p.vx, p.vy);
+      }
+      const avgSpeed = totalSpeed / particles.length;
+      droneOsc.frequency.setTargetAtTime(120 + avgSpeed, audioCtx.currentTime, 0.05);
+      const newGain = 0.05 + avgSpeed * 0.0005;
+      droneGain.gain.setTargetAtTime(newGain, audioCtx.currentTime, 0.05);
+      if (Math.random() < 0.01) {
+        const pan = Math.random() * 2 - 1;
+        beep(300 + Math.random() * 400, 0.2, pan);
+      }
+      // maybe spawn a meteor
+      if (Math.random() < 0.005) {
+        spawnMeteor();
+      }
+      // update meteors
+      for (let i = meteors.length - 1; i >= 0; i--) {
+        const m = meteors[i];
+        m.life -= dt;
+        if (m.life <= 0) {
+          meteors.splice(i, 1);
+          continue;
+        }
+        m.lastX = m.x;
+        m.lastY = m.y;
+        m.x += m.vx * dt;
+        m.y += m.vy * dt;
+      }
+      const maxDistSq = 80 * 80;
+      ctx.lineWidth = 1;
+      for (let i = 0; i < particles.length; i++) {
+        const pi = particles[i];
+        for (let j = i + 1; j < particles.length; j++) {
+          const pj = particles[j];
+          const dx = pi.x - pj.x;
+          const dy = pi.y - pj.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < maxDistSq) {
+            const alpha = 1 - Math.sqrt(distSq) / 80;
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.3})`;
+            ctx.moveTo(pi.x, pi.y);
+            ctx.lineTo(pj.x, pj.y);
+            ctx.stroke();
+          }
+        }
+      }
+      for (const p of particles) {
+        p.draw();
+      }
+      for (let i = attractors.length - 1; i >= 0; i--) {
+        const a = attractors[i];
+        a.life -= dt;
+        if (a.life <= 0) {
+          attractors.splice(i, 1);
+          const pan = (a.x / width) * 2 - 1;
+          beep(100 + a.hue, 0.3, pan);
+          continue;
+        }
+        const size = 5 + 12 * (a.life / a.initialLife);
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${a.hue},70%,60%,0.9)`;
+        ctx.arc(a.x, a.y, size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${a.hue},70%,60%,0.3)`;
+        ctx.arc(a.x, a.y, size * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        const nebSize = size * 5;
+        const gradient = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, nebSize);
+        gradient.addColorStop(0, `hsla(${a.hue},70%,50%,0.15)`);
+        gradient.addColorStop(1, `hsla(${a.hue},70%,50%,0)`);
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, nebSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // network lines between attractors (similar to v13)
+      if (attractors.length > 1) {
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < attractors.length; i++) {
+          for (let j = i + 1; j < attractors.length; j++) {
+            const a1 = attractors[i];
+            const a2 = attractors[j];
+            const dx = a1.x - a2.x;
+            const dy = a1.y - a2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const max = 300;
+            if (dist < max) {
+              const alpha = 1 - dist / max;
+              const midHue = (a1.hue + a2.hue) / 2;
+              ctx.beginPath();
+              ctx.strokeStyle = `hsla(${midHue},70%,70%,${alpha * 0.3})`;
+              ctx.moveTo(a1.x, a1.y);
+              ctx.lineTo(a2.x, a2.y);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+      for (let i = repellers.length - 1; i >= 0; i--) {
+        const r = repellers[i];
+        r.life -= dt;
+        if (r.life <= 0) {
+          repellers.splice(i, 1);
+          const pan = (r.x / width) * 2 - 1;
+          beep(80, 0.3, pan);
+          continue;
+        }
+        const size = 5 + 12 * (r.life / r.initialLife);
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(200,70%,60%,0.9)`;
+        ctx.arc(r.x, r.y, size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = `hsla(200,70%,60%,0.4)`;
+        ctx.lineWidth = 2;
+        ctx.arc(r.x, r.y, size * 2.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // draw meteors
+      ctx.lineWidth = 2;
+      for (const m of meteors) {
+        const alpha = Math.max(0, m.life);
+        ctx.strokeStyle = `rgba(255,255,180,${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(m.lastX, m.lastY);
+        ctx.lineTo(m.x, m.y);
+        ctx.stroke();
+      }
+      requestAnimationFrame(animate);
+    }
+    animate(last);
+  })();
+  </script>
+</body>
+</html>
