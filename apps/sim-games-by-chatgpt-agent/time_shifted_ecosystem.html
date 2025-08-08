@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time‑Shifted Ecosystem</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7fb;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #2a7ae4;
+      color: white;
+      padding: 10px 20px;
+    }
+    #ecosystem {
+      flex: 1;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding: 20px;
+    }
+    .period {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-align: center;
+      width: 200px;
+    }
+    .period h2 {
+      margin-top: 0;
+    }
+    .bar-container {
+      height: 200px;
+      width: 60px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      position: relative;
+      margin: 10px auto;
+      background: #eef7fc;
+    }
+    .bar {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: #2a7ae4;
+    }
+    button {
+      margin-top: 10px;
+      padding: 5px 10px;
+      border: none;
+      background: #2a7ae4;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #1f5bb5;
+    }
+    a {
+      color: #fdfdfd;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Time‑Shifted Ecosystem</h1>
+    <a href="index.html">&larr; Back to Menu</a>
+  </header>
+  <div id="ecosystem">
+    <div class="period" id="past">
+      <h2>Past</h2>
+      <div class="bar-container"><div class="bar" style="height:0%" id="pastBar"></div></div>
+      <p id="pastCount">0</p>
+      <button onclick="addSpecies('past')">Add Species</button>
+    </div>
+    <div class="period" id="present">
+      <h2>Present</h2>
+      <div class="bar-container"><div class="bar" style="height:0%" id="presentBar"></div></div>
+      <p id="presentCount">0</p>
+      <button onclick="addSpecies('present')">Add Species</button>
+    </div>
+    <div class="period" id="future">
+      <h2>Future</h2>
+      <div class="bar-container"><div class="bar" style="height:0%" id="futureBar"></div></div>
+      <p id="futureCount">0</p>
+      <button onclick="addSpecies('future')">Add Species</button>
+    </div>
+  </div>
+  <script>
+    const state = {
+      past: 10,
+      present: 10,
+      future: 10
+    };
+    const maxPop = 200;
+    function updateDisplay() {
+      ['past','present','future'].forEach(period => {
+        const bar = document.getElementById(period + 'Bar');
+        const countEl = document.getElementById(period + 'Count');
+        const val = state[period];
+        const percent = Math.min(val / maxPop, 1) * 100;
+        bar.style.height = percent + '%';
+        countEl.textContent = Math.floor(val);
+      });
+    }
+    function addSpecies(period) {
+      state[period] += 10;
+      updateDisplay();
+    }
+    function tick() {
+      // influence across time: past influences present, present influences future
+      const pastGrowth = state.past * 0.02 - state.past * 0.01;
+      const presentGrowth = state.present * 0.02 - state.present * 0.015 + state.past * 0.005;
+      const futureGrowth = state.future * 0.02 - state.future * 0.02 + state.present * 0.005;
+      state.past += pastGrowth;
+      state.present += presentGrowth;
+      state.future += futureGrowth;
+      // limit values between 0 and maxPop
+      ['past','present','future'].forEach(period => {
+        state[period] = Math.max(0, Math.min(state[period], maxPop));
+      });
+      updateDisplay();
+    }
+    updateDisplay();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>

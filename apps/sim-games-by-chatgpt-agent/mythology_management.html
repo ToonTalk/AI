@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bureau of Mythology Management</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #fcf8ec;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #d35400;
+      color: white;
+      padding: 10px 20px;
+    }
+    main {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .myth-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 500px;
+    }
+    .bar-container {
+      flex: 1;
+      height: 20px;
+      background: #eee;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .bar {
+      height: 100%;
+      width: 0%;
+      background: #d35400;
+    }
+    button {
+      padding: 5px 10px;
+      border: none;
+      background: #d35400;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #b04a00;
+    }
+    #status {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    a { color: white; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Bureau of Mythology Management</h1>
+    <a href="index.html">&larr; Back to Menu</a>
+  </header>
+  <main>
+    <div id="pointsDisplay">Narrative Points: 50</div>
+    <div id="myths"></div>
+    <div id="status"></div>
+    <button id="restartBtn" style="display:none;" onclick="restart()">Restart</button>
+  </main>
+  <script>
+    let points = 50;
+    let myths = {
+      Dragons: 60,
+      Fairies: 60,
+      Giants: 60,
+      Mermaids: 60
+    };
+    let gameOver = false;
+    const mythsContainer = document.getElementById('myths');
+    function renderMyths() {
+      mythsContainer.innerHTML = '';
+      Object.keys(myths).forEach(name => {
+        const row = document.createElement('div');
+        row.className = 'myth-row';
+        const label = document.createElement('span');
+        label.textContent = name;
+        const barContainer = document.createElement('div');
+        barContainer.className = 'bar-container';
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.id = 'bar-' + name;
+        bar.style.width = myths[name] + '%';
+        barContainer.appendChild(bar);
+        const btn = document.createElement('button');
+        btn.textContent = '+5';
+        btn.onclick = () => invest(name);
+        row.appendChild(label);
+        row.appendChild(barContainer);
+        row.appendChild(btn);
+        mythsContainer.appendChild(row);
+      });
+      document.getElementById('pointsDisplay').textContent = 'Narrative Points: ' + Math.floor(points);
+    }
+    function invest(name) {
+      if (gameOver) return;
+      if (points >= 5) {
+        points -= 5;
+        myths[name] = Math.min(100, myths[name] + 10);
+        renderMyths();
+      }
+    }
+    function tick() {
+      if (gameOver) return;
+      // decay beliefs
+      Object.keys(myths).forEach(name => {
+        myths[name] -= 0.5 + Math.random() * 0.5;
+        if (myths[name] < 0) myths[name] = 0;
+      });
+      // random event
+      if (Math.random() < 0.3) {
+        const names = Object.keys(myths);
+        const idx = Math.floor(Math.random() * names.length);
+        const name = names[idx];
+        const change = (Math.random() < 0.5 ? -5 : 5);
+        myths[name] = Math.max(0, Math.min(100, myths[name] + change));
+        const status = document.getElementById('status');
+        status.textContent = (change > 0 ? 'Positive' : 'Negative') + ' press on ' + name + ' mythology ' + (change > 0 ? 'boosts' : 'reduces') + ' belief by ' + Math.abs(change);
+      }
+      // gain narrative points slowly
+      points += 0.5;
+      renderMyths();
+      // check game over
+      Object.keys(myths).forEach(name => {
+        if (myths[name] <= 0) {
+          gameOver = true;
+        }
+      });
+      if (gameOver) {
+        document.getElementById('status').textContent = 'A legend has faded away... Game Over';
+        document.getElementById('restartBtn').style.display = 'block';
+      }
+    }
+    function restart() {
+      points = 50;
+      myths = { Dragons: 60, Fairies: 60, Giants: 60, Mermaids: 60 };
+      gameOver = false;
+      document.getElementById('restartBtn').style.display = 'none';
+      document.getElementById('status').textContent = '';
+      renderMyths();
+    }
+    renderMyths();
+    setInterval(tick, 2000);
+  </script>
+</body>
+</html>

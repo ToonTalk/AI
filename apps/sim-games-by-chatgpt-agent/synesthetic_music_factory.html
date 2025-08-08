@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synesthetic Music Factory</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f5f0ff;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #8e44ad;
+      color: white;
+      padding: 10px 20px;
+    }
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px;
+      background: #faf5ff;
+    }
+    button.note {
+      flex: 1 1 calc(25% - 20px);
+      min-width: 80px;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      background: #9b59b6;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button.note:hover {
+      background: #8e44ad;
+    }
+    #canvasContainer {
+      flex: 1;
+      background: #f5f0ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      background: #ffffff;
+      border: 1px solid #ccc;
+    }
+    a {
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Synesthetic Music Factory</h1>
+    <a href="index.html">&larr; Back to Menu</a>
+  </header>
+  <div id="controls"></div>
+  <div id="canvasContainer">
+    <canvas id="factoryCanvas" width="800" height="500"></canvas>
+  </div>
+  <script>
+    // Audio setup
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    function playTone(freq, duration) {
+      const oscillator = audioCtx.createOscillator();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      const gainNode = audioCtx.createGain();
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      oscillator.connect(gainNode).connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + duration);
+    }
+    // Note definitions
+    const notes = [
+      {name:'C', freq:261.63, color:'#e74c3c'},
+      {name:'D', freq:293.66, color:'#e67e22'},
+      {name:'E', freq:329.63, color:'#f1c40f'},
+      {name:'F', freq:349.23, color:'#2ecc71'},
+      {name:'G', freq:392.00, color:'#1abc9c'},
+      {name:'A', freq:440.00, color:'#3498db'},
+      {name:'B', freq:493.88, color:'#9b59b6'},
+      {name:'C2',freq:523.25, color:'#34495e'}
+    ];
+    // Create note buttons
+    const controls = document.getElementById('controls');
+    notes.forEach((note) => {
+      const btn = document.createElement('button');
+      btn.textContent = note.name;
+      btn.className = 'note';
+      btn.style.background = note.color;
+      btn.onclick = () => {
+        playTone(note.freq, 0.4);
+        addShape(note.color);
+      };
+      controls.appendChild(btn);
+    });
+    // Canvas drawing
+    const canvas = document.getElementById('factoryCanvas');
+    const ctx = canvas.getContext('2d');
+    const shapes = [];
+    function addShape(color) {
+      const size = 20 + Math.random() * 30;
+      shapes.push({
+        x: Math.random() * canvas.width,
+        y: canvas.height + size,
+        size,
+        color,
+        speed: 1 + Math.random() * 1.5
+      });
+    }
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = shapes.length - 1; i >= 0; i--) {
+        const s = shapes[i];
+        s.y -= s.speed;
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+        // remove if off screen
+        if (s.y + s.size < 0) shapes.splice(i, 1);
+      }
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>

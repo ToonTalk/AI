@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravity Sculptor</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #eef6ff;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #3498db;
+      color: white;
+      padding: 10px 20px;
+    }
+    #controls {
+      padding: 10px;
+      background: #ffffff;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    #canvasContainer {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #eef6ff;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      background: #ffffff;
+    }
+    button {
+      padding: 5px 10px;
+      border: none;
+      background: #3498db;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2c80b4;
+    }
+    a { color: white; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gravity Sculptor</h1>
+    <a href="index.html">&larr; Back to Menu</a>
+  </header>
+  <div id="controls">
+    <span>Click on the canvas to place masses.</span>
+    <button onclick="removeMass()">Undo</button>
+    <button onclick="resetAll()">Reset</button>
+  </div>
+  <div id="canvasContainer">
+    <canvas id="gravCanvas" width="600" height="500"></canvas>
+  </div>
+  <script>
+    const canvas = document.getElementById('gravCanvas');
+    const ctx = canvas.getContext('2d');
+    const masses = [];
+    const particles = [];
+    const G = 0.5; // gravitational constant (tuned for visualization)
+    // Create test particles
+    function initParticles() {
+      particles.length = 0;
+      for (let i = 0; i < 50; i++) {
+        // spawn around edges
+        let x, y, angle;
+        const edge = Math.floor(Math.random() * 4);
+        if (edge === 0) { // top
+          x = Math.random() * canvas.width; y = 0;
+        } else if (edge === 1) { // bottom
+          x = Math.random() * canvas.width; y = canvas.height;
+        } else if (edge === 2) { // left
+          x = 0; y = Math.random() * canvas.height;
+        } else { // right
+          x = canvas.width; y = Math.random() * canvas.height;
+        }
+        angle = Math.random() * Math.PI * 2;
+        const speed = 0.5 + Math.random() * 0.5;
+        particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, color: 'rgba(46, 204, 113,0.8)' });
+      }
+    }
+    function removeMass() {
+      masses.pop();
+    }
+    function resetAll() {
+      masses.length = 0;
+      initParticles();
+    }
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      masses.push({ x, y, m: 100 });
+    });
+    function update() {
+      // update particles
+      particles.forEach((p) => {
+        let ax = 0;
+        let ay = 0;
+        masses.forEach((mass) => {
+          const dx = mass.x - p.x;
+          const dy = mass.y - p.y;
+          const distSq = dx*dx + dy*dy + 20; // softening factor
+          const force = G * mass.m / distSq;
+          ax += force * dx / Math.sqrt(distSq);
+          ay += force * dy / Math.sqrt(distSq);
+        });
+        p.vx += ax;
+        p.vy += ay;
+        // update positions
+        p.x += p.vx;
+        p.y += p.vy;
+        // wrap around edges for continuous effect
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
+      });
+    }
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // draw masses
+      masses.forEach((mass) => {
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(mass.x, mass.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      // draw particles
+      particles.forEach((p) => {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    // initialize
+    initParticles();
+    loop();
+  </script>
+</body>
+</html>
