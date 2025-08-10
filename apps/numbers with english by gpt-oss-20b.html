@@ -58,6 +58,90 @@ button{
 </div>
 
 <script>
+/* -------------------------------------------------------------------- */
+/* 1️⃣  Word lookup tables – used by chunkToWords()                     */
+/* -------------------------------------------------------------------- */
+const UNITS = [
+    'zero', 'one', 'two', 'three', 'four',
+    'five', 'six', 'seven', 'eight', 'nine'
+];
+
+const TEENS = [          // 10‑19
+    'ten', 'eleven', 'twelve', 'thirteen', 'fourteen',
+    'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'
+];
+
+const TENS = [           // 20,30,…90
+    '',        // dummy 0
+    '',        // no “ten‑tens”
+    'twenty', 'thirty', 'forty',
+    'fifty', 'sixty', 'seventy', 'eighty', 'ninety'
+];
+
+/* -------------------------------------------------------------------- */
+/* 2️⃣  Conway–Guy Latin root tables (new names to avoid clash)         */
+/* -------------------------------------------------------------------- */
+const LAT_UNITS = ['', 'un',   'duo',  'tre',  'quattuor',
+                   'quin', 'se',   'septen','octo', 'nove'];
+
+const LAT_TENS = ['', '',    'viginti', 'triginta', 'quadraginta',
+                  'quinquaginta', 'sexaginta', 'septuaginta',
+                  'octoginta',  'nonaginta'];
+
+const LAT_HUNDREDS = ['', 'centi',   'ducenti',  'trecenti', 'quadringenti',
+                      'quingenti','sescenti', 'septingenti',
+                      'octingenti','nongenti'];
+
+/* -------------------------------------------------------------------- */
+/* 3️⃣  Convert any integer n (≥ 1) into its Latin prefix             */
+/* -------------------------------------------------------------------- */
+function latinPrefixFromNumber(n){
+    if (n === 0) return '';
+
+    const parts = [];                 // each part corresponds to a block of ≤3 digits
+    while (n > 0) {
+        const d   = n % 1000;         // current three‑digit block
+        const h   = Math.floor(d / 100);
+        const t   = Math.floor((d % 100) / 10);
+        const u   = d % 10;
+
+        let part = '';
+        if (h > 0) part += LAT_HUNDREDS[h];
+        if (t > 0) part += LAT_TENS[t];
+        if (u > 0) part += LAT_UNITS[u];
+
+        parts.unshift(part);          // higher‑order blocks go first
+        n = Math.floor(n / 1000);
+    }
+    return parts.join('');
+}
+
+/* -------------------------------------------------------------------- */
+/* 4️⃣  The public API – returns the full scale name for group i      */
+/* -------------------------------------------------------------------- */
+function getScaleName(i){
+    if (i === 0) return '';
+
+    /* hard‑coded names up to decillion – unchanged */
+    switch (i) {
+        case 1:  return 'thousand';
+        case 2:  return 'million';
+        case 3:  return 'billion';
+        case 4:  return 'trillion';
+        case 5:  return 'quadrillion';
+        case 6:  return 'quintillion';
+        case 7:  return 'sextillion';
+        case 8:  return 'septillion';
+        case 9:  return 'octillion';
+        case10: return 'nonillion';
+        case11: return 'decillion';
+    }
+
+    /* i ≥ 12 – build the name from Latin roots */
+    const prefix = latinPrefixFromNumber(i);   // e.g. 123 → "centivigintiun"
+    return prefix + 'illion';
+}
+    
 // ---------- Utility functions ----------
 function formatBigInt(bi){
     const s = bi.toString();
@@ -246,93 +330,12 @@ function evaluate(expr){
     return evalRPN(rpn);
 }
 
-/* --------------------------------------------------------------------
-   1️⃣  Convert an arbitrary BigInt into its English wording.
-   -------------------------------------------------------------------- */
-const SCALE_NAMES = [
-    '',          // 10^0
-    'thousand',  // 10^3
-    'million',   // 10^6
-    'billion',   // 10^9
-    'trillion',  // 10^12
-    'quadrillion',
-    'quintillion',
-    'sextillion',
-    'septillion',
-    'octillion',
-    'nonillion',
-    'decillion',
-    'undecillion',
-    'duodecillion',
-    'tredecillion',
-    'quattuordecillion',
-    'quindecillion',
-    'sexdecillion',
-    'septendecillion',
-    'octodecillion',
-    'novemdecillion',
-    'vigintillion',          // 10^63
-    // … you can keep extending the array if you need more.
-];
-
-const UNITS = ['', 'one','two','three','four','five','six','seven','eight','nine'];
-const TEENS = ['ten','eleven','twelve','thirteen','fourteen',
-               'fifteen','sixteen','seventeen','eighteen','nineteen'];
-const TENS  = ['', '', 'twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
-
-/* --------------------------------------------------------------------
-   1️⃣  Scale names – helper for group indices (0 → units, 1 → thousand, …)
--------------------------------------------------------------------- */
-/* --------------------------------------------------------------------
-   1️⃣  Scale names – helper that works with *group index*
--------------------------------------------------------------------- */
-const ORDINALS = [
-    '',            // unused placeholder so that idx 0 → empty string
-    'un',          // group 12 → undecillion (10^36)
-    'duo',
-    'tre',
-    'quattuor',
-    'quin',
-    'sex',
-    'septen',
-    'octo',
-    'novem'        // group 20 → novemdeciillion
-];
-
-/**
- * Return the English scale name for a given 3‑digit group index.
- *
- * @param {number} idx - 0 = units, 1 = thousand, 2 = million, …
- */
-function getScaleName(idx) {
-    /* ---------- 1️⃣  Groups 1–10 (hard‑coded) --------------------- */
-    switch (idx) {
-        case 1: return 'thousand';
-        case 2: return 'million';
-        case 3: return 'billion';
-        case 4: return 'trillion';
-        case 5: return 'quadrillion';
-        case 6: return 'quintillion';
-        case 7: return 'sextillion';
-        case 8: return 'septillion';
-        case 9: return 'octillion';
-        case10: return 'nonillion';
-        case11: return 'decillion';          // 10³³
-    }
-
-    /* ---------- 2️⃣  Groups 12–20 → “un‑deci”, …, “novem‑deci” ---- */
-    if (idx >= 12 && idx <= 20) {
-        const ordIdx = idx - 12;           // 0…8
-        const prefix = ORDINALS[ordIdx + 1]; // skip the empty placeholder
-        return `${prefix}deciillion`;       // e.g., 'un' → 'undecillion'
-    }
-
-    /* ---------- 3️⃣  Group 21 (vigintillion) ----------------------- */
-    if (idx === 21) return 'vigintillion';
-
-    /* ---------- 4️⃣  Beyond – you can extend further as needed --------- */
-    return '';   // fallback: no scale name
-}
+/* --------------------------------------------------------------
+   3️⃣  Run your three tests
+------------------------------------------------------------------ */
+console.log(getScaleName(12)); // expected: undecillion
+console.log(getScaleName(21)); // expected: vigintillion
+console.log(getScaleName(23)); // expected: vigintiduotillion
 
 /**
  * Convert a number <1000 into words.
