@@ -308,54 +308,59 @@
       <div class="modal-content">
         <span class="close">&times;</span>
         <h2>How to Play Connections</h2>
-
         <ol>
-          <li><strong>Initialize the Game</strong>: Click the "Initialize Game" button to start a new game. This will generate a grid of 16 words.</li>
-          <li><strong>Select Words</strong>: Click on the words in the grid to select them. You can select up to 4 words at a time.</li>
-          <li><strong>Submit Group</strong>: Once you've selected a group of words, click the "Submit" button to check if they belong to the same category.</li>
-          <li><strong>Correct Group</strong>: If the selected words form a correct group, they will fade away and the remaining tiles will form a new, smaller grid.</li>
-          <li><strong>Clear Selection</strong>: You can clear your current selection at any time by clicking the "Clear Selection" button.</li>
-          <li><strong>Mistakes</strong>: Be careful! You are only allowed up to 4 mistakes. After that, the game will end and reveal the categories and words you didn't find.</li>
-          <li><strong>End Game</strong>: The game ends when you've successfully grouped all 16 words or reached the maximum number of mistakes.</li>
-          <li><strong>Custom Prompt</strong>: Want to customize the game? Edit the prompt in the text area and click "Initialize Game" again for a new set of categories and words.</li>
+          <li><strong>Initialize the Game</strong>: Click the "Initialize Game" button to start a new game.</li>
+          <li><strong>Select Words</strong>: Click on the words in the grid to select them (up to 4).</li>
+          <li><strong>Submit Group</strong>: Click "Submit" to check if the words belong to a category.</li>
+          <li><strong>Mistakes</strong>: You are allowed up to 4 mistakes.</li>
         </ol>
-        
-        <p>
-            To learn more about how this was made <a href="https://docs.google.com/document/d/1p-Fes0NiS1SPqriVLdyvqOg2UGQlp46MpES0_8u2gZw/edit?usp=sharing" target="_blank">click here</a>.<br>
-            For professionally designed games like this visit <a href="https://www.nytimes.com/games/connections" target="_blank">https://www.nytimes.com/games/connections</a>.
-        </p>
-
       </div>
     </div>
 
     <div id="gemini-info-panel" class="info-panel-hidden">
         <div class="info-panel-content">
-            <span id="close-info-panel" class="close-btn">&times;</span>
+            <span id="close-gemini-panel" class="close-btn">&times;</span>
             <h2>Gemini Nano AI Not Available</h2>
             <p>To use the built-in Gemini AI, please ensure you meet the requirements and have enabled the necessary features in Chrome.</p>
-            
             <h3>How to Enable</h3>
             <ol>
                 <li>Go to <code>chrome://flags</code> in your address bar.</li>
-                <li>Enable the <strong>Prompt API for Gemini Nano</strong> flag (#prompt-api-for-gemini-nano).</li>
-                <li>Enable the <strong>Optimization Guide On-Device Model</strong> flag (#optimization-guide-on-device-model).</li>
-                <li>Relaunch your browser. The model will download in the background.</li>
+                <li>Enable <strong>#prompt-api-for-gemini-nano</strong>.</li>
+                <li>Enable <strong>#optimization-guide-on-device-model</strong>.</li>
+                <li>Relaunch your browser.</li>
             </ol>
+        </div>
+    </div>
+    
+    <div id="lmstudio-info-panel" class="info-panel-hidden">
+        <div class="info-panel-content">
+            <span id="close-lmstudio-panel" class="close-btn">&times;</span>
+            <h2>Troubleshooting LM Studio</h2>
+            <p>If you're having trouble connecting, please check the following steps:</p>
+            
+            <h3>1. Start the LM Studio Server</h3>
+            <p>Make sure you've clicked the "Start Server" button on the Local Server tab (<code>&lt;-&gt;</code> icon) in LM Studio.</p>
 
-            <h3>System Requirements</h3>
-            <ul>
-                <li><strong>OS:</strong> Windows 10/11, macOS 13+, or Linux</li>
-                <li><strong>GPU:</strong> More than 4 GB of VRAM</li>
-                <li><strong>Storage:</strong> At least 22 GB of free space for your Chrome profile</li>
-            </ul>
-            <p><a href="https://developer.chrome.com/docs/ai/prompt-api" target="_blank">Read the Official Documentation</a></p>
+            <h3>2. Load a Compatible Model</h3>
+            <p>This application requires a model that supports the chat endpoint. Load an **"Instruct"** or **"Chat"** model. After loading it, verify that <code>POST /v1/chat/completions</code> appears in the "Supported endpoints" list.</p>
+
+            <h3>3. Configure CORS for Hosted Games</h3>
+            <p>Since this game is running from a web server, you must give it permission to access LM Studio.</p>
+            <ol>
+                <li>In LM Studio's server settings, check the box for **Enable CORS**.</li>
+                <li>In the `Access-Control-Allow-Origin` text box, paste the following value:
+                    <br>
+                    <code id="cors-origin-value"></code>
+                </li>
+                 <li>Restart the server in LM Studio.</li>
+            </ol>
         </div>
     </div>
 
     <label for="apiChoice">Choose AI Provider:</label>
     <select id="apiChoice">
       <option value="gemini" selected>Gemini Nano (Local)</option>
-      <option value="openai">OpenAI GPT-4 Turbo</option>
+      <option value="openai">OpenAI GPT-5</option>
       <option value="lm-studio">LM Studio (Local)</option>
     </select>
     
@@ -379,10 +384,8 @@
         <div id="statusMessage"></div>
     </div>
 
-    <div id="grid">
-        </div>
-    <div id="solution-container">
-        </div>
+    <div id="grid"></div>
+    <div id="solution-container"></div>
     <button id="submitBtn">Submit</button>
     <button id="clearBtn">Clear</button>
     
@@ -394,18 +397,12 @@
         <div>
             <textarea id="gpt4Prompt" rows="16">
 Generate 4 categories of words, each containing exactly 4 unique words.
-Ensure that no words are duplicated across categories.
-In total, there should be exactly 16 unique words.
-Make sure the same word does not appear in more than one category.
-Try to include words that could be ambiguous
-and fit into more than one category.
-For example, the word 'mouse' could be ambiguous if
-both 'ANIMALS' and 'COMPUTER PARTS' are categories
-but it should be part of only one category.
-But don't use the mouse example.
-Categories can also be like "FIRE ___" for
-Ant, Drill, Island, Opal.
-Or something else about the words independent of their meaning.
+Ensure that no words are duplicated across categories. In total, there should be exactly 16 unique words.
+Make sure the same word does not appear in more than one category. Try to include words that could be ambiguous
+and fit into more than one category. For example, the word 'mouse' could be ambiguous if both 'ANIMALS' and 
+'COMPUTER PARTS' are categories but it should be part of only one category. But don't use the mouse example.
+Categories can also be like "FIRE ___" for Ant, Drill, Island, Opal. Or something else about the words 
+independent of their meaning.
 </textarea>
         </div>
     </div>
@@ -416,87 +413,67 @@ Or something else about the words independent of their meaning.
         let foundCategories = [];
         let mistakes = 0;
         let categories = {};
-        let aiSession = null;  // Global variable to hold the AI session
+        let aiSession = null;
 
         // ### Core Game Logic ###
 
-        // Populates the grid with a given list of items
         function populateGrid(itemsToDisplay) {
             const grid = document.getElementById('grid');
-            grid.innerHTML = ''; // Clear the grid first
-
+            grid.innerHTML = '';
             itemsToDisplay.forEach((itemText) => {
                 const gridItem = document.createElement('div');
                 gridItem.className = 'grid-item';
                 gridItem.textContent = itemText;
-                
-                // Add a specific class if the item is likely an emoji
                 const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
                 if (emojiRegex.test(itemText)) {
                     gridItem.classList.add('emoji');
                 }
-
                 gridItem.addEventListener('click', handleItemClick);
                 grid.appendChild(gridItem);
             });
         }
 
-        // Handles when a grid item is clicked
         function handleItemClick() {
             const itemText = this.textContent;
             const index = selectedItems.indexOf(itemText);
-
             if (index > -1) {
-                // Deselect the item
                 selectedItems.splice(index, 1);
                 this.classList.remove('selected');
             } else if (selectedItems.length < 4) {
-                // Select the item if fewer than 4 are already selected
                 selectedItems.push(itemText);
                 this.classList.add('selected');
             }
         }
 
-        // Validates if the selected items form a correct category or are "one away"
         function validateSelectedItems(selected) {
-            // Check for a perfect match first
             for (const [category, items] of Object.entries(categories)) {
                 if (selected.length === items.length && selected.every(item => items.includes(item))) {
-                    return ['correct', category]; // Return 'correct' status
+                    return ['correct', category];
                 }
             }
-
-            // If no perfect match, check for "one away"
             for (const [category, items] of Object.entries(categories)) {
                 const intersection = selected.filter(item => items.includes(item));
                 if (intersection.length === 3) {
-                    return ['one-away', category]; // Return 'one-away' status
+                    return ['one-away', category];
                 }
             }
-
-            // Otherwise, it's just incorrect
             return ['incorrect', null];
         }
 
-        // Handles the Submit button click with "one away" logic
         function handleSubmit() {
             if (selectedItems.length !== 4) {
                 updateStatusMessage('Please select exactly 4 items.', 'invalid-message');
                 return;
             }
-
             const [result, category] = validateSelectedItems(selectedItems);
-
             if (result === 'correct') {
                 foundCategories.push(category);
                 document.getElementById('foundCategories').textContent = `Found Categories: ${foundCategories.join(', ')}`;
                 updateStatusMessage('Valid group found!', 'valid-message');
-
                 document.querySelectorAll('.grid-item.selected').forEach(gridItem => {
                     gridItem.classList.add('found-fade-out');
                 });
                 clearSelection();
-
                 setTimeout(() => {
                     if (foundCategories.length === Object.keys(categories).length) {
                         displayFinalSolution(true);
@@ -504,255 +481,152 @@ Or something else about the words independent of their meaning.
                         let remainingItems = Object.entries(categories)
                             .filter(([cat, _]) => !foundCategories.includes(cat))
                             .flatMap(([_, items]) => items);
-                        
                         populateGrid(shuffleArray(remainingItems));
                     }
                 }, 500);
-
-            } else { // This block handles both 'one-away' and 'incorrect'
+            } else {
                 mistakes++;
                 document.getElementById('mistakeCounter').textContent = `Mistakes: ${mistakes}`;
-                
                 if (result === 'one-away') {
                     updateStatusMessage('One away...', 'invalid-message');
-                } else { // result === 'incorrect'
+                } else {
                     updateStatusMessage('Invalid group. Try again.', 'invalid-message');
                 }
-                
                 if (mistakes >= 4) {
-                    displayFinalSolution(false); // Player has lost
+                    displayFinalSolution(false);
                 }
             }
         }
 
-        // Refactored function to show the final solution board
         function displayFinalSolution(isWin) {
-            const message = isWin ? 'Congratulations, you have won!' : 'You have lost the game! Here is the solution:';
-            const messageClass = isWin ? 'valid-message' : 'invalid-message';
-            updateStatusMessage(message, messageClass);
-
-            document.getElementById('grid').innerHTML = ''; // Clear the interactive grid
+            const message = isWin ? 'Congratulations, you have won!' : 'You have lost! Here is the solution:';
+            updateStatusMessage(message, isWin ? 'valid-message' : 'invalid-message');
+            document.getElementById('grid').innerHTML = '';
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('clearBtn').disabled = true;
-
             const solutionContainer = document.getElementById('solution-container');
-            solutionContainer.innerHTML = ''; // Clear previous solutions
-
+            solutionContainer.innerHTML = '';
             const categoryColors = ['#a0c4ff', '#9bf6ff', '#ffadad', '#ffd6a5'];
             let colorIndex = 0;
-
             for (const categoryName in categories) {
                 const categoryWrapper = document.createElement('div');
                 categoryWrapper.className = 'solution-category-wrapper';
-                
                 const categoryTitle = document.createElement('h4');
                 categoryTitle.textContent = categoryName;
                 categoryWrapper.appendChild(categoryTitle);
-
                 const itemsWrapper = document.createElement('div');
                 itemsWrapper.className = 'solution-items-wrapper';
-                
-                categoryWrapper.style.backgroundColor = categoryColors[colorIndex % categoryColors.length];
-                colorIndex++;
-
+                categoryWrapper.style.backgroundColor = categoryColors[colorIndex++ % categoryColors.length];
                 categories[categoryName].forEach(itemText => {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'grid-item solution-item';
                     itemDiv.textContent = itemText;
-                    
                     const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
-                    if (emojiRegex.test(itemText)) {
-                        itemDiv.classList.add('emoji');
-                    }
-                    
+                    if (emojiRegex.test(itemText)) itemDiv.classList.add('emoji');
                     itemsWrapper.appendChild(itemDiv);
                 });
-                
                 categoryWrapper.appendChild(itemsWrapper);
                 solutionContainer.appendChild(categoryWrapper);
             }
         }
 
-        // Clears the current selection
         function clearSelection() {
             selectedItems = [];
-            document.querySelectorAll('.grid-item.selected').forEach(item => {
-                item.classList.remove('selected');
-            });
+            document.querySelectorAll('.grid-item.selected').forEach(item => item.classList.remove('selected'));
         }
 
         // ### AI Interaction and Game Initialization ###
 
-        // Initializes the local AI session (Gemini Nano)
         async function initializeAI(showUserFeedback = false) {
-            // Check for mobile devices first, as they are not supported
-            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-            if (isMobile) {
-                if (showUserFeedback) {
-                    updateStatusMessage('Gemini Nano is not supported on mobile devices.', 'invalid-message');
-                }
-                throw new Error("Mobile device detected.");
-            }
-            
-            // A more robust check for Google Chrome
-            const isChrome = !!window.chrome && (navigator.userAgent.indexOf("Chrome") > -1 && navigator.userAgent.indexOf("Edg") === -1 && navigator.userAgent.indexOf("OPR") === -1);
-            if (!isChrome) {
-                if (showUserFeedback) {
-                    updateStatusMessage('Gemini Nano is only available in Google Chrome.', 'invalid-message');
-                }
-                throw new Error("Browser is not Chrome.");
-            }
-            
             if (typeof LanguageModel === 'undefined') {
-                if (showUserFeedback) {
-                    const infoPanel = document.getElementById('gemini-info-panel');
-                    if (infoPanel) {
-                        infoPanel.className = 'info-panel-visible';
-                    }
-                }
+                if (showUserFeedback) document.getElementById('gemini-info-panel').className = 'info-panel-visible';
                 throw new Error("LanguageModel API not available.");
             }
             try {
                 const availability = await LanguageModel.availability();
                 if (availability === "available" || availability === "readily") {
-                    if (!aiSession) {
-                       aiSession = await LanguageModel.create();
-                       console.log("AI session created successfully");
-                    }
-                } else if (availability === "after-download" || availability === "downloading") {
-                    if (showUserFeedback) {
-                        updateStatusMessage('Downloading AI model...', 'valid-message');
-                    }
-                    aiSession = await LanguageModel.create({
-                        monitor(m) {
-                            m.addEventListener('downloadprogress', (e) => {
-                                if (showUserFeedback && e.total > 0) {
-                                    const progress = Math.round(e.loaded / e.total * 100);
-                                    updateStatusMessage(`Downloading AI model... ${progress}%`, 'valid-message');
-                                }
-                            });
-                        },
-                    });
-                    if (showUserFeedback) {
-                        updateStatusMessage('Model ready!', 'valid-message');
-                    }
-                    console.log("AI session created after download");
-                }
-                else {
+                    if (!aiSession) aiSession = await LanguageModel.create();
+                    console.log("AI session created successfully");
+                } else {
                     throw new Error(`AI capabilities not available. Status: ${availability}`);
                 }
             } catch (error) {
                 console.error('Error initializing AI:', error);
-                if (showUserFeedback) {
-                    if (error.name === 'NotAllowedError') {
-                         updateStatusMessage('Gemini Nano cannot run in this environment due to security restrictions. Please select another AI provider.', 'invalid-message');
-                    } else {
-                         updateStatusMessage(`Error initializing AI: ${error.message}.`, 'invalid-message');
-                    }
-                }
+                if (showUserFeedback) updateStatusMessage(`Error initializing AI: ${error.message}.`, 'invalid-message');
                 throw error;
             }
         }
 
-        // Calls local Gemini Nano with the provided prompt
         async function geminiNano(prompt) {
-            if (!aiSession) {
-                // This call will now throw an error if it fails, which will be caught by the caller
-                await initializeAI(true);
-            }
+            if (!aiSession) await initializeAI(true);
             try {
                 return await aiSession.prompt(prompt);
             } catch (error) {
-                console.error('Error in Gemini Nano prompt:', error);
                 updateStatusMessage('Error during AI interaction.', 'invalid-message');
                 throw error;
             }
         }
         
-        // Calls the OpenAI API
         async function callOpenAI(apiKey, fullPrompt) {
             try {
                 const response = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: "gpt-4-turbo", messages: [{ "role": "user", "content": fullPrompt }] })
+                    body: JSON.stringify({ model: "gpt-5", messages: [{ "role": "user", "content": fullPrompt }] })
                 });
                 const data = await response.json();
                 if (data.choices && data.choices.length > 0) return data.choices[0].message.content;
                 throw new Error("Invalid response format from OpenAI.");
             } catch (error) {
-                console.error('Error:', error);
                 updateStatusMessage('Error communicating with OpenAI.', 'invalid-message');
                 throw error;
             }
         }
 
-        // Calls the LM Studio API
         async function callLMStudio(fullPrompt) {
             try {
                 const response = await fetch('http://localhost:1234/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        model: "local-model", // This can be any string
+                        model: "local-model",
                         messages: [{ "role": "user", "content": fullPrompt }]
                     })
                 });
                 const data = await response.json();
-                if (data.choices && data.choices.length > 0) {
-                    return data.choices[0].message.content;
-                }
+                if (data.choices && data.choices.length > 0) return data.choices[0].message.content;
                 throw new Error("Invalid response format from LM Studio.");
             } catch (error) {
-                console.error('Error:', error);
-                const learnMoreButton = `<button onclick="window.open('https://lmstudio.ai/docs/local-server', '_blank')">Learn How</button>`;
-                updateStatusMessage(`Error communicating with LM Studio. Make sure it is running. ${learnMoreButton}`, 'invalid-message');
+                const troubleshootButton = `<button onclick="showLMStudioHelp()">Troubleshoot</button>`;
+                updateStatusMessage(`Error communicating with LM Studio. ${troubleshootButton}`, 'invalid-message');
                 throw error;
             }
         }
 
-        // Validates the categories object from the AI
         function validateCategories(categoriesData) {
             if (Object.keys(categoriesData).length !== 4) return false;
-            
             const allWords = Object.values(categoriesData).flat();
             const uniqueWords = new Set(allWords);
-
-            if (uniqueWords.size !== 16 || allWords.length !== 16) return false;
-            
-            return true;
+            return uniqueWords.size === 16 && allWords.length === 16;
         }
 
-        // Handles the AI response with validation and a re-prompt loop
         async function handleApiResponse(apiResponse, originalUserPrompt, apiConfig, attempt = 1) {
-            const maxAttempts = 3;
-
             if (!apiResponse) {
                 updateStatusMessage("No valid response from AI.", "invalid-message");
                 return;
             }
-
             try {
                 const jsonMatch = apiResponse.match(/\{[\s\S]*\}/);
-                if (!jsonMatch) {
-                    throw new Error("No JSON object found in the response.");
-                }
-                
+                if (!jsonMatch) throw new Error("No JSON object found in the response.");
                 const parsedCategories = JSON.parse(jsonMatch[0]);
-
                 if (validateCategories(parsedCategories)) {
                     categories = parsedCategories;
                     initGame();
                 } else {
-                    if (attempt >= maxAttempts) {
-                        throw new Error("AI failed to provide a valid game after multiple attempts.");
-                    }
-                    
-                    updateStatusMessage(`AI response was invalid. Retrying... (Attempt ${attempt + 1})`, 'invalid-message');
-                    
-                    const repromptInstructions = "The previous response was invalid. Please try again. Ensure the new response contains exactly 4 categories, each with exactly 4 unique words, for a total of 16 unique words with no duplicates. The entire output must be only a single JSON object.";
-                    const newFullPrompt = constructFullPrompt(`${repromptInstructions}\n\nOriginal request: ${originalUserPrompt}`);
-                    
+                    if (attempt >= 3) throw new Error("AI failed to provide a valid game after multiple attempts.");
+                    updateStatusMessage(`AI response invalid. Retrying... (Attempt ${attempt + 1})`, 'invalid-message');
+                    const reprompt = `The previous response was invalid. Please try again. Ensure the new response contains exactly 4 categories, each with exactly 4 unique words, for a total of 16 unique words with no duplicates. The entire output must be only a single JSON object.\n\nOriginal request: ${originalUserPrompt}`;
+                    const newFullPrompt = constructFullPrompt(reprompt);
                     let result;
                     switch (apiConfig.choice) {
                         case 'openai': result = await callOpenAI(apiConfig.key, newFullPrompt); break;
@@ -762,57 +636,39 @@ Or something else about the words independent of their meaning.
                     await handleApiResponse(result, originalUserPrompt, apiConfig, attempt + 1);
                 }
             } catch (error) {
-                console.error('Error processing API response:', error, 'Original String:', apiResponse);
                 updateStatusMessage(`Failed to process AI response: ${error.message}`, "invalid-message");
             }
         }
 
-        // Main function to initialize or reset the game
         function initGame() {
             mistakes = 0;
             foundCategories = [];
             selectedItems = [];
-
             document.getElementById('mistakeCounter').textContent = `Mistakes: 0`;
             document.getElementById('foundCategories').textContent = `Found Categories: `;
             updateStatusMessage('', '');
             document.getElementById('submitBtn').disabled = false;
             document.getElementById('clearBtn').disabled = false;
-            
-            const solutionContainer = document.getElementById('solution-container');
-            if(solutionContainer) {
-                solutionContainer.innerHTML = '';
-            }
-
-            const allItems = shuffleArray(Object.values(categories).flat());
-            populateGrid(allItems);
+            if(document.getElementById('solution-container')) document.getElementById('solution-container').innerHTML = '';
+            populateGrid(shuffleArray(Object.values(categories).flat()));
         }
 
         // ### UI and Utility Functions ###
 
-        // Constructs the full prompt for the AI
         function constructFullPrompt(userPrompt) {
             const jsonStructure = [
                 'The output must be only a single valid JSON object containing exactly 4 categories with 4 unique string items each. Use double quotes.',
-                'Example:',
-                '{',
-                '  "FISH": ["Bass", "Flounder", "Salmon", "Trout"],',
-                '  "PLANETS": ["Earth", "Mars", "Jupiter", "Venus"],',
-                '  "COLORS": ["Red", "Blue", "Green", "Yellow"],',
-                '  "FRUITS": ["Apple", "Banana", "Cherry", "Date"]',
-                '}'
+                'Example:', '{ "FISH": ["Bass", "Flounder", "Salmon", "Trout"], "PLANETS": ["Earth", "Mars", "Jupiter", "Venus"], "COLORS": ["Red", "Blue", "Green", "Yellow"], "FRUITS": ["Apple", "Banana", "Cherry", "Date"] }'
             ];
             return [userPrompt, ...jsonStructure].join("\n");
         }
 
-        // Updates the status message display
         function updateStatusMessage(message, className) {
             const statusMessage = document.getElementById('statusMessage');
             statusMessage.innerHTML = message;
             statusMessage.className = className;
         }
 
-        // Shuffles an array randomly
         function shuffleArray(array) {
             for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -821,105 +677,83 @@ Or something else about the words independent of their meaning.
             return array;
         }
 
-        // Toggles visibility of the loading icon
         function toggleLoadingIcon(show) {
             document.getElementById('loadingIcon').style.display = show ? 'inline-block' : 'none';
+        }
+        
+        function showLMStudioHelp() {
+            const panel = document.getElementById('lmstudio-info-panel');
+            document.getElementById('cors-origin-value').textContent = window.location.origin;
+            panel.className = 'info-panel-visible';
         }
 
         // ### Event Listeners ###
 
         document.addEventListener('DOMContentLoaded', () => {
-            const modal = document.getElementById("instructionsModal");
-            const btn = document.getElementById("instructionsButton");
-            const span = document.getElementsByClassName("close")[0];
-            if (btn) btn.onclick = () => { if(modal) modal.style.display = "block"; };
-            if (span) span.onclick = () => { if(modal) modal.style.display = "none"; };
-            window.onclick = (event) => { if (event.target == modal) modal.style.display = "none"; };
-            
-            const closePanelBtn = document.getElementById('close-info-panel');
-            if (closePanelBtn) {
-                closePanelBtn.addEventListener('click', function() {
-                    const infoPanel = document.getElementById('gemini-info-panel');
-                    if (infoPanel) {
-                        infoPanel.className = 'info-panel-hidden';
-                    }
-                });
-            }
-
-            const initializeGameBtn = document.getElementById('initializeGame');
-            if (initializeGameBtn) {
-                initializeGameBtn.addEventListener('click', async function() {
-                    const apiKey = document.getElementById('apiKey').value;
-                    const apiChoice = document.getElementById('apiChoice').value;
-                    const userPrompt = document.getElementById('gpt4Prompt').value;
-                    const apiConfig = { choice: apiChoice, key: apiKey };
-
-                    toggleLoadingIcon(true);
-                    try {
-                        const fullPrompt = constructFullPrompt(userPrompt);
-                        let result;
-                        switch (apiChoice) {
-                            case 'openai': result = await callOpenAI(apiKey, fullPrompt); break;
-                            case 'gemini': result = await geminiNano(fullPrompt); break;
-                            case 'lm-studio': result = await callLMStudio(fullPrompt); break;
-                            default: 
-                                updateStatusMessage('Please select an AI Provider.', 'invalid-message');
-                                toggleLoadingIcon(false);
-                                return;
-                        }
-                        // Only proceed if the AI call was successful
-                        if (result) {
-                            await handleApiResponse(result, userPrompt, apiConfig);
-                        }
-
-                    } catch (error) {
-                        console.error('Error during API interaction:', error);
-                    } finally {
-                        toggleLoadingIcon(false);
-                    }
-                });
-            }
-
-            const apiChoiceEl = document.getElementById('apiChoice');
-            if(apiChoiceEl) {
-                apiChoiceEl.addEventListener('change', function() {
-                    const apiKeyContainer = document.getElementById('apiKeyContainer');
-                    if (apiKeyContainer) {
-                        const needsApiKey = this.value === 'openai';
-                        apiKeyContainer.style.display = needsApiKey ? 'block' : 'none';
-                    }
-                });
-            }
-            
-            const addEmojiBtn = document.getElementById('addEmojiPromptBtn');
-            if (addEmojiBtn) {
-                addEmojiBtn.addEventListener('click', function() {
-                    const promptTextArea = document.getElementById('gpt4Prompt');
-                    const emojiInstruction = "\n\nUse emojis instead of words but leave category labels as words.";
-                    
-                    if (!promptTextArea.value.includes(emojiInstruction.trim())) {
-                        promptTextArea.value += emojiInstruction;
-                    }
-                });
-            }
-
-            const submitBtn = document.getElementById('submitBtn');
-            if (submitBtn) submitBtn.addEventListener('click', handleSubmit);
-            
-            const clearBtn = document.getElementById('clearBtn');
-            if (clearBtn) clearBtn.addEventListener('click', clearSelection);
-
-            // Set default categories and initialize game without AI
-            categories = {
-                'FISH': ['Bass', 'Flounder', 'Salmon', 'Trout'],
-                'PLANETS': ['Earth', 'Mars', 'Jupiter', 'Venus'],
-                'COLORS': ['Red', 'Blue', 'Green', 'Yellow'],
-                'FRUITS': ['Apple', 'Banana', 'Cherry', 'Date']
+            const setupPanel = (panelId, buttonId, closeId) => {
+                const panel = document.getElementById(panelId);
+                const btn = document.getElementById(buttonId);
+                const closeBtn = document.getElementById(closeId);
+                if (btn) btn.onclick = () => { if (panel) panel.className = 'info-panel-visible'; };
+                if (closeBtn) closeBtn.onclick = () => { if (panel) panel.className = 'info-panel-hidden'; };
             };
-            initGame();
+
+            const instructionsModal = document.getElementById('instructionsModal');
+            if (instructionsModal) {
+                 const instructionsButton = document.getElementById('instructionsButton');
+                 if (instructionsButton) instructionsButton.onclick = () => { instructionsModal.style.display = 'block'; };
+                 const closeSpan = instructionsModal.querySelector('.close');
+                 if(closeSpan) closeSpan.onclick = () => { instructionsModal.style.display = 'none'; };
+                 window.onclick = (event) => { if (event.target == instructionsModal) instructionsModal.style.display = 'none'; };
+            }
+
+            setupPanel('gemini-info-panel', null, 'close-gemini-panel');
+            setupPanel('lmstudio-info-panel', null, 'close-lmstudio-panel');
             
-            // Attempt to initialize Gemini Nano on load, but don't block or show errors
-            initializeAI(false).catch(e => console.log("Pre-initialization of local AI failed, will try again on first use if selected."));
+            document.getElementById('initializeGame').addEventListener('click', async function() {
+                const apiChoice = document.getElementById('apiChoice').value;
+                const userPrompt = document.getElementById('gpt4Prompt').value;
+                const apiConfig = { choice: apiChoice, key: document.getElementById('apiKey').value };
+                toggleLoadingIcon(true);
+                try {
+                    const fullPrompt = constructFullPrompt(userPrompt);
+                    let result;
+                    switch (apiChoice) {
+                        case 'openai': result = await callOpenAI(apiConfig.key, fullPrompt); break;
+                        case 'gemini': result = await geminiNano(fullPrompt); break;
+                        case 'lm-studio': result = await callLMStudio(fullPrompt); break;
+                        default: 
+                            updateStatusMessage('Please select an AI Provider.', 'invalid-message');
+                            toggleLoadingIcon(false);
+                            return;
+                    }
+                    if (result) await handleApiResponse(result, userPrompt, apiConfig);
+                } catch (error) {
+                    console.error('Error during API interaction:', error);
+                } finally {
+                    toggleLoadingIcon(false);
+                }
+            });
+
+            document.getElementById('apiChoice').addEventListener('change', function() {
+                const needsApiKey = this.value === 'openai';
+                document.getElementById('apiKeyContainer').style.display = needsApiKey ? 'block' : 'none';
+            });
+            
+            document.getElementById('addEmojiPromptBtn').addEventListener('click', function() {
+                const promptTextArea = document.getElementById('gpt4Prompt');
+                const emojiInstruction = "\n\nUse emojis instead of words but leave category labels as words.";
+                if (!promptTextArea.value.includes(emojiInstruction.trim())) {
+                    promptTextArea.value += emojiInstruction;
+                }
+            });
+
+            document.getElementById('submitBtn').addEventListener('click', handleSubmit);
+            document.getElementById('clearBtn').addEventListener('click', clearSelection);
+
+            categories = {'FISH':['Bass','Flounder','Salmon','Trout'],'PLANETS':['Earth','Mars','Jupiter','Venus'],'COLORS':['Red','Blue','Green','Yellow'],'FRUITS':['Apple','Banana','Cherry','Date']};
+            initGame();
+            initializeAI(false).catch(e => console.log("Pre-init of local AI failed."));
         });
     </script>
 </body>
