@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fireworks Demo – No Bounce, Softer Gravity + Sound</title>
+<style>
+  body, html {margin:0;height:100%;overflow:hidden;background:#000;}
+  canvas{display:block;}
+
+  /* Fixed control panel */
+  #controls{
+    position:absolute;top:10px;left:10px;
+    background:rgba(0,0,0,.3);
+    color:#fff;font-family:sans-serif;padding:8px 12px;border-radius:4px;
+    user-select:none;               /* prevent accidental dragging/selection */
+  }
+  #controls label{display:block;margin-bottom:6px;}
+  #controls input[type=range]{width:120px;}
+</style>
+</head>
+
+<body>
+<div id="controls">
+  <label>Gravity:
+    <input type="range" id="gravitySlider" min="0.05" max="0.25" step="0.01">
+    <span id="gravityVal"></span>
+  </label>
+  <label>Particles per firework:
+    <input type="number" id="particlesInput" min="10" max="200" step="10">
+    <span id="particlesVal"></span>
+  </label>
+  <label>Trail intensity:
+    <input type="range" id="trailSlider" min="0.01" max="0.2" step="0.01">
+    <span id="trailVal"></span>
+  </label>
+  <label>Particle radius:
+    <input type="range" id="radiusSlider" min="1" max="10" step="0.5">
+    <span id="radiusVal"></span>
+  </label>
+  <label>Wind X:
+    <input type="range" id="windSlider" min="-5" max="5" step="0.1">
+    <span id="windVal"></span>
+  </label>
+  <label>Air resistance:
+    <input type="range" id="airResSlider" min="0.90" max="0.99" step="0.01">
+    <span id="airResVal"></span>
+  </label>
+  <label>Lightness (color brightness):
+    <input type="range" id="lightnessSlider" min="30" max="90" step="1">
+    <span id="lightnessVal"></span>
+  </label>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+(() => {
+  /* ---------- Constants & defaults ---------- */
+  const MAX_PARTICLES = 2000;                     // pool size
+  const DEFAULTS = {
+      gravity: 0.15,
+      particlesPerFirework: 80,
+      trailAlpha: 0.05,          // brighter trails
+      particleRadius: 3,
+      windX: 0,
+      airResistance: 0.99,
+      bounceFactor: 0,           // **set to 0 → no bounce**
+      lightness: 70              // new color brightness setting (percent)
+  };
+  const STORAGE_KEYS = {
+      gravity: 'gravity',
+      particlesPerFirework: 'particlesPerFirework',
+      trailAlpha: 'trailAlpha',
+      particleRadius: 'particleRadius',
+      windX: 'windX',
+      airRes: 'airRes',
+      lightness: 'lightness'
+  };
+
+  /* ---------- Load persisted values ---------- */
+  const getStored = key => {
+    const v = localStorage.getItem(key);
+    return v !== null ? parseFloat(v) : null;
+  };
+  let gravity        = getStored(STORAGE_KEYS.gravity)        ?? DEFAULTS.gravity;
+  let particlesPerFirework = getStored(STORAGE_KEYS.particlesPerFirework) ?? DEFAULTS.particlesPerFirework;
+  let trailAlpha     = getStored(STORAGE_KEYS.trailAlpha)     ?? DEFAULTS.trailAlpha;
+  let particleRadius = getStored(STORAGE_KEYS.particleRadius) ?? DEFAULTS.particleRadius;
+  let windX          = getStored(STORAGE_KEYS.windX)          ?? DEFAULTS.windX;
+  let airResistance  = getStored(STORAGE_KEYS.airRes)         ?? DEFAULTS.airResistance;
+  let lightness      = getStored(STORAGE_KEYS.lightness)      ?? DEFAULTS.lightness;
+  const bounceFactor = DEFAULTS.bounceFactor; // always 0 for no bounce
+
+  /* ---------- UI elements ---------- */
+  const gravitySlider   = document.getElementById('gravitySlider');
+  const particlesInput  = document.getElementById('particlesInput');
+  const trailSlider     = document.getElementById('trailSlider');
+  const radiusSlider    = document.getElementById('radiusSlider');
+  const windSlider      = document.getElementById('windSlider');
+  const airResSlider    = document.getElementById('airResSlider');
+  const lightnessSlider = document.getElementById('lightnessSlider');
+
+  const gravityVal   = document.getElementById('gravityVal');
+  const particlesVal = document.getElementById('particlesVal');
+  const trailVal     = document.getElementById('trailVal');
+  const radiusVal    = document.getElementById('radiusVal');
+  const windVal      = document.getElementById('windVal');
+  const airResVal    = document.getElementById('airResVal');
+  const lightnessVal = document.getElementById('lightnessVal');
+
+  /* ---------- Initialise UI with stored values ---------- */
+  gravitySlider.value   = gravity;
+  particlesInput.value  = particlesPerFirework;
+  trailSlider.value     = trailAlpha;
+  radiusSlider.value    = particleRadius;
+  windSlider.value      = windX;
+  airResSlider.value    = airResistance;
+  lightnessSlider.value = lightness;
+
+  gravityVal.textContent   = gravity.toFixed(2);
+  particlesVal.textContent = particlesPerFirework;
+  trailVal.textContent     = trailAlpha.toFixed(2);
+  radiusVal.textContent    = particleRadius.toFixed(1);
+  windVal.textContent      = windX.toFixed(1);
+  airResVal.textContent    = airResistance.toFixed(2);
+  lightnessVal.textContent = lightness;
+
+  /* ---------- Helper update functions + persistence ---------- */
+  const updateGravity   = v => { gravity = v; localStorage.setItem(STORAGE_KEYS.gravity, v); gravityVal.textContent = v.toFixed(2); };
+  const updateParticles = v => { particlesPerFirework = v; localStorage.setItem(STORAGE_KEYS.particlesPerFirework, v); particlesVal.textContent = v; };
+  const updateTrail     = v => { trailAlpha = v; localStorage.setItem(STORAGE_KEYS.trailAlpha, v); trailVal.textContent = v.toFixed(2); };
+  const updateRadius    = v => { particleRadius = v; localStorage.setItem(STORAGE_KEYS.particleRadius, v); radiusVal.textContent = v.toFixed(1); };
+  const updateWind      = v => { windX = v; localStorage.setItem(STORAGE_KEYS.windX, v); windVal.textContent = v.toFixed(1); };
+  const updateAirRes    = v => { airResistance = v; localStorage.setItem(STORAGE_KEYS.airRes, v); airResVal.textContent = v.toFixed(2); };
+  const updateLightness = v => { lightness = v; localStorage.setItem(STORAGE_KEYS.lightness, v); lightnessVal.textContent = v; };
+
+  /* ---------- UI event listeners ---------- */
+  gravitySlider.addEventListener('input', e=>updateGravity(parseFloat(e.target.value)));
+  particlesInput.addEventListener('change', e=>updateParticles(parseInt(e.target.value) || DEFAULTS.particlesPerFirework));
+  trailSlider.addEventListener('input', e=>updateTrail(parseFloat(e.target.value)));
+  radiusSlider.addEventListener('input', e=>updateRadius(parseFloat(e.target.value)));
+  windSlider.addEventListener('input', e=>updateWind(parseFloat(e.target.value)));
+  airResSlider.addEventListener('input', e=>updateAirRes(parseFloat(e.target.value)));
+  lightnessSlider.addEventListener('input', e=>updateLightness(parseInt(e.target.value)));
+
+  /* ---------- Canvas setup ---------- */
+  const canvas = document.getElementById('c');
+  const ctx    = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  /* ---------- Sound setup – Web Audio synthesis ---------- */
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playBoom() {
+    // Ensure the AudioContext is running
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const filter = audioCtx.createBiquadFilter();
+    const gainNode = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.3);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(3000, audioCtx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(500, audioCtx.currentTime + 0.3);
+
+    gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+    osc.connect(filter).connect(gainNode).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.35);
+  }
+
+  /* ---------- Particle system ---------- */
+  class Particle {
+    constructor() {
+      this.x = this.y = this.vx = this.vy = 0;
+      this.hue = 0; this.life = 0; this.alpha = 1; this.radius = particleRadius;
+    }
+    init(x, y, vx, vy, hue) {
+      this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.hue = hue;
+      this.life   = 100;
+      this.alpha  = 1;
+      this.radius = particleRadius;
+    }
+    update() {
+      // Physics
+      this.vy += gravity;
+      this.vx += windX;
+      this.vx *= airResistance;
+      this.vy *= airResistance;
+
+      this.x += this.vx;
+      this.y += this.vy;
+
+      /* Bottom “bounce” – set bounceFactor to 0 for no bounce */
+      if (this.y >= canvas.height) {
+        this.y = canvas.height;
+        this.vy = -this.vy * bounceFactor;   // when bounceFactor===0, vy becomes 0 → particle stops
+      }
+
+      // Fade out
+      this.life -= 1;
+      this.alpha = Math.max(this.life / 100, 0);
+    }
+    draw(ctx) {
+      const grad = ctx.createRadialGradient(
+          this.x, this.y, 0,
+          this.x, this.y, this.radius
+      );
+      grad.addColorStop(0, `hsla(${this.hue},80%,${lightness}%, ${this.alpha})`);
+      grad.addColorStop(0.6, `hsla(${this.hue},80%,${lightness}%, ${this.alpha * 0.3})`);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  class ParticlePool {
+    constructor(max) { this.pool = Array.from({ length: max }, () => new Particle()); this.index = 0; }
+    spawn(x, y, vx, vy, hue) {
+      const p = this.pool[this.index];
+      p.init(x, y, vx, vy, hue);
+      this.index = (this.index + 1) % this.pool.length;
+      return p;
+    }
+  }
+
+  const pool = new ParticlePool(MAX_PARTICLES);
+  const activeParticles = [];
+
+  function launchFirework(x, y) {
+    const hueBase = randomBetween(0, 360);
+    for (let i = 0; i < particlesPerFirework; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = randomBetween(1.5, 4);
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+      const hue = (hueBase + i * 2) % 360;
+      activeParticles.push(pool.spawn(x, y, vx, vy, hue));
+    }
+    playBoom();   // **sound on every launch**
+  }
+
+  /* ---------- Interactivity – mouse & touch ---------- */
+  let mouseDown = false;
+  canvas.addEventListener('mousedown', e => {
+    mouseDown = true;
+    launchFirework(e.clientX, e.clientY);
+  });
+  canvas.addEventListener('mousemove', e => { if (mouseDown) launchFirework(e.clientX, e.clientY); });
+  canvas.addEventListener('mouseup', () => { mouseDown = false; });
+
+  const touchHandler = e => {
+    if (e.touches.length > 0) {
+      const t = e.touches[0];
+      launchFirework(t.clientX, t.clientY);
+    }
+    e.preventDefault();
+  };
+  canvas.addEventListener('touchstart', touchHandler);
+  canvas.addEventListener('touchmove', touchHandler);
+
+  /* ---------- Animation loop ---------- */
+  function animate() {
+    requestAnimationFrame(animate);
+
+    ctx.fillStyle = `rgba(0,0,0,${trailAlpha})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = activeParticles.length - 1; i >= 0; i--) {
+      const p = activeParticles[i];
+      p.update();
+      if (p.life <= 0) { activeParticles.splice(i, 1); }
+      else { p.draw(ctx); }
+    }
+  }
+
+  animate();
+
+  /* ---------- Utility ---------- */
+  function randomBetween(min, max) { return min + Math.random() * (max - min); }
+
+})();
+</script>
+</body>
+</html>
