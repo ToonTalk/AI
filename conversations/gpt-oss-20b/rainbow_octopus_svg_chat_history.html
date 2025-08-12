@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rainbow Octopus SVG - Chat History</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .file-upload {
+            margin: 30px;
+            text-align: center;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+            transform: scale(1.02);
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .save-btn {
+            background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+            box-shadow: 0 4px 15px rgba(67, 206, 162, 0.3);
+        }
+
+        .save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(67, 206, 162, 0.4);
+        }
+
+        .chat-container {
+            max-height: 70vh;
+            overflow-y: auto;
+            padding: 0 30px 30px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .conversation-info {
+            background: #f8f9ff;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 15px;
+            border-left: 5px solid #667eea;
+        }
+
+        .conversation-info h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-value {
+            color: #333;
+            font-size: 1.1rem;
+            margin-top: 5px;
+        }
+
+        .message {
+            margin: 20px 0;
+            display: flex;
+            gap: 15px;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .user .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .assistant .message-avatar {
+            background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);
+            color: white;
+        }
+
+        .message-content {
+            flex: 1;
+            max-width: 85%;
+            min-width: 0;
+        }
+
+        .message-bubble {
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            position: relative;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            min-width: 0;
+        }
+
+        .user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+        }
+
+        .assistant .message-bubble {
+            background: white;
+            border: 1px solid #e0e6ed;
+            color: #333;
+        }
+
+        .message-bubble::before {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            top: 20px;
+        }
+
+        .user .message-bubble::before {
+            right: -10px;
+            border-left: 10px solid #764ba2;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+        }
+
+        .assistant .message-bubble::before {
+            left: -10px;
+            border-right: 10px solid #e0e6ed;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+        }
+
+        .message-text {
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        .message-text h1, .message-text h2, .message-text h3, .message-text h4, .message-text h5, .message-text h6 {
+            margin: 20px 0 10px 0;
+            color: inherit;
+            line-height: 1.3;
+        }
+
+        .message-text p {
+            margin: 10px 0;
+            line-height: 1.7;
+        }
+
+        .message-text ul, .message-text ol {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        .message-text li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        .svg-container {
+            background: #f8f9ff;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            border: 1px solid #e0e6ed;
+            text-align: center;
+            overflow: auto;
+            max-width: 100%;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .user .svg-container {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .svg-container svg {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .svg-title {
+            font-size: 0.9rem;
+            color: #667eea;
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .user .svg-title {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            overflow: auto;
+            font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #d4d4d4;
+            position: relative;
+            box-sizing: border-box;
+            max-height: 500px;
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            white-space: pre;
+            overflow: visible;
+            width: 100%;
+            font-family: inherit;
+            font-size: inherit;
+            line-height: inherit;
+        }
+
+        .code-block::before {
+            content: attr(data-language);
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: #007acc;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .inline-code {
+            background: #f1f3f4;
+            color: #d73a49;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            border: 1px solid #e1e4e8;
+        }
+
+        .user .inline-code {
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .message-meta {
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #ffe6e6;
+            color: #d63384;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px;
+            border-left: 5px solid #d63384;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .scrollbar-custom {
+            scrollbar-width: thin;
+            scrollbar-color: #667eea #f0f0f0;
+        }
+
+        .scrollbar-custom::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: #f0f0f0;
+            border-radius: 10px;
+        }
+
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
+        .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+            background: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Chat History</h1>
+            <p>Rainbow Octopus SVG</p>
+        </div>
+        <div class="chat-container">
+            <div class="conversation-info">
+                <h2>Rainbow Octopus SVG</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Created</div>
+                        <div class="info-value">8/12/2025, 11:16:35 AM</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Token Count</div>
+                        <div class="info-value">9202</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Messages</div>
+                        <div class="info-value">2</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Pinned</div>
+                        <div class="info-value">No</div>
+                    </div>
+                </div>
+            </div><div class="message user"><div class="message-avatar">U</div><div class="message-content"><div class="message-bubble">
+                <div class="message-text"><p>Create an SVG element of a rainbow octopus</p></div>
+                <div class="message-meta">
+                    <span>user</span>
+                    <span>Message 1</span>
+                </div>
+            </div></div></div><div class="message assistant"><div class="message-avatar">A</div><div class="message-content"><div class="message-bubble">
+                <div class="message-text"><p>The user wants "Create an SVG element of a rainbow octopus". So they want an SVG code snippet that draws a rainbow octopus. The question is ambiguous: They probably want some vector drawing representation. We need to provide an SVG string that, when rendered in a browser or image viewer, shows a rainbow octopus.</p>
+<p>We need to produce a relatively simple but visually appealing depiction of an octopus with rainbow colors. It might involve using shapes like circles for the head, arcs for arms, etc., and color gradients or solid colors for each arm segment or body. Rainbow can be represented as multiple colored segments along the arms or perhaps a gradient background.</p>
+<p>We need to produce a complete SVG element: <svg ...=""> ... </svg>. We should specify width/height, viewBox maybe 200x200 or something. Provide a nice illustration: a round head, big eyes, tentacles with rainbow colors. Each arm can be drawn as a curved path. Use gradient fill or solid stripes.</p>
+<p>We might use CSS styles within <style> tags or inline style attributes.</p>
+<p>Simplify: Represent the octopus with 8 arms emanating from the body. For each arm, we could create a path shape and assign a different color from rainbow spectrum: red, orange, yellow, green, blue, indigo, violet, maybe an extra one for 8? Actually 7 colors in rainbow, but 8 arms. We can reuse or add a gradient.</p>
+<p>Alternatively, we can draw the arms with gradient fill that goes through all colors. But to keep it simple, assign each arm a different color.</p>
+<p>We also need to depict the body: a circle with some shading maybe. The eyes could be circles.</p>
+<p>We might want to create an overall composition with head in center and arms around.</p>
+<p>Also the user wants "Create an SVG element of a rainbow octopus". They didn't specify any dimensions, so we can choose typical 200x200 or bigger.</p>
+<p>We need to provide code that is ready to copy/paste. We should ensure no syntax errors. Use proper namespaces: <svg xmlns="http://www.w3.org/2000/svg" ...>.</p>
+<p>Should also include fill attributes and maybe stroke for outlines.</p>
+<p>We can use radial gradient for the body color, or just a simple color like dark grey.</p>
+<p>Maybe we want to show the octopus with arms colored in rainbow colors. The body can be purple or black.</p>
+<p>Ok, let's design:</p>
+<p>- Use <svg width="200" height="200" viewBox="0 0 200 200">.<br>- Body: circle at (100, 80) radius 30 fill #8a2be2 (blueviolet). Maybe also a smaller inner circle for eyes. Or we can use two circles for eyes.</p>
+<p>But the body should be large enough to show arms around. Let's set head center at (100, 100). radius 40. Use fill #8a2be2 or gradient from violet to blue.</p>
+<p>Arms: 8 curved paths emanating from body. Each arm will start at a point on the circumference of the body and go outward with a curve.</p>
+<p>Simplify arms as cubic Bezier curves:</p>
+<p>- Starting points around circle: angles 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°.</p>
+<p>For each angle, compute starting coordinates: x = cx + r <em> cos(angle), y = cy + r </em> sin(angle). r=40.</p>
+<p>Then define a path that goes outward with some control points to make a tentacle shape. Use relative positions or absolute.</p>
+<p>Better to use <path d="M ... C ..."/>. For each arm, we can set the path: start at body point, then curve outwards to an endpoint maybe 80 units away in direction of angle plus some variation.</p>
+<p>Simplify: Use param: start (sx, sy). Then control points at (cx+some offset, cy+some offset). Endpoints further out.</p>
+<p>We need to design each arm shape manually. We can approximate with arcs or curves.</p>
+<p>Alternatively, we can use <ellipse> rotated to represent arms? But easier is path.</p>
+<p>Let's precompute coordinates:</p>
+<p>Let center (cx,cy) = (100,100). radius body r=40. For each angle in degrees: 0°,45°,90°,135°,180°,225°,270°,315°. Compute starting point:</p>
+<p>- 0°: sx=140, sy=100.<br>- 45°: sx=100+28.284=128.284, sy=100+28.284=128.284.<br>- 90°: sx=100, sy=140.<br>- 135°: sx=71.716, sy=128.284.<br>- 180°: sx=60, sy=100? Wait r=40, cos(180)= -1 => x=100-40=60; y=100.<br>- 225°: cos(225)=-0.7071 -> x=100-28.284=71.716; sin(225)=-0.7071 -> y=100-28.284=71.716.<br>- 270°: x=100, y=60.<br>- 315°: cos(315)=0.7071 -> x=128.284; sin(315)=-0.7071 -> y=71.716.</p>
+<p>But earlier I used r=40 but the coordinates above use 28.284 for sqrt(2)/2 * 40 = ~28.284. That is correct.</p>
+<p>So starting points:</p>
+<p>0°: (140,100)<br>45°: (128.284,128.284)<br>90°: (100,140)<br>135°: (71.716,128.284)<br>180°: (60,100)<br>225°: (71.716,71.716)<br>270°: (100,60)<br>315°: (128.284,71.716)</p>
+<p>Now endpoints should be further out. Let's choose endpoint distances maybe 80 from center in the same angle direction? But we want arms to curve outward.</p>
+<p>We can compute end points at distance of say 120 units away from center along the same angle: e.g., for 0°, (100+120,100) = (220,100). For 45°, (100+84.852,100+84.852) = (184.852,184.852). For 90°, (100,220). For 135°, (15.148,184.852). For 180°, (-20,100). For 225°, (15.148,15.148). For 270°, (100,-20). For 315°, (184.852,15.148).</p>
+<p>But these endpoints might go outside viewBox if width=200. So we need to keep within 0-200. We can choose smaller distances like 80 units: for 0°: (180,100), for 45°: (158.284,158.284). For 90°: (100,180). For 135°: (41.716,158.284). For 180°: (-20,100). Too far left; not good.</p>
+<p>So maybe choose distance = 60 units from center? Then endpoints:</p>
+<p>0°: (160,100)<br>45°: (148.284,148.284)<br>90°: (100,160)<br>135°: (51.716,148.284)<br>180°: (-20,100) still out.</p>
+<p>We need to keep within 0-200. So maybe choose distance from body start rather than center. Starting at body radius r=40; we can extend arms outward by some length L such that endpoint coordinates are roughly within viewBox. For angle 0°, starting point (140,100). Extend along same direction for e.g., L=80: endpoint = (140+80,100) = (220,100) outside. But maybe we can set L=60: endpoint=(200,100) at boundary.</p>
+<p>For 45°: start (128.284,128.284). Add vector length 60 along same direction: dx=60*cos(45)=42.426; dy=42.426 => end = (170.710,170.710).</p>
+<p>For 90°: start (100,140); add dy=60 => end=(100,200) at boundary.</p>
+<p>135°: start (71.716,128.284). cos(135)=-0.7071 => dx=-42.426; dy=+42.426? Wait sin(135)=0.7071 so dy positive. So end = (29.290,170.710).</p>
+<p>180°: start (60,100); add dx=-60 => end=(-0,100). At left boundary.</p>
+<p>225°: start (71.716,71.716). cos= -0.7071 -> dx=-42.426; sin= -0.7071 -> dy=-42.426 => end=(29.290,29.290).</p>
+<p>270°: start (100,60); add dy=-60 => end=(100,0) at top boundary.</p>
+<p>315°: start (128.284,71.716). cos(315)=0.7071-> dx=+42.426; sin(315)=-0.7071 -> dy=-42.426 => end=(170.710,29.290).</p>
+<p>So endpoints lie within 0-200 boundaries.</p>
+<p>Thus we can set each arm as a path from start to endpoint with some curvature. We can choose control points to make them curved outward and have thickness. For thickness, we can just use stroke width, but arms should be filled shapes maybe like elliptical arcs? But we can also draw each arm as a thick line (stroke). But the user likely expects an octopus with visible tentacles that are not just lines.</p>
+<p>Simplify: Use <path> for each arm with fill color and some shape to represent thickness. We can create a path that is basically a polygon representing cross-section of the arm: start point, then two control points to shape width, then end point, etc.</p>
+<p>Alternatively, we can use <ellipse> shapes rotated to approximate arms. But 8 arcs might be better as paths with fill and stroke.</p>
+<p>Better approach: Use <path> for each arm that draws a thick line (stroke) of color representing the tentacle. For thickness, set stroke-width maybe 12 or 16. We can also use stroke-linecap round for smooth ends.</p>
+<p>But if we just draw lines from start to end with thick stroke, arms will be straight lines, not curved. To add curvature, we can use a cubic Bezier path: M sx sy C cx1 cy1, cx2 cy2, ex ey. Then set stroke and fill none. That gives curved arm.</p>
+<p>But the user might want a more detailed octopus shape. But given the constraints of generating an SVG snippet in text, it's fine to create a stylized version.</p>
+<p>Alternatively, we can use <path> with fill for each tentacle shape: like a symmetrical shape that goes from start to end and back, forming a thick arm shape. We can approximate by using two cubic Bezier curves to create a filled shape.</p>
+<p>Simplify: Use stroke approach: <path d="M sx sy C c1x c1y, c2x c2y, ex ey" fill="none" stroke="color" stroke-width="12" stroke-linecap="round"/>. That will produce a curved line with thickness.</p>
+<p>We need to choose control points for each arm such that they curve outward away from the body. For example, for 0°: start at (140,100). End at (200,100). Control points maybe at (160,80) and (180,120). That will produce a gentle arch. But we can also adjust.</p>
+<p>Alternatively, use a simple approach: For each arm, use <path d="M sx sy Q cx cy ex ey" ...> with quadratic curve. Quadratic is easier to compute: start, control, end. Choose control point somewhere offset from the line to create curvature.</p>
+<p>We can decide for each angle:</p>
+<p>- 0° (east): start (140,100), end (200,100). Control point maybe at (170,80) to curve upward or downward? For a gentle arc outward, we might want it to bulge outwards away from body. The direction of curvature relative to the line: For eastward arm, if control point is above the line (y < 100), the arm will arch upward. If below (y > 100) it arches downward. We can pick whichever looks better.</p>
+<p>Maybe we want arms to curve outward and then around to form a natural shape: Some arcs go up, some down. For simplicity, choose control points offset perpendicular to the line by a fixed amount, like 30 units.</p>
+<p>For eastward arm (0°): start at (140,100). End at (200,100). Vector direction: horizontal right. Perpendicular vector is vertical. We can offset upward or downward. Let's set control point at (170,80) which is above the line by -20 y difference. That will arch upward.</p>
+<p>- 45° arm: start (128.284,128.284), end (170.710,170.710). Direction angle = 45°. Perpendicular direction rotated 90°, so vector components: (-sinθ, cosθ) for left/up? Actually perpendicular to direction (cosθ, sinθ) is (-sinθ, cosθ). For θ=45°, cos=0.7071, sin=0.7071 => perp = (-0.7071,0.7071). Multiply by offset magnitude maybe 20: dx=-14.142, dy=14.142. Add to mid point? But easier: choose control point at start + some offset along perpendicular direction or something. But we can approximate.</p>
+<p>Simplify: For each arm, we can pick a control point that is the midpoint between start and end plus an offset perpendicular to the line. Compute mid = (sx+ex)/2, (sy+ey)/2. Then offset by some magnitude along perpendicular. The magnitude could be maybe 15-20 units.</p>
+<p>Compute for each:</p>
+<p>- 0°: start(140,100), end(200,100). Mid=(170,100). Perp vector (-sinθ=0? For horizontal line, sinθ=0, cosθ=1 => perp = (0,1)? Wait for θ=0°, direction = (1,0). Perp = (0,1). So offset by maybe 20 up or down. Choose up: offset=(0,-20). Control point at (170,80).</p>
+<p>- 45°: start(128.284,128.284), end(170.710,170.710). Direction vector d=(42.426,42.426). Normalize: length = sqrt(42.426^2+42.426^2)=60? Actually dx=ex-sx=42.426, dy=42.426. Norm length=60 (makes sense because we extended 60 units). Unit direction u=(0.7071,0.7071). Perp vector = (-u.y, u.x) = (-0.7071,0.7071). So perp unit is (-0.7071,0.7071). Multiply by offset magnitude maybe 20: offset=(-14.142,14.142). Midpoint: (149.497,149.497). Control point: (149.497-14.142,149.497+14.142) = (135.355,163.639). That will produce a curve that bows outward relative to the direction? Wait the line is from start to end along 45°, so the perpendicular vector (-0.7071,0.7071) points left/upwards relative to the line. So adding that offset moves control point left/upwards relative to mid. Might create an arc that bulges outwards away from center (makes sense).</p>
+<p>- 90°: start(100,140), end(100,200). Direction vertical downward. u=(0,-1)? Actually d = (0,60) if we extended downwards by 60? Wait start at (100,140), end at (100,200). So direction vector (0,60). Unit direction u=(0,1). Perp = (-u.y, u.x)=(-1,0). Offset maybe -20? For downward arm, we might want to curve left or right. Choose offset: (-20,0) -> control point at (80,170)? Wait mid=(100,170). Control at (80,170). That will arch leftwards.</p>
+<p>- 135°: start(71.716,128.284), end(29.290,170.710). Direction vector = (-42.426,42.426). Unit direction u=(-0.7071,0.7071). Perp = (-u.y, u.x)=(-0.7071,-0.7071)? Wait compute: -u.y = -(0.7071)=-0.7071; u.x = -0.7071 => so perp vector = (-0.7071,-0.7071). So offset maybe 20: (-14.142,-14.142). Midpoint: (50.503,149.497). Control point: (50.503-14.142,149.497-14.142) = (36.361,135.355). That will produce a curve that bows left/downwards relative to line? Might be fine.</p>
+<p>- 180°: start(60,100), end(-0,100). Direction vector (-60,0). Unit u=(-1,0). Perp = (-u.y,u.x)=(0,-1)? Actually -u.y=0, u.x=-1 => perp (0,-1). So offset maybe 20 upward: control at (30,80). Midpoint: (30,100). Control point: (30,80).</p>
+<p>- 225°: start(71.716,71.716), end(29.290,29.290). Direction vector (-42.426,-42.426). Unit u=(-0.7071,-0.7071). Perp = (-u.y,u.x)=(0.7071,-0.7071)? Actually -(-0.7071)=+0.7071; u.x=-0.7071 => perp (0.7071,-0.7071). Offset maybe 20: (14.142,-14.142). Midpoint: (50.503,50.503). Control point: (64.645,36.361).</p>
+<p>- 270°: start(100,60), end(100,0). Direction vector (0,-60). Unit u=(0,-1). Perp = (-u.y,u.x)=(1,0). Offset maybe 20 rightwards: control at (120,30). Midpoint: (100,30). Control point: (120,30).</p>
+<p>- 315°: start(128.284,71.716), end(170.710,29.290). Direction vector (42.426,-42.426). Unit u=(0.7071,-0.7071). Perp = (-u.y,u.x)=(+0.7071,0.7071)? Wait -u.y = -(-0.7071)=+0.7071; u.x=0.7071 => perp (0.7071,0.7071). Offset maybe 20: (14.142,14.142). Midpoint: (149.497,50.503). Control point: (163.639,64.645).</p>
+<p>Thus we have control points for each arm.</p>
+<p>We need to assign colors for each arm: rainbow colors: red, orange, yellow, green, blue, indigo, violet, maybe a duplicate or another color like pink? Actually 8 arms, but typical rainbow has 7 colors. We can choose:</p>
+<p>- Arm0 (east): Red (#FF0000)<br>- Arm1 (45°): Orange (#FFA500)<br>- Arm2 (south): Yellow (#FFFF00)<br>- Arm3 (135°): Green (#008000) or maybe light green #32CD32.<br>- Arm4 (west): Blue (#0000FF)<br>- Arm5 (225°): Indigo (#4B0082)<br>- Arm6 (north): Violet (#EE82EE) or Purple (#800080).<br>- Arm7 (315°): Maybe a secondary color like "magenta" (#FF00FF) to fill.</p>
+<p>But we might want to keep the colors consistent with rainbow order: red, orange, yellow, green, blue, indigo, violet. That's 7. For the 8th, maybe use an extra one or repeat violet or add another shade like pink. We can also choose "pink" (#FFC0CB) for the last.</p>
+<p>Alternatively, we could use a radial gradient across each arm from start to end color? But simpler: assign each arm a solid color.</p>
+<p>We can also optionally add a slight gradient effect inside each arm by using linearGradient definitions referencing each path id. But it's more complex.</p>
+<p>Simplify: Use stroke fill only.</p>
+<p>But we might want the arms to be thick and colored. We could use <path> with fill none, stroke as color, stroke-width=12 or 14, stroke-linecap round.</p>
+<p>Also add a subtle shadow maybe by adding offset duplicate paths with lower opacity.</p>
+<p>But let's keep it simple: Just draw body circle and arms using strokes.</p>
+<p>We also want the eyes: two small circles inside body at positions relative to center. For eyes, we can use white circles with black pupils.</p>
+<p>Let's design eye positions: Body center (100,100). Eyes maybe offset horizontally by +/- 15 from center and vertically -10? So left eye at (85,90), right eye at (115,90). Eye outer radius maybe 8. Pupils smaller radius maybe 3, colored black.</p>
+<p>Add body circle with fill #800080 (purple) or maybe gradient.</p>
+<p>Alternatively, we can use a radial gradient for the body: from center dark purple to lighter purple edges.</p>
+<p>But simpler: Use solid color like #4B0082 (indigo). Or just #6A5ACD (slate blue). Let's pick something nice: #8A2BE2 (blue violet). That is similar to violet.</p>
+<p>Also we can add a subtle black outline for the body.</p>
+<p>Add <circle> with stroke black, stroke-width=3 maybe.</p>
+<p>We also want to add maybe small tentacle tips? But not necessary.</p>
+<p>Ok. So final plan:</p>
+<p>- <svg xmlns="http://www.w3.org/2000/svg" width="220" height="220" viewBox="-10 -10 240 240"> or something to include arms that extend to edges. Because arms go up to coordinates like (200,100) etc. We want some margin. Let's set viewBox "0 0 210 210". But we have arms extending to x=200 and y=200. So we need width >=210 maybe.</p>
+<p>We can also center the body at (105,105). Then arms extend within 210. For simplicity, let's use width=220, height=220. viewBox="0 0 220 220". Center at (110,110). Body radius r=40. Arm endpoints will be near edges but not exceed.</p>
+<p>But our earlier coordinates were based on center (100,100). We can shift everything by +10 to keep within 220? Actually if we use viewBox "0 0 210 210", body center at (105,105) with radius 40, arms extend to around 200. That fits because max coordinate is 200. So width=210 and height=210. But we can set width/height bigger for margin: 220.</p>
+<p>Let's pick viewBox="0 0 220 220". Body center at (110,110). Then coordinates shift by +10 relative to earlier ones: new start points = old+10. Endpoints also +10. So we need to recalc coordinates accordingly.</p>
+<p>Alternatively, we can keep body center at (100,100) and viewBox "0 0 210 210". That will have arms up to x=200. That's fine if width/height=210. But the user might want a nicer shape with margin. But it's okay.</p>
+<p>We can set width="210" height="210" viewBox="0 0 210 210".</p>
+<p>But we must also ensure body center is at (105,105). Wait if viewBox=0-210, center at 105. So we should adjust coordinates accordingly: Starting points and endpoints shift from earlier ones by +5? Actually earlier center was at 100,100. Now center at 105,105. So add 5 to each coordinate. But arms extend to 200, which is less than viewBox max 210, so it's safe.</p>
+<p>Let's do that: Body center (cx=105, cy=105). r=40. Starting points and endpoints will be offset by +5 relative to earlier coordinates computed with cx=100,cy=100. So we can take the earlier coordinates and add 5 to each x and y.</p>
+<p>Alternatively, just recalc using new center 105. But adding 5 is simpler: all earlier coordinates plus 5.</p>
+<p>Thus starting points:</p>
+<p>- Arm0: (140+5,100+5)=(145,105)<br>- Arm1: (128.284+5,128.284+5)=(133.284,133.284)<br>- Arm2: (100+5,140+5)=(105,145)<br>- Arm3: (71.716+5,128.284+5)=(76.716,133.284)<br>- Arm4: (60+5,100+5)=(65,105)<br>- Arm5: (71.716+5,71.716+5)=(76.716,76.716)<br>- Arm6: (100+5,60+5)=(105,65)<br>- Arm7: (128.284+5,71.716+5)=(133.284,76.716)</p>
+<p>End points:</p>
+<p>- Arm0: (200+5,100+5)=(205,105)<br>- Arm1: (170.710+5,170.710+5)=(175.710,175.710)<br>- Arm2: (100+5,200+5)=(105,205)<br>- Arm3: (29.290+5,170.710+5)=(34.290,175.710)<br>- Arm4: (-0+5,100+5)=(5,105)<br>- Arm5: (29.290+5,29.290+5)=(34.290,34.290)<br>- Arm6: (100+5,0+5)=(105,5)<br>- Arm7: (170.710+5,29.290+5)=(175.710,34.290)</p>
+<p>Control points for each arm need to be recomputed accordingly. We can just add 5 to each coordinate as well.</p>
+<p>Earlier control points we computed:</p>
+<p>- Arm0: (170,80)<br>- Arm1: (135.355,163.639)<br>- Arm2: (80,170)<br>- Arm3: (36.361,135.355)<br>- Arm4: (30,80)<br>- Arm5: (64.645,36.361)<br>- Arm6: (120,30)<br>- Arm7: (163.639,64.645)</p>
+<p>Add 5 to each coordinate:</p>
+<p>- Arm0: (175,85)<br>- Arm1: (140.355,168.639)<br>- Arm2: (85,175)<br>- Arm3: (41.361,140.355)<br>- Arm4: (35,85)<br>- Arm5: (69.645,41.361)<br>- Arm6: (125,35)<br>- Arm7: (168.639,69.645)</p>
+<p>Check that all coordinates are within 0-210: yes.</p>
+<p>Now we can create path d="M sx sy Q cx cy ex ey" for each arm.</p>
+<p>Alternatively, use cubic Bezier: M start, C control1, control2, end. But quadratic simpler with single control point.</p>
+<p>But the curvature may not be as nice if using a single control. But it's fine.</p>
+<p>We can also do stroke-linecap round to make ends smooth.</p>
+<p>Thus arms:</p>
+<p>- Arm0 (red): d="M145 105 Q175 85 205 105"<br>- Arm1 (orange): d="M133.284 133.284 Q140.355 168.639 175.710 175.710"<br>- Arm2 (yellow): d="M105 145 Q85 175 105 205"<br>- Arm3 (green): d="M76.716 133.284 Q41.361 140.355 34.290 175.710"<br>- Arm4 (blue): d="M65 105 Q35 85 5 105"<br>- Arm5 (indigo): d="M76.716 76.716 Q69.645 41.361 34.290 34.290"<br>- Arm6 (violet): d="M105 65 Q125 35 105 5"<br>- Arm7 (magenta): d="M133.284 76.716 Q168.639 69.645 175.710 34.290"</p>
+<p>Now we can set stroke width maybe 12, color accordingly.</p>
+<p>We also want body circle: <circle cx="105" cy="105" r="40" fill="#8A2BE2" stroke="black" stroke-width="3"/></p>
+<p>Eyes:</p>
+<p>- Left eye outer: <circle cx="90" cy="95" r="7" fill="white" stroke="black" stroke-width="1"/><br>- Left pupil: <circle cx="90" cy="95" r="3" fill="black"/><br>- Right eye outer: <circle cx="120" cy="95" r="7" fill="white" stroke="black" stroke-width="1"/><br>- Right pupil: <circle cx="120" cy="95" r="3" fill="black"/></p>
+<p>Alternatively, we can set eye positions relative to center: left at (105-15,105-10) = (90,95). right at (120,95). Good.</p>
+<p>We might also want a subtle outline for arms maybe with stroke-linejoin round? Not necessary.</p>
+<p>Add some style: maybe use <defs> to define gradients for each arm? But not needed.</p>
+<p>We can also add drop shadow via filter but not necessary.</p>
+<p>Let's produce final SVG code:</p>
+<p><svg xmlns="http://www.w3.org/2000/svg" width="210" height="210" viewBox="0 0 210 210"><br>  <style><br>    .arm {stroke-linecap: round; stroke-width:12;}<br>  </style><br>  <!-- Body --><br>  <circle cx="105" cy="105" r="40" fill="#8A2BE2" stroke="black" stroke-width="3"><br>  <!-- Eyes --><br>  <circle cx="90" cy="95" r="7" fill="white" stroke="black" stroke-width="1"><br>  <circle cx="90" cy="95" r="3" fill="black"><br>  <circle cx="120" cy="95" r="7" fill="white" stroke="black" stroke-width="1"><br>  <circle cx="120" cy="95" r="3" fill="black"><br>  <!-- Arms --><br>  <path d="M145 105 Q175 85 205 105" class="arm" style="stroke:#FF0000;"><br>  <path d="M133.284 133.284 Q140.355 168.639 175.710 175.710" class="arm" style="stroke:#FFA500;"><br>  <path d="M105 145 Q85 175 105 205" class="arm" style="stroke:#FFFF00;"><br>  <path d="M76.716 133.284 Q41.361 140.355 34.290 175.710" class="arm" style="stroke:#32CD32;"><br>  <path d="M65 105 Q35 85 5 105" class="arm" style="stroke:#0000FF;"><br>  <path d="M76.716 76.716 Q69.645 41.361 34.290 34.290" class="arm" style="stroke:#4B0082;"><br>  <path d="M105 65 Q125 35 105 5" class="arm" style="stroke:#EE82EE;"><br>  <path d="M133.284 76.716 Q168.639 69.645 175.710 34.290" class="arm" style="stroke:#FF00FF;"><br></path></path></path></path></path></path></path></path></circle></circle></circle></circle></circle></p>
+<p>But we might want to adjust stroke width for arms to be maybe 12? But that may appear thick relative to body radius 40. 12 is fine.</p>
+<p>Alternatively, we can use stroke-linecap round and also fill none. That's default.</p>
+<p>We should add "fill:none" to each path to avoid unwanted filling of shape if the path encloses an area (which it doesn't). But for safety, we can set style="stroke:#FF0000; fill:none;" etc.</p>
+<p>Let's update each path with fill="none".</p>
+<p>Also maybe add a subtle glow effect or gradient inside body? Not necessary.</p>
+<p>Better also include "stroke-linejoin: round" in .arm style.</p>
+<p>We might want to use class attributes for each arm. But we can just inline style.</p>
+<p>But better to separate: <path d="..." class="arm" style="stroke:#FF0000;"></path></p>
+<p>Add CSS:</p>
+<p><style><br>  .arm { stroke-width:12; stroke-linecap:round; fill:none;}<br></style></p>
+<p>Ok.</p>
+<p>Also maybe add a small black outline for the body and arms. But we already set stroke on body, not arms. Arms have no stroke by default? Wait we set style "stroke:#FF0000;" but not specifying stroke width. But .arm sets stroke-width:12. So it's fine.</p>
+<p>Now let's check coordinates again: For arm1, start at (133.284,133.284) to end at (175.710,175.710). That seems correct. The control point (140.355,168.639) is near the line but not too far.</p>
+<p>But we might want arms symmetrical. Let's double-check each path for proper shape:</p>
+<p>- Arm0: start (145,105), control (175,85), end (205,105). This will arc upward then back to horizontal at end? Actually start and end are same y=105, so line is horizontal. Control point at (175,85) above the line, causing an arch upward.</p>
+<p>- Arm1: start (133.284,133.284), control (140.355,168.639), end (175.710,175.710). The line goes from start to end which is roughly diagonal downwards to right. Control point at (140.355,168.639) is slightly below the start? Actually y=168.639 &gt; 133.284, so control point is below the start relative to the line. So path will bulge downward.</p>
+<p>- Arm2: start (105,145), end (105,205). Straight vertical downwards. Control at (85,175) which is left of the line, causing arc leftwards.</p>
+<p>- Arm3: start (76.716,133.284), end (34.290,175.710). This is diagonal downward to left. Control at (41.361,140.355) slightly above? Actually y=140.355 &gt; 133.284 so control point is below start relative to line? Might be okay.</p>
+<p>- Arm4: start (65,105), end (5,105). Horizontal leftwards. Control at (35,85) above the line, causing arc upward.</p>
+<p>- Arm5: start (76.716,76.716), end (34.290,34.290). Diagonal up-left. Control at (69.645,41.361) near? Might cause slight curvature.</p>
+<p>- Arm6: start (105,65), end (105,5). Vertical upward. Control at (125,35) right of the line, causing arc to the right.</p>
+<p>- Arm7: start (133.284,76.716), end (175.710,34.290). Diagonal up-right. Control at (168.639,69.645).</p>
+<p>Seems okay.</p>
+<p>Now we can provide the final code.</p>
+<p>We might want to add some extra attributes like "stroke-linejoin" for arms maybe not necessary.</p>
+<p>Add "stroke-miterlimit=10".</p>
+<p>But it's fine.</p>
+<p>Now we need to ensure that the entire SVG is correct: The <style> inside <svg> may be interpreted as style element. But we should include <defs>? Not needed.</p>
+<p>Make sure to close tags properly.</p>
+<p>Thus final output:</p>
+
+                        <div class="svg-container">
+                            <div class="svg-title">🎨 Rainbow Octopus SVG</div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="210" height="210" viewBox="0 0 210 210">
+  <style>
+    .arm {
+      stroke-width:12;
+      stroke-linecap:round;
+      fill:none;
+    }
+  </style>
+
+  <!-- Body -->
+  <circle cx="105" cy="105" r="40" fill="#8A2BE2" stroke="black" stroke-width="3">
+
+  <!-- Eyes -->
+  <circle cx="90" cy="95" r="7" fill="white" stroke="black" stroke-width="1">
+  <circle cx="90" cy="95" r="3" fill="black">
+  <circle cx="120" cy="95" r="7" fill="white" stroke="black" stroke-width="1">
+  <circle cx="120" cy="95" r="3" fill="black">
+
+  <!-- Arms -->
+  <path d="M145 105 Q175 85 205 105" class="arm" style="stroke:#FF0000;">
+  <path d="M133.284 133.284 Q140.355 168.639 175.710 175.710" class="arm" style="stroke:#FFA500;">
+  <path d="M105 145 Q85 175 105 205" class="arm" style="stroke:#FFFF00;">
+  <path d="M76.716 133.284 Q41.361 140.355 34.290 175.710" class="arm" style="stroke:#32CD32;">
+  <path d="M65 105 Q35 85 5 105" class="arm" style="stroke:#0000FF;">
+  <path d="M76.716 76.716 Q69.645 41.361 34.290 34.290" class="arm" style="stroke:#4B0082;">
+  <path d="M105 65 Q125 35 105 5" class="arm" style="stroke:#EE82EE;">
+  <path d="M133.284 76.716 Q168.639 69.645 175.710 34.290" class="arm" style="stroke:#FF00FF;">
+
+
+                        </path></path></path></path></path></path></path></path></circle></circle></circle></circle></circle></p></div>
+                    
+<p>We might also want to add a subtle "stroke" for arms? Already defined.</p>
+<p>But we may want to include "stroke-linejoin" but not necessary.</p>
+<p>Also maybe adjust body fill: #8A2BE2 is violet, good. Could also use gradient.</p>
+<p>Ok.</p>
+<p>Alternatively, we can provide an explanation and the code.</p>
+<p>Given the user asked "Create an SVG element of a rainbow octopus", we just need to produce the code.</p>
+<p>We should output the SVG code only? Or include some description? Probably the user wants the code snippet. So we can just output the full <svg> markup.</svg></p>
+<p>We might also want to mention that they can adjust colors, size etc.</p>
+<p>But maybe just give the final code block.</p>
+<p>Thus answer: Provide a stylized rainbow octopus as an SVG with arms colored accordingly.</p>
+<p>Let's produce the final output.</p>
+<p>Below is a self‑contained SVG that draws a simple “rainbow octopus”.  <br>Copy and paste it into an HTML file or an SVG viewer to see the illustration.</p>
+
+                        <div class="svg-container">
+                            <div class="svg-title">🎨 Rainbow Octopus SVG</div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="210" height="210" viewBox="0 0 210 210">
+
+  <!-- Common arm styling -->
+  <style>
+    .arm{
+      stroke-width:12;
+      stroke-linecap:round;
+      fill:none;
+    }
+  </style>
+
+  <!-- Octopus body -->
+  <circle cx="105" cy="105" r="40" fill="#8A2BE2" stroke="black" stroke-width="3"></circle>
+
+  <!-- Eyes -->
+  <circle cx="90" cy="95" r="7" fill="white" stroke="black" stroke-width="1"></circle>
+  <circle cx="90" cy="95" r="3" fill="black"></circle>
+  <circle cx="120" cy="95" r="7" fill="white" stroke="black" stroke-width="1"></circle>
+  <circle cx="120" cy="95" r="3" fill="black"></circle>
+
+  <!-- Arms – one for each rainbow color -->
+  <path d="M145 105 Q175 85 205 105" class="arm" style="stroke:#FF0000;"></path>          <!-- Red   -->
+  <path d="M133.284 133.284 Q140.355 168.639 175.710 175.710" class="arm" style="stroke:#FFA500;"></path>          <!-- Orange-->
+  <path d="M105 145 Q85 175 105 205" class="arm" style="stroke:#FFFF00;"></path>          <!-- Yellow -->
+  <path d="M76.716 133.284 Q41.361 140.355 34.290 175.710" class="arm" style="stroke:#32CD32;"></path>          <!-- Green  -->
+  <path d="M65 105 Q35 85 5 105" class="arm" style="stroke:#0000FF;"></path>          <!-- Blue   -->
+  <path d="M76.716 76.716 Q69.645 41.361 34.290 34.290" class="arm" style="stroke:#4B0082;"></path>          <!-- Indigo -->
+  <path d="M105 65 Q125 35 105 5" class="arm" style="stroke:#EE82EE;"></path>          <!-- Violet -->
+  <path d="M133.284 76.716 Q168.639 69.645 175.710 34.290" class="arm" style="stroke:#FF00FF;"></path>          <!-- Magenta (extra) -->
+
+</svg>
+                        </div>
+                    
+<p>Feel free to tweak the colors, sizes or add gradients if you’d like a more detailed look!</p>
+                <div class="message-meta">
+                    <span>openai/gpt-oss-20b</span>
+                    <span>Message 2</span>
+                </div>
+            </div></div></div>
+        </div>
+    </div>
+</body>
+</html>
