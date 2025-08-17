@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Many Worlds Maze — Radioactive Splits</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Many Worlds Maze — Radioactive Splits</h1>
+  </header>
+
+  <div class="container">
+    <div class="card left">
+      <h2>Maze</h2>
+      <div class="playbar">
+        <button id="decayBtn" class="btn">☢️ Decay / Split</button>
+        <button id="stepBtn" class="btn ghost">🎲 Step Active</button>
+        <button id="rewindBtn" class="btn ghost">⏪ Rewind</button>
+        <button id="resetBtn" class="btn ghost">🔄 Reset</button>
+        <span style="width:10px"></span>
+        <div class="switch" title="Choose how the atom behaves">
+          <input type="radio" name="mode" id="modeMany" checked>
+          <label for="modeMany">Many‑Worlds</label>
+          <input type="radio" name="mode" id="modeClassical">
+          <label for="modeClassical">Classical</label>
+        </div>
+        <label class="btn ghost rangeGroup">Max universes
+          <input id="maxU" type="range" min="4" max="64" value="24" step="1" list="maxUTicks" />
+          <output id="maxUOut" for="maxU" class="bubble">24</output>
+        </label>
+        <datalist id="maxUTicks">
+          <option value="4" label="4"></option>
+          <option value="8" label="8"></option>
+          <option value="12" label="12"></option>
+          <option value="16" label="16"></option>
+          <option value="24" label="24"></option>
+          <option value="32" label="32"></option>
+          <option value="48" label="48"></option>
+          <option value="64" label="64"></option>
+        </datalist>
+        <label class="btn ghost" style="margin-left:auto;display:flex;align-items:center;gap:8px"><input id="animToggle" type="checkbox" checked> ✨ Animate splits</label>
+      </div>
+      <div id="mazeWrap">
+        <canvas id="mazeCanvas" width="800" height="540" aria-label="Maze canvas"></canvas>
+      </div>
+      <div class="legend">
+        🦊 Explorer (active) • 👻 Ghost explorer (click to focus) • 💎 Crystal • 🚪 Portal • 🧱 Wall
+      </div>
+    </div>
+
+    <div class="card right">
+      <h2>Worlds & Controls</h2>
+      <div class="section">
+        <div>Universes: <b id="statUniverses">1</b></div>
+        <div>Crystals (this): <b id="statCrystals">0</b></div>
+        <div>Escaped: <b id="statEscaped">0</b></div>
+        <label style="display:block;margin-top:8px"><input id="mergeToggle" type="checkbox" checked> Auto‑merge identical states</label>
+        <label style="display:block;margin-top:4px"><input id="ghostToggle" type="checkbox" checked> Show ghost explorers</label>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button id="showStoryBtn" class="btn ghost">📖 Show story</button>
+          <button id="resetStoryBtn" class="btn ghost" title="Clears the skip flag so the intro shows on reload">🔁 Reset story</button>
+        </div>
+      </div>
+      <div class="section">
+        <details>
+          <summary><b>How it works</b></summary>
+          <p>
+            Tap <span class="kbd">☢️ Decay / Split</span> to trigger a radioactive event. In <i>Many‑Worlds</i> mode,
+            the universe branches so that every allowed direction from each explorer happens in parallel. In <i>Classical</i> mode, only one random direction happens for the focused universe (no branching).
+          </p>
+          <p>
+            <b>Step Active</b> (<span class="kbd">🎲</span>): moves <i>only</i> the focused universe forward by one random step without creating any new branches—useful for nudging a single world or demonstrating classical randomness even when Many‑Worlds is selected.
+          </p>
+          <p>
+            <b>Maze icons:</b> 🦊 explorer • 👻 ghost (click to focus) • 💎 crystal • 🚪 portal • 🧱 wall • ▫️ open path
+          </p>
+          <p>
+            Click a universe in the list to <b>Focus</b> it — or simply <b>click a 👻 ghost on the maze</b>. Use <span class="kbd">⏪ Rewind</span> to undo a split or step. <b>Auto‑merge</b> keeps growth manageable by merging universes that reach the exact same state (same position, crystals, escaped status). Use <b>Prune</b> to remove a branch you don’t want to follow.
+          </p>
+        </details>
+      </div>
+      <div class="section">
+        <b>Universes</b>
+        <div id="universes" class="universes" role="list"></div>
+      </div>
+      <details class="tests" id="diagnostics">
+        <summary><b>Diagnostics & Tests</b></summary>
+        <div style="display:flex;gap:10px;align-items:center;margin:6px 0 10px">
+          <button id="runTestsBtn" class="btn ghost">▶️ Run tests</button>
+          <span id="testHint" class="meta">Tests run on demand so the game starts clean.</span>
+        </div>
+        <div id="testLog">Idle</div>
+      </details>
+      <div class="footer">Keyboard: <span class="kbd">Space</span> split • <span class="kbd">R</span> reset • <span class="kbd">U</span> rewind • <span class="kbd">G</span> toggle ghosts</div>
+    </div>
+  </div>
+
+  <!-- Story overlay -->
+  <div id="story" class="storyOverlay" role="dialog" aria-modal="true" aria-labelledby="storyTitle">
+    <div class="storyCard">
+      <div class="storyHead">
+        <div style="font-size:28px">🦊</div>
+        <h2 class="storyTitle" id="storyTitle">The Fox Who Couldn't Decide</h2>
+      </div>
+      <div class="panels">
+        <div class="panel"><div class="emo">🧱💎🚪</div><p>
+          In a shimmering maze of walls, crystals, and a glowing green portal, a tiny explorer fox wakes up.
+        </p></div>
+        <div class="panel"><div class="emo">🤔➡️⬆️⬇️⬅️</div><p>
+          At every crossing the fox hesitates. Up? Right? Down? Left? He can never decide!
+        </p></div>
+        <div class="panel"><div class="emo">☢️✨</div><p>
+          But in a quantum world, a radioactive *split* lets **every** choice happen—in parallel universes.
+        </p></div>
+        <div class="panel"><div class="emo">💎💎💎 / 🔄</div><p>
+          In some worlds, Fox collects shiny crystals and reaches the portal. In others, he wanders forever.
+        </p></div>
+      </div>
+      <div class="panel" style="align-items:center"><div class="emo">🎮</div><p>
+        Your job: press <b>☢️ Decay / Split</b> to branch the universes, watch the same fox explore in different universes, and see where choices lead.
+      </p></div>
+      <div class="storyActions">
+        <span id="skipOnce" class="linkish">Skip story next time</span>
+        <span style="flex:1"></span>
+        <button id="startBtn" class="btn">Start exploring</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
