@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quantum Duck Pond</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Quantum Duck Pond</h1>
+    <span class="badge">wave ⇄ particle • demo</span>
+  </header>
+
+  <div id="intro">
+    <div class="intro-card">
+      <h1>Quantum Duck Pond</h1>
+      <p>We fire tiny 🦆 rubber ducks as a <em>wave</em> toward a wall with one or two slits. When the wave reaches the screen on the right, a single duck is detected at one spot. Repeat this many times to build up a distribution.</p>
+      <ol>
+        <li><b>Choose slits</b>: Single → one broad band. Double → interference fringes. Which‑path tagging scrambles the relative phase between the two paths so fringes vanish (both slits stay open).</li>
+        <li><b>Launch</b> to emit a wave packet; <b>Measure position</b> (or enable Passive auto detector) to record a duck.</li>
+        <li><b>Run N trials</b> repeats launch→measure and shows a histogram of hits on the right.</li>
+        <li><b>Speed</b> changes how fast the wave evolves. Ducks always appear just after the wave arrives.</li>
+        <li><b>Show phase</b> toggles the color scheme to visualize the wave's phase (positive and negative parts) instead of only its intensity.</li>
+      </ol>
+      <h3 style="margin:10px 0 6px 0;font-size:16px">Detectors</h3>
+      <ul style="margin:8px 0 0 18px;color:var(--muted)">
+        <li><b>Which‑path detector</b> — Both slits stay open, but we add a tiny “tag” that lets you tell which slit the duck took. That destroys the relative phase between the two paths, so the <em>interference fringes vanish</em>. You’ll see two broad single‑slit envelopes instead of bright/dark stripes.</li>
+        <li><b>Passive auto detector</b> — Acts like a screen that clicks on its own. When the wave reaches the detector band, it triggers a detection <em>almost immediately</em> (random in time, weighted by the local intensity). Turn this on if you don’t want to press <b>Measure position</b> each launch.</li>
+      </ul>
+      <div class="intro-actions">
+        <button id="startApp" class="btn">Start the simulator</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="appMain" class="container" style="display:none">
+    <div class="card left">
+      <h2>🫧 Pond</h2>
+      <div class="playbar">
+        <div class="row">
+          <label><input type="checkbox" id="kidMode" checked title="Toggle the duck visualization on and off." /> Kid Mode</label>
+          <label>Slits
+            <select id="slits" title="Choose the barrier configuration: no slits, a single slit, or a double slit.">
+              <option value="none">None</option>
+              <option value="single">Single</option>
+              <option value="double" selected>Double</option>
+            </select>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px">Slit size
+            <input id="slitSize" type="range" min="1" max="40" step="1" value="4" title="Adjust the vertical size of the slits." />
+            <span id="slitSizeVal">4</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px">Slit separation
+            <input id="slitGap" type="range" min="8" max="60" step="1" value="12" title="Adjust the vertical separation between the two slits." />
+            <span id="slitGapVal">12</span>
+          </label>
+          <div class="row">
+            <label><input type="checkbox" id="which" title="Turn on the which-path detector. This destroys the interference pattern for double slits." /> Which‑path detector</label>
+            <span id="speedWarning" style="display:none; font-size:11px; color:var(--warn);">
+              (Stable at 1.0x speed)
+            </span>
+          </div>
+          <label><input type="checkbox" id="autoNet" title="Automatically measure a duck's position when the wave hits the detector." /> Passive auto detector</label>
+          <label style="display:flex;align-items:center;gap:8px">Speed
+            <input id="speed" type="range" min="0.5" max="20" step="0.1" value="1" title="Control the simulation speed. Higher speeds may be less stable with the which-path detector." />
+            <span id="speedVal">1.0×</span>
+          </label>
+        </div>
+        <div class="row">
+          <button id="launch" class="btn" title="Launch a new wave from the left.">🦆 Launch</button>
+          <button id="net" class="btn ghost" title="Manually measure the wave's position at the detector screen, collapsing it to a single duck.">📏 Measure position</button>
+          <label>Trials <input id="trialsN" class="num" type="number" min="1" max="2000" value="50" title="Set the number of trials to run in a batch." /></label>
+          <button id="runN" class="btn" title="Automatically run multiple launch-and-measure trials.">▶ Run N trials</button>
+          <button id="reset" class="btn ghost" title="Reset the wave simulation without clearing the histogram.">🔄 Reset</button>
+          <button id="clearHits" class="btn ghost" title="Clear all caught ducks and reset the histogram.">🧹 Clear histogram</button>
+          <button id="togglePhase" class="btn ghost" title="Toggle color mode to show wave phase instead of intensity.">🎚️ Show phase</button>
+        </div>
+      </div>
+      <div id="pondWrap">
+        <canvas id="pond" width="960" height="600"></canvas>
+        <div id="domDuckLayer"></div>
+        <canvas id="overlay" width="960" height="600" aria-hidden="true"></canvas>
+        <canvas id="hist" width="960" height="600" aria-hidden="true"></canvas>
+        <div id="duckLayer" aria-hidden="true"></div>
+      </div>
+      <div class="legend">brightness = probability | ripples interfere | 🎣 measurement collapses to one 🦆 at the screen</div>
+    </div>
+
+    <div class="card right">
+      <h2>Results & Histogram</h2>
+      <div class="statbar">
+        <span class="stat">Ducks caught: <b id="caught">0</b></span>
+      </div>
+      <div id="sideHistWrap">
+        <h3>Where the ducks hit (accumulated)</h3>
+        <canvas id="sideHist" width="360" height="520" aria-label="Histogram of measured y positions"></canvas>
+        <div class="mini-legend">Detections per height (adds up over time)</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
