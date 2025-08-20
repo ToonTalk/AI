@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Many Worlds Maze — Radioactive Sandbox</title>
+  <style>
+    :root{
+      --bg:#0f0c1a;
+      --panel:#17132a;
+      --accent:#7c5cff;
+      --accent2:#31d0ff;
+      --good:#3ee06d;
+      --warn:#ffcc4d;
+      --danger:#ff6a6a;
+      --text:#f5f3ff;
+      --muted:#bfb9ff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 70% -10%, #221a46 0%, #0f0c1a 60%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    header{display:flex;align-items:center;gap:.75rem;padding:14px 18px;background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0));backdrop-filter:blur(6px);position:sticky;top:0;z-index:5;border-bottom:1px solid rgba(255,255,255,.06)}
+    header h1{font-size:clamp(18px,2.5vw,22px);margin:0;font-weight:700;letter-spacing:.2px}
+    header .badge{background:linear-gradient(135deg,var(--accent),var(--accent2));padding:.25rem .5rem;border-radius:999px;font-size:.75rem;color:#0c0620}
+    .container{display:grid;grid-template-columns:minmax(560px, 1.35fr) minmax(360px, .9fr);gap:14px;padding:14px;max-width:1400px;margin:0 auto}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);overflow:hidden}
+    .card h2{margin:0;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);font-size:15px;letter-spacing:.3px;color:var(--muted)}
+    .playbar{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);flex-wrap:wrap}
+    .btn{appearance:none;border:0;outline:0;padding:.6rem .9rem;border-radius:12px;background:linear-gradient(180deg, #fff, #e7e7ff);color:#20124d;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(124,92,255,.25);transition:transform .05s ease, box-shadow .2s ease}
+    .btn:active{transform:translateY(1px)}
+    .btn.ghost{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.18);box-shadow:none}
+    .btn.small{padding:.45rem .65rem;border-radius:10px;font-size:.85rem}
+    .switch{display:inline-flex;gap:8px;align-items:center;background:rgba(255,255,255,.06);padding:6px;border-radius:999px}
+    .switch input{display:none}
+    .switch label{padding:.35rem .65rem;border-radius:999px;cursor:pointer;font-size:.85rem;color:var(--muted)}
+    .switch input:checked + label{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0d0820;font-weight:700}
+    #mazeWrap{position:relative}
+    #mazeCanvas{display:block;width:100%;height:min(72vh, 68vw);background:radial-gradient(1000px 600px at 50% 0%, #1a1431 0%, #0f0c1a 60%);border-bottom-left-radius:16px;border-bottom-right-radius:16px}
+    .overlay{position:absolute;inset:0;pointer-events:none}
+    .legend{display:flex;gap:12px;align-items:center;padding:10px 14px}
+    .dot{width:12px;height:12px;border-radius:50%}
+    .muted{color:var(--muted)}
+    .right .section{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+    .universes{max-height:52vh;overflow:auto;padding:6px 10px}
+    .u{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);margin:6px 0}
+    .u.active{outline:2px solid var(--accent2)}
+    .u .chip{min-width:22px;height:22px;border-radius:999px;border:2px solid rgba(255,255,255,.35)}
+    .u .meta{font-size:.82rem;color:var(--muted)}
+    .statbar{display:flex;gap:12px;flex-wrap:wrap}
+    .stat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:8px 10px;border-radius:10px;font-size:.9rem}
+    .footer{padding:12px 14px;font-size:.9rem;color:var(--muted)}
+    details{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 10px}
+    details[open]{background:rgba(255,255,255,.06)}
+    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:rgba(255,255,255,.1);padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="badge">Quantum Sandbox</div>
+    <h1>Many Worlds Maze — Radioactive Splits</h1>
+  </header>
+
+  <div class="container">
+    <div class="card left">
+      <h2>Maze</h2>
+      <div class="playbar">
+        <button id="decayBtn" class="btn" title="Trigger a radioactive decay (split)">☢️ Decay / Split</button>
+        <button id="stepBtn" class="btn ghost" title="Single step without branching (classical random for active)">🎲 Step Active</button>
+        <button id="rewindBtn" class="btn ghost">⏪ Rewind</button>
+        <button id="resetBtn" class="btn ghost">🔄 Reset</button>
+        <span class="muted">Mode:</span>
+        <div class="switch" title="Choose how the atom behaves">
+          <input type="radio" name="mode" id="modeMany" checked>
+          <label for="modeMany">Many‑Worlds</label>
+          <input type="radio" name="mode" id="modeClassical">
+          <label for="modeClassical">Classical Random</label>
+        </div>
+        <label class="muted" style="margin-left:auto;display:flex;align-items:center;gap:8px">Max universes
+          <input id="maxU" type="range" min="4" max="64" value="24" />
+        </label>
+      </div>
+      <div id="mazeWrap">
+        <canvas id="mazeCanvas" width="1024" height="700" aria-label="Maze canvas"></canvas>
+        <div class="overlay" id="finishOverlay" hidden></div>
+      </div>
+      <div class="legend">
+        <span class="dot" style="background:var(--accent)"></span> Active universe
+        <span class="dot" style="background:#ffffff44"></span> Ghost universes
+        <span class="dot" style="background:var(--good)"></span> Portal
+        <span class="dot" style="background:var(--warn)"></span> Crystal
+      </div>
+    </div>
+
+    <div class="card right">
+      <h2>Worlds & Controls</h2>
+      <div class="section statbar">
+        <span class="stat">Universes: <b id="statUniverses">1</b></span>
+        <span class="stat">Crystals (this): <b id="statCrystals">0</b></span>
+        <span class="stat">Escaped: <b id="statEscaped">0</b></span>
+        <label class="stat" title="Merge identical states to limit growth">
+          <input id="mergeToggle" type="checkbox" checked> Auto‑merge identical states
+        </label>
+        <label class="stat" title="Show faint ghosts of other universes on the maze">
+          <input id="ghostToggle" type="checkbox" checked> Show ghost explorers
+        </label>
+      </div>
+      <div class="section">
+        <details>
+          <summary><b>How it works</b></summary>
+          <p>
+            Tap <span class="kbd">☢️ Decay / Split</span> to trigger a radioactive event. In <i>Many‑Worlds</i> mode,
+            the universe branches so that every allowed direction at each junction happens in parallel. In <i>Classical Random</i> mode, only one random direction happens for the active universe.
+          </p>
+          <p>
+            Click a universe in the list to focus it. Use <span class="kbd">⏪ Rewind</span> to undo one split. Toggle ghost explorers to
+            reduce visual clutter. Auto‑merge keeps growth manageable by merging universes that reach the exact same state.
+          </p>
+        </details>
+      </div>
+      <div class="section">
+        <b>Universes</b>
+        <div id="universes" class="universes" role="list"></div>
+      </div>
+      <div class="footer">Keyboard: <span class="kbd">Space</span> split • <span class="kbd">R</span> reset • <span class="kbd">U</span> rewind • <span class="kbd">G</span> toggle ghosts</div>
+    </div>
+  </div>
+
+  <script>
+  // ====== Utility helpers ======
+  const rand = (n)=>Math.floor(Math.random()*n);
+  const shuffle = (arr)=>arr.map(v=>[Math.random(),v]).sort((a,b)=>a[0]-b[0]).map(v=>v[1]);
+  const key = (x,y)=>`${x},${y}`;
+
+  // Color generator for universes
+  function pastel(i){
+    const golden = 0.61803398875; // golden ratio conj to distribute hues
+    const hue = (i*golden % 1)*360;
+    return `hsl(${hue}deg 90% 65%)`;
+  }
+
+  // ====== Maze definition ======
+  // 0 empty, 1 wall, 2 crystal, 3 portal
+  // A friendly fixed maze hand-crafted for clarity
+  const GRID = [
+    "11111111111111111111",
+    "10000020000100000003",
+    "10111101110101111101",
+    "10200101000201000001",
+    "10110101111101011101",
+    "10010100000101010001",
+    "11110111110101110101",
+    "10000000010100000101",
+    "10111111010111110101",
+    "10100001010000000101",
+    "10101101011111110101",
+    "10100101000002000101",
+    "10111101111101111101",
+    "10000000000001000001",
+    "11111111111111111111"
+  ].map(r=>r.split('').map(c=>+c));
+
+  const H = GRID.length;
+  const W = GRID[0].length;
+
+  const CELL = 38; // px
+  const PADDING = 20;
+
+  const canvas = document.getElementById('mazeCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // Resize canvas to fit container height while preserving grid aspect
+  function resize(){
+    const wrap = document.getElementById('mazeWrap');
+    const w = wrap.clientWidth;
+    const h = Math.min(w*0.68, window.innerHeight*0.72);
+    canvas.width = Math.floor(W*CELL + PADDING*2);
+    canvas.height = Math.floor(H*CELL + PADDING*2);
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  // ====== Universe state ======
+  let universes = [];
+  let activeId = 0; // id of active universe
+  let nextId = 1;
+  let escapedCount = 0;
+  const history = []; // stack of past universe snapshots
+
+  function newUniverse(x,y){
+    const id = nextId++;
+    return { id, x, y, crystals:new Set(), escaped:false, stuck:false, steps:0, color:pastel(id), parent:null, gen:0 };
+  }
+
+  function startState(){
+    universes = [ newUniverse(1,1) ];
+    activeId = universes[0].id;
+    nextId = universes[0].id+1;
+    escapedCount = 0;
+    history.length = 0;
+    draw();
+    renderUniverseList();
+    updateStats();
+  }
+
+  // Neighbor cells & movement
+  const dirs = [ {dx:0,dy:-1,name:'up'}, {dx:1,dy:0,name:'right'}, {dx:0,dy:1,name:'down'}, {dx:-1,dy:0,name:'left'} ];
+
+  function openNeighbors(u){
+    const res = [];
+    for(const d of dirs){
+      const nx = u.x + d.dx; const ny = u.y + d.dy;
+      if(ny<0||ny>=H||nx<0||nx>=W) continue;
+      if(GRID[ny][nx]!==1) res.push({nx,ny,dir:d.name});
+    }
+    return res;
+  }
+
+  function copyUniverse(u){
+    return { id: nextId++, x:u.x, y:u.y, crystals:new Set([...u.crystals]), escaped:u.escaped, stuck:u.stuck, steps:u.steps, color:pastel(nextId), parent:u.id, gen:u.gen+1 };
+  }
+
+  function cellType(x,y){ return GRID[y][x]; }
+
+  function applyCellEffects(u){
+    const t = cellType(u.x,u.y);
+    if(t===2){ // crystal
+      const k = key(u.x,u.y);
+      if(!u.crystals.has(k)) u.crystals.add(k);
+    } else if(t===3){
+      u.escaped = true; escapedCount++;
+    }
+  }
+
+  function mergeUniversesIfNeeded(list){
+    if(!document.getElementById('mergeToggle').checked) return list;
+    const map = new Map();
+    for(const u of list){
+      const k = `${u.x}|${u.y}|${[...u.crystals].sort().join(';')}|${u.escaped}`;
+      const prev = map.get(k);
+      if(!prev) map.set(k,u);
+      else {
+        // merge metadata (keep earliest steps, propagate parent linkage)
+        prev.steps = Math.min(prev.steps, u.steps);
+        prev.gen = Math.min(prev.gen, u.gen);
+      }
+    }
+    return [...map.values()];
+  }
+
+  function clampUniverses(list){
+    const max = +document.getElementById('maxU').value;
+    if(list.length<=max) return list;
+    // Heuristic: prefer not escaped, higher crystal count, closer to portal (manhattan to nearest portal)
+    const portals = [];
+    for(let y=0;y<H;y++){for(let x=0;x<W;x++){if(GRID[y][x]===3) portals.push({x,y});}}
+    function nearestPortalDist(u){
+      let best=1e9; for(const p of portals){ const d=Math.abs(p.x-u.x)+Math.abs(p.y-u.y); if(d<best) best=d; } return best;
+    }
+    list.sort((a,b)=>{
+      const sa = (a.escaped?0:1)*1000 + a.crystals.size*10 - nearestPortalDist(a);
+      const sb = (b.escaped?0:1)*1000 + b.crystals.size*10 - nearestPortalDist(b);
+      return sb-sa;
+    });
+    return list.slice(0,max);
+  }
+
+  function pushHistory(){
+    const snapshot = universes.map(u=>({
+      id:u.id,x:u.x,y:u.y,crystals:[...u.crystals],escaped:u.escaped,stuck:u.stuck,steps:u.steps,color:u.color,parent:u.parent,gen:u.gen
+    }));
+    history.push({activeId, escapedCount, nextId, snapshot});
+    // Limit history size to keep memory bounded
+    if(history.length>80) history.shift();
+  }
+
+  function popHistory(){
+    const h = history.pop();
+    if(!h) return;
+    activeId = h.activeId; escapedCount = h.escapedCount; nextId = h.nextId;
+    universes = h.snapshot.map(o=>({ ...o, crystals:new Set(o.crystals) }));
+    draw(); renderUniverseList(); updateStats();
+  }
+
+  // Actions
+  function decaySplit(){
+    const modeMany = document.getElementById('modeMany').checked;
+    pushHistory();
+    let next = [];
+    for(const u of universes){
+      if(u.escaped){ next.push(u); continue; }
+      const neigh = openNeighbors(u);
+      if(neigh.length===0){ u.stuck=true; next.push(u); continue; }
+      if(modeMany){
+        const order = shuffle(neigh);
+        for(const {nx,ny} of order){
+          const nu = copyUniverse(u); nu.x = nx; nu.y = ny; nu.steps++; applyCellEffects(nu); next.push(nu);
+        }
+      } else { // classical random: only move active universe
+        if(u.id!==activeId){ next.push(u); continue; }
+        const {nx,ny} = neigh[rand(neigh.length)];
+        u.x=nx; u.y=ny; u.steps++; applyCellEffects(u); next.push(u);
+      }
+    }
+    if(document.getElementById('modeMany').checked){
+      // In Many‑Worlds, originals are conceptually replaced by children; no need to keep parents
+      next = next.filter(u=>u.parent!==null || u.escaped || u.stuck);
+    }
+    next = mergeUniversesIfNeeded(next);
+    next = clampUniverses(next);
+    universes = next;
+    if(!universes.find(u=>u.id===activeId)){
+      // Focus the newest with highest crystals
+      universes.sort((a,b)=>b.crystals.size-a.crystals.size);
+      if(universes[0]) activeId = universes[0].id;
+    }
+    draw(); renderUniverseList(); updateStats();
+  }
+
+  function stepActive(){
+    // single step for active (no branching)
+    pushHistory();
+    const u = universes.find(v=>v.id===activeId);
+    if(!u || u.escaped) return;
+    const neigh = openNeighbors(u);
+    if(neigh.length===0){ u.stuck=true; draw(); renderUniverseList(); return; }
+    const {nx,ny} = neigh[rand(neigh.length)];
+    u.x=nx; u.y=ny; u.steps++; applyCellEffects(u);
+    draw(); renderUniverseList(); updateStats();
+  }
+
+  // ====== Rendering ======
+  function draw(){
+    const showGhosts = document.getElementById('ghostToggle').checked;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save();
+    ctx.translate(PADDING,PADDING);
+
+    // Background grid
+    for(let y=0;y<H;y++){
+      for(let x=0;x<W;x++){
+        const cx = x*CELL, cy = y*CELL;
+        const t = GRID[y][x];
+        if(t===1){
+          // wall block
+          const g = ctx.createLinearGradient(cx,cy,cx,cy+CELL);
+          g.addColorStop(0,'#2a2262');
+          g.addColorStop(1,'#18123b');
+          ctx.fillStyle = g;
+          ctx.fillRect(cx,cy,CELL-1,CELL-1);
+        } else {
+          ctx.fillStyle = (x+y)%2? '#151131':'#171236';
+          ctx.fillRect(cx,cy,CELL-1,CELL-1);
+          if(t===2){ // crystal
+            drawCrystal(cx+CELL/2, cy+CELL/2, 10);
+          }
+          if(t===3){ // portal
+            drawPortal(cx+CELL/2, cy+CELL/2, 12);
+          }
+        }
+      }
+    }
+
+    // Ghost universes
+    if(showGhosts){
+      for(const u of universes){
+        if(u.id===activeId) continue;
+        drawExplorer(u, true);
+      }
+    }
+    // Active last on top
+    const active = universes.find(u=>u.id===activeId);
+    if(active) drawExplorer(active,false);
+
+    ctx.restore();
+  }
+
+  function drawExplorer(u, ghost){
+    const x = u.x*CELL + CELL/2, y = u.y*CELL + CELL/2;
+    ctx.save();
+    ctx.globalAlpha = ghost? 0.45 : 1;
+    // glow
+    ctx.shadowColor = ghost? '#ffffff44' : u.color;
+    ctx.shadowBlur = ghost? 12 : 16;
+    ctx.fillStyle = ghost? '#ffffffaa' : u.color;
+    // body
+    circle(x,y,12,true);
+    // eyes
+    ctx.shadowBlur = 0; ctx.fillStyle = '#120a25';
+    circle(x-4,y-2,2,true); circle(x+4,y-2,2,true);
+    // little feet
+    ctx.fillStyle = ghost? '#ffffff99' : '#ffdca6';
+    circle(x-6,y+8,3,true); circle(x+6,y+8,3,true);
+    ctx.restore();
+  }
+
+  function circle(x,y,r,fill){
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    if(fill) ctx.fill(); else ctx.stroke();
+  }
+
+  function drawCrystal(x,y,s){
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.fillStyle = '#ffcc4d';
+    ctx.globalAlpha = .9;
+    ctx.beginPath();
+    ctx.moveTo(0,-s);
+    ctx.lineTo(s*0.7,-s*0.15);
+    ctx.lineTo(s*0.5,s*0.7);
+    ctx.lineTo(-s*0.5,s*0.7);
+    ctx.lineTo(-s*0.7,-s*0.15);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPortal(x,y,r){
+    const g = ctx.createRadialGradient(x,y,2,x,y,r);
+    g.addColorStop(0,'#66ffbb');
+    g.addColorStop(1,'#00a86b');
+    ctx.fillStyle = g;
+    circle(x,y,r,true);
+  }
+
+  // ====== UI: universe list ======
+  function renderUniverseList(){
+    const el = document.getElementById('universes');
+    el.innerHTML = '';
+    universes.sort((a,b)=> (b.id===activeId)-(a.id===activeId) || b.crystals.size - a.crystals.size || a.steps-b.steps);
+    for(const u of universes){
+      const row = document.createElement('div'); row.className = 'u'+(u.id===activeId?' active':''); row.role='listitem';
+      row.innerHTML = `
+        <div class="chip" style="background:${u.color}"></div>
+        <div>
+          <div><b>#${u.id}</b> ${u.escaped?'<span style="color:var(--good)">escaped</span>':u.stuck?'<span style="color:var(--warn)">stuck</span>':''}</div>
+          <div class="meta">steps ${u.steps} • crystals ${u.crystals.size}${u.parent?` • from #${u.parent}`:''}</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn small ghost" data-act="focus" data-id="${u.id}">Focus</button>
+          <button class="btn small ghost" data-act="prune" data-id="${u.id}">Prune</button>
+        </div>
+      `;
+      el.appendChild(row);
+    }
+    el.onclick = (ev)=>{
+      const b = ev.target.closest('button'); if(!b) return;
+      const id = +b.dataset.id; const act = b.dataset.act;
+      if(act==='focus'){ activeId = id; draw(); renderUniverseList(); updateStats(); }
+      if(act==='prune'){
+        pushHistory();
+        universes = universes.filter(u=>u.id!==id);
+        if(activeId===id && universes[0]) activeId = universes[0].id;
+        draw(); renderUniverseList(); updateStats();
+      }
+    };
+  }
+
+  function updateStats(){
+    document.getElementById('statUniverses').textContent = String(universes.length);
+    const active = universes.find(u=>u.id===activeId);
+    document.getElementById('statCrystals').textContent = active? active.crystals.size : 0;
+    document.getElementById('statEscaped').textContent = String(universes.filter(u=>u.escaped).length);
+  }
+
+  // ====== Controls ======
+  document.getElementById('decayBtn').addEventListener('click', decaySplit);
+  document.getElementById('stepBtn').addEventListener('click', stepActive);
+  document.getElementById('rewindBtn').addEventListener('click', popHistory);
+  document.getElementById('resetBtn').addEventListener('click', startState);
+  document.getElementById('ghostToggle').addEventListener('change', draw);
+  document.getElementById('mergeToggle').addEventListener('change', ()=>{ draw(); });
+  document.getElementById('maxU').addEventListener('input', ()=>{});
+
+  window.addEventListener('keydown', (e)=>{
+    if(e.code==='Space'){ e.preventDefault(); decaySplit(); }
+    if(e.key==='u' || e.key==='U'){ popHistory(); }
+    if(e.key==='r' || e.key==='R'){ startState(); }
+    if(e.key==='g' || e.key==='G'){ const t=document.getElementById('ghostToggle'); t.checked=!t.checked; draw(); }
+  });
+
+  // ====== Init ======
+  resize();
+  startState();
+  </script>
+</body>
+</html>
