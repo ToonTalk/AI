@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quantum Duck Pond — Simple Prototype</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#121a33; --ink:#eef2ff; --muted:#b9c3ff;
+    --accent:#48d1ff; --accent2:#7c5cff; --good:#3ee06d; --warn:#ffcc4d;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 70% -10%, #1b2044 0%, #0b1020 60%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+  header{display:flex;align-items:center;gap:.75rem;padding:14px 18px;background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0));border-bottom:1px solid rgba(255,255,255,.06);backdrop-filter:blur(6px);position:sticky;top:0;z-index:5}
+  header h1{font-size:clamp(18px,2.5vw,22px);margin:0;font-weight:800;letter-spacing:.2px}
+  header .badge{background:linear-gradient(135deg,var(--accent),var(--accent2));padding:.25rem .5rem;border-radius:999px;font-size:.75rem;color:#0c0620}
+
+  .container{display:grid;grid-template-columns:minmax(560px, 1.4fr) minmax(320px, .9fr);gap:14px;padding:14px;max-width:1400px;margin:0 auto}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);overflow:hidden}
+  .card h2{margin:0;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);font-size:15px;letter-spacing:.3px;color:var(--muted)}
+  .playbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .btn{appearance:none;border:0;padding:.6rem .9rem;border-radius:12px;background:linear-gradient(180deg, #fff, #e7e7ff);color:#1a1240;font-weight:800;cursor:pointer;box-shadow:0 6px 16px rgba(72,209,255,.28);transition:transform .05s ease}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid rgba(255,255,255,.18);box-shadow:none}
+  .btn.small{padding:.45rem .6rem;border-radius:10px;font-size:.85rem}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  select, input[type="range"]{accent-color:var(--accent)}
+  label{font-size:.9rem;color:var(--muted)}
+  #pondWrap{position:relative}
+  #pond{display:block;width:100%;height:min(70vh, 65vw);background:radial-gradient(1000px 600px at 50% 0%, #0d1431 0%, #0b1020 60%);border-bottom-left-radius:16px;border-bottom-right-radius:16px}
+  #overlay, #hist{position:absolute;inset:0;pointer-events:none}
+  .legend{display:flex;gap:12px;align-items:center;padding:10px 14px}
+  .statbar{display:flex;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .stat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:8px 10px;border-radius:10px;font-size:.9rem}
+  details{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 10px}
+  details[open]{background:rgba(255,255,255,.06)}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:rgba(255,255,255,.1);padding:2px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+  <header>
+    <div class="badge">prototype</div>
+    <h1>Quantum Duck Pond — Wave or Particle?</h1>
+  </header>
+
+  <div class="container">
+    <div class="card left">
+      <h2>Pond</h2>
+      <div class="playbar">
+        <div class="row">
+          <label>Slits
+            <select id="slits">
+              <option value="none">None</option>
+              <option value="single" selected>Single</option>
+              <option value="double">Double</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="which" /> Which‑path detector</label>
+          <label style="display:flex;align-items:center;gap:8px">Murkiness
+            <input id="murk" type="range" min="0" max="100" value="10" />
+          </label>
+        </div>
+        <div class="row" style="margin-left:auto">
+          <button id="launch" class="btn">🦆 Launch</button>
+          <button id="stream" class="btn ghost">🖌️ Stream ×50</button>
+          <button id="net" class="btn ghost">🎣 Net now</button>
+          <button id="reset" class="btn ghost">🔄 Reset</button>
+        </div>
+      </div>
+      <div id="pondWrap">
+        <canvas id="pond" width="960" height="600"></canvas>
+        <canvas id="overlay" width="960" height="600" aria-hidden="true"></canvas>
+        <canvas id="hist" width="960" height="600" aria-hidden="true"></canvas>
+      </div>
+      <div class="legend">brightness = probability | ripples interfere | 🎣 measurement collapses to one 🦆 at the screen</div>
+    </div>
+
+    <div class="card right">
+      <h2>Controls & Notes</h2>
+      <div class="statbar">
+        <span class="stat">Ducks caught: <b id="caught">0</b></span>
+        <span class="stat">Trials: <b id="trials">0</b></span>
+      </div>
+      <div style="padding:10px 14px;display:flex;gap:10px;flex-wrap:wrap">
+        <button id="clearHits" class="btn ghost">🧹 Clear histogram</button>
+        <button id="togglePhase" class="btn ghost">🎚️ Show phase</button>
+      </div>
+      <div style="padding:10px 14px">
+        <details open>
+          <summary><b>How to play</b></summary>
+          <p>Pick a slit setup, then press <span class="kbd">Launch</span>. A fuzzy wave launches from the left, passes the reed wall, and splashes on the right screen. Press <span class="kbd">Net</span> to make a measurement: one duck 🦆 pops into existence where the wave is brightest. Do this many times to see the interference pattern paint in. Turn on <i>Which‑path detector</i> to watch the fringes disappear.</p>
+        </details>
+      </div>
+    </div>
+  </div>
+
+<script>
+// === Quick, kid-friendly wave toy (2D ripple with obstacles) ===
+const pond = document.getElementById('pond');
+const ctx = pond.getContext('2d');
+const over = document.getElementById('overlay').getContext('2d');
+const hist = document.getElementById('hist').getContext('2d');
+const caughtEl = document.getElementById('caught');
+const trialsEl = document.getElementById('trials');
+
+// Grid resolution (kept modest for speed)
+const NX = 180, NY = 110; // simulation cells
+const W = pond.width, H = pond.height;
+const sx = W / NX, sy = H / NY; // pixels per cell
+
+// State arrays
+let u = new Float32Array(NX*NY);       // current field
+let v = new Float32Array(NX*NY);       // previous field
+let w = new Float32Array(NX*NY);       // next field
+let obs = new Uint8ClampedArray(NX*NY);// obstacles (1=wall)
+
+let running = false; // animation flag
+let frameId = 0;
+let tStep = 0;       // time steps since launch
+let driveSteps = 0;  // how long to emit source
+let showPhase = false;
+let trials = 0, hits = 0;
+
+function idx(x,y){ return y*NX + x; }
+
+function resetField(){
+  u.fill(0); v.fill(0); w.fill(0); tStep = 0; driveSteps = 0; running = false; cancelAnimationFrame(frameId);
+  over.clearRect(0,0,W,H);
+}
+
+function clearHistogram(){ hist.clearRect(0,0,W,H); hits = 0; caughtEl.textContent = hits; }
+
+// Build walls + slits according to UI
+function buildObstacles(){
+  obs.fill(0);
+  const mode = document.getElementById('slits').value; // none/single/double
+  if(mode === 'none') return;
+  const wallX = Math.floor(NX*0.45);
+  const slitHalf = 7; // height half
+  const gap = 18;     // separation between double slits
+  for(let y=0;y<NY;y++) obs[idx(wallX,y)] = 1; // vertical wall
+  const centerY = Math.floor(NY/2);
+  const open = [];
+  if(mode === 'single'){
+    for(let y=centerY-slitHalf; y<=centerY+slitHalf; y++) obs[idx(wallX,y)] = 0;
+    open.push({y0:centerY-slitHalf, y1:centerY+slitHalf});
+  } else if(mode === 'double'){
+    for(let y=centerY-gap-slitHalf; y<=centerY-gap+slitHalf; y++) obs[idx(wallX,y)] = 0;
+    for(let y=centerY+gap-slitHalf; y<=centerY+gap+slitHalf; y++) obs[idx(wallX,y)] = 0;
+    open.push({y0:centerY-gap-slitHalf, y1:centerY-gap+slitHalf});
+    open.push({y0:centerY+gap-slitHalf, y1:centerY+gap+slitHalf});
+  }
+  // Which-path detector: randomly close one slit per emission
+  if(mode==='double' && document.getElementById('which').checked){
+    const chooseTop = Math.random()<0.5; // close the other slit
+    const yA0 = chooseTop? (centerY-gap-slitHalf):(centerY+gap-slitHalf);
+    const yA1 = chooseTop? (centerY-gap+slitHalf):(centerY+gap+slitHalf);
+    for(let y=yA0; y<=yA1; y++) obs[idx(wallX,y)] = 1;
+  }
+}
+
+function launchDuck(){
+  resetField();
+  buildObstacles();
+  // source near left center
+  const sxCell = Math.floor(NX*0.12);
+  const syCell = Math.floor(NY*0.5);
+  const radius = 6;
+  for(let y=syCell-2*radius; y<=syCell+2*radius; y++){
+    for(let x=sxCell-2*radius; x<=sxCell+2*radius; x++){
+      if(x<1||x>=NX-1||y<1||y>=NY-1) continue;
+      const dx=x-sxCell, dy=y-syCell; const r=Math.sqrt(dx*dx+dy*dy);
+      if(r<=radius){ u[idx(x,y)] += Math.cos((r/radius)*Math.PI)*0.8; }
+    }
+  }
+  v.set(u); // start at rest
+  driveSteps = 120; // keep emitting for a bit
+  running = true; tStep = 0;
+  loop();
+}
+
+function stepSim(){
+  // Parameters
+  const murk = +document.getElementById('murk').value / 100; // 0..1
+  const damp = 0.002 + murk*0.06; // global damping
+  const s = 0.24; // wave speed^2 * dt^2 / dx^2 (must be < 0.25 for stability)
+
+  // Update interior
+  for(let y=1;y<NY-1;y++){
+    for(let x=1;x<NX-1;x++){
+      const i = idx(x,y);
+      if(obs[i]){ w[i]=0; u[i]=0; v[i]=0; continue; }
+      const lap = u[i-1] + u[i+1] + u[i-NX] + u[i+NX] - 4*u[i];
+      const next = (2-damp)*u[i] - (1-damp)*v[i] + s*lap;
+      w[i] = next;
+    }
+  }
+  // Drive the source for a short time
+  if(tStep < driveSteps){
+    const sxCell = Math.floor(NX*0.12), syCell = Math.floor(NY*0.5);
+    const i = idx(sxCell, syCell);
+    w[i] += Math.sin(tStep*0.25)*1.1;
+  }
+  // Swap
+  const tmp = v; v = u; u = w; w = tmp;
+  tStep++;
+}
+
+function drawField(){
+  const image = ctx.getImageData(0,0,W,H);
+  const data = image.data;
+  // Map each pixel to nearest cell (fast nearest sampling)
+  let k=0;
+  for(let py=0; py<H; py++){
+    const y = Math.min(NY-1, Math.max(0, (py/sy)|0));
+    for(let px=0; px<W; px++){
+      const x = Math.min(NX-1, Math.max(0, (px/sx)|0));
+      const i = idx(x,y);
+      let a = u[i];
+      if(obs[i]){ // wall tint
+        data[k++] = 28; data[k++] = 24; data[k++] = 62; data[k++] = 255; continue;
+      }
+      // intensity/phase coloring
+      const mag = Math.min(1, Math.abs(a));
+      if(showPhase){
+        const pos = a>=0 ? 1 : 0; // simple two-tone phase hint
+        const r = pos? 30 : 140; const g = pos? 220 : 50; const b = 255;
+        data[k++] = r*mag; data[k++] = g*mag; data[k++] = b*mag; data[k++] = 255;
+      } else {
+        // cyan brightness
+        data[k++] = 20*mag; data[k++] = 200*mag; data[k++] = 255*mag; data[k++] = 255;
+      }
+    }
+  }
+  ctx.putImageData(image,0,0);
+
+  // draw detection screen line at right edge
+  over.clearRect(0,0,W,H);
+  over.strokeStyle = 'rgba(240,255,255,.35)';
+  over.beginPath(); over.moveTo(W-14, 0); over.lineTo(W-14, H); over.stroke();
+}
+
+function measureDuck(){
+  // compute intensity along the detector band near the right
+  const bandX0 = NX-4, bandX1 = NX-2;
+  let weights = new Float32Array(NY);
+  let sum = 0;
+  for(let y=1;y<NY-1;y++){
+    let s=0;
+    for(let x=bandX0;x<=bandX1;x++){
+      const a = u[idx(x,y)]; s += a*a;
+    }
+    weights[y] = s; sum += s;
+  }
+  if(sum <= 1e-6){ // fallback uniform
+    const yy = (Math.random()*(NY-2)|0)+1;
+    plotHit(yy); return;
+  }
+  // sample y proportional to weight
+  let r = Math.random()*sum;
+  let ySel = 1;
+  for(let y=1;y<NY-1;y++){ r -= weights[y]; if(r<=0){ ySel=y; break; } }
+  plotHit(ySel);
+}
+
+function plotHit(yCell){
+  const y = (yCell+0.5)*sy;
+  hist.fillStyle = 'rgba(255,255,255,.7)';
+  hist.beginPath(); hist.arc(W-14, y, 2.2, 0, Math.PI*2); hist.fill();
+  // draw a tiny duck where it landed
+  over.font = "22px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji'";
+  over.textAlign = 'center'; over.textBaseline = 'middle';
+  over.fillText('🦆', W-28, y);
+  hits++; trials++;
+  caughtEl.textContent = hits; trialsEl.textContent = trials;
+}
+
+function loop(){
+  if(!running) return;
+  // A few sim substeps per frame for smoothness
+  for(let s=0;s<2;s++) stepSim();
+  drawField();
+  // auto-measure after enough time has passed beyond the wall
+  if(tStep === driveSteps + 120){ measureDuck(); running=false; }
+  frameId = requestAnimationFrame(loop);
+}
+
+// UI hookups
+ document.getElementById('launch').addEventListener('click', ()=>{ launchDuck(); trials++; trialsEl.textContent = trials; });
+ document.getElementById('net').addEventListener('click', ()=>{ if(running){ measureDuck(); running=false; } else { measureDuck(); } });
+ document.getElementById('reset').addEventListener('click', ()=>{ resetField(); trials=0; hits=0; trialsEl.textContent=0; caughtEl.textContent=0; drawField(); });
+ document.getElementById('clearHits').addEventListener('click', clearHistogram);
+ document.getElementById('togglePhase').addEventListener('click', ()=>{ showPhase = !showPhase; drawField(); });
+ document.getElementById('stream').addEventListener('click', async ()=>{
+   // quick batch of launches without animating the drawing to paint a histogram
+   const N = 50; const savedShow = showPhase; showPhase=false;
+   for(let i=0;i<N;i++){
+     buildObstacles();
+     // For speed, reset but do a shorter sim without rendering every step
+     u.fill(0); v.fill(0); w.fill(0); tStep=0;
+     // source pulse
+     const sxCell = Math.floor(NX*0.12); const syCell = Math.floor(NY*0.5);
+     w[idx(sxCell, syCell)] += 1.2; let tmp;
+     // evolve ~240 steps
+     for(let k=0;k<240;k++){ stepSim(); tmp=u; u=v; v=tmp; tmp=u; u=w; w=tmp; /* (ensure state progressed) */ }
+     // draw once in a while to show progress
+     if(i%10===0) drawField();
+     measureDuck();
+     await new Promise(r=>setTimeout(r, 0)); // yield to UI
+   }
+   showPhase = savedShow;
+ });
+
+// First paint
+buildObstacles();
+drawField();
+</script>
+</body>
+</html>

@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quantum Duck Pond — Fixed Prototype</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#121a33; --ink:#eef2ff; --muted:#b9c3ff;
+    --accent:#48d1ff; --accent2:#7c5cff; --good:#3ee06d; --warn:#ffcc4d;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 900px at 50% -200px, #1a244a, #0b1020 60%) fixed; color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+  header{display:flex;align-items:center;gap:.75rem;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.06);backdrop-filter:blur(6px);position:sticky;top:0;z-index:5}
+  header h1{font-size:clamp(18px,2.5vw,22px);margin:0;font-weight:800;letter-spacing:.2px}
+  header .badge{background:linear-gradient(135deg,var(--accent),rgba(124,92,255,.85));padding:.25rem .5rem;border-radius:999px;font-size:.75rem;color:#0c0620}
+
+  .container{display:grid;grid-template-columns:minmax(560px, 1.1fr) minmax(320px, .9fr);gap:14px;padding:14px;max-width:1400px;margin:0 auto}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);overflow:hidden}
+  .card h2{margin:0;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);font-size:15px;letter-spacing:.3px;color:var(--muted)}
+
+  .playbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  label{font-size:13px;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  select, input[type="checkbox"]{accent-color:var(--accent2)}
+  select{background:#0d1530;color:var(--ink);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 8px}
+
+  .btn{appearance:none;border:none;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--ink);padding:8px 12px;border-radius:14px;font-weight:600;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+  .btn:hover{transform:translateY(-1px)}
+  .btn.ghost{background:rgba(255,255,255,.04)}
+  .btn[disabled]{opacity:.6;cursor:progress}
+  input.num{background:#0d1530;color:var(--ink);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:6px 8px;width:80px}
+
+  #pondWrap{position:relative}
+  #pond{display:block;width:100%;height:min(70vh, 65vw);background:radial-gradient(1200px 600px at -10% -40%, rgba(124,92,255,.12), transparent 60%),
+         radial-gradient(1000px 500px at 130% 140%, rgba(72,209,255,.10), transparent 60%);
+         border-bottom-left-radius:16px;border-bottom-right-radius:16px;position:relative;z-index:0}
+  #overlay{position:absolute;inset:0;pointer-events:none;z-index:100}
+  #hist{position:absolute;inset:0;pointer-events:none;z-index:101}
+
+  /* DOM duck overlay */
+  #duckLayer{position:absolute;inset:0;pointer-events:none;z-index:102}
+  .duck-wrap{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center}
+  .duck-emoji{font-size:42px;line-height:1;text-shadow:0 0 6px rgba(255,255,255,.85),0 0 14px rgba(255,209,102,.8)}
+  /* Launch birth animation */
+  .duck-birth{position:absolute;transform:translate(-50%,-50%) scale(1);filter:blur(0px);opacity:1;transition:transform 600ms ease, filter 600ms ease, opacity 700ms ease;font-size:34px}
+  .duck-birth.go{transform:translate(-50%,-50%) scale(3.8);filter:blur(8px);opacity:0}
+  .duck-ripple{position:absolute;transform:translate(-50%,-50%) scale(1);width:12px;height:12px;border:2px solid rgba(124,92,255,.8);border-radius:999px;opacity:.9;transition:transform 900ms ease-out, opacity 900ms ease-out}
+  .duck-ripple.go{transform:translate(-50%,-50%) scale(9);opacity:0}
+  @media (max-width:600px){ .duck-emoji{font-size:36px} }
+
+  .legend{font-size:12px;color:var(--muted);padding:8px 14px;border-top:1px dashed rgba(255,255,255,.08)}
+  .statbar{display:flex;gap:18px;padding:10px 14px}
+  .stat b{font-variant-numeric:tabular-nums}
+  .notes{padding:10px 14px;color:var(--muted);font-size:13px;line-height:1.4}
+  .guide{padding:12px 14px;color:var(--muted);font-size:13px;line-height:1.5;border-bottom:1px solid rgba(255,255,255,.06)}
+  .guide h3{margin:0 0 6px 0;color:var(--ink);font-size:14px}
+  .guide ol{margin:6px 0 0 16px;}
+  .guide li{margin:4px 0}
+  .guide .tip{margin-top:8px;color:#cfe6ff}
+  /* Sidebar histogram panel */
+  #sideHistWrap{padding:10px 14px}
+  #sideHistWrap h3{margin:8px 0 6px 0;font-size:14px;color:var(--muted)}
+  #sideHist{display:block;width:100%;height:auto;background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.08);border-radius:12px}
+  .mini-legend{margin-top:6px;font-size:12px;color:var(--muted)}
+  /* Intro overlay */
+  #intro{position:fixed; inset:0; padding:24px; display:grid; place-items:center; z-index:9999; background:radial-gradient(1200px 900px at 50% -200px, #1a244a, #0b1020 60%)}
+  .intro-card{max-width:960px; width:min(92vw, 960px); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.12); border-radius:18px; box-shadow:0 10px 40px rgba(0,0,0,.5); padding:18px 20px}
+  .intro-card h1{margin:4px 0 8px 0; font-size:22px; letter-spacing:.3px}
+  .intro-card p{color:var(--muted); margin:8px 0}
+  .intro-card ol{margin:10px 0 0 18px; color:var(--muted)}
+  .intro-actions{display:flex; gap:12px; align-items:center; margin-top:14px}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Quantum Duck Pond</h1>
+    <span class="badge">wave ⇄ particle • demo</span>
+  </header>
+
+  <!-- Intro / Story overlay -->
+  <div id="intro">
+    <div class="intro-card">
+      <h1>Quantum Duck Pond</h1>
+      <p>We fire tiny 🦆 rubber ducks as a <em>wave</em> toward a wall with one or two slits. When the wave reaches the screen on the right, a single duck is detected at one spot. Repeat this many times to build up a distribution.</p>
+      <ol>
+        <li><b>Choose slits</b>: Single → one broad band. Double → interference fringes. Which‑path tagging scrambles the relative phase between the two paths so fringes vanish (both slits stay open).</li>
+        <li><b>Launch</b> to emit a wave packet; <b>Measure position</b> (or enable Passive auto detector) to record a duck.</li>
+        <li><b>Run N trials</b> repeats launch→measure and shows a histogram of hits on the right.</li>
+        <li><b>Speed</b> changes how fast the wave evolves. Ducks always appear just after the wave arrives.</li>
+      </ol>
+      <h3 style="margin:10px 0 6px 0;font-size:16px">Detectors</h3>
+      <ul style="margin:8px 0 0 18px;color:var(--muted)">
+        <li><b>Which‑path detector</b> — Both slits stay open, but we add a tiny “tag” that lets you tell which slit the duck took. That destroys the relative phase between the two paths, so the <em>interference fringes vanish</em>. You’ll see two broad single‑slit envelopes instead of bright/dark stripes.</li>
+        <li><b>Passive auto detector</b> — Acts like a screen that clicks on its own. When the wave reaches the detector band, it triggers a detection <em>almost immediately</em> (random in time, weighted by the local intensity). Turn this on if you don’t want to press <b>Measure position</b> each launch.</li>
+      </ul>
+      <div class="intro-actions">
+        <button id="startApp" class="btn">Start the simulator</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="appMain" class="container" style="display:none">
+    <div class="card left">
+      <h2>🫧 Pond</h2>
+      <div class="playbar">
+        <div class="row">
+          <label>Slits
+            <select id="slits">
+              <option value="none">None</option>
+              <option value="single" selected>Single</option>
+              <option value="double">Double</option>
+            </select>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px">Slit size
+            <input id="slitSize" type="range" min="4" max="40" step="1" value="14" />
+            <span id="slitSizeVal">14</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px">Slit separation
+            <input id="slitGap" type="range" min="8" max="60" step="1" value="18" />
+            <span id="slitGapVal">18</span>
+          </label>
+          <label><input type="checkbox" id="which" /> Which‑path detector</label>
+          <label><input type="checkbox" id="autoNet" /> Passive auto detector</label>
+          
+          <label style="display:flex;align-items:center;gap:8px">Speed
+            <input id="speed" type="range" min="0.5" max="20" step="0.1" value="1" />
+            <span id="speedVal">1.0×</span>
+          </label>
+        </div>
+        <div class="row">
+          <button id="launch" class="btn">🦆 Launch</button>
+          <button id="net" class="btn ghost">📏 Measure position</button>
+          <label>Trials <input id="trialsN" class="num" type="number" min="1" max="2000" value="50" /></label>
+          <button id="runN" class="btn">▶ Run N trials</button>
+          <button id="reset" class="btn ghost">🔄 Reset</button>
+          <button id="clearHits" class="btn ghost">🧹 Clear histogram</button>
+          <button id="togglePhase" class="btn ghost">🎚️ Show phase</button>
+        </div>
+      </div>
+      <div id="pondWrap">
+        <canvas id="pond" width="960" height="600"></canvas>
+        <canvas id="overlay" width="960" height="600" aria-hidden="true"></canvas>
+        <canvas id="hist" width="960" height="600" aria-hidden="true"></canvas>
+        <div id="duckLayer" aria-hidden="true"></div>
+      </div>
+      <div class="legend">brightness = probability | ripples interfere | 🎣 measurement collapses to one 🦆 at the screen</div>
+    </div>
+
+    <div class="card right">
+      <h2>Results & Histogram</h2>
+      
+      </div>
+      <div class="statbar">
+        <span class="stat">Ducks caught: <b id="caught">0</b></span>
+        
+      </div>
+      <div id="sideHistWrap">
+        <h3>Where the ducks hit (accumulated)</h3>
+        <canvas id="sideHist" width="360" height="520" aria-label="Histogram of measured y positions"></canvas>
+        <div class="mini-legend">Detections per height (adds up over time)</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// --- Canvas & state ---
+const pond = document.getElementById('pond');
+const ctx = pond.getContext('2d');
+const over = document.getElementById('overlay').getContext('2d');
+const hist = document.getElementById('hist').getContext('2d');
+const sideHist = document.getElementById('sideHist') ? document.getElementById('sideHist').getContext('2d') : null;
+
+const caughtEl = document.getElementById('caught');
+
+
+// Grid resolution (kept modest for speed)
+const NX = 180, NY = 110; // simulation cells
+const W = pond.width, H = pond.height;
+const sx = W / NX, sy = H / NY; // pixels per cell
+
+// State arrays
+let u = new Float32Array(NX*NY);       // current field
+let v = new Float32Array(NX*NY);       // previous field
+let w = new Float32Array(NX*NY);       // next field
+let obs = new Uint8ClampedArray(NX*NY);// obstacles (1=wall)
+
+let running = false; // animation flag
+let frameId = 0;
+let tStep = 0;       // time steps since launch
+let driveSteps = 0;  // how long to emit source
+let showPhase = false;
+let hasLaunched = false;
+let hasCollapsed = false;
+let hits = 0;
+let histCounts = new Uint32Array(NY);
+let lastSlitCentersPx = [];
+let decoSegments = []; // open-slit y-intervals for decoherence (which-path)
+let lastWallXCell = Math.floor(NX*0.45);
+let slitSizeCells = 14;
+let slitGapCells = 18; // center-to-center offset from midline for each slit (double)
+let debugLogs = false;
+let simSpeed = 1;
+let inBatch = false; // suppress auto detector during scripted batches
+let autoArm = -1;    // frames to wait after arrival for auto detector
+
+// --- Absorbing sponge near the right edge to reduce reflections ---
+const SPONGE_W = 16; // columns
+const SPONGE_MAX = 0.18; // extra damping at the boundary per step
+let spongeDampX = new Float32Array(NX);
+function buildSponge(){
+  for(let x=0; x<NX; x++){
+    const t = Math.max(0, (x - (NX - SPONGE_W)) / Math.max(1, (SPONGE_W-1)));
+    const sCurve = t*t; // smooth ramp
+    spongeDampX[x] = SPONGE_MAX * sCurve;
+  }
+}
+buildSponge();
+
+function idx(x,y){ return y*NX + x; }
+
+function resetField(){
+  u.fill(0); v.fill(0); w.fill(0); tStep = 0; driveSteps = 0; running = false; cancelAnimationFrame(frameId);
+  hasLaunched = false; hasCollapsed = false;
+  over.clearRect(0,0,W,H);
+  hist.clearRect(0,0,W,H);
+  redrawHistogram();
+}
+
+function clearHistogram(){
+  hist.clearRect(0,0,W,H);
+  if (sideHist) sideHist.clearRect(0,0,sideHist.canvas.width, sideHist.canvas.height);
+  histCounts.fill(0);
+  if(duckLayer) duckLayer.textContent='';
+  hits = 0; caughtEl.textContent = hits;
+  redrawHistogram();
+}
+
+// --- Obstacles / slits ---
+function buildObstacles(){
+  // Reset obstacles
+  obs.fill(0);
+  const mode = document.getElementById('slits').value; // none/single/double
+  if(mode === 'none'){ lastSlitCentersPx = []; return; }
+
+  // Read slit size & gap (total cell height and half-separation) from UI, clamp
+  const sizeEl = document.getElementById('slitSize');
+  slitSizeCells = Math.max(2, Math.min(40, parseInt(sizeEl ? sizeEl.value : slitSizeCells, 10) || 14));
+  const gapEl = document.getElementById('slitGap');
+  slitGapCells  = Math.max(6, Math.min(60, parseInt(gapEl ? gapEl.value : slitGapCells, 10) || 18));
+  const slitHalf = Math.max(1, Math.min(Math.floor(slitSizeCells/2), Math.floor(NY/3)));
+
+  // Wall and slit geometry
+  const wallX = Math.floor(NX*0.45);
+  for(let y=0;y<NY;y++) obs[idx(wallX,y)] = 1; // solid wall first
+  const centerY = Math.floor(NY/2);
+
+  if(mode === 'single'){
+    for(let y=centerY-slitHalf; y<=centerY+slitHalf; y++) obs[idx(wallX,y)] = 0;
+  } else if(mode === 'double'){
+    const gap = slitGapCells;
+    for(let y=centerY-gap-slitHalf; y<=centerY-gap+slitHalf; y++) obs[idx(wallX,y)] = 0;
+    for(let y=centerY+gap-slitHalf; y<=centerY+gap+slitHalf; y++) obs[idx(wallX,y)] = 0;
+  }
+
+  // Which‑path detector: randomly close one slit per emission
+  // Which‑path detector: keep both slits open; decoherence applied after the wall during propagation
+
+  // Compute slit centers (in pixels) along the wall for particle-path animation
+  lastWallXCell = wallX;
+  lastSlitCentersPx = [];
+  decoSegments = [];
+  let inOpen = false, yStart = 0;
+  for(let y=1;y<NY-1;y++){
+    const isOpen = (obs[idx(wallX,y)]===0);
+    if(isOpen && !inOpen){ inOpen = true; yStart = y; }
+    if(inOpen && (!isOpen || y===NY-2)){
+      const yEnd = isOpen ? y : (y-1);
+      const yCenterPx = ((yStart + yEnd)/2 + 0.5) * sy;
+      lastSlitCentersPx.push(yCenterPx);
+      decoSegments.push({y0:yStart, y1:yEnd});
+      inOpen = false;
+    }
+  }
+}
+
+// --- Launch ---
+function launchDuck(){
+  if (debugLogs) console.groupCollapsed('LAUNCH');
+  resetField();
+  buildObstacles();
+  showDuckBirth();
+  // source near left center
+  const sxCell = Math.floor(NX*0.12);
+  const syCell = Math.floor(NY*0.5);
+  const radius = 6;
+  for(let y=syCell-2*radius; y<=syCell+2*radius; y++){
+    for(let x=sxCell-2*radius; x<=sxCell+2*radius; x++){
+      if(x<1||x>=NX-1||y<1||y>=NY-1) continue;
+      const dx=x-sxCell, dy=y-syCell; const r=Math.sqrt(dx*dx+dy*dy);
+      if(r<=radius){ u[idx(x,y)] += Math.cos((r/radius)*Math.PI)*0.8; }
+    }
+  }
+  v.set(u); // start at rest
+  driveSteps = 220; // keep emitting a bit longer
+  running = true; tStep = 0;
+  hasLaunched = true; hasCollapsed = false;
+  loop();
+  if (debugLogs) { console.info('params',{driveSteps, NX, NY}); console.groupEnd(); }
+}
+
+// --- Simulation step ---
+function stepSim(){
+  if (debugLogs && tStep % 30 === 0) console.info('stepSim t', tStep);
+  // Parameters
+  const baseDamp = 0.006; // fixed baseline damping
+  const s = 0.22; // speed factor
+
+  // Update interior
+  for(let y=1;y<NY-1;y++){
+    for(let x=1;x<NX-1;x++){
+      const i = idx(x,y);
+      if(obs[i]){ w[i]=0; continue; }
+      const lap = (u[idx(x-1,y)] + u[idx(x+1,y)] + u[idx(x,y-1)] + u[idx(x,y+1)] - 4*u[i]);
+      const localD = baseDamp + spongeDampX[x];
+      w[i] = (2 - localD)*u[i] - (1 - localD)*v[i] + s*lap;
+    }
+  }
+  // Which‑path decoherence: keep both slits open but scramble relative phase just after the wall
+  const whichOn = document.getElementById('which')?.checked;
+  const modeNow = document.getElementById('slits')?.value;
+  if (whichOn && modeNow==='double' && decoSegments.length>=1){
+    const x0 = Math.min(NX-2, lastWallXCell+1);
+    const x1 = Math.min(NX-2, lastWallXCell+2);
+    for(let si=0; si<decoSegments.length; si++){
+      const sgn = (Math.random()<0.5) ? -1 : 1; // random sign per slit per step
+      const seg = decoSegments[si];
+      for(let x=x0; x<=x1; x++){
+        for(let y=seg.y0; y<=seg.y1; y++){
+          const ii = idx(x,y);
+          if (!obs[ii]) w[ii] *= sgn;
+        }
+      }
+    }
+  }
+
+  // Edges = absorb
+  for(let x=0;x<NX;x++){ w[idx(x,0)]=0; w[idx(x,NY-1)]=0; }
+  for(let y=0;y<NY;y++){ w[idx(0,y)]=0; w[idx(NX-1,y)]=0; }
+
+  // Source continues for a while
+  if(tStep < driveSteps){
+    const sxCell = Math.floor(NX*0.12);
+    const syCell = Math.floor(NY*0.5);
+    const radius = 6;
+    for(let y=syCell-radius; y<=syCell+radius; y++){
+      for(let x=sxCell-radius; x<=sxCell+radius; x++){
+        const dx=x-sxCell, dy=y-syCell; const r=Math.hypot(dx,dy);
+        if(r<=radius){ w[idx(x,y)] += Math.cos((r/radius)*Math.PI)*0.65; }
+      }
+    }
+  }
+
+  // Rotate buffers
+  v = u; u = w; w = v; // swap
+  tStep++;
+}
+
+// --- Draw field ---
+function drawField(){
+  if (debugLogs && tStep % 30 === 0) console.info('drawField t', tStep, 'detectorSum', detectorBandSum().toFixed(4));
+  const image = ctx.getImageData(0,0,W,H);
+  const data = image.data;
+  // Map each pixel to nearest cell (fast nearest sampling)
+  let k=0;
+  for(let py=0; py<H; py++){
+    const y = Math.min(NY-1, Math.max(0, (py/sy)|0));
+    for(let px=0; px<W; px++){
+      const x = Math.min(NX-1, Math.max(0, (px/sx)|0));
+      const i = idx(x,y);
+      let a = u[i];
+      if(obs[i]){ // wall tint (brighter so slits are obvious)
+        data[k++] = 140; data[k++] = 110; data[k++] = 230; data[k++] = 255; continue;
+      }
+      // intensity/phase coloring
+      const mag = Math.min(1, Math.abs(a));
+      if(showPhase){
+        const pos = a>=0 ? 1 : 0; // simple two-tone phase hint
+        const r = pos? 30 : 140; const g = pos? 220 : 50; const b = 255;
+        data[k++] = r*mag; data[k++] = g*mag; data[k++] = b*mag; data[k++] = 255;
+      } else {
+        // cyan brightness
+        data[k++] = 20*mag; data[k++] = 200*mag; data[k++] = 255*mag; data[k++] = 255;
+      }
+    }
+  }
+  ctx.putImageData(image,0,0);
+
+  // draw detection screen line at right edge if not yet collapsed
+  if(!hasCollapsed){
+    over.clearRect(0,0,W,H);
+    over.strokeStyle = 'rgba(240,255,255,.35)';
+    over.beginPath(); over.moveTo(W-14, 0); over.lineTo(W-14, H); over.stroke();
+  }
+}
+
+// --- Measurement ---
+function redrawHistogram(){
+  // Prefer drawing into the sidebar canvas in Controls & Notes
+  if (sideHist){
+    const c = sideHist; const cvs = c.canvas; const dpr = window.devicePixelRatio || 1;
+    // Make the sidebar canvas height match the pond so Y alignment feels natural
+    const ph = Math.round(pond.getBoundingClientRect().height);
+    cvs.style.height = ph + 'px';
+    const cssW = Math.round(cvs.getBoundingClientRect().width);
+    cvs.width  = Math.max(100, Math.round(cssW * dpr));
+    cvs.height = Math.max(50, Math.round(ph   * dpr));
+
+    const CW = cvs.width, CH = cvs.height;
+    c.setTransform(1,0,0,1,0,0);
+    c.clearRect(0,0,CW,CH);
+    // background
+    c.fillStyle = 'rgba(10,14,28,.85)';
+    c.fillRect(0,0,CW,CH);
+    // frame
+    const m = Math.round(12*dpr);
+    c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 1;
+    c.strokeRect(m, m, CW-2*m, CH-2*m);
+    // binning
+    const NBINS = Math.min(44, Math.floor(NY/2));
+    const bins = new Uint32Array(NBINS);
+    for(let y=1;y<NY-1;y++){
+      const b = Math.floor((y-1) * NBINS / (NY-2));
+      bins[b] += histCounts[y]||0;
+    }
+    let maxv = 1; for(let b=0;b<NBINS;b++) if(bins[b] > maxv) maxv = bins[b];
+    const innerW = CW - 2*m - Math.round(10*dpr);
+    const innerH = CH - 2*m;
+    const binH = innerH / NBINS;
+    c.fillStyle = 'rgba(255,255,255,.95)';
+    for(let b=0;b<NBINS;b++){
+      const v = bins[b]; if(!v) continue;
+      const wBar = Math.max(2*dpr, Math.round((v / maxv) * innerW));
+      const py = Math.round(m + (b+0.5)*binH);
+      c.fillRect(m+6, py-1, wBar, Math.max(2,Math.round(2*dpr)));
+    }
+
+    return;
+  }
+  // Fallback: draw a right sidebar on the overlay histogram canvas
+  const sidebarW = 64;
+  const sidebarX = W - (sidebarW + 12);
+  hist.clearRect(0,0,W,H);
+  hist.fillStyle = 'rgba(10,14,28,.65)';
+  hist.fillRect(sidebarX, 0, sidebarW, H);
+  let maxv2 = 1; for(let y=1;y<NY-1;y++) if(histCounts[y] > maxv2) maxv2 = histCounts[y];
+  hist.fillStyle = 'rgba(255,255,255,.95)';
+  for(let y=1;y<NY-1;y++){
+    const v = histCounts[y]; if(!v) continue;
+    const py = Math.round((y+0.5)*sy);
+    const wBar = Math.max(2, Math.round((v / maxv2) * (sidebarW - 12)));
+    hist.fillRect(sidebarX+6, py-1, wBar, 2);
+  }
+}
+
+// --- Measurement ---
+function detectorBandSum(){
+  // Place the detection band just before the sponge region
+  const bandX0 = NX-8, bandX1 = NX-6;
+  let sum = 0;
+  for(let y=1;y<NY-1;y++){
+    for(let x=bandX0;x<=bandX1;x++){
+      const a = u[idx(x,y)]; sum += a*a;
+    }
+  }
+  return sum;
+}
+
+// Simple vector duck fallback (visible even if emoji fonts fail)
+function drawCartoonDuck(ctx2, x, y){
+  try{
+    ctx2.save();
+    ctx2.globalCompositeOperation = 'source-over';
+    // Body
+    ctx2.beginPath(); ctx2.arc(x, y, 14, 0, Math.PI*2); ctx2.fillStyle = '#ffd166'; ctx2.fill();
+    // Beak
+    ctx2.beginPath(); ctx2.moveTo(x+6, y-2); ctx2.lineTo(x+16, y+2); ctx2.lineTo(x+6, y+6); ctx2.closePath();
+    ctx2.fillStyle = '#f4a261'; ctx2.fill(); ctx2.strokeStyle = 'rgba(0,0,0,.5)'; ctx2.lineWidth = 1; ctx2.stroke();
+    // Eye
+    ctx2.beginPath(); ctx2.arc(x-4, y-4, 2.2, 0, Math.PI*2); ctx2.fillStyle = '#222'; ctx2.fill();
+  } finally { ctx2.restore(); }
+}
+
+// ---- DOM duck helpers ----
+const duckLayer = document.getElementById('duckLayer');
+function clearDuckHTML(){ if(duckLayer) duckLayer.textContent=''; }
+function htmlDuckAt(x, y){
+  if(!duckLayer) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'duck-wrap';
+  wrap.style.left = (x / W * 100) + '%';
+  wrap.style.top  = (y / H * 100) + '%';
+  const em = document.createElement('div');
+  em.className = 'duck-emoji';
+  em.textContent = '🦆';
+  wrap.appendChild(em);
+  duckLayer.appendChild(wrap);
+}
+
+function showDuckBirth(){
+  if(!duckLayer) return;
+  const x = Math.floor(NX*0.12) * sx;
+  const y = Math.floor(NY*0.5) * sy;
+  // Duck seed
+  const seed = document.createElement('div');
+  seed.className = 'duck-birth';
+  seed.textContent = '🦆';
+  seed.style.left = (x / W * 100) + '%';
+  seed.style.top  = (y / H * 100) + '%';
+  duckLayer.appendChild(seed);
+  // Ripples
+  const mkRipple = (delay)=>{
+    const r = document.createElement('div');
+    r.className = 'duck-ripple';
+    r.style.left = (x / W * 100) + '%';
+    r.style.top  = (y / H * 100) + '%';
+    duckLayer.appendChild(r);
+    setTimeout(()=> r.classList.add('go'), 10+delay);
+    setTimeout(()=> r.remove(), 1000+delay);
+  };
+  mkRipple(0); mkRipple(180);
+  // Animate seed
+  requestAnimationFrame(()=> seed.classList.add('go'));
+  setTimeout(()=> seed.remove(), 800);
+}
+
+
+
+function plotHit(yCell){
+  if (debugLogs) console.info('PLOT', { yCell, yPx: (yCell+0.5)*sy });
+  const y = (yCell+0.5)*sy;
+  const xDuck = W-20;
+
+  // Update histogram counts and redraw sidebar histogram
+  histCounts[yCell] = (histCounts[yCell]||0) + 1;
+  redrawHistogram();
+
+  // Duck emoji as DOM overlay so it never gets cleared by canvas redraws
+  htmlDuckAt(xDuck, y);
+
+  // Book-keeping
+  hits++; caughtEl.textContent = hits;
+  hasCollapsed = true;
+  running = false;
+  try{ cancelAnimationFrame(frameId); }catch(e){}
+}
+
+function measureDuck(source='manual'){
+  if (debugLogs) console.groupCollapsed('MEASURE', source);
+  // Only one measurement per launch
+  if(!hasLaunched || hasCollapsed) return;
+  // compute intensity along the detector band near the right
+  // IMPORTANT: use the SAME band as detectorBandSum() and keep it BEFORE the heavy sponge
+  const bandX0 = NX-8, bandX1 = NX-6; // was NX-4..NX-2 (too deep in sponge → near-zero signal)
+  let weights = new Float32Array(NY);
+  let sum = 0;
+  for(let y=1;y<NY-1;y++){
+    let s=0;
+    for(let x=bandX0;x<=bandX1;x++){
+      const a = u[idx(x,y)]; s += a*a;
+    }
+    weights[y] = s; sum += s;
+  }
+  if(sum <= 1e-8){ // nearly zero even in pre-sponge band → fall back to a thin earlier band
+    if (debugLogs) console.warn('very low signal at detector band; probing earlier band');
+    let sum2 = 0;
+    const bx0 = NX-12, bx1 = NX-10;
+    for(let y=1;y<NY-1;y++){
+      let s=0; for(let x=bx0;x<=bx1;x++){ const a=u[idx(x,y)]; s+=a*a; }
+      weights[y]=s; sum2+=s;
+    }
+    sum = sum2;
+  }
+  if(sum <= 1e-10){ // absolute fallback (should be rare)
+    const yy = (Math.random()*(NY-2)|0)+1;
+    if (debugLogs) console.warn('detector sum ~0; falling back to uniform y');
+    plotHit(yy);
+    if (debugLogs) console.groupEnd();
+    return;
+  }
+  // sample y proportional to weight
+  let r = Math.random()*sum;
+  let ySel = 1;
+  for(let y=1;y<NY-1;y++){ r -= weights[y]; if(r<=0){ ySel=y; break; } }
+  if (debugLogs) console.info('detectorSum', sum.toFixed(6), 'chosen yCell', ySel);
+  plotHit(ySel);
+  if (debugLogs) console.groupEnd();
+}
+
+// --- Loop & helpers ---
+function loop(){
+  if(!running) return;
+  const stepsThisFrame = Math.max(1, Math.round(2 * simSpeed));
+  for(let s=0; s<stepsThisFrame; s++) stepSim();
+  drawField();
+  const auto = document.getElementById('autoNet')?.checked;
+  const sig = detectorBandSum();
+  if (debugLogs && tStep % 30 === 0) console.info('loop t', tStep, {sig: sig.toFixed(4), driveSteps});
+  if (auto && !inBatch && !hasCollapsed){
+    // Very short delay after first arrival: arm when signal crosses threshold,
+    // then measure after 1–2 frames (scaled by speed).
+    const ARRIVAL_THRESH = 5e-4;
+    if (sig >= ARRIVAL_THRESH){
+      if (autoArm < 0) autoArm = Math.max(1, Math.round(2 / Math.max(1, simSpeed)));
+      autoArm--;
+      if (autoArm <= 0){
+        if (debugLogs) console.warn('AUTO fast detection');
+        measureDuck('auto-fast');
+        running = false;
+        autoArm = -1;
+      }
+    } else {
+      autoArm = -1; // not yet arrived
+    }
+  }
+  frameId = requestAnimationFrame(loop);
+}
+
+async function ensureDetectorEnergy(targetSteps=300){
+  const maxSteps = Math.min(targetSteps, 1200);
+  for(let i=0;i<maxSteps && !hasCollapsed;i++){
+    stepSim();
+    if(i%10===0) drawField();
+    await new Promise(r=>setTimeout(r, 0));
+  }
+}
+
+// --- UI wiring ---
+function alignSideHistTop(){
+  const wrap = document.getElementById('sideHistWrap');
+  const canvasEl = document.getElementById('sideHist');
+  if(!wrap || !canvasEl) return;
+  // Reset before measuring
+  wrap.style.marginTop = '0px';
+  const pondTop = pond.getBoundingClientRect().top;            // top of experimental area
+  const canvasTop = canvasEl.getBoundingClientRect().top;      // top of the histogram CANVAS (not the wrapper)
+  const delta = Math.round(pondTop - canvasTop);
+  // Shift the whole histogram block so the CANVAS top matches the pond top
+  wrap.style.marginTop = delta + 'px';
+}
+
+function syncSideHist(){ try{ redrawHistogram(); alignSideHistTop(); } catch(e){} }
+
+// --- UI wiring ---
+document.getElementById('launch').addEventListener('click', launchDuck);
+
+// Speed slider wiring
+const speedEl = document.getElementById('speed');
+const speedVal = document.getElementById('speedVal');
+function updateSpeed(){
+  const v = parseFloat(speedEl?.value || '1');
+  simSpeed = (isFinite(v) && v>0) ? v : 1;
+  if (speedVal) speedVal.textContent = simSpeed.toFixed(1) + '×';
+}
+speedEl?.addEventListener('input', updateSpeed);
+updateSpeed();
+
+drawField();
+
+// Intro start button wiring
+const appMain = document.getElementById('appMain');
+const introPanel = document.getElementById('intro');
+document.getElementById('startApp')?.addEventListener('click', ()=>{
+  if (introPanel) introPanel.style.display = 'none';
+  if (appMain) appMain.style.display = 'grid';
+  try{ syncSideHist(); }catch(e){}
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+// Slit size slider wiring
+const slitSizeEl = document.getElementById('slitSize');
+const slitSizeVal = document.getElementById('slitSizeVal');
+function updateSlitSize(){
+  slitSizeCells = Math.max(2, Math.min(40, parseInt(slitSizeEl?.value||'14',10)||14));
+  if (slitSizeVal) slitSizeVal.textContent = String(slitSizeCells);
+}
+slitSizeEl?.addEventListener('input', ()=>{ updateSlitSize(); buildObstacles(); drawField(); });
+updateSlitSize();
+
+// Slit gap slider wiring
+const slitGapEl = document.getElementById('slitGap');
+const slitGapVal = document.getElementById('slitGapVal');
+function updateSlitGap(){
+  slitGapCells = Math.max(6, Math.min(60, parseInt(slitGapEl?.value||'18',10)||18));
+  if (slitGapVal) slitGapVal.textContent = String(slitGapCells);
+}
+slitGapEl?.addEventListener('input', ()=>{ updateSlitGap(); buildObstacles(); drawField(); redrawHistogram(); });
+updateSlitGap();
+
+// Barrier controls now update immediately
+['slits','which','slitSize','slitGap'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('change', ()=>{ buildObstacles(); drawField(); });
+});
+
+document.getElementById('net').addEventListener('click', async () => {
+  if (debugLogs) console.info('NET clicked', {hasLaunched, hasCollapsed, running});
+  // Only measure if a wave is in flight and not yet collapsed
+  if (!hasLaunched || hasCollapsed) {
+    if (debugLogs) console.warn('Net ignored (no live wave).');
+    return; // one measurement per launch
+  }
+  if (!running) {
+    if (debugLogs) console.info('fast-forwarding before manual net');
+    await ensureDetectorEnergy(320);
+    drawField();
+  }
+  measureDuck('manual');
+});
+
+document.getElementById('reset').addEventListener('click', ()=>{ resetField(); if(duckLayer) duckLayer.textContent=''; drawField(); });
+document.getElementById('clearHits').addEventListener('click', clearHistogram);
+document.getElementById('togglePhase').addEventListener('click', ()=>{ showPhase = !showPhase; drawField(); });
+
+// Batch run N trials
+function runNTrials(n){
+  return new Promise(async (resolve)=>{
+    n = Math.max(1, Math.min(2000, n|0));
+    const btn = document.getElementById('runN');
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = `Running ${n}…`;
+
+    // Temporarily disable auto detector and suppress it in the loop
+    const autoBox = document.getElementById('autoNet');
+    const prevAuto = autoBox ? !!autoBox.checked : false;
+    if (autoBox) autoBox.checked = false;
+    inBatch = true; autoArm = -1;
+
+    // Arrival threshold and tiny post-arrival jitter
+    const ARRIVAL_THRESH = 5e-4;
+
+    for(let t=0; t<n; t++){
+      launchDuck();
+      let steps = 0; let arrived = false;
+      while(!hasCollapsed){
+        stepSim(); steps++;
+        if (steps % 6 === 0) { drawField(); await new Promise(r=>setTimeout(r, 0)); }
+        if (steps >= 6 && detectorBandSum() >= ARRIVAL_THRESH){ arrived = true; break; }
+        if (steps > 1800) break; // safety cap
+      }
+      // ultra-short randomized delay after arrival (scaled by speed)
+      const jitter = Math.max(0, Math.round((Math.random()*6) / Math.max(1, simSpeed)));
+      for(let k=0; k<jitter; k++){ stepSim(); if(k%3===0) drawField(); }
+
+      drawField();
+      measureDuck('batch');
+      await new Promise(r=>setTimeout(r, 0));
+    }
+
+    inBatch = false; autoArm = -1;
+    if (autoBox) autoBox.checked = prevAuto;
+    btn.disabled = false; btn.textContent = old;
+    resolve();
+  });
+}
+
+document.getElementById('runN').addEventListener('click', async ()=>{
+  const n = +document.getElementById('trialsN').value || 1;
+  await runNTrials(n);
+});
+
+// keep sidebar histogram synced with layout changes
+try{
+  if(window.ResizeObserver){
+    const ro = new ResizeObserver(()=>syncSideHist());
+    ro.observe(pond);
+    ro.observe(document.querySelector('.left .playbar'));
+  }
+  window.addEventListener('resize', syncSideHist);
+  // sync once after layout
+  requestAnimationFrame(syncSideHist);
+} catch(e){}
+
+
+// First paint
+buildObstacles();
+drawField();
+redrawHistogram();
+</script>
+</body>
+</html>
