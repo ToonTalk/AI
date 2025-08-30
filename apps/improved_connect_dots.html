@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Connect-the-Dots Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root { --panel:#121a35; --ink:#eaf2ff; --muted:#9db0d6; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background:#0e1530;color:var(--ink);
+      display:grid;grid-template-rows:auto 1fr
+    }
+    header{padding:12px 16px;border-bottom:1px solid #2a355f;background:#111a3a}
+    h1{margin:0;font-size:18px}
+    main{display:grid;grid-template-columns:320px 1fr;gap:12px;padding:12px}
+    aside{
+      background:var(--panel);border:1px solid #2a355f;border-radius:14px;padding:12px;
+      overflow:auto;max-height:calc(100vh - 100px)
+    }
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+    label{color:var(--muted);display:grid;grid-template-columns:1fr auto auto;gap:8px;width:100%}
+    input[type="range"]{width:180px}
+    input[type="file"]{max-width:100%}
+    select{background:#214a8f;border:1px solid #396bcb;color:#eaf2ff;padding:6px 8px;border-radius:8px;font-size:14px}
+    output{min-width:3ch;text-align:right;color:#d8e8ff;font-variant-numeric:tabular-nums}
+    .btn{background:#214a8f;border:1px solid #396bcb;color:#eaf2ff;
+         padding:10px 14px;border-radius:12px;font-weight:800;cursor:pointer;font-size:14px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    figure{margin:0;background:#0b122a;border:1px solid #283463;border-radius:14px;padding:10px}
+    canvas{background:#fff;display:block;width:100%;height:auto;border-radius:10px}
+    figcaption{margin-top:6px;font-size:13px;color:#9db0d6;text-align:center}
+    #status{display:block;padding:10px;border:1px dashed #32447f;border-radius:10px;color:#e0ecff}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Connect-the-Dots Generator</h1>
+</header>
+
+<main>
+  <aside>
+    <div class="row">
+      <input id="file" type="file" accept="image/*">
+      <button id="demoBtn" class="btn">Load Demo</button>
+    </div>
+
+    <div class="row"><button id="run" class="btn">Generate</button></div>
+
+    <div class="row"><label>Desired dots <input id="desiredDots" type="range" min="20" max="500" value="100"><output id="val_desired">100</output></label></div>
+    <div class="row"><label>Minimum distance (px) <input id="minDist" type="range" min="4" max="20" value="8"><output id="val_minDist">8</output></label></div>
+    <div class="row"><label>Label type <select id="labelType"><option value="numeric">Numbers (1,2,3...)</option><option value="letters">Letters (a,b,c...)</option><option value="binary">Binary (1,10,11...)</option></select></label></div>
+
+    <div class="row">
+      <button id="exportDots" class="btn">Export Dots (SVG)</button>
+      <button id="exportConn" class="btn">Export Connected (SVG)</button>
+    </div>
+
+    <div id="status" aria-live="polite">Load an image to begin.</div>
+  </aside>
+
+  <section class="grid">
+    <figure>
+      <canvas id="orig" width="1024" height="768"></canvas>
+      <figcaption>Original</figcaption>
+    </figure>
+    <figure>
+      <canvas id="dots" width="1024" height="768"></canvas>
+      <figcaption>Dots</figcaption>
+    </figure>
+    <figure>
+      <canvas id="conn" width="1024" height="768"></canvas>
+      <figcaption>Connected</figcaption>
+    </figure>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+/* ---------- helpers ---------- */
+const $=id=>document.getElementById(id);
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const setStatus=s=>{$("status").textContent=s;};
+function safeRun(fn){try{return fn();}catch(e){console.error(e);setStatus("Error: "+(e&&e.message?e.message:String(e)));}}
+
+/* ---------- state / canvases ---------- */
+const state={img:null,W:0,H:0,dots:[],contour:[]};
+const ctxO=$("orig").getContext("2d");
+const ctxD=$("dots").getContext("2d");
+const ctxC=$("conn").getContext("2d");
+const proc=document.createElement("canvas");
+const pctx=proc.getContext("2d");
+
+/* ---------- image IO ---------- */
+function drawOriginal(img){
+  const maxDim=800;
+  const s=Math.min(1,maxDim/Math.max(img.naturalWidth,img.naturalHeight));
+  const W=Math.round(img.naturalWidth*s), H=Math.round(img.naturalHeight*s);
+  ["orig","dots","conn"].forEach(id=>{const c=$(id); c.width=W; c.height=H;});
+  proc.width=W; proc.height=H;
+  ctxO.clearRect(0,0,W,H); ctxO.drawImage(img,0,0,W,H);
+  pctx.clearRect(0,0,W,H); pctx.drawImage(img,0,0,W,H);
+  state.img=img; state.W=W; state.H=H;
+}
+function loadImage(src){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>res(img);img.onerror=()=>rej(new Error("Image failed to load"));img.src=src;});}
+
+/* ---------- image processing ---------- */
+function getGray(){
+  const W=state.W,H=state.H,d=pctx.getImageData(0,0,W,H).data;
+  const g=new Float32Array(W*H);
+  for(let i=0,j=0;i<d.length;i+=4,j++) g[j]=0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2];
+  return g;
+}
+
+function otsu(g){
+  const hist=new Uint32Array(256);
+  for(let i=0;i<g.length;i++) hist[clamp(Math.round(g[i]),0,255)]++;
+  const total=g.length; let sum=0; 
+  for(let i=0;i<256;i++) sum+=i*hist[i];
+  let sumB=0,wB=0,varMax=-1,tBest=127;
+  for(let t=0;t<256;t++){
+    wB+=hist[t]; if(!wB) continue; 
+    const wF=total-wB; if(!wF) break;
+    sumB+=t*hist[t]; 
+    const mB=sumB/wB, mF=(sum-sumB)/wF, v=wB*wF*(mB-mF)*(mB-mF);
+    if(v>varMax){varMax=v;tBest=t;}
+  }
+  return tBest;
+}
+
+function binarize(g,t){
+  const out=new Uint8Array(g.length);
+  for(let i=0;i<g.length;i++) out[i]=(g[i]<t)?1:0; 
+  return out;
+}
+
+/* ---------- proper contour tracing ---------- */
+function findMainContour(binary, W, H) {
+  // Find starting point - leftmost point of topmost row with foreground pixels
+  let startX = -1, startY = -1;
+  
+  for(let y = 1; y < H-1 && startY === -1; y++) {
+    for(let x = 1; x < W-1; x++) {
+      if(binary[y * W + x] && isEdgePixel(binary, x, y, W, H)) {
+        startX = x;
+        startY = y;
+        break;
+      }
+    }
+  }
+  
+  if(startX === -1) return [];
+  
+  // Moore neighborhood boundary following
+  const contour = [];
+  const directions = [
+    [1, 0],   // E
+    [1, 1],   // SE  
+    [0, 1],   // S
+    [-1, 1],  // SW
+    [-1, 0],  // W
+    [-1, -1], // NW
+    [0, -1],  // N
+    [1, -1]   // NE
+  ];
+  
+  let x = startX, y = startY;
+  let dir = 0; // Start looking East
+  let foundStart = false;
+  
+  do {
+    contour.push({x: x, y: y});
+    
+    // Look for next boundary pixel
+    let found = false;
+    let attempts = 0;
+    
+    while(!found && attempts < 8) {
+      const [dx, dy] = directions[dir];
+      const nx = x + dx;
+      const ny = y + dy;
+      
+      if(nx >= 1 && ny >= 1 && nx < W-1 && ny < H-1 && binary[ny * W + nx]) {
+        x = nx;
+        y = ny;
+        found = true;
+        // Turn left (counterclockwise) for next search
+        dir = (dir + 6) % 8;
+      } else {
+        // Turn right (clockwise) and try next direction
+        dir = (dir + 1) % 8;
+        attempts++;
+      }
+    }
+    
+    if(!found) break; // No more boundary pixels
+    
+    // Check if we've returned to start
+    if(x === startX && y === startY && foundStart) break;
+    foundStart = true;
+    
+  } while(contour.length < 10000); // Safety limit
+  
+  return contour;
+}
+
+function isEdgePixel(binary, x, y, W, H) {
+  if(!binary[y * W + x]) return false;
+  
+  // Check 4-connected neighbors
+  return !binary[(y-1) * W + x] || !binary[(y+1) * W + x] || 
+         !binary[y * W + (x-1)] || !binary[y * W + (x+1)];
+}
+
+/* ---------- contour simplification ---------- */
+function simplifyContour(contour, tolerance) {
+  if(contour.length <= 2) return contour;
+  
+  return douglasPeucker(contour, tolerance);
+}
+
+function douglasPeucker(points, tolerance) {
+  if(points.length <= 2) return points;
+  
+  let maxDist = 0;
+  let maxIndex = 0;
+  
+  for(let i = 1; i < points.length - 1; i++) {
+    const dist = perpendicularDistance(points[i], points[0], points[points.length - 1]);
+    if(dist > maxDist) {
+      maxDist = dist;
+      maxIndex = i;
+    }
+  }
+  
+  if(maxDist > tolerance) {
+    const left = douglasPeucker(points.slice(0, maxIndex + 1), tolerance);
+    const right = douglasPeucker(points.slice(maxIndex), tolerance);
+    return left.slice(0, -1).concat(right);
+  } else {
+    return [points[0], points[points.length - 1]];
+  }
+}
+
+function perpendicularDistance(point, lineStart, lineEnd) {
+  const A = lineEnd.x - lineStart.x;
+  const B = lineEnd.y - lineStart.y;
+  const C = point.x - lineStart.x;
+  const D = point.y - lineStart.y;
+  
+  const dot = A * C + B * D;
+  const lenSq = A * A + B * B;
+  
+  if(lenSq === 0) return Math.hypot(C, D);
+  
+  const param = dot / lenSq;
+  let nearestX, nearestY;
+  
+  if(param < 0) {
+    nearestX = lineStart.x;
+    nearestY = lineStart.y;
+  } else if(param > 1) {
+    nearestX = lineEnd.x;
+    nearestY = lineEnd.y;
+  } else {
+    nearestX = lineStart.x + param * A;
+    nearestY = lineStart.y + param * B;
+  }
+  
+  return Math.hypot(point.x - nearestX, point.y - nearestY);
+}
+
+/* ---------- label generation ---------- */
+function generateLabel(index, type) {
+  switch(type) {
+    case 'binary':
+      return (index + 1).toString(2);
+    case 'letters':
+      return generateLetterLabel(index);
+    case 'numeric':
+    default:
+      return (index + 1).toString();
+  }
+}
+
+function generateLetterLabel(index) {
+  let result = '';
+  let num = index;
+  
+  while(true) {
+    result = String.fromCharCode(97 + (num % 26)) + result;
+    num = Math.floor(num / 26);
+    if(num === 0) break;
+    num--; // Adjust for 1-based indexing in multi-letter sequences
+  }
+  
+  return result;
+}
+
+/* ---------- dot placement ---------- */
+function placeDots(contour, desiredCount, minDist, labelType) {
+  if(contour.length === 0) return [];
+  
+  // Calculate cumulative arc lengths
+  const arcLengths = [0];
+  let totalLength = 0;
+  
+  for(let i = 1; i < contour.length; i++) {
+    const dist = Math.hypot(contour[i].x - contour[i-1].x, contour[i].y - contour[i-1].y);
+    totalLength += dist;
+    arcLengths.push(totalLength);
+  }
+  
+  if(totalLength === 0) return [contour[0]];
+  
+  // Calculate actual dot count based on constraints
+  const maxByLength = Math.floor(totalLength / minDist) + 1;
+  const actualCount = Math.min(desiredCount, Math.max(3, maxByLength));
+  
+  const dots = [];
+  
+  for(let i = 0; i < actualCount; i++) {
+    const targetLength = (totalLength * i) / actualCount;
+    const point = interpolateAtLength(contour, arcLengths, targetLength);
+    dots.push({
+      x: point.x,
+      y: point.y,
+      label: generateLabel(i, labelType)
+    });
+  }
+  
+  return dots;
+}
+
+function interpolateAtLength(contour, arcLengths, targetLength) {
+  if(targetLength <= 0) return contour[0];
+  if(targetLength >= arcLengths[arcLengths.length - 1]) return contour[contour.length - 1];
+  
+  // Find the segment
+  let segmentIndex = 0;
+  for(let i = 1; i < arcLengths.length; i++) {
+    if(arcLengths[i] >= targetLength) {
+      segmentIndex = i - 1;
+      break;
+    }
+  }
+  
+  const segmentStart = arcLengths[segmentIndex];
+  const segmentEnd = arcLengths[segmentIndex + 1];
+  const t = (targetLength - segmentStart) / (segmentEnd - segmentStart);
+  
+  const p1 = contour[segmentIndex];
+  const p2 = contour[segmentIndex + 1];
+  
+  return {
+    x: p1.x + t * (p2.x - p1.x),
+    y: p1.y + t * (p2.y - p1.y)
+  };
+}
+
+/* ---------- drawing ---------- */
+function drawAll(){
+  const W=state.W, H=state.H;
+  for(const c of [ctxD,ctxC]){ 
+    c.clearRect(0,0,W,H); 
+    c.fillStyle="#fff"; 
+    c.fillRect(0,0,W,H); 
+  }
+  
+  const r = 2.5;
+  const fs = 11;
+  const dots = state.dots;
+
+  // Draw dots
+  ctxD.fillStyle = "#000";
+  ctxC.fillStyle = "#000";
+  
+  for(const dot of dots) {
+    ctxD.beginPath();
+    ctxD.arc(dot.x, dot.y, r, 0, Math.PI * 2);
+    ctxD.fill();
+    
+    ctxC.beginPath();
+    ctxC.arc(dot.x, dot.y, r, 0, Math.PI * 2);
+    ctxC.fill();
+    
+    // Labels
+    ctxD.font = ctxC.font = fs + "px Arial, sans-serif";
+    ctxD.fillStyle = ctxC.fillStyle = "#666";
+    ctxD.textAlign = ctxC.textAlign = "center";
+    ctxD.textBaseline = ctxC.textBaseline = "middle";
+    
+    const labelX = dot.x + r + 6;
+    const labelY = dot.y;
+    
+    ctxD.fillText(String(dot.label), labelX, labelY);
+    ctxC.fillText(String(dot.label), labelX, labelY);
+  }
+  
+  // Draw connections on connected canvas
+  if(dots.length > 1) {
+    ctxC.strokeStyle = "rgba(0,0,0,0.4)";
+    ctxC.lineWidth = 2;
+    ctxC.beginPath();
+    ctxC.moveTo(dots[0].x, dots[0].y);
+    
+    for(let i = 1; i < dots.length; i++) {
+      ctxC.lineTo(dots[i].x, dots[i].y);
+    }
+    
+    // Close the shape
+    ctxC.lineTo(dots[0].x, dots[0].y);
+    ctxC.stroke();
+  }
+}
+
+/* ---------- main generation ---------- */
+function generate(){
+  if(!state.img){ setStatus("Load an image first."); return; }
+  setStatus("Processing image...");
+  
+  const W = state.W, H = state.H;
+  const desired = +$("desiredDots").value;
+  const minDist = +$("minDist").value;
+  const labelType = $("labelType").value;
+  
+  // Process image
+  const gray = getGray();
+  const threshold = otsu(gray);
+  const binary = binarize(gray, threshold);
+  
+  // Find main contour
+  const rawContour = findMainContour(binary, W, H);
+  
+  if(rawContour.length < 3) {
+    setStatus("No suitable contour found in image.");
+    state.dots = [];
+    state.contour = [];
+    drawAll();
+    return;
+  }
+  
+  // Simplify contour
+  const simplificationTolerance = Math.max(1, minDist * 0.5);
+  const contour = simplifyContour(rawContour, simplificationTolerance);
+  
+  // Place dots
+  const dots = placeDots(contour, desired, minDist, labelType);
+  
+  state.dots = dots;
+  state.contour = contour;
+  
+  setStatus(`Generated ${dots.length} dots (requested ${desired})`);
+  drawAll();
+}
+
+/* ---------- export ---------- */
+function exportSVG(kind){
+  const W=state.W,H=state.H; 
+  if(!W){ setStatus("Nothing to export yet."); return; }
+  
+  const r = 2.5;
+  const fs = 11;
+  const dots = state.dots;
+  
+  const parts = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
+    '<rect width="100%" height="100%" fill="#ffffff"/>'
+  ];
+  
+  if(kind === "connected" && dots.length > 1) {
+    let pathData = `M ${dots[0].x.toFixed(2)} ${dots[0].y.toFixed(2)}`;
+    for(let i = 1; i < dots.length; i++) {
+      pathData += ` L ${dots[i].x.toFixed(2)} ${dots[i].y.toFixed(2)}`;
+    }
+    pathData += ' Z'; // Close path
+    
+    parts.push(`<path d="${pathData}" stroke="#000" stroke-opacity="0.4" stroke-width="2" fill="none"/>`);
+  }
+  
+  for(const dot of dots){
+    parts.push(`<circle cx="${dot.x.toFixed(2)}" cy="${dot.y.toFixed(2)}" r="${r}" fill="#000"/>`);
+    parts.push(`<text x="${(dot.x+r+6).toFixed(2)}" y="${dot.y.toFixed(2)}" font-family="Arial, sans-serif" font-size="${fs}" fill="#666" text-anchor="middle" dominant-baseline="central">${dot.label}</text>`);
+  }
+  
+  parts.push('</svg>');
+  const blob=new Blob([parts.join('\n')],{type:'image/svg+xml'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); 
+  a.href=url; 
+  a.download=(kind==="connected"?'connected.svg':'dots.svg'); 
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+/* ---------- UI wiring ---------- */
+function bindRange(id,out){ 
+  const el=$(id), o=$(out); 
+  const sync=()=>o.textContent=String(el.value); 
+  el.addEventListener("input",sync); 
+  sync(); 
+}
+
+bindRange("desiredDots","val_desired");
+bindRange("minDist","val_minDist");
+
+$("file").addEventListener("change", e=>safeRun(()=>{
+  const f=e.target.files && e.target.files[0]; if(!f) return;
+  const url=URL.createObjectURL(f);
+  loadImage(url).then(img=>{drawOriginal(img); setStatus("Image loaded. Press Generate.");})
+                .catch(err=>setStatus("Error: "+(err&&err.message?err.message:String(err))))
+                .finally(()=>setTimeout(()=>URL.revokeObjectURL(url),1000));
+}));
+
+$("run").addEventListener("click", ()=>safeRun(generate));
+$("exportDots").addEventListener("click", ()=>safeRun(()=>exportSVG("dots")));
+$("exportConn").addEventListener("click", ()=>safeRun(()=>exportSVG("connected")));
+
+window.addEventListener("keydown", e=>{ if(e.key==="Enter") safeRun(generate); });
+
+// Demo
+const demoSVG="<svg xmlns='http://www.w3.org/2000/svg' width='600' height='450' viewBox='0 0 600 450'><rect width='100%' height='100%' fill='#fff'/><g stroke='#000' stroke-width='8' fill='none' stroke-linecap='round' stroke-linejoin='round'><path d='M300 40 L352 170 L490 170 L378 250 L420 380 L300 300 L180 380 L222 250 L110 170 L248 170 Z'/></g></svg>";
+
+function loadDemo(){ 
+  const url="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(demoSVG);
+  loadImage(url).then(img=>{drawOriginal(img); setStatus("Demo loaded. Press Generate.");})
+                .catch(err=>setStatus("Error: "+(err&&err.message?err.message:String(err))));
+}
+
+$("demoBtn").addEventListener("click", ()=>safeRun(loadDemo));
+
+window.addEventListener("error", e=>setStatus("JS error: "+(e&&e.message?e.message:"unknown")));
+window.addEventListener("unhandledrejection", e=>setStatus("Promise error: "+(e&&e.reason?e.reason:"unknown")));
+
+setStatus("Ready. Choose an image (or Load Demo), then Generate.");
+</script>
+</body>
+</html>
