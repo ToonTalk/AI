@@ -132,18 +132,18 @@
             margin: 0 5px;
         }
         .script-preview {
-            display: none; /* Hidden by default, only shown during playback mode */
+            display: none; 
         }
         .current-line {
+            background-color: #554a2b;
             padding: 5px;
             margin: 2px 0;
-            background-color: #fff3cd;
             border-radius: 3px;
         }
         .url-modal {
             display: none;
             position: fixed;
-            z-index: 1000;
+            z-index: 2100;
             left: 0;
             top: 0;
             width: 100%;
@@ -179,7 +179,7 @@
             margin-left: 10px;
         }
         
-        /* New Playback View Styles */
+        /* Playback View Styles */
         #playbackView {
             display: none;
             position: fixed;
@@ -197,27 +197,40 @@
         }
         .playback-controls {
             width: 100%;
-            max-width: 1200px;
+            max-width: 90vw;
             text-align: right;
             margin-bottom: 20px;
         }
         .playback-content {
             width: 100%;
-            max-width: 1200px;
-            height: 66vh;
+            max-width: 90vw;
+            height: 85vh;
             background-color: #2b2b2b;
             border-radius: 10px;
             padding: 20px;
             box-sizing: border-box;
             display: flex;
-            flex-direction: column;
+            flex-direction: row; /* Side-by-side layout */
+            gap: 20px;
+        }
+        #playbackScriptContainer {
+            flex: 0 0 40%; /* Starts at 40% width, doesn't grow, can shrink */
+            height: 100%;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            font-size: 1.1em;
+            line-height: 1.6;
+            padding-right: 10px;
         }
         #playbackUrlDisplay {
-            flex-grow: 1; /* Takes up available space */
-            margin-bottom: 15px;
-            background-color: #fff;
+            flex: 1 1 60%; /* Takes remaining space, based at 60% */
+            background-color: #000;
             border-radius: 5px;
             border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0; 
         }
         #playbackUrlDisplay iframe {
             width: 100%;
@@ -225,17 +238,11 @@
             border: none;
             border-radius: 5px;
         }
-        #playbackScriptContainer {
-            flex-grow: 0;
-            flex-shrink: 0; /* Prevents shrinking */
-            max-height: 40%; /* Limits script height */
-            overflow-y: auto;
-            scroll-behavior: smooth;
-            font-size: 1.1em;
-            line-height: 1.6;
-        }
-        #playbackScriptContainer .current-line {
-            background-color: #554a2b;
+        #playbackUrlDisplay img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -294,8 +301,8 @@
             <button class="secondary-btn" onclick="stopPlayback()">Exit Playback</button>
         </div>
         <div class="playback-content">
-            <div id="playbackUrlDisplay"></div>
             <div id="playbackScriptContainer"></div>
+            <div id="playbackUrlDisplay"></div>
         </div>
     </div>
 
@@ -313,9 +320,7 @@
 
         function loadVoices() {
             availableVoices = speechSynthesis.getVoices();
-            if (availableVoices.length === 0) {
-                setTimeout(loadVoices, 100);
-            }
+            if (availableVoices.length === 0) setTimeout(loadVoices, 100);
         }
         loadVoices();
         speechSynthesis.onvoiceschanged = loadVoices;
@@ -328,9 +333,7 @@
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    parseScript(e.target.result);
-                };
+                reader.onload = (event) => parseScript(event.target.result);
                 reader.readAsText(file);
             }
         });
@@ -338,7 +341,7 @@
         async function loadScriptFromURL() {
             const url = document.getElementById('scriptUrlInput').value.trim();
             if (!url) return alert('Please enter a URL.');
-            document.getElementById('statusMessage').textContent = 'Loading script from URL...';
+            document.getElementById('statusMessage').textContent = 'Loading script...';
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
@@ -347,7 +350,7 @@
                 parseScript(content);
             } catch (error) {
                 console.error('Failed to fetch script:', error);
-                alert('Failed to load script from URL. Please check the URL and ensure it allows cross-origin requests (CORS).');
+                alert('Failed to load script from URL. Check console for details.');
                 document.getElementById('statusMessage').textContent = 'Failed to load script.';
             }
         }
@@ -408,16 +411,9 @@
             checkboxList.innerHTML = '';
             
             allSpeakers.forEach((speaker, index) => {
-                const row = document.createElement('div');
-                row.className = 'speaker-checkbox-row';
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.id = `speaker_checkbox_${index}`;
-                checkbox.value = speaker;
-                checkbox.checked = true;
-                const label = document.createElement('label');
-                label.htmlFor = `speaker_checkbox_${index}`;
-                label.textContent = speaker;
+                const row = document.createElement('div'); row.className = 'speaker-checkbox-row';
+                const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `speaker_checkbox_${index}`; checkbox.value = speaker; checkbox.checked = true;
+                const label = document.createElement('label'); label.htmlFor = `speaker_checkbox_${index}`; label.textContent = speaker;
                 row.append(checkbox, label);
                 checkboxList.appendChild(row);
             });
@@ -430,7 +426,7 @@
             selectedSpeakers = [];
             allSpeakers.forEach((speaker, index) => {
                 const checkbox = document.getElementById(`speaker_checkbox_${index}`);
-                if (checkbox && checkbox.checked) selectedSpeakers.push(speaker);
+                if (checkbox?.checked) selectedSpeakers.push(speaker);
             });
             if (selectedSpeakers.length === 0) {
                 document.getElementById('speakerConfig').style.display = 'none';
@@ -483,7 +479,6 @@
         function getSpeakerVoiceSettings(speaker) {
             const speakerIndex = selectedSpeakers.indexOf(speaker);
             if (speakerIndex === -1) return null;
-            // --- BUG FIX: Use speakerIndex instead of index ---
             const voiceName = document.getElementById(`voice_${speakerIndex}`).value;
             const pitch = parseFloat(document.getElementById(`pitch_${speakerIndex}`).value);
             const rate = parseFloat(document.getElementById(`rate_${speakerIndex}`).value);
@@ -517,17 +512,20 @@
             const voiceSettings = getSpeakerVoiceSettings(currentLine.speaker);
             const scriptContainer = document.getElementById('playbackScriptContainer');
             const urlDisplay = document.getElementById('playbackUrlDisplay');
-            
+            const isImageUrlRegex = /\.(jpg|jpeg|png|gif|webp|svg)$/i;
+
             if (currentLine.url) {
-                urlDisplay.innerHTML = `<iframe src="${currentLine.url}"></iframe>`;
-                urlDisplay.style.display = 'block';
-                scriptContainer.style.flexGrow = '0';
-                scriptContainer.style.maxHeight = '30%';
+                if (isImageUrlRegex.test(currentLine.url)) {
+                    urlDisplay.innerHTML = `<img src="${currentLine.url}" alt="Script content image">`;
+                } else {
+                    urlDisplay.innerHTML = `<iframe src="${currentLine.url}"></iframe>`;
+                }
+                urlDisplay.style.display = 'flex';
+                scriptContainer.style.flex = '0 0 40%';
             } else {
                 urlDisplay.style.display = 'none';
                 urlDisplay.innerHTML = '';
-                scriptContainer.style.flexGrow = '1';
-                scriptContainer.style.maxHeight = '100%';
+                scriptContainer.style.flex = '1 1 100%';
             }
             
             document.querySelectorAll('[id^="playback_line_"]').forEach(line => line.classList.remove('current-line'));
