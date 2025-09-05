@@ -131,21 +131,8 @@
             font-size: 12px;
             margin: 0 5px;
         }
-        .progress {
-            margin: 20px 0;
-            padding: 10px;
-            background-color: #e9ecef;
-            border-radius: 5px;
-            display: none;
-        }
         .script-preview {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-            max-height: 200px;
-            overflow-y: auto;
-            display: none;
+            display: none; /* Hidden by default, only shown during playback mode */
         }
         .current-line {
             padding: 5px;
@@ -191,6 +178,65 @@
         .modal-buttons button {
             margin-left: 10px;
         }
+        
+        /* New Playback View Styles */
+        #playbackView {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(20, 20, 20, 0.95);
+            color: #f1f1f1;
+            z-index: 2000;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .playback-controls {
+            width: 100%;
+            max-width: 1200px;
+            text-align: right;
+            margin-bottom: 20px;
+        }
+        .playback-content {
+            width: 100%;
+            max-width: 1200px;
+            height: 66vh;
+            background-color: #2b2b2b;
+            border-radius: 10px;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        #playbackUrlDisplay {
+            flex-grow: 1; /* Takes up available space */
+            margin-bottom: 15px;
+            background-color: #fff;
+            border-radius: 5px;
+            border: none;
+        }
+        #playbackUrlDisplay iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 5px;
+        }
+        #playbackScriptContainer {
+            flex-grow: 0;
+            flex-shrink: 0; /* Prevents shrinking */
+            max-height: 40%; /* Limits script height */
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+        #playbackScriptContainer .current-line {
+            background-color: #554a2b;
+        }
     </style>
 </head>
 <body>
@@ -210,10 +256,6 @@
         <div class="controls">
             <div class="controls-row">
                 <button class="primary-btn" id="playBtn" onclick="startPlayback()" disabled>Start Playback</button>
-                <button class="secondary-btn" id="stopBtn" onclick="stopPlayback()" disabled>Stop</button>
-                <button class="secondary-btn" id="pauseBtn" onclick="pausePlayback()" disabled>Pause</button>
-            </div>
-             <div class="controls-row">
                 <button class="primary-btn" id="shareBtn" onclick="generateShareableURL()" disabled>Generate Shareable URL</button>
                 <span id="statusMessage" style="margin-left: 10px; font-style: italic; color: #666;"></span>
             </div>
@@ -234,16 +276,6 @@
             <div id="speakerList"></div>
         </div>
 
-        <div class="progress" id="progress">
-            <div>Current: <span id="currentSpeaker"></span></div>
-            <div>Line: <span id="currentLine"></span></div>
-        </div>
-
-        <div class="script-preview" id="scriptPreview">
-            <h4>Script Preview</h4>
-            <div id="previewContent"></div>
-        </div>
-
         <div id="urlModal" class="url-modal">
             <div class="url-modal-content">
                 <h3>Shareable URL Generated!</h3>
@@ -257,6 +289,16 @@
         </div>
     </div>
 
+    <div id="playbackView">
+        <div class="playback-controls">
+            <button class="secondary-btn" onclick="stopPlayback()">Exit Playback</button>
+        </div>
+        <div class="playback-content">
+            <div id="playbackUrlDisplay"></div>
+            <div id="playbackScriptContainer"></div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let parsedLines = [];
@@ -264,9 +306,8 @@
         let selectedSpeakers = [];
         let currentLineIndex = 0;
         let isPlaying = false;
-        let isPaused = false;
         let availableVoices = [];
-        let scriptSourceURL = null; // To store the URL of the script if loaded from one
+        let scriptSourceURL = null;
 
         // --- Initialization ---
 
@@ -278,13 +319,12 @@
         }
         loadVoices();
         speechSynthesis.onvoiceschanged = loadVoices;
-
         window.addEventListener('load', loadFromURL);
 
         // --- Event Listeners & Script Loading ---
 
         document.getElementById('scriptFile').addEventListener('change', function(e) {
-            scriptSourceURL = null; // Reset script source when a local file is chosen
+            scriptSourceURL = null;
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
@@ -297,18 +337,13 @@
 
         async function loadScriptFromURL() {
             const url = document.getElementById('scriptUrlInput').value.trim();
-            if (!url) {
-                alert('Please enter a URL.');
-                return;
-            }
+            if (!url) return alert('Please enter a URL.');
             document.getElementById('statusMessage').textContent = 'Loading script from URL...';
             try {
                 const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
                 const content = await response.text();
-                scriptSourceURL = url; // Save the source URL
+                scriptSourceURL = url;
                 parseScript(content);
             } catch (error) {
                 console.error('Failed to fetch script:', error);
@@ -321,6 +356,7 @@
 
         function parseScript(content) {
             const lines = content.split('\n');
+            const urlRegex = /(https?:\/\/[^\s]+)$/i;
             parsedLines = [];
             const speakerSet = new Set();
 
@@ -330,12 +366,16 @@
                     const colonIndex = line.indexOf(':');
                     if (colonIndex > 0) {
                         const speaker = line.substring(0, colonIndex).trim();
-                        const dialogue = line.substring(colonIndex + 1).trim();
-                        const cleanedDialogue = dialogue.replace(/\([^)]*\)/g, '').trim();
+                        let dialogue = line.substring(colonIndex + 1).trim();
+                        dialogue = dialogue.replace(/\([^)]*\)/g, '').trim();
                         
-                        if (cleanedDialogue) {
+                        const urlMatch = dialogue.match(urlRegex);
+                        const url = urlMatch ? urlMatch[0] : null;
+                        const dialogueText = url ? dialogue.replace(urlRegex, '').trim() : dialogue;
+
+                        if (dialogueText || url) {
                             speakerSet.add(speaker);
-                            parsedLines.push({ speaker, dialogue: cleanedDialogue });
+                            parsedLines.push({ speaker, dialogue: dialogueText, url });
                         }
                     }
                 }
@@ -347,16 +387,9 @@
         }
 
         function processScript() {
-            if (selectedSpeakers.length === 0) {
-                alert('Please select at least one speaker!');
-                return;
-            }
-            
+            if (selectedSpeakers.length === 0) return alert('Please select at least one speaker!');
             const filteredLines = parsedLines.filter(line => selectedSpeakers.includes(line.speaker));
-            if (filteredLines.length === 0) {
-                alert('No dialogue found for the selected speakers!');
-                return;
-            }
+            if (filteredLines.length === 0) return alert('No dialogue found for the selected speakers!');
             
             window.processedLines = filteredLines;
             document.getElementById('playBtn').disabled = false;
@@ -397,20 +430,15 @@
             selectedSpeakers = [];
             allSpeakers.forEach((speaker, index) => {
                 const checkbox = document.getElementById(`speaker_checkbox_${index}`);
-                if (checkbox && checkbox.checked) {
-                    selectedSpeakers.push(speaker);
-                }
+                if (checkbox && checkbox.checked) selectedSpeakers.push(speaker);
             });
-
             if (selectedSpeakers.length === 0) {
                 document.getElementById('speakerConfig').style.display = 'none';
                 document.getElementById('playBtn').disabled = true;
                 document.getElementById('shareBtn').disabled = true;
                 return;
             }
-
             displaySpeakerConfig();
-            displayScriptPreview();
             processScript();
         }
         
@@ -420,66 +448,26 @@
             speakerList.innerHTML = '';
             
             selectedSpeakers.forEach((speaker, index) => {
-                const row = document.createElement('div');
-                row.className = 'speaker-row';
-                
-                const nameDiv = document.createElement('div');
-                nameDiv.className = 'speaker-name';
-                nameDiv.textContent = speaker + ':';
-                
-                const voiceSelect = document.createElement('select');
-                voiceSelect.id = `voice_${index}`;
+                const row = document.createElement('div'); row.className = 'speaker-row';
+                const nameDiv = document.createElement('div'); nameDiv.className = 'speaker-name'; nameDiv.textContent = speaker + ':';
+                const voiceSelect = document.createElement('select'); voiceSelect.id = `voice_${index}`;
                 availableVoices.forEach(voice => {
                     const option = document.createElement('option');
                     option.value = voice.name;
                     option.textContent = `${voice.name} (${voice.lang})`;
                     voiceSelect.appendChild(option);
                 });
-                
-                const pitchLabel = document.createElement('span');
-                pitchLabel.className = 'range-label';
-                pitchLabel.textContent = 'Pitch:';
-                const pitchRange = document.createElement('input');
-                pitchRange.type = 'range';
-                pitchRange.id = `pitch_${index}`;
-                pitchRange.min = '0.5';
-                pitchRange.max = '2';
-                pitchRange.step = '0.1';
-                pitchRange.value = '1';
-                
-                const rateLabel = document.createElement('span');
-                rateLabel.className = 'range-label';
-                rateLabel.textContent = 'Rate:';
-                const rateRange = document.createElement('input');
-                rateRange.type = 'range';
-                rateRange.id = `rate_${index}`;
-                rateRange.min = '0.5';
-                rateRange.max = '2';
-                rateRange.step = '0.1';
-                rateRange.value = '1';
-                
+                const pitchLabel = document.createElement('span'); pitchLabel.className = 'range-label'; pitchLabel.textContent = 'Pitch:';
+                const pitchRange = document.createElement('input'); pitchRange.type = 'range'; pitchRange.id = `pitch_${index}`; pitchRange.min = '0.5'; pitchRange.max = '2'; pitchRange.step = '0.1'; pitchRange.value = '1';
+                const rateLabel = document.createElement('span'); rateLabel.className = 'range-label'; rateLabel.textContent = 'Rate:';
+                const rateRange = document.createElement('input'); rateRange.type = 'range'; rateRange.id = `rate_${index}`; rateRange.min = '0.5'; rateRange.max = '2'; rateRange.step = '0.1'; rateRange.value = '1';
                 row.append(nameDiv, voiceSelect, pitchLabel, pitchRange, rateLabel, rateRange);
                 speakerList.appendChild(row);
-                
                 if (availableVoices.length > 0) {
-                    const voiceIndex = index % availableVoices.length;
-                    voiceSelect.value = availableVoices[voiceIndex]?.name;
+                    voiceSelect.value = availableVoices[index % availableVoices.length]?.name;
                 }
             });
-            
             configDiv.style.display = 'block';
-        }
-
-        function displayScriptPreview() {
-            const previewDiv = document.getElementById('scriptPreview');
-            const previewContent = document.getElementById('previewContent');
-            const filteredLines = parsedLines.filter(line => selectedSpeakers.includes(line.speaker));
-            
-            previewContent.innerHTML = filteredLines.map((line, index) => 
-                `<div id="line_${index}"><strong>${line.speaker}:</strong> ${line.dialogue}</div>`
-            ).join('');
-            
-            previewDiv.style.display = 'block';
         }
 
         function selectAllSpeakers() {
@@ -495,6 +483,7 @@
         function getSpeakerVoiceSettings(speaker) {
             const speakerIndex = selectedSpeakers.indexOf(speaker);
             if (speakerIndex === -1) return null;
+            // --- BUG FIX: Use speakerIndex instead of index ---
             const voiceName = document.getElementById(`voice_${speakerIndex}`).value;
             const pitch = parseFloat(document.getElementById(`pitch_${speakerIndex}`).value);
             const rate = parseFloat(document.getElementById(`rate_${speakerIndex}`).value);
@@ -502,35 +491,52 @@
         }
 
         function startPlayback() {
-            speechSynthesis.cancel(); 
+            speechSynthesis.cancel();
             const linesToPlay = window.processedLines;
-            if (!linesToPlay || linesToPlay.length === 0) {
-                alert('Please upload and process a script first.');
-                return;
-            }
+            if (!linesToPlay || linesToPlay.length === 0) return alert('Please upload and process a script first.');
+            
+            document.querySelector('.container').style.display = 'none';
+            document.getElementById('playbackView').style.display = 'flex';
+            const scriptContainer = document.getElementById('playbackScriptContainer');
+            scriptContainer.innerHTML = linesToPlay.map((line, index) => 
+                `<div id="playback_line_${index}"><strong>${line.speaker}:</strong> ${line.dialogue}</div>`
+            ).join('');
+            
             window.playbackLines = linesToPlay;
             isPlaying = true;
-            isPaused = false;
             currentLineIndex = 0;
-            document.getElementById('playBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = false;
-            document.getElementById('pauseBtn').disabled = false;
-            document.getElementById('progress').style.display = 'block';
             playNextLine();
         }
 
         function playNextLine() {
-            if (!isPlaying || isPaused || currentLineIndex >= window.playbackLines.length) {
+            if (!isPlaying || currentLineIndex >= window.playbackLines.length) {
                 if (currentLineIndex >= window.playbackLines.length) stopPlayback();
                 return;
             }
             const currentLine = window.playbackLines[currentLineIndex];
             const voiceSettings = getSpeakerVoiceSettings(currentLine.speaker);
-            document.getElementById('currentSpeaker').textContent = currentLine.speaker;
-            document.getElementById('currentLine').textContent = currentLine.dialogue.substring(0, 50) + '...';
-            document.querySelectorAll('[id^="line_"]').forEach(line => line.classList.remove('current-line'));
-            const currentLineElement = document.getElementById(`line_${currentLineIndex}`);
-            if (currentLineElement) currentLineElement.classList.add('current-line');
+            const scriptContainer = document.getElementById('playbackScriptContainer');
+            const urlDisplay = document.getElementById('playbackUrlDisplay');
+            
+            if (currentLine.url) {
+                urlDisplay.innerHTML = `<iframe src="${currentLine.url}"></iframe>`;
+                urlDisplay.style.display = 'block';
+                scriptContainer.style.flexGrow = '0';
+                scriptContainer.style.maxHeight = '30%';
+            } else {
+                urlDisplay.style.display = 'none';
+                urlDisplay.innerHTML = '';
+                scriptContainer.style.flexGrow = '1';
+                scriptContainer.style.maxHeight = '100%';
+            }
+            
+            document.querySelectorAll('[id^="playback_line_"]').forEach(line => line.classList.remove('current-line'));
+            const currentLineElement = document.getElementById(`playback_line_${currentLineIndex}`);
+            if (currentLineElement) {
+                currentLineElement.classList.add('current-line');
+                currentLineElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
             const utterance = new SpeechSynthesisUtterance(currentLine.dialogue);
             if (voiceSettings) {
                 if (voiceSettings.voice) utterance.voice = voiceSettings.voice;
@@ -546,46 +552,35 @@
                 currentLineIndex++;
                 playNextLine();
             };
-            speechSynthesis.speak(utterance);
+            
+            if(utterance.text) {
+                speechSynthesis.speak(utterance);
+            } else {
+                utterance.onend();
+            }
         }
 
         function stopPlayback() {
             isPlaying = false;
-            isPaused = false;
             speechSynthesis.cancel();
-            document.getElementById('playBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-            document.getElementById('pauseBtn').disabled = true;
-            document.getElementById('pauseBtn').textContent = 'Pause';
-            document.getElementById('progress').style.display = 'none';
-            document.querySelectorAll('[id^="line_"]').forEach(line => line.classList.remove('current-line'));
+            document.getElementById('playbackView').style.display = 'none';
+            document.querySelector('.container').style.display = 'block';
         }
 
-        function pausePlayback() {
-            if (isPlaying && !isPaused) {
-                isPaused = true;
-                speechSynthesis.pause();
-                document.getElementById('pauseBtn').textContent = 'Resume';
-            } else if (isPaused) {
-                isPaused = false;
-                speechSynthesis.resume();
-                document.getElementById('pauseBtn').textContent = 'Pause';
-            }
-        }
+        // --- URL Sharing & Voice Matching ---
 
-        // --- URL Sharing Functionality ---
+        function inferGenderFromName(name) {
+            const lowerCaseName = name.toLowerCase();
+            const femaleKeywords = ['female', 'libby', 'maisie', 'sonia', 'ava', 'emma', 'ana', 'aria', 'jenny', 'michelle', 'zira', 'hazel', 'samantha', 'karen', 'tessa', 'susan', 'joanna', 'ivy', 'kendra'];
+            const maleKeywords = ['male', 'ryan', 'thomas', 'andrew', 'brian', 'christopher', 'eric', 'guy', 'david', 'mark', 'alex', 'daniel', 'tom', 'fred', 'matthew', 'justin', 'joey'];
+            if (femaleKeywords.some(keyword => lowerCaseName.includes(keyword))) return 'female';
+            if (maleKeywords.some(keyword => lowerCaseName.includes(keyword))) return 'male';
+            return null;
+        }
 
         function generateShareableURL() {
-            if (!window.processedLines || selectedSpeakers.length === 0) {
-                alert('Please process a script first!');
-                return;
-            }
-            const config = {
-                allSpeakers: allSpeakers,
-                selectedSpeakers: selectedSpeakers,
-                voiceSettings: {}
-            };
-            // If script was loaded from a URL, store the URL. Otherwise, store the content.
+            if (!window.processedLines || selectedSpeakers.length === 0) return alert('Please process a script first!');
+            const config = { allSpeakers, selectedSpeakers, voiceSettings: {} };
             if (scriptSourceURL) {
                 config.scriptURL = scriptSourceURL;
             } else {
@@ -594,7 +589,7 @@
             selectedSpeakers.forEach(speaker => {
                 const settings = getSpeakerVoiceSettings(speaker);
                 if (settings && settings.voice) {
-                    config.voiceSettings[speaker] = { voiceName: settings.voice.name, pitch: settings.pitch, rate: settings.rate };
+                    config.voiceSettings[speaker] = { voiceName: settings.voice.name, lang: settings.voice.lang, pitch: settings.pitch, rate: settings.rate };
                 }
             });
             try {
@@ -625,30 +620,22 @@
         }
 
         async function applyConfig(config) {
-            // Wait for voices to be loaded by the browser
             while (availableVoices.length === 0) {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-            
-            // If the config points to a script URL, fetch it first.
             if (config.scriptURL) {
                 document.getElementById('statusMessage').textContent = 'Loading shared script from URL...';
                 const response = await fetch(config.scriptURL);
                 const content = await response.text();
-                scriptSourceURL = config.scriptURL; // Preserve the source
-                parseScript(content); // This parses the script and sets defaults
+                scriptSourceURL = config.scriptURL;
+                parseScript(content);
             } else {
-                // Otherwise, use the script embedded in the config
                 parsedLines = config.script || [];
                 allSpeakers = config.allSpeakers || [];
             }
-            
-            // Now, apply the specific settings from the config, overriding defaults
             selectedSpeakers = config.selectedSpeakers || [];
-            
             displaySpeakerSelectionFromURL(config);
             displaySpeakerConfigFromURL(config);
-            displayScriptPreview();
             processScript();
         }
 
@@ -677,45 +664,55 @@
             const configDiv = document.getElementById('speakerConfig');
             const speakerList = document.getElementById('speakerList');
             speakerList.innerHTML = '';
+            const usedFallbackVoices = new Set();
             selectedSpeakers.forEach((speaker, index) => {
-                const row = document.createElement('div');
-                row.className = 'speaker-row';
-                const nameDiv = document.createElement('div');
-                nameDiv.className = 'speaker-name';
-                nameDiv.textContent = speaker + ':';
-                const voiceSelect = document.createElement('select');
-                voiceSelect.id = `voice_${index}`;
+                const row = document.createElement('div'); row.className = 'speaker-row';
+                const nameDiv = document.createElement('div'); nameDiv.className = 'speaker-name'; nameDiv.textContent = speaker + ':';
+                const voiceSelect = document.createElement('select'); voiceSelect.id = `voice_${index}`;
                 availableVoices.forEach(voice => {
                     const option = document.createElement('option');
                     option.value = voice.name;
                     option.textContent = `${voice.name} (${voice.lang})`;
                     voiceSelect.appendChild(option);
                 });
-                const pitchLabel = document.createElement('span');
-                pitchLabel.className = 'range-label';
-                pitchLabel.textContent = 'Pitch:';
-                const pitchRange = document.createElement('input');
-                pitchRange.type = 'range';
-                pitchRange.id = `pitch_${index}`;
-                pitchRange.min = '0.5';
-                pitchRange.max = '2';
-                pitchRange.step = '0.1';
-                const rateLabel = document.createElement('span');
-                rateLabel.className = 'range-label';
-                rateLabel.textContent = 'Rate:';
-                const rateRange = document.createElement('input');
-                rateRange.type = 'range';
-                rateRange.id = `rate_${index}`;
-                rateRange.min = '0.5';
-                rateRange.max = '2';
-                rateRange.step = '0.1';
+                const pitchRange = document.createElement('input'); pitchRange.type = 'range'; pitchRange.id = `pitch_${index}`; pitchRange.min = '0.5'; pitchRange.max = '2'; pitchRange.step = '0.1';
+                const rateRange = document.createElement('input'); rateRange.type = 'range'; rateRange.id = `rate_${index}`; rateRange.min = '0.5'; rateRange.max = '2'; rateRange.step = '0.1';
+                const pitchLabel = document.createElement('span'); pitchLabel.className = 'range-label'; pitchLabel.textContent = 'Pitch:';
+                const rateLabel = document.createElement('span'); rateLabel.className = 'range-label'; rateLabel.textContent = 'Rate:';
+
                 const speakerSettings = config.voiceSettings[speaker];
                 if (speakerSettings) {
-                    const voiceExists = availableVoices.some(v => v.name === speakerSettings.voiceName);
-                    if (voiceExists) {
-                        voiceSelect.value = speakerSettings.voiceName;
+                    let bestMatch = availableVoices.find(v => v.name === speakerSettings.voiceName);
+                    let matchType = 'exact';
+                    if (!bestMatch) {
+                        const desiredGender = inferGenderFromName(speakerSettings.voiceName);
+                        if (speakerSettings.lang && typeof speakerSettings.lang === 'string') {
+                            const langMatches = availableVoices.filter(v => v.lang.toLowerCase() === speakerSettings.lang.toLowerCase());
+                            if (langMatches.length > 0) {
+                                if (desiredGender) bestMatch = langMatches.find(v => inferGenderFromName(v.name) === desiredGender && !usedFallbackVoices.has(v.name));
+                                if (!bestMatch) bestMatch = langMatches.find(v => !usedFallbackVoices.has(v.name));
+                                if (!bestMatch) bestMatch = langMatches[0];
+                                if (bestMatch) matchType = 'language-region';
+                            }
+                        }
+                        if (!bestMatch && speakerSettings.lang && typeof speakerSettings.lang === 'string') {
+                            const baseLang = speakerSettings.lang.split('-')[0].toLowerCase();
+                            const familyMatches = availableVoices.filter(v => v.lang.toLowerCase().startsWith(baseLang));
+                            if (familyMatches.length > 0) {
+                                if (desiredGender) bestMatch = familyMatches.find(v => inferGenderFromName(v.name) === desiredGender && !usedFallbackVoices.has(v.name));
+                                if (!bestMatch) bestMatch = familyMatches.find(v => !usedFallbackVoices.has(v.name));
+                                if (!bestMatch) bestMatch = familyMatches[0];
+                                if (bestMatch) matchType = 'language-family';
+                            }
+                        }
+                    }
+                    if (bestMatch) {
+                        voiceSelect.value = bestMatch.name;
+                        if (matchType !== 'exact') {
+                            usedFallbackVoices.add(bestMatch.name);
+                            voiceSelect.style.border = '2px solid orange';
+                        }
                     } else {
-                        console.warn(`Voice "${speakerSettings.voiceName}" not found. Using default voice for ${speaker}.`);
                         voiceSelect.style.border = '2px solid red';
                     }
                     pitchRange.value = speakerSettings.pitch;
