@@ -33,6 +33,19 @@
         .file-input {
             margin: 10px 0;
         }
+        .url-load-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .url-load-group input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            max-width: 400px;
+        }
         .controls {
             display: flex;
             flex-direction: column;
@@ -44,22 +57,6 @@
             gap: 10px;
             flex-wrap: wrap;
             align-items: center;
-        }
-        .volume-control {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-left: 15px;
-            padding: 5px 10px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-        }
-        .volume-control label {
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .volume-control input {
-            width: 100px;
         }
         button {
             padding: 10px 20px;
@@ -203,20 +200,18 @@
         <div class="upload-section">
             <h3>Upload Your Script</h3>
             <input type="file" id="scriptFile" class="file-input" accept=".txt" />
-            <p>Upload a text file with dialogue in format: "Speaker Name: dialogue text"</p>
+            <p style="margin: 20px 0 5px;"><strong>Or</strong> load from a URL (e.g., a raw GitHub Gist):</p>
+            <div class="url-load-group">
+                <input type="text" id="scriptUrlInput" placeholder="https://example.com/script.txt">
+                <button class="secondary-btn" onclick="loadScriptFromURL()">Load Script</button>
+            </div>
         </div>
 
         <div class="controls">
             <div class="controls-row">
-                <button class="primary-btn" id="processBtn" onclick="processScript()" disabled>Process Script</button>
                 <button class="primary-btn" id="playBtn" onclick="startPlayback()" disabled>Start Playback</button>
                 <button class="secondary-btn" id="stopBtn" onclick="stopPlayback()" disabled>Stop</button>
                 <button class="secondary-btn" id="pauseBtn" onclick="pausePlayback()" disabled>Pause</button>
-                <div class="volume-control">
-                    <label for="volumeControl">Volume:</label>
-                    <input type="range" id="volumeControl" min="0" max="100" step="10" value="100">
-                    <span id="volumeDisplay">100%</span>
-                </div>
             </div>
              <div class="controls-row">
                 <button class="primary-btn" id="shareBtn" onclick="generateShareableURL()" disabled>Generate Shareable URL</button>
@@ -271,10 +266,10 @@
         let isPlaying = false;
         let isPaused = false;
         let availableVoices = [];
+        let scriptSourceURL = null; // To store the URL of the script if loaded from one
 
         // --- Initialization ---
 
-        // Load available voices from the browser
         function loadVoices() {
             availableVoices = speechSynthesis.getVoices();
             if (availableVoices.length === 0) {
@@ -284,19 +279,12 @@
         loadVoices();
         speechSynthesis.onvoiceschanged = loadVoices;
 
-        // On page load, check if there's a configuration in the URL
         window.addEventListener('load', loadFromURL);
 
-        // --- Event Listeners ---
+        // --- Event Listeners & Script Loading ---
 
-        // Volume control slider
-        document.getElementById('volumeControl').addEventListener('input', function(e) {
-            const volume = e.target.value;
-            document.getElementById('volumeDisplay').textContent = volume + '%';
-        });
-
-        // File upload handler
         document.getElementById('scriptFile').addEventListener('change', function(e) {
+            scriptSourceURL = null; // Reset script source when a local file is chosen
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
@@ -306,6 +294,28 @@
                 reader.readAsText(file);
             }
         });
+
+        async function loadScriptFromURL() {
+            const url = document.getElementById('scriptUrlInput').value.trim();
+            if (!url) {
+                alert('Please enter a URL.');
+                return;
+            }
+            document.getElementById('statusMessage').textContent = 'Loading script from URL...';
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const content = await response.text();
+                scriptSourceURL = url; // Save the source URL
+                parseScript(content);
+            } catch (error) {
+                console.error('Failed to fetch script:', error);
+                alert('Failed to load script from URL. Please check the URL and ensure it allows cross-origin requests (CORS).');
+                document.getElementById('statusMessage').textContent = 'Failed to load script.';
+            }
+        }
         
         // --- Core Script Processing ---
 
@@ -349,10 +359,12 @@
             }
             
             window.processedLines = filteredLines;
-            
             document.getElementById('playBtn').disabled = false;
             document.getElementById('shareBtn').disabled = false;
-            alert(`Script processed! Ready to play ${filteredLines.length} lines.`);
+            
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = `Script processed! Ready to play ${filteredLines.length} lines.`;
+            statusMessage.style.color = 'green';
         }
 
         // --- UI Display Functions ---
@@ -365,19 +377,15 @@
             allSpeakers.forEach((speaker, index) => {
                 const row = document.createElement('div');
                 row.className = 'speaker-checkbox-row';
-                
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.id = `speaker_checkbox_${index}`;
                 checkbox.value = speaker;
                 checkbox.checked = true;
-                
                 const label = document.createElement('label');
                 label.htmlFor = `speaker_checkbox_${index}`;
                 label.textContent = speaker;
-                
-                row.appendChild(checkbox);
-                row.appendChild(label);
+                row.append(checkbox, label);
                 checkboxList.appendChild(row);
             });
             
@@ -396,12 +404,14 @@
 
             if (selectedSpeakers.length === 0) {
                 document.getElementById('speakerConfig').style.display = 'none';
-                document.getElementById('processBtn').disabled = true;
+                document.getElementById('playBtn').disabled = true;
+                document.getElementById('shareBtn').disabled = true;
                 return;
             }
 
             displaySpeakerConfig();
             displayScriptPreview();
+            processScript();
         }
         
         function displaySpeakerConfig() {
@@ -458,7 +468,6 @@
             });
             
             configDiv.style.display = 'block';
-            document.getElementById('processBtn').disabled = false;
         }
 
         function displayScriptPreview() {
@@ -486,39 +495,27 @@
         function getSpeakerVoiceSettings(speaker) {
             const speakerIndex = selectedSpeakers.indexOf(speaker);
             if (speakerIndex === -1) return null;
-
             const voiceName = document.getElementById(`voice_${speakerIndex}`).value;
             const pitch = parseFloat(document.getElementById(`pitch_${speakerIndex}`).value);
             const rate = parseFloat(document.getElementById(`rate_${speakerIndex}`).value);
-            
-            return {
-                voice: availableVoices.find(v => v.name === voiceName),
-                pitch,
-                rate
-            };
+            return { voice: availableVoices.find(v => v.name === voiceName), pitch, rate };
         }
 
         function startPlayback() {
-            // --- NEW FIX HERE ---
-            // Clear any stale or pending utterances before starting.
             speechSynthesis.cancel(); 
-            
             const linesToPlay = window.processedLines;
             if (!linesToPlay || linesToPlay.length === 0) {
-                alert('Please process the script first.');
+                alert('Please upload and process a script first.');
                 return;
             }
-            
             window.playbackLines = linesToPlay;
             isPlaying = true;
             isPaused = false;
             currentLineIndex = 0;
-            
             document.getElementById('playBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
             document.getElementById('pauseBtn').disabled = false;
             document.getElementById('progress').style.display = 'block';
-            
             playNextLine();
         }
 
@@ -527,43 +524,28 @@
                 if (currentLineIndex >= window.playbackLines.length) stopPlayback();
                 return;
             }
-            
             const currentLine = window.playbackLines[currentLineIndex];
             const voiceSettings = getSpeakerVoiceSettings(currentLine.speaker);
-            
             document.getElementById('currentSpeaker').textContent = currentLine.speaker;
             document.getElementById('currentLine').textContent = currentLine.dialogue.substring(0, 50) + '...';
-            
             document.querySelectorAll('[id^="line_"]').forEach(line => line.classList.remove('current-line'));
             const currentLineElement = document.getElementById(`line_${currentLineIndex}`);
             if (currentLineElement) currentLineElement.classList.add('current-line');
-            
             const utterance = new SpeechSynthesisUtterance(currentLine.dialogue);
-            
-            // Safely assign settings and handle unavailable voices
             if (voiceSettings) {
-                // Only assign the voice if it was successfully found
-                if (voiceSettings.voice) {
-                    utterance.voice = voiceSettings.voice;
-                }
-                // If voice is null/undefined, browser uses its default, preventing the error.
+                if (voiceSettings.voice) utterance.voice = voiceSettings.voice;
                 utterance.pitch = voiceSettings.pitch;
                 utterance.rate = voiceSettings.rate;
             }
-            
-            utterance.volume = parseInt(document.getElementById('volumeControl').value) / 100;
-            
             utterance.onend = () => {
                 currentLineIndex++;
-                setTimeout(playNextLine, 500); // Pause between lines
+                setTimeout(playNextLine, 500);
             };
-            
             utterance.onerror = (e) => {
                 console.error('Speech synthesis error:', e);
                 currentLineIndex++;
-                playNextLine(); // Skip faulty line
+                playNextLine();
             };
-            
             speechSynthesis.speak(utterance);
         }
 
@@ -571,7 +553,6 @@
             isPlaying = false;
             isPaused = false;
             speechSynthesis.cancel();
-            
             document.getElementById('playBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
             document.getElementById('pauseBtn').disabled = true;
@@ -599,31 +580,27 @@
                 alert('Please process a script first!');
                 return;
             }
-
             const config = {
-                script: window.processedLines,
                 allSpeakers: allSpeakers,
                 selectedSpeakers: selectedSpeakers,
-                volume: parseInt(document.getElementById('volumeControl').value),
                 voiceSettings: {}
             };
-
+            // If script was loaded from a URL, store the URL. Otherwise, store the content.
+            if (scriptSourceURL) {
+                config.scriptURL = scriptSourceURL;
+            } else {
+                config.script = window.processedLines;
+            }
             selectedSpeakers.forEach(speaker => {
                 const settings = getSpeakerVoiceSettings(speaker);
                 if (settings && settings.voice) {
-                    config.voiceSettings[speaker] = {
-                        voiceName: settings.voice.name,
-                        pitch: settings.pitch,
-                        rate: settings.rate
-                    };
+                    config.voiceSettings[speaker] = { voiceName: settings.voice.name, pitch: settings.pitch, rate: settings.rate };
                 }
             });
-
             try {
                 const configJSON = JSON.stringify(config);
-                const encodedConfig = btoa(unescape(encodeURIComponent(configJSON))); // Handle UTF-8 characters
+                const encodedConfig = btoa(unescape(encodeURIComponent(configJSON)));
                 const shareableURL = `${window.location.origin}${window.location.pathname}?config=${encodedConfig}`;
-                
                 document.getElementById('shareableURL').value = shareableURL;
                 document.getElementById('urlModal').style.display = 'block';
             } catch (error) {
@@ -632,43 +609,14 @@
             }
         }
 
-        function loadFromURL() {
+        async function loadFromURL() {
             const urlParams = new URLSearchParams(window.location.search);
             const configParam = urlParams.get('config');
-            
             if (configParam) {
                 try {
                     const configJSON = decodeURIComponent(escape(atob(configParam)));
                     const config = JSON.parse(configJSON);
-                    
-                    function applyConfig() {
-                        if (availableVoices.length === 0) {
-                            setTimeout(applyConfig, 100); // Wait for voices
-                            return;
-                        }
-                        
-                        parsedLines = config.script || [];
-                        allSpeakers = config.allSpeakers || [];
-                        selectedSpeakers = config.selectedSpeakers || [];
-                        window.processedLines = config.script || [];
-                        
-                        document.getElementById('volumeControl').value = config.volume || 100;
-                        document.getElementById('volumeDisplay').textContent = (config.volume || 100) + '%';
-                        
-                        displaySpeakerSelectionFromURL(config);
-                        displaySpeakerConfigFromURL(config);
-                        displayScriptPreview();
-                        
-                        document.getElementById('processBtn').disabled = false;
-                        document.getElementById('playBtn').disabled = false;
-                        document.getElementById('shareBtn').disabled = false;
-                        
-                        document.getElementById('statusMessage').textContent = 'Configuration loaded from URL!';
-                        document.getElementById('statusMessage').style.color = 'green';
-                    }
-                    
-                    applyConfig();
-                    
+                    await applyConfig(config);
                 } catch (error) {
                     console.error('Error loading configuration from URL:', error);
                     alert('Error loading configuration from URL. The link may be invalid.');
@@ -676,11 +624,38 @@
             }
         }
 
+        async function applyConfig(config) {
+            // Wait for voices to be loaded by the browser
+            while (availableVoices.length === 0) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            // If the config points to a script URL, fetch it first.
+            if (config.scriptURL) {
+                document.getElementById('statusMessage').textContent = 'Loading shared script from URL...';
+                const response = await fetch(config.scriptURL);
+                const content = await response.text();
+                scriptSourceURL = config.scriptURL; // Preserve the source
+                parseScript(content); // This parses the script and sets defaults
+            } else {
+                // Otherwise, use the script embedded in the config
+                parsedLines = config.script || [];
+                allSpeakers = config.allSpeakers || [];
+            }
+            
+            // Now, apply the specific settings from the config, overriding defaults
+            selectedSpeakers = config.selectedSpeakers || [];
+            
+            displaySpeakerSelectionFromURL(config);
+            displaySpeakerConfigFromURL(config);
+            displayScriptPreview();
+            processScript();
+        }
+
         function displaySpeakerSelectionFromURL(config) {
             const selectionDiv = document.getElementById('speakerSelection');
             const checkboxList = document.getElementById('speakerCheckboxList');
             checkboxList.innerHTML = '';
-            
             allSpeakers.forEach((speaker, index) => {
                 const row = document.createElement('div');
                 row.className = 'speaker-checkbox-row';
@@ -695,7 +670,6 @@
                 row.append(checkbox, label);
                 checkboxList.appendChild(row);
             });
-            
             selectionDiv.style.display = 'block';
         }
 
@@ -703,15 +677,12 @@
             const configDiv = document.getElementById('speakerConfig');
             const speakerList = document.getElementById('speakerList');
             speakerList.innerHTML = '';
-            
             selectedSpeakers.forEach((speaker, index) => {
                 const row = document.createElement('div');
                 row.className = 'speaker-row';
-                
                 const nameDiv = document.createElement('div');
                 nameDiv.className = 'speaker-name';
                 nameDiv.textContent = speaker + ':';
-                
                 const voiceSelect = document.createElement('select');
                 voiceSelect.id = `voice_${index}`;
                 availableVoices.forEach(voice => {
@@ -720,7 +691,6 @@
                     option.textContent = `${voice.name} (${voice.lang})`;
                     voiceSelect.appendChild(option);
                 });
-                
                 const pitchLabel = document.createElement('span');
                 pitchLabel.className = 'range-label';
                 pitchLabel.textContent = 'Pitch:';
@@ -730,7 +700,6 @@
                 pitchRange.min = '0.5';
                 pitchRange.max = '2';
                 pitchRange.step = '0.1';
-                
                 const rateLabel = document.createElement('span');
                 rateLabel.className = 'range-label';
                 rateLabel.textContent = 'Rate:';
@@ -740,28 +709,21 @@
                 rateRange.min = '0.5';
                 rateRange.max = '2';
                 rateRange.step = '0.1';
-                
                 const speakerSettings = config.voiceSettings[speaker];
                 if (speakerSettings) {
-                    // Check if the saved voice exists in the current browser
                     const voiceExists = availableVoices.some(v => v.name === speakerSettings.voiceName);
-                    
                     if (voiceExists) {
                         voiceSelect.value = speakerSettings.voiceName;
                     } else {
-                        // Add a visual warning if the voice is not found
                         console.warn(`Voice "${speakerSettings.voiceName}" not found. Using default voice for ${speaker}.`);
                         voiceSelect.style.border = '2px solid red';
                     }
-                    
                     pitchRange.value = speakerSettings.pitch;
                     rateRange.value = speakerSettings.rate;
                 }
-                
                 row.append(nameDiv, voiceSelect, pitchLabel, pitchRange, rateLabel, rateRange);
                 speakerList.appendChild(row);
             });
-            
             configDiv.style.display = 'block';
         }
 
@@ -774,7 +736,7 @@
         function copyToClipboard() {
             const urlTextarea = document.getElementById('shareableURL');
             urlTextarea.select();
-            urlTextarea.setSelectionRange(0, 99999); // For mobile devices
+            urlTextarea.setSelectionRange(0, 99999);
             try {
                 navigator.clipboard.writeText(urlTextarea.value);
                 alert('URL copied to clipboard!');
@@ -782,7 +744,6 @@
                 alert('Failed to copy URL. Please copy it manually.');
             }
         }
-        
     </script>
 </body>
 </html>
