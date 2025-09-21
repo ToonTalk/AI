@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meta Comment Injector</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #1c1e21; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; margin: 0; padding: 2rem; }
+        main { background-color: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); width: 100%; max-width: 900px; }
+        h1 { color: #1877f2; text-align: center; margin-bottom: 2rem; }
+        .step { margin-bottom: 1.5rem; }
+        label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+        input[type="file"] { width: 100%; padding: 0.75rem; border: 1px solid #dddfe2; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+        .instruction-row { display: grid; grid-template-columns: 1fr 1fr 80px 40px; gap: 10px; align-items: center; margin-bottom: 10px; }
+        .instruction-row input[type="text"] { width: 100%; padding: 0.5rem; border: 1px solid #dddfe2; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+        .instruction-row input[type="color"] { width: 100%; height: 38px; padding: 4px; border-radius: 6px; border: 1px solid #dddfe2; cursor: pointer; }
+        .remove-row-btn, #add-row-btn { background-color: #e4e6eb; color: #333; border: none; border-radius: 6px; font-size: 1.2rem; cursor: pointer; transition: background-color 0.2s; height: 38px; }
+        .remove-row-btn:hover, #add-row-btn:hover { background-color: #d8dbdf; }
+        #add-row-btn { width: 100%; margin-top: 10px; background-color: #e8f3ff; color: #1877f2; font-weight: 600; }
+        #add-row-btn:hover { background-color: #dceafb; }
+        button#process-btn { display: block; width: 100%; padding: 0.8rem 1rem; background-color: #1877f2; color: #fff; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; margin-top: 2rem; }
+        button#process-btn:hover { background-color: #166fe5; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Meta Comment Injector 🖊️</h1>
+        <div class="step">
+            <label for="html-file">1. Upload your HTML file</label>
+            <input type="file" id="html-file" accept=".html,.htm">
+        </div>
+        <div class="step">
+            <label>2. Define text fragments, comments, and colors</label>
+            <div id="instructions-container">
+                </div>
+            <button id="add-row-btn" type="button">+ Add Comment</button>
+        </div>
+        
+        <button id="process-btn">Generate & Download File</button>
+        
+    </main>
+
+    <script>
+        let originalHtmlContent = '';
+        const instructionsContainer = document.getElementById('instructions-container');
+
+        // --- DYNAMIC UI LOGIC ---
+        function createInstructionRow() {
+            const row = document.createElement('div');
+            row.className = 'instruction-row';
+            row.innerHTML = `
+                <input type="text" class="text-fragment" placeholder="Text fragment to find">
+                <input type="text" class="comment-text" placeholder="Text for the comment">
+                <input type="color" class="comment-color" value="#1a73e8">
+                <button type="button" class="remove-row-btn" title="Remove row">×</button>
+            `;
+            instructionsContainer.appendChild(row);
+        }
+
+        document.getElementById('add-row-btn').addEventListener('click', createInstructionRow);
+
+        instructionsContainer.addEventListener('click', (event) => {
+            if (event.target.classList.contains('remove-row-btn')) {
+                event.target.closest('.instruction-row').remove();
+            }
+        });
+
+        createInstructionRow();
+
+        // --- FILE PROCESSING LOGIC ---
+        document.getElementById('html-file').addEventListener('change', event => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    originalHtmlContent = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        document.getElementById('process-btn').addEventListener('click', () => {
+            if (!originalHtmlContent) {
+                alert('Please upload an HTML file first.');
+                return;
+            }
+            
+            const instructionRows = instructionsContainer.querySelectorAll('.instruction-row');
+            const instructions = [];
+            instructionRows.forEach(row => {
+                const sentence = row.querySelector('.text-fragment').value.trim();
+                const comment = row.querySelector('.comment-text').value.trim();
+                const color = row.querySelector('.comment-color').value;
+                if (sentence && comment) {
+                    instructions.push({ sentence, comment, color });
+                }
+            });
+
+            if (instructions.length === 0) {
+                alert('Please provide at least one text fragment and comment.');
+                return;
+            }
+
+            const modifiedHtml = restructureHtmlAndInject(originalHtmlContent, instructions);
+
+            // --- NEW: DIRECT DOWNLOAD LOGIC ---
+            const blob = new Blob([modifiedHtml], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            
+            const tempLink = document.createElement('a');
+            tempLink.href = url;
+            tempLink.download = 'modified_file.html';
+            
+            document.body.appendChild(tempLink);
+            tempLink.click();
+            
+            document.body.removeChild(tempLink);
+            URL.revokeObjectURL(url);
+        });
+
+        function restructureHtmlAndInject(htmlString, instructions) {
+            const bodyRegex = /<body[^>]*>([\s\S]*)<\/body>/i;
+            const bodyMatch = htmlString.match(bodyRegex);
+            if (!bodyMatch || !bodyMatch[1]) {
+                alert("Could not find the <body> content of the uploaded file.");
+                return htmlString;
+            }
+            let originalBodyContent = bodyMatch[1];
+
+            instructions.forEach((inst, index) => {
+                const uniqueId = `mc-target-${Date.now()}-${index}`;
+                const replacementHtml = `<span class="meta-comment-target" id="${uniqueId}" data-comment-text="${inst.comment}" data-comment-color="${inst.color}">${inst.sentence}</span>`;
+                originalBodyContent = originalBodyContent.replace(new RegExp(inst.sentence.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), replacementHtml);
+            });
+
+            const newBody = `
+<body style="margin: 0;">
+    <div id="meta-comment-layout-wrapper">
+        <div id="meta-comment-gutter"></div>
+        <div id="meta-comment-content-wrapper">
+            ${originalBodyContent}
+        </div>
+    </div>
+</body>
+`;
+            
+            let finalHtml = htmlString.replace(bodyRegex, newBody);
+
+            const stylesAndScript = `
+<style>
+    :root { /* Default color, can be overridden */ --meta-comment-color: #1a73e8; }
+    #meta-comment-layout-wrapper { display: flex; align-items: flex-start; }
+    #meta-comment-gutter { width: 220px; flex-shrink: 0; position: relative; }
+    #meta-comment-content-wrapper { flex-grow: 1; min-width: 0; }
+    .meta-comment { position: absolute; right: 10px; display: flex; align-items: center; width: 165px; height: 80px; font-size: 16px; color: var(--meta-comment-color); }
+    .bracket-svg path { stroke: var(--meta-comment-color); }
+    .bracket-svg { position: absolute; left: 100%; transform: translateX(-100%); height: 95px; top: -7.5px; width: 25px; }
+    .comment-text-group { display: flex; align-items: center; position: absolute; left: 5px; top: 50%; transform: translateY(-50%) rotate(-3deg); }
+    .star-svg path { fill: var(--meta-comment-color); stroke: var(--meta-comment-color); }
+    .star-svg { width: 25px; height: 25px; margin-right: 5px; flex-shrink: 0; }
+    .comment-text { font-family: 'Kalam', cursive; font-size: 1.2rem; font-weight: 700; color: var(--meta-comment-color); white-space: nowrap; }
+    .arrow-svg line { stroke: var(--meta-comment-color); }
+    .arrow-svg { position: absolute; left: 110px; top: 58%; width: 35px; height: 10px; transform: rotate(5deg); }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap" rel="stylesheet">
+<script>
+    function drawMetaComments() {
+        const gutter = document.getElementById('meta-comment-gutter');
+        if (!gutter) return;
+        gutter.innerHTML = '';
+        
+        const targets = document.querySelectorAll('.meta-comment-target');
+        
+        targets.forEach(target => {
+            const rect = target.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return;
+
+            const commentText = target.dataset.commentText;
+            const commentColor = target.dataset.commentColor;
+            const commentEl = document.createElement('div');
+            commentEl.className = 'meta-comment';
+            
+            const verticalCenter = rect.top + window.scrollY + (rect.height / 2);
+            commentEl.style.top = \`\${verticalCenter - 40}px\`;
+            commentEl.style.setProperty('--meta-comment-color', commentColor);
+
+            commentEl.innerHTML = \`
+                <svg class="bracket-svg" viewBox="0 0 30 100" preserveAspectRatio="none"><path d="M 25,2 C 10,2, 5,30, 5,50 C 5,70, 10,98, 25,98" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+                <div class="comment-text-group">
+                    <svg class="star-svg" viewBox="0 0 50 50"><path d="M25 2 L31.1 18.4 L48.5 18.4 L34.7 28.5 L40.9 44.9 L25 34.7 L9.1 44.9 L15.3 28.5 L1.5 18.4 L18.9 18.4 Z" stroke-width="2"/></svg>
+                    <span class="comment-text">\${commentText}</span>
+                </div>
+                <svg class="arrow-svg" viewBox="0 0 40 10"><line x1="0" y1="5" x2="35" y2="5" stroke-width="3" stroke-linecap="round"/></svg>
+            \`;
+            gutter.appendChild(commentEl);
+        });
+    }
+    
+    window.addEventListener('load', () => setTimeout(drawMetaComments, 100));
+    window.addEventListener('resize', drawMetaComments);
+<\/script>
+    `;
+            
+            if (!htmlString.includes('id="meta-comment-layout-wrapper"')) {
+                finalHtml = finalHtml.replace('</head>', `${stylesAndScript}</head>`);
+            }
+            
+            return finalHtml;
+        }
+
+    </script>
+</body>
+</html>
