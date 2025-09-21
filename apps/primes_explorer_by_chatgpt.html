@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Primes Explorer — Grid · Square Spiral · Hex Spiral</title>
+<style>
+  :root{
+    --bg:#0e1220; --panel:#151a2c; --ink:#eaf0ff; --muted:#96a3b8; --accent:#7bdcff;
+    --prime:#8ef6a0; --comp:#ff5a91; --curr:#ffd166; --b1:#232a45; --b2:#2c3556;
+    --bar:#3ad0ff; --barbg:#0b1020; --semi:#ffc456;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15.5px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial}
+  header{padding:16px 20px;border-bottom:1px solid var(--b1);background:linear-gradient(180deg,rgba(255,255,255,.03),transparent)}
+  h1{margin:0;font-size:20px;letter-spacing:.2px}
+  main{display:grid;grid-template-columns:380px 1fr;gap:18px;padding:18px}
+  @media (max-width:1080px){ main{grid-template-columns:1fr} }
+
+  .card{background:var(--panel);border:1px solid var(--b1);border-radius:16px;box-shadow:0 6px 28px rgba(0,0,0,.25)}
+  .controls{padding:14px 14px 10px}
+  .controls h2{margin:0 0 8px;font-size:16px;color:var(--accent)}
+  .row{display:flex;align-items:center;gap:10px;margin:8px 0}
+  .row label{min-width:160px;color:var(--muted)}
+  .row input[type="number"]{width:160px;padding:6px 8px;border-radius:10px;border:1px solid var(--b2);background:#0b1020;color:var(--ink)}
+  .row select{width:160px;padding:6px 8px;border-radius:10px;border:1px solid var(--b2);background:#0b1020;color:var(--ink)}
+  .row input[type="range"]{width:100%}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  button{cursor:pointer;border:1px solid var(--b2);background:#0b1020;color:var(--ink);padding:8px 12px;border-radius:12px}
+  button.primary{background:linear-gradient(180deg,#1b2547,#121a38);border-color:#425ab0}
+  button:disabled{opacity:.55;cursor:not-allowed}
+
+  .wrap{padding:10px}
+  .gridHeader{display:flex;justify-content:space-between;align-items:center;margin:0 10px 8px 10px;color:var(--muted);flex-wrap:wrap;gap:10px}
+  .grid{display:grid;gap:4px;grid-auto-rows:42px;align-content:start;padding:10px}
+  .cell{display:grid;place-items:center;border-radius:10px;border:1px solid var(--b2);font-weight:600}
+  .cell.small{font-size:12px}
+  .cell.prime{background:linear-gradient(180deg, rgba(142,246,160,.18), transparent); color:var(--prime); border-color:rgba(142,246,160,.45)}
+  .cell.comp{background:linear-gradient(180deg, rgba(255,90,145,.16), transparent); color:#ffc7da; border-color:rgba(255,90,145,.45)}
+  .cell.semi{background:linear-gradient(180deg, rgba(255,196,86,.2), transparent); color:#ffe2a8; border-color:rgba(255,196,86,.55)}
+  .cell.curr{outline:2px solid var(--curr); box-shadow:0 0 0 4px rgba(255,209,102,.15)}
+  .cell.tiny{font-size:0;padding:0}
+
+  .viz{position:relative; overflow:auto; background:rgba(0,0,0,.15); border-top:1px dashed var(--b2); border-radius:12px; margin:10px; min-height:420px}
+  .tile{position:absolute; display:grid; place-items:center; border:1px solid var(--b2); border-radius:8px; font-weight:700; background:#0b1020}
+  .tile.tiny{font-size:0}
+  .tile.prime{background:linear-gradient(180deg, rgba(142,246,160,.18), transparent); color:var(--prime); border-color:rgba(142,246,160,.45)}
+  .tile.comp{background:linear-gradient(180deg, rgba(255,90,145,.16), transparent); color:#ffc7da; border-color:rgba(255,90,145,.45)}
+  .tile.semi{background:linear-gradient(180deg, rgba(255,196,86,.2), transparent); color:#ffe2a8; border-color:rgba(255,196,86,.55)}
+  .tile.curr{outline:2px solid var(--curr)}
+
+  /* Hex clip for hex spiral (pointy-top) */
+  .tile.hex{
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    border-radius:0;
+  }
+
+  /* Solid-color mode when Fit All Cells is ON */
+  body.solid .cell, body.solid .tile { border:none; }
+  body.solid .cell.prime, body.solid .tile.prime { background: var(--prime); color: transparent; }
+  body.solid .cell.comp,  body.solid .tile.comp  { background: var(--comp);  color: transparent; }
+  body.solid .cell.semi,  body.solid .tile.semi  { background: var(--semi);  color: transparent; }
+  body.solid .cell.curr, body.solid .tile.curr { outline:2px solid var(--curr); box-shadow:none; }
+
+  .legend{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:14px;height:14px;border-radius:6px;border:1px solid var(--b2)}
+  .dot.pr{background:linear-gradient(180deg, rgba(142,246,160,.6), rgba(142,246,160,.25))}
+  .dot.co{background:linear-gradient(180deg, rgba(255,90,145,.6), rgba(255,90,145,.2))}
+  .dot.cu{background:var(--curr)}
+
+  .stats{padding:12px 14px;border-top:1px solid var(--b1);color:var(--muted)}
+  .stats strong{color:var(--ink)}
+  .explain{padding:14px 16px 10px;color:#cfe1ff}
+  .muted{color:var(--muted)}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono","Courier New",monospace}
+
+  /* Progress UI */
+  .progressWrap{padding:10px 14px 14px;border-top:1px solid var(--b1)}
+  .progressBar{height:12px;background:var(--barbg);border:1px solid var(--b2);border-radius:999px;overflow:hidden}
+  .progressFill{height:100%;width:0%;background:linear-gradient(90deg,#4fe8ff,#6ecbff);transition:width .12s ease}
+  .progressInfo{display:flex;justify-content:space-between;gap:10px;color:#cfe1ff;margin-top:6px;font-size:13px;flex-wrap:wrap}
+
+  details.tests{margin:12px 18px 0}
+  .testlog{padding:12px 14px 16px;border-top:1px solid var(--b1);color:var(--muted)}
+  .testlog .pass{color:#26d07c}.testlog .fail{color:#ff6b6b}
+</style>
+</head>
+<body>
+<header>
+  <h1>Primes Explorer — Grid · Square Spiral · Hex Spiral</h1>
+  <div class="muted">Explore primes in any interval. Choose a view, Step/Play or Finish, and export a report.</div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="controls">
+      <h2>Sieve Controls</h2>
+      <div class="row">
+        <label for="startN">Start (inclusive)</label>
+        <input id="startN" type="number" min="1" max="2000000" step="1" value="1"/>
+      </div>
+      <div class="row">
+        <label for="maxN">Max number (N)</label>
+        <input id="maxN" type="number" min="10" max="2000000" step="1" value="40"/>
+      </div>
+      <div class="row">
+        <label for="cols">Columns (Grid)</label>
+        <input id="cols" type="number" min="5" max="100" step="1" value="10"/>
+      </div>
+
+      <div class="row">
+        <label for="viewMode">View</label>
+        <select id="viewMode">
+          <option value="grid" selected>Grid</option>
+          <option value="ulam">Square spiral (Ulam)</option>
+          <option value="hex">Hex spiral</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="fitGrid">Fit all cells (hide labels)</label>
+        <input id="fitGrid" type="checkbox" />
+      </div>
+      <div class="row">
+        <label for="speed">Play speed</label>
+        <input id="speed" type="range" min="0" max="1000" value="500"/>
+      </div>
+      <div class="row">
+        <label for="highlightSemi">Highlight semiprimes</label>
+        <input id="highlightSemi" type="checkbox"/>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="btnInit">Reset & Build</button>
+        <button id="btnStep">Step</button>
+        <button id="btnPlay">Play</button>
+        <button id="btnPause" disabled>Pause</button>
+        <button id="btnFinish">Finish</button>
+        <button id="btnDownloadHtml">Download HTML report</button>
+      </div>
+
+      <div class="stats" id="stats">
+        <div>Current base: <strong class="mono" id="statBase">–</strong> · Next multiple: <strong class="mono" id="statNext">–</strong></div>
+        <div>Marked composites: <strong id="statComp">0</strong> · Primes found: <strong id="statPrime">0</strong> · π(N): <strong id="statPi">0</strong></div>
+      </div>
+
+      <div class="progressWrap">
+        <div class="progressBar"><div class="progressFill" id="progressFill"></div></div>
+        <div class="progressInfo">
+          <div id="progressText">Ready.</div>
+          <div id="progressMini" class="mono"></div>
+        </div>
+      </div>
+
+      <div class="explain">
+        <strong>How it works:</strong> We sieve globally up to N; the view renders only the selected interval
+        <span class="mono" id="lblRangeExplain">[1, 40]</span>. Spiral layouts place numbers; coloring comes from the sieve.
+      </div>
+
+      <details class="tests">
+        <summary>Developer tests</summary>
+        <div class="testlog" id="testlog">
+          <button id="btnRunTests">Run tests</button>
+          <div id="testResults" style="margin-top:10px"></div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="card wrap">
+    <div class="gridHeader">
+      <div class="legend">
+        <span><span class="dot pr"></span> prime</span>
+        <span><span class="dot co"></span> composite</span>
+        <span><span class="dot cu"></span> current base</span>
+        <span><span class="dot" style="background:linear-gradient(180deg, rgba(255,196,86,.6), rgba(255,196,86,.25))"></span> semiprime</span>
+      </div>
+      <div class="muted">Range = <span id="lblRange">[1, 40]</span> · columns = <span id="lblCols">10</span></div>
+    </div>
+
+    <!-- Grid mode -->
+    <div class="grid" id="grid" aria-live="polite"></div>
+
+    <!-- Spiral modes -->
+    <div class="viz" id="viz" style="display:none"></div>
+  </section>
+</main>
+
+<script>
+/* ============ Utilities ============ */
+const $ = (sel) => document.querySelector(sel);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const clamp = (x,min,max)=>Math.max(min, Math.min(max, x));
+const fmt = (n)=> new Intl.NumberFormat().format(n);
+
+/* ============ State ============ */
+let A=1, N=40, cols=10, isPlaying=false, base=2, nextMultiple=0;
+let marked=[], isPrime=[], isSemiPrime=[], spf=[];
+let gridReady=false;
+
+/* ============ Elements ============ */
+const gridEl = $('#grid');
+const vizEl  = $('#viz');
+const statBase=$('#statBase'), statNext=$('#statNext'), statComp=$('#statComp'), statPrime=$('#statPrime'), statPi=$('#statPi');
+const lblRange=$('#lblRange'), lblRangeExplain=$('#lblRangeExplain'), lblCols=$('#lblCols');
+
+const startNInput=$('#startN'), maxNInput=$('#maxN'), colsInput=$('#cols'), speedInput=$('#speed');
+const btnInit=$('#btnInit'), btnStep=$('#btnStep'), btnPlay=$('#btnPlay'), btnPause=$('#btnPause'), btnFinish=$('#btnFinish'), btnDownloadHtml=$('#btnDownloadHtml'), btnRunTests=$('#btnRunTests');
+
+const viewMode=$('#viewMode'), fitGrid=$('#fitGrid');
+
+const progressFill=$('#progressFill'), progressText=$('#progressText'), progressMini=$('#progressMini');
+
+let effectiveCols = cols;
+
+/* ============ Solid-mode toggle ============ */
+function setSolidMode(on){
+  document.body.classList.toggle('solid', !!on);
+}
+
+/* ============ Sieve & Semiprimes ============ */
+function buildSPF(limit){
+  spf = new Array(limit+1).fill(0);
+  for(let i=2;i<=limit;i++) if(spf[i]===0){
+    spf[i]=i;
+    if(i*i<=limit) for(let m=i*i; m<=limit; m+=i) if(spf[m]===0) spf[m]=i;
+  }
+}
+function buildSemiprimes(limit){
+  isSemiPrime = new Array(limit+1).fill(false);
+  for(let n=4;n<=limit;n++){
+    const a=spf[n]; if(!a || a===n) continue;
+    const b=n/a; if(Number.isInteger(b) && spf[b]===b) isSemiPrime[n]=true;
+  }
+}
+
+/* ============ Reset / Labels ============ */
+function resetState(){
+  const rawA = parseInt(startNInput.value||1,10);
+  const rawN = parseInt(maxNInput.value||40,10);
+  N = clamp(rawN, 10, 2000000);
+  A = clamp(rawA, 1, N);
+  cols = clamp(parseInt(colsInput.value||10), 5, 100);
+  base = 2; nextMultiple=0; isPlaying=false;
+  marked = Array(N+1).fill(false);
+  isPrime = Array(N+1).fill(true);
+  if(N>=0) isPrime[0]=false; if(N>=1) isPrime[1]=false;
+  buildSPF(N); buildSemiprimes(N);
+  updateInfoLabels();
+  buildView();
+  updateStats();
+  updateButtons();
+  setProgress(0,'Ready.','');
+}
+function updateInfoLabels(){
+  lblRange.textContent=`[${A}, ${N}]`;
+  lblRangeExplain.textContent=`[${A}, ${N}]`;
+  lblCols.textContent=cols;
+}
+
+/* ============ Grid builder ============ */
+function buildGrid(){
+  gridReady=false;
+  gridEl.innerHTML='';
+  const frag=document.createDocumentFragment();
+  const hide = !!(fitGrid && fitGrid.checked);
+  for(let v=A; v<=N; v++){
+    const d=document.createElement('div');
+    d.className='cell small'; d.dataset.value=v; d.textContent= hide? '' : v;
+    if(hide) d.classList.add('tiny');
+    frag.appendChild(d);
+  }
+  gridEl.appendChild(frag);
+  applyGridLayout();
+  gridReady=true; paintGrid();
+}
+function applyGridLayout(){
+  const hide = !!(fitGrid && fitGrid.checked);
+  setSolidMode(hide);
+  if(!hide){
+    gridEl.style.gridTemplateColumns=`repeat(${cols}, minmax(36px,1fr))`;
+    gridEl.style.gridAutoRows='42px';
+    for(const d of gridEl.children){ if(d){ d.classList.remove('tiny'); if(!d.textContent) d.textContent = d.dataset.value; } }
+    effectiveCols=cols; lblCols.textContent=String(effectiveCols);
+    return;
+  }
+  const card = gridEl.parentElement;
+  const cardRect = card.getBoundingClientRect();
+  const pad=28;
+  const availW = Math.max(140, cardRect.width - 2*pad);
+  const availH = Math.max(240, Math.min(900, window.innerHeight - cardRect.top - pad));
+  const gap=4, aspect=availW/availH, count=(N-A+1);
+  let bestCols=Math.max(1, Math.floor(Math.sqrt(count*aspect)));
+  let bestRows=Math.ceil(count/bestCols);
+  let cellSize=Math.floor(Math.min((availW-gap*(bestCols-1))/bestCols, (availH-gap*(bestRows-1))/bestRows));
+  if(cellSize<4) cellSize=4;
+  gridEl.style.gridTemplateColumns=`repeat(${bestCols}, ${cellSize}px)`;
+  gridEl.style.gridAutoRows=`${cellSize}px`;
+  for(const d of gridEl.children){ if(d){ d.textContent=''; d.classList.add('tiny'); } }
+  effectiveCols=bestCols; lblCols.textContent=String(effectiveCols);
+}
+
+/* ============ Spiral helpers ============ */
+// Square (Ulam) spiral integer coordinates
+function ulamPositions(A,N){
+  const dirs=[[1,0],[0,-1],[-1,0],[0,1]]; // R,U,L,D
+  let x=0,y=0, stepLen=1, dirIdx=0, stepsDone=0, changes=0;
+  const res=new Map();
+  const min={x:0,y:0}, max={x:0,y:0};
+  for(let n=1; n<=N; n++){
+    if(n>=A){ res.set(n,[x,y]); if(x<min.x)min.x=x; if(y<min.y)min.y=y; if(x>max.x)max.x=x; if(y>max.y)max.y=y; }
+    x += dirs[dirIdx][0]; y += dirs[dirIdx][1]; stepsDone++;
+    if(stepsDone===stepLen){ stepsDone=0; dirIdx=(dirIdx+1)%4; changes++; if(changes%2===0) stepLen++; }
+  }
+  return {res, min, max};
+}
+
+// ===== Hex helpers (pointy-top axial, centered spiral) =====
+function ringForN(n){
+  if(n <= 1) return 0;
+  let r = Math.ceil((-1 + Math.sqrt(1 + 4*(n-1)/3)) / 2);
+  while (1 + 3*r*(r+1) < n) r++;
+  return r;
+}
+function hexCoords(n){
+  if(n === 1) return { q:0, r:0 };
+  const R = ringForN(n);
+  const prevTotal = 1 + 3*(R-1)*R;
+  let offset = n - prevTotal - 1; // 0..6R-1
+  let q = R, a = 0;               // start at (R,0)
+  const dirs = [ [-1,1], [-1,0], [0,-1], [1,-1], [1,0], [0,1] ];
+  for (let side=0; side<6 && offset>0; side++){
+    const step = Math.min(offset, R);
+    q += dirs[side][0]*step;
+    a += dirs[side][1]*step;
+    offset -= step;
+  }
+  return { q, r:a };
+}
+function hexAxialToPixelUnit(q, r){
+  return { x: Math.sqrt(3) * (q + r/2), y: 1.5 * r };
+}
+function hexSpiralPositions(A, N){
+  const res = new Map();
+  let min = {x: Infinity, y: Infinity}, max = {x: -Infinity, y: -Infinity};
+  for (let n = A; n <= N; n++){
+    const {q, r} = hexCoords(n);
+    const {x, y} = hexAxialToPixelUnit(q, r);
+    res.set(n, [x, y]);
+    if (x < min.x) min.x = x;
+    if (y < min.y) min.y = y;
+    if (x > max.x) max.x = x;
+    if (y > max.y) max.y = y;
+  }
+  return { res, min, max };
+}
+
+/* ============ Spiral builders (DOM, no canvas) ============ */
+function buildView(){
+  const mode = viewMode.value;
+  const hide = !!(fitGrid && fitGrid.checked);
+  setSolidMode(hide);
+  if(mode==='grid'){
+    gridEl.style.display='';
+    vizEl.style.display='none';
+    buildGrid();
+    return;
+  }
+  gridEl.style.display='none';
+  vizEl.style.display='';
+  buildSpiral(mode);
+}
+
+function paintTile(el, v){
+  el.classList.remove('prime','comp','curr','semi','hex');
+  if(v===base) el.classList.add('curr');
+  if(marked[v]){ el.classList.add('comp'); if($('#highlightSemi')?.checked && isSemiPrime[v]) el.classList.add('semi'); }
+  else if(isPrime[v]) el.classList.add('prime');
+}
+
+function buildSpiral(mode){
+  vizEl.innerHTML='';
+  const count = N-A+1;
+  if(count<=0) return;
+  const pad=20;
+  const rect = vizEl.getBoundingClientRect();
+  const availW = Math.max(200, rect.width - 2*pad);
+  const availH = Math.max(260, rect.height - 2*pad);
+
+  let positions, min, max, tileW, tileH, gap, hexScale_s, shrink=1;
+
+  if(mode==='ulam'){
+    ({res:positions,min,max} = ulamPositions(A,N));
+    gap = 2;
+    tileW = tileH = Math.floor(Math.min(
+      48,
+      Math.max(6, Math.min(availW/(max.x-min.x+1+gap), availH/(max.y-min.y+1+gap)))
+    ));
+  } else { // hex
+    ({res:positions, min, max} = hexSpiralPositions(A, N));
+
+    // unit spans (axial->pixel with s=1)
+    const unitWidth  = (max.x - min.x) + Math.sqrt(3);
+    const unitHeight = (max.y - min.y) + 2;
+
+    // choose uniform pixel scale s
+    const s = Math.max(6, Math.floor(Math.min(availW / unitWidth, availH / unitHeight)));
+    hexScale_s = s;
+
+    // shrink tiles so they don't touch; clip as true hexes
+    shrink = 0.90;  // <- adjust if you want more/less gap
+    tileW = Math.round(Math.sqrt(3) * s * shrink);
+    tileH = Math.round(2 * s * shrink);
+    gap = 0;
+  }
+
+  const hideLabels = !!(fitGrid && fitGrid.checked);
+
+  for(let v=A; v<=N; v++){
+    const pos = positions.get(v);
+    if(!pos) continue;
+    const [px,py] = pos;
+    const tile = document.createElement('div');
+    tile.className='tile';
+    tile.textContent = hideLabels ? '' : v;
+    if(hideLabels) tile.classList.add('tiny');
+
+    if(viewMode.value==='hex'){
+      tile.classList.add('hex');               // clip to hexagon
+      tile.style.width  = tileW + 'px';
+      tile.style.height = tileH + 'px';
+      const x = (px - min.x) * hexScale_s;
+      const y = (py - min.y) * hexScale_s;
+      tile.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    } else {
+      tile.style.width = tileW+'px';
+      tile.style.height = tileH+'px';
+      const x = (px - min.x) * (tileW + gap);
+      const y = (py - min.y) * (tileH + gap);
+      tile.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    }
+
+    paintTile(tile, v);
+    tile.dataset.value = v;
+    vizEl.appendChild(tile);
+  }
+
+  // Resize container to fit content
+  const tiles = vizEl.children;
+  if(tiles.length){
+    let maxRight=0, maxBottom=0;
+    for(const t of tiles){
+      const tr = t.style.transform.match(/translate\(([^p]+)px,\s*([^p]+)px\)/);
+      const tx = tr? parseFloat(tr[1]):0, ty = tr? parseFloat(tr[2]):0;
+      const right = tx + t.offsetWidth;
+      const bottom= ty + t.offsetHeight;
+      if(right>maxRight) maxRight=right;
+      if(bottom>maxBottom) maxBottom=bottom;
+    }
+    vizEl.style.minHeight = Math.min(1600, Math.max(420, Math.ceil(maxBottom)+40))+'px';
+  }
+
+  paintGrid();
+}
+
+/* ============ Coloring refresh per view ============ */
+function paintGrid(){
+  const mode=viewMode.value;
+  if(mode==='grid'){
+    if(!gridReady) return;
+    const cells=gridEl.children; if(!cells || cells.length<(N-A+1)) return;
+    let comp=0, primes=0;
+    for(let idx=0,v=A; v<=N; v++, idx++){
+      const d=cells[idx]; if(!d) continue;
+      d.classList.remove('prime','comp','curr','semi','hex');
+      if(v===base) d.classList.add('curr');
+      if(marked[v]){ d.classList.add('comp'); if($('#highlightSemi')?.checked && isSemiPrime[v]) d.classList.add('semi'); comp++; }
+      else if(isPrime[v]){ d.classList.add('prime'); primes++; }
+    }
+    statComp.textContent=fmt(comp); statPrime.textContent=fmt(primes); statPi.textContent=fmt(primes);
+  }else{
+    const tiles = vizEl.children;
+    let comp=0, primes=0;
+    for(const t of tiles){
+      const v=parseInt(t.dataset.value,10);
+      paintTile(t, v);
+      if(marked[v]) comp++; else if(isPrime[v]) primes++;
+    }
+    statComp.textContent=fmt(comp); statPrime.textContent=fmt(primes); statPi.textContent=fmt(primes);
+  }
+}
+
+/* ============ Sieve stepping / play / finish ============ */
+function updateStats(){
+  statBase.textContent = (base<=N? base : '–');
+  statNext.textContent = (nextMultiple>0? nextMultiple : '–');
+  paintGrid();
+  updateProgress();
+}
+function nextBase(){
+  for(let k=base+1;k<=N;k++){
+    if(!marked[k]){ base=k; nextMultiple=base*base; return; }
+  }
+  base = N+1;
+}
+function step(){
+  if(base*base > N){ isPlaying=false; updateButtons(); finalizePrimes(); setProgress(100,'Done.',''); updateStats(); return; }
+  if(nextMultiple===0){
+    if(marked[base] || !isPrime[base]){ nextBase(); updateStats(); return; }
+    nextMultiple = base*base; updateStats(); return;
+  }
+  if(nextMultiple <= N){
+    if(!marked[nextMultiple]){ marked[nextMultiple]=true; isPrime[nextMultiple]=false; }
+    nextMultiple += base; updateStats(); return;
+  } else { nextMultiple=0; nextBase(); updateStats(); return; }
+}
+function finalizePrimes(){ for(let k=2;k<=N;k++) isPrime[k] = !marked[k]; paintGrid(); }
+async function playLoop(){
+  isPlaying = true; updateButtons();
+  while(isPlaying){
+    step(); if(!(base*base <= N)) break;
+    const delay = 1020 - parseInt(speedInput.value||500); await sleep(delay);
+  }
+  isPlaying=false; updateButtons();
+}
+function updateButtons(){ btnPlay.disabled=isPlaying; btnPause.disabled=!isPlaying; }
+
+/* ============ Progress UI ============ */
+function setProgress(percent, text, mini){
+  const p=clamp(percent,0,100);
+  progressFill.style.width=p+'%';
+  progressText.textContent=text;
+  progressMini.textContent=mini||'';
+}
+function updateProgress(){
+  if(base*base > N){ setProgress(100,'Done.', `π(N)≈${statPi.textContent}, comps=${statComp.textContent}`); return; }
+  const maxBase=Math.floor(Math.sqrt(N));
+  const baseSpan=Math.max(0, maxBase-1);
+  const baseIndex=Math.max(0, Math.min(base, maxBase)) - 2;
+  let coarse = baseSpan>0 ? baseIndex/baseSpan : 1;
+  let refine=0;
+  if(base*base<=N){
+    const totalForBase = Math.floor((N - base*base)/base) + 1;
+    let doneForBase=0;
+    if(nextMultiple===0) doneForBase=0; else doneForBase = Math.floor((Math.min(nextMultiple, N+base) - (base*base))/base);
+    if(totalForBase>0) refine = clamp(doneForBase/totalForBase,0,1);
+    const percent = Math.round(100*clamp(((baseIndex+refine)/(baseSpan||1)),0,1));
+    const mini = `base ${base}: ${doneForBase}/${totalForBase} · comps=${statComp.textContent} · primes≈${statPi.textContent}`;
+    setProgress(percent, `Sieving up to √N (≈ ${maxBase})`, mini);
+  } else {
+    const percent = Math.round(100*coarse);
+    setProgress(percent, `Sieving up to √N (≈ ${maxBase})`, `base ${base} · comps=${statComp.textContent}`);
+  }
+}
+// Non-blocking Finish with ~1 Hz updates
+async function finishAll(){
+  isPlaying=true; updateButtons();
+  const UPDATE_EVERY_MS=1000; let last=performance.now();
+  while(base*base<=N){
+    step();
+    const now=performance.now();
+    if(now-last>=UPDATE_EVERY_MS){ updateStats(); await sleep(0); last=now; }
+  }
+  finalizePrimes(); updateStats();
+  setProgress(100,'Done.', `π(N)≈${statPi.textContent}, comps=${statComp.textContent}`);
+  isPlaying=false; updateButtons();
+}
+
+/* ============ Report (pure sieve + interval) ============ */
+function buildPrimesReportHTML(){
+  function primesUpTo(M){
+    const arr=new Array(M+1).fill(true); arr[0]=false; arr[1]=false;
+    for(let p=2;p*p<=M;p++) if(arr[p]) for(let m=p*p; m<=M; m+=p) arr[m]=false;
+    const list=[]; for(let i=2;i<=M;i++) if(arr[i]) list.push(i);
+    return list;
+  }
+  function spfUpTo(M){
+    const spf=new Array(M+1).fill(0);
+    for(let i=2;i<=M;i++) if(spf[i]===0){ spf[i]=i; if(i*i<=M) for(let m=i*i;m<=M;m+=i) if(spf[m]===0) spf[m]=i; }
+    return spf;
+  }
+  const primesAll=primesUpTo(N);
+  const primes=primesAll.filter(p=>p>=A);
+  const pcountAll=primesAll.length, pcountInRange=primes.length;
+  const largest=pcountAll?primesAll[pcountAll-1]:'none';
+  const density=(pcountAll/N);
+  const approx=(N>1)?(N/Math.log(N)):0;
+  const approxErr=(pcountAll-approx);
+
+  let twinCount=0; const twinPairs=[];
+  for(let i=0;i<pcountAll-1;i++){
+    if(primesAll[i+1]-primesAll[i]===2){
+      twinCount++;
+      const a=primesAll[i], b=primesAll[i+1];
+      if(twinPairs.length<12 && a>=A && b<=N) twinPairs.push(`(${a}, ${b})`);
+    }
+  }
+  const spf=spfUpTo(N);
+  let semiCount=0; for(let n=Math.max(4,A); n<=N; n++){ const a=spf[n]; if(a && a!==n){ const b=n/a; if(Number.isInteger(b) && spf[b]===b) semiCount++; } }
+  const gaps=[]; for(let i=0;i<pcountAll-1;i++) gaps.push(primesAll[i+1]-primesAll[i]);
+  const maxGap=gaps.length?Math.max(...gaps):0;
+  const maxGapAt=(()=>{
+    if(!gaps.length) return '—';
+    const g=maxGap, idx=gaps.indexOf(g);
+    return `${primesAll[idx]}→${primesAll[idx+1]}`;
+  })();
+  const avgGap=gaps.length?(gaps.reduce((a,b)=>a+b,0)/gaps.length):0;
+  const lastDigit={1:0,3:0,7:0,9:0};
+  for(const p of primes){ if(p>5){ const d=p%10; if(lastDigit[d]!=null) lastDigit[d]++; } }
+  let mod6_1=0, mod6_5=0; for(const p of primes){ if(p>=5){ const r=p%6; if(r===1) mod6_1++; else if(r===5) mod6_5++; } }
+  const sumMod1e9p7 = primes.reduce((acc,p)=> (acc+p)%1000000007,0);
+  let xor=0; for(const p of primes) xor^=p;
+  const esc = (s)=>String(s).replace(/[&<>]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;' }[m]));
+  const now = new Date().toLocaleString();
+  const styles=`
+    :root{--bg:#0e1220;--panel:#151a2c;--ink:#eaf0ff;--muted:#96a3b8;--accent:#7bdcff;--b1:#232a45;--b2:#2c3556}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15.5px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    header{padding:18px 22px;border-bottom:1px solid var(--b1);background:linear-gradient(180deg,rgba(255,255,255,.03),transparent)}
+    h1{margin:0 0 2px 0;font-size:22px}
+    main{padding:20px;display:grid;gap:18px}
+    .card{background:var(--panel);border:1px solid var(--b1);border-radius:14px;box-shadow:0 6px 28px rgba(0,0,0,.25)}
+    .sec{padding:14px 16px}
+    h2{margin:0 0 10px;color:var(--accent);font-size:18px}
+    .row{padding:10px 0;border-bottom:1px dashed var(--b2)}
+    .row strong{font-weight:800}
+    details{margin:8px 0;border-left:3px solid var(--b2);background:#0b1020;border-radius:8px}
+    details>summary{list-style:none;cursor:pointer;padding:8px 12px;font-weight:600;color:#cfe1ff;position:relative}
+    details>summary::before{content:"▸";position:absolute;left:8px;transform:translateX(-4px)}
+    details[open]>summary::before{content:"▾"}
+    details>div{padding:0 12px 12px 12px;color:#dbe6ff}
+    .flow{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+    .badge{border:1px solid var(--b2);border-radius:999px;padding:3px 10px;background:#0b1020}
+    .code{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#0b1020;border:1px solid var(--b1);border-radius:10px;padding:10px;margin-top:8px}
+  `;
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Primes Report — [${esc(A)}, ${esc(N)}]</title><style>${styles}</style></head>
+<body>
+<header><h1>Primes Report</h1>
+<div class="muted">Generated ${esc(now)} · range = <strong>[${esc(A)}, ${esc(N)}]</strong> · π(N) = <strong>${esc(pcountAll)}</strong> · primes in range = <strong>${esc(pcountInRange)}</strong></div>
+</header>
+<main>
+<section class="card sec">
+  <h2>Summary</h2>
+  <div class="row"><strong>${esc(largest)}</strong> is the largest prime ≤ N.</div>
+  <details><summary>Explain: largest prime ≤ N</summary><div>The last prime not exceeding N is useful for discussing prime gaps and distribution near N.</div></details>
+  <div class="row"><strong>${(density*100).toFixed(3)}%</strong> of numbers ≤ N are prime (π(N) = ${esc(pcountAll)}).</div>
+  <details><summary>Explain: prime density</summary><div>Prime density is the proportion of integers ≤ N that are prime; by the Prime Number Theorem it is ≈ 1/ln N for large N.</div></details>
+  <div class="row"><strong>${approx.toFixed(3)}</strong> is Gauss's N/log N; the error π(N) − N/log N is <strong>${approxErr.toFixed(3)}</strong>.</div>
+  <details><summary>Explain: Gauss approximation</summary><div><strong>Gauss conjectured</strong> (and later mathematicians rigorously proved) that <span class="code">π(N) ~ N/log N</span>. Li(N) improves the estimate, but N/log N is a simple baseline.</div></details>
+</section>
+<section class="card sec">
+  <h2>Patterns &amp; counts (in range [${esc(A)}, ${esc(N)}])</h2>
+  <div class="row"><strong>${esc(twinCount)}</strong> twin prime pairs up to N. Examples in range:${twinPairs.length?`<div class="flow">${twinPairs.map(s=>`<span class="badge mono">${esc(s)}</span>`).join('')}</div>`:' <em>none</em>'}</div>
+  <details><summary>Explain: twin primes</summary><div>Pairs of primes differing by 2. It remains open whether infinitely many exist.</div></details>
+  <div class="row"><strong>${esc(semiCount)}</strong> semiprimes (Ω(n)=2) in [${esc(A)}, ${esc(N)}].</div>
+  <details><summary>Explain: semiprimes</summary><div>Semiprimes have exactly two prime factors counted with multiplicity (e.g., 6=2×3, 9=3×3).</div></details>
+  <div class="row"><strong>${esc(maxGap)}</strong> is the maximum prime gap ≤ N; it occurs at <strong class="mono">${esc(maxGapAt)}</strong>. The average gap is <strong>${avgGap.toFixed(3)}</strong>.</div>
+  <details><summary>Explain: prime gaps</summary><div>Gaps are differences between consecutive primes. Heuristics suggest the average gap near N is about ln N; record gaps grow faster.</div></details>
+  <div class="row"><strong>Last digits</strong> in range (≥ 7): 1→${esc(lastDigit[1])}, 3→${esc(lastDigit[3])}, 7→${esc(lastDigit[7])}, 9→${esc(lastDigit[9])}.</div>
+  <div class="row"><strong>mod 6 residues</strong> in range (p ≥ 5): ≡1 → ${esc(mod6_1)}, ≡5 → ${esc(mod6_5)}.</div>
+  <details><summary>Explain: residues</summary><div>Except 2 and 5, base-10 primes end with 1, 3, 7, or 9. For p ≥ 5, primes are ≡ ±1 (mod 6).</div></details>
+  <div class="row"><strong>Checksums (range):</strong> sum(primes) mod 1e9+7 = <strong>${esc(sumMod1e9p7)}</strong>, XOR = <strong>${esc(xor)}</strong>.</div>
+  <details><summary>Explain: checksums</summary><div>
+    Two order-independent fingerprints for the primes in the interval (useful for confirming another run produced the same set; not cryptographic).
+    <br><strong>Modular sum:</strong> <code>S = (∑ p) mod 1,000,000,007</code> — overflow-safe; collisions ≈ 1/M for random differences.
+    <br><strong>Bitwise XOR:</strong> <code>X = p₁ ⊕ p₂ ⊕ ··· ⊕ p_k</code> — order-independent; changing one element flips bits; <code>a ⊕ a = 0</code>.
+  </div></details>
+</section>
+<section class="card sec">
+  <h2>All primes in [${esc(A)}, ${esc(N)}]</h2>
+  <div class="code">${esc(primes.join(', '))}</div>
+</section>
+</main></body></html>`;
+  return html;
+}
+function downloadPrimesHTML(){
+  const html=buildPrimesReportHTML();
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`primes_report_[${A}_${N}].html`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ============ Reference π(N) ============ */
+function sieveCount(M){
+  if(M<2) return 0; const arr=new Array(M+1).fill(true); arr[0]=false; arr[1]=false;
+  for(let p=2;p*p<=M;p++) if(arr[p]) for(let m=p*p;m<=M;m+=p) arr[m]=false;
+  let c=0; for(let i=2;i<=M;i++) if(arr[i]) c++; return c;
+}
+
+/* ============ Events ============ */
+btnInit.addEventListener('click', ()=>{ isPlaying=false; resetState(); });
+btnStep.addEventListener('click', step);
+btnPlay.addEventListener('click', playLoop);
+btnPause.addEventListener('click', ()=>{ isPlaying=false; updateButtons(); });
+btnFinish.addEventListener('click', ()=>{ finishAll(); });
+btnDownloadHtml.addEventListener('click', downloadPrimesHTML);
+btnRunTests.addEventListener('click', ()=>runTests());
+
+fitGrid.addEventListener('change', ()=>{ buildView(); });
+viewMode.addEventListener('change', ()=>{ buildView(); });
+
+startNInput.addEventListener('change', ()=>{ isPlaying=false; resetState(); });
+maxNInput.addEventListener('change', ()=>{ isPlaying=false; resetState(); });
+colsInput.addEventListener('change', ()=>{ cols=clamp(parseInt(colsInput.value||10),5,100); if(viewMode.value==='grid'){ buildGrid(); } });
+
+window.addEventListener('resize', ()=>{ if(viewMode.value==='grid' && fitGrid.checked) applyGridLayout(); else if(viewMode.value!=='grid') buildSpiral(viewMode.value); });
+
+/* ============ Tests (originals + hex sanity) ============ */
+function logResult(container, name, ok, extra=''){
+  const div=document.createElement('div');
+  div.innerHTML=`<strong>${name}:</strong> <span class="${ok?'pass':'fail'}">${ok?'PASS':'FAIL'}</span> ${extra?`<span class="muted">${extra}</span>`:''}`;
+  container.appendChild(div);
+}
+async function runUITestPiMatches(M){
+  const prevN=maxNInput.value, prevA=startNInput.value;
+  startNInput.value='1'; maxNInput.value=String(M);
+  resetState(); while(base*base<=N) step(); finalizePrimes();
+  const uiPi=parseInt(statPi.textContent,10); const expected=sieveCount(M);
+  startNInput.value=prevA; maxNInput.value=prevN; resetState();
+  return {ok:uiPi===expected, uiPi, expected};
+}
+async function runTests(){
+  const out=$('#testResults'); out.innerHTML='';
+  startNInput.value='1'; maxNInput.value='40'; colsInput.value='10'; viewMode.value='grid'; resetState();
+  logResult(out,'Grid builds cells = N-A+1', gridEl.children.length===(N-A+1), `cells=${gridEl.children.length}`);
+  logResult(out,'Reference π(30)=10', sieveCount(30)===10, `got ${sieveCount(30)}`);
+  logResult(out,'Reference π(100)=25', sieveCount(100)===25, `got ${sieveCount(100)}`);
+  for(const M of [50,200,997,1000]){
+    const {ok,uiPi,expected}=await runUITestPiMatches(M);
+    logResult(out,`UI π(${M}) matches (A=1)`,ok,`(ui=${uiPi}, ref=${expected})`);
+  }
+  // Spiral presence tests
+  viewMode.value='ulam'; buildView();
+  logResult(out,'Ulam spiral renders tiles', vizEl.children.length===(N-A+1), `tiles=${vizEl.children.length}`);
+  viewMode.value='hex'; buildView();
+  logResult(out,'Hex spiral renders tiles', vizEl.children.length===(N-A+1), `tiles=${vizEl.children.length}`);
+  // Interval test
+  startNInput.value='1000'; maxNInput.value='1020'; viewMode.value='grid'; resetState();
+  const expectedCount=[1009,1013,1019].length;
+  const uiRangeCount=[...gridEl.children].filter(c=>c.classList.contains('prime')).length;
+  logResult(out,'Range [1000,1020] shows only 3 primes', uiRangeCount===expectedCount, `(ui=${uiRangeCount})`);
+  // Report lists only primes
+  startNInput.value='1'; maxNInput.value='30'; resetState();
+  const html = buildPrimesReportHTML(); const expected = [2,3,5,7,11,13,17,19,23,29].join(', ');
+  logResult(out,'Report lists only primes (A=1)', html.includes(expected));
+  // Hex sanity
+  const c1 = hexCoords(1);  logResult(out, 'hexCoords(1) = (0,0)', c1.q===0 && c1.r===0, `(${c1.q},${c1.r})`);
+  const c8 = ringForN(8);   logResult(out, 'ringForN(8)=2', c8===2, `r=${c8}`);
+  // Progress after finish
+  startNInput.value='1'; maxNInput.value='200'; resetState(); await finishAll();
+  const width=parseFloat(getComputedStyle(progressFill).width), parentWidth=parseFloat(getComputedStyle(progressFill.parentElement).width);
+  logResult(out,'Progress completes after Finish', width/parentWidth>0.98);
+}
+
+/* ============ Init ============ */
+resetState();
+</script>
+</body>
+</html>
