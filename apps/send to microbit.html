@@ -444,7 +444,7 @@ while True:
                 let url, headers, body;
                 switch (provider) {
                     case 'gemini':
-                        url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${key}`;
+                        url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
                         headers = { 'Content-Type': 'application/json' };
                         body = {
                             contents: [{ parts: [{ text: prompt }] }],
@@ -464,7 +464,7 @@ while True:
                     case 'chatgpt':
                         url = 'https://api.openai.com/v1/chat/completions';
                         headers = { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' };
-                        body = { model: 'gpt-4o-mini', messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: prompt }] };
+                        body = { model: 'gpt-5', messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: prompt }] };
                         break;
                     default:
                         throw new Error("Unknown AI provider.");
@@ -488,6 +488,9 @@ while True:
                 console.error("AI Generation Error:", error);
                  if (provider === 'chatgpt' && error.message.includes('401')) {
                     throw new Error("The provided OpenAI API key is incorrect or invalid. Please check your key at platform.openai.com and save it again.");
+                }
+                 if (provider === 'claude' && error instanceof TypeError) {
+                    throw new Error("Failed to fetch. This is likely a CORS error. The Anthropic API is not designed to be called directly from a browser and requires a server-side proxy, which cannot be implemented in this app.");
                 }
                 throw error; // Re-throw for other cases
             }
