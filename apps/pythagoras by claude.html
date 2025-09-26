@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Pythagorean Theorem Explorer</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        function PythagoreanExplorer() {
+            const [ratio, setRatio] = useState(0.75); // a/b ratio, default 0.75 (120/160)
+            
+            const b = 160;
+            const a = b * ratio;
+            const c = Math.sqrt(a * a + b * b);
+            const squareSize = a + b;
+            const margin = 50;
+            
+            const triangleColors = {
+                1: { fill: '#3b82f6', stroke: '#1e40af', name: 'blue' },
+                2: { fill: '#ef4444', stroke: '#b91c1c', name: 'red' },
+                3: { fill: '#10b981', stroke: '#047857', name: 'green' },
+                4: { fill: '#f59e0b', stroke: '#d97706', name: 'orange' }
+            };
+            
+            const [triangles, setTriangles] = useState([
+                { id: 1, x: margin, y: margin, rotation: 0 },
+                { id: 2, x: margin, y: margin, rotation: 0 },
+                { id: 3, x: margin, y: margin, rotation: 0 },
+                { id: 4, x: margin, y: margin, rotation: 0 }
+            ]);
+            
+            const [dragging, setDragging] = useState(null);
+            const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+            const handleMouseDown = (e, id) => {
+                const triangle = triangles.find(t => t.id === id);
+                const svg = e.currentTarget.closest('svg').getBoundingClientRect();
+                setOffset({
+                    x: e.clientX - svg.left - triangle.x,
+                    y: e.clientY - svg.top - triangle.y
+                });
+                setDragging(id);
+            };
+
+            const handleMouseMove = (e) => {
+                if (dragging === null) return;
+                
+                const rect = e.currentTarget.getBoundingClientRect();
+                const newX = e.clientX - rect.left - offset.x;
+                const newY = e.clientY - rect.top - offset.y;
+                
+                setTriangles(prev => prev.map(t => 
+                    t.id === dragging ? { ...t, x: newX, y: newY } : t
+                ));
+            };
+
+            const handleMouseUp = () => {
+                setDragging(null);
+            };
+
+            const rotateTriangle = (id) => {
+                setTriangles(prev => prev.map(t => 
+                    t.id === id ? { ...t, rotation: (t.rotation + 90) % 360 } : t
+                ));
+            };
+
+            return (
+                <div className="p-8 max-w-6xl mx-auto">
+                    <h1 className="text-3xl font-bold text-center mb-2">Interactive Pythagorean Theorem Explorer</h1>
+                    <p className="text-center text-gray-600 mb-6">
+                        Drag the triangles and rotate them to discover why a² + b² = c²
+                    </p>
+
+                    <div className="flex gap-8 items-start justify-center flex-wrap">
+                        <div className="flex flex-col items-center">
+                            <div className="mb-4 text-sm text-gray-600 text-center">
+                                <p>Right triangle: a = {a.toFixed(1)}px, b = {b}px</p>
+                                <p>Hypotenuse: c = {c.toFixed(1)}px</p>
+                                <p>Square side: a + b = {squareSize.toFixed(1)}px</p>
+                            </div>
+
+                            <div className="mb-4 w-full max-w-md">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Triangle Shape (a/b ratio): {ratio.toFixed(2)}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="0.3"
+                                    max="1.5"
+                                    step="0.05"
+                                    value={ratio}
+                                    onChange={(e) => setRatio(parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                />
+                                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span>Tall & thin</span>
+                                    <span>Wide & flat</span>
+                                </div>
+                            </div>
+                            
+                            <svg
+                                width={squareSize + margin * 2}
+                                height={squareSize + margin * 2}
+                                className="border-2 border-gray-300 bg-gray-50"
+                                style={{ cursor: dragging ? 'grabbing' : 'default' }}
+                                onMouseMove={handleMouseMove}
+                                onMouseUp={handleMouseUp}
+                                onMouseLeave={handleMouseUp}
+                            >
+                                {/* Outer square */}
+                                <rect
+                                    x={margin}
+                                    y={margin}
+                                    width={squareSize}
+                                    height={squareSize}
+                                    fill="none"
+                                    stroke="#9ca3af"
+                                    strokeWidth="3"
+                                />
+                                
+                                {/* Grid lines at a and b divisions */}
+                                <line x1={margin} y1={margin + a} x2={margin + squareSize} y2={margin + a} stroke="#d1d5db" strokeWidth="1" strokeDasharray="5,5" />
+                                <line x1={margin + a} y1={margin} x2={margin + a} y2={margin + squareSize} stroke="#d1d5db" strokeWidth="1" strokeDasharray="5,5" />
+                                <line x1={margin} y1={margin + b} x2={margin + squareSize} y2={margin + b} stroke="#d1d5db" strokeWidth="1" strokeDasharray="5,5" />
+                                <line x1={margin + b} y1={margin} x2={margin + b} y2={margin + squareSize} stroke="#d1d5db" strokeWidth="1" strokeDasharray="5,5" />
+
+                                {triangles.map(tri => (
+                                    <g
+                                        key={tri.id}
+                                        transform={`translate(${tri.x}, ${tri.y}) rotate(${tri.rotation} ${a/2} ${b/2})`}
+                                        onMouseDown={(e) => handleMouseDown(e, tri.id)}
+                                        style={{ cursor: 'grab' }}
+                                    >
+                                        <polygon
+                                            points={`0,0 ${a},0 ${a},${b}`}
+                                            fill={triangleColors[tri.id].fill}
+                                            stroke={triangleColors[tri.id].stroke}
+                                            strokeWidth="2"
+                                            opacity="0.7"
+                                        />
+                                        
+                                        {/* Label for side a (bottom horizontal) */}
+                                        <text
+                                            x={a/2}
+                                            y={-8}
+                                            textAnchor="middle"
+                                            className="text-sm font-bold"
+                                            fill="#1f2937"
+                                            style={{ pointerEvents: 'none' }}
+                                        >
+                                            a
+                                        </text>
+                                        
+                                        {/* Label for side b (right vertical) */}
+                                        <text
+                                            x={a + 15}
+                                            y={b/2}
+                                            textAnchor="middle"
+                                            className="text-sm font-bold"
+                                            fill="#1f2937"
+                                            style={{ pointerEvents: 'none' }}
+                                        >
+                                            b
+                                        </text>
+                                        
+                                        {/* Label for side c (hypotenuse) */}
+                                        <text
+                                            x={a/2 - 20}
+                                            y={b/2 + 20}
+                                            textAnchor="middle"
+                                            className="text-sm font-bold"
+                                            fill="#1f2937"
+                                            style={{ pointerEvents: 'none' }}
+                                        >
+                                            c
+                                        </text>
+                                    </g>
+                                ))}
+                            </svg>
+                        </div>
+
+                        <div className="flex flex-col gap-4">
+                            <div className="bg-white border-2 border-gray-300 rounded-lg p-6">
+                                <h2 className="text-xl font-bold mb-3">Controls</h2>
+                                <ul className="space-y-2 text-sm text-gray-700">
+                                    <li><strong>Drag:</strong> Click and drag triangles</li>
+                                    <li><strong>Rotate:</strong> Click the buttons below</li>
+                                    <li><strong>Slider:</strong> Change triangle shape</li>
+                                    <li><strong>Hint:</strong> Try to arrange them in two different ways!</li>
+                                </ul>
+                            </div>
+
+                            <div className="bg-white border-2 border-gray-300 rounded-lg p-6">
+                                <h2 className="text-xl font-bold mb-3">Rotate Triangles</h2>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {triangles.map(tri => (
+                                        <button
+                                            key={tri.id}
+                                            onClick={() => rotateTriangle(tri.id)}
+                                            className="flex items-center justify-center gap-2 px-3 py-2 text-white rounded hover:opacity-80 transition-opacity"
+                                            style={{ backgroundColor: triangleColors[tri.id].fill }}
+                                        >
+                                            ↻ {triangleColors[tri.id].name.charAt(0).toUpperCase() + triangleColors[tri.id].name.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6">
+                                <h2 className="text-xl font-bold mb-2 text-yellow-800">The Key Insight</h2>
+                                <p className="text-sm text-yellow-900">
+                                    The same 4 triangles can be arranged in a (a+b)×(a+b) square to show either:
+                                </p>
+                                <ul className="text-sm text-yellow-900 mt-2 space-y-1">
+                                    <li>• One tilted square with area <strong>c²</strong> (hypotenuse)</li>
+                                    <li>• Two squares with areas <strong>a²</strong> and <strong>b²</strong> (legs)</li>
+                                </ul>
+                                <p className="text-sm text-yellow-900 mt-2">
+                                    Since the triangles are the same, <strong>c² = a² + b²</strong>!
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PythagoreanExplorer />);
+    </script>
+</body>
+</html>
