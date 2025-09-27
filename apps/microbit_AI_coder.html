@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>micro:bit MicroPython Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .fira-code {
+            font-family: 'Fira Code', monospace;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        .error-highlight { background-color: #7f1d1d; color: #fecaca; padding: 2px 4px; border-radius: 3px; font-weight: bold; }
+        .error-border { border-left: 3px solid #ef4444; padding-left: 8px; }
+    </style>
+</head>
+<body class="h-full text-slate-200 antialiased">
+    <div id="app" class="flex flex-col h-screen p-4 md:p-6 lg:p-8 gap-6 max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex-shrink-0">
+            <h1 class="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                micro:bit <span class="text-sky-400">MicroPython</span> Editor
+            </h1>
+            <p class="text-slate-400 mt-1">
+                Write MicroPython code, connect your micro:bit via Web Serial, and run it directly from your browser.
+            </p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
+
+            <!-- Code Editor -->
+            <div class="flex-1 flex flex-col min-h-0">
+                <label for="code-editor" class="text-sm font-medium text-slate-300 mb-2">Code Editor</label>
+                <div class="flex-1 bg-slate-800 rounded-lg shadow-inner overflow-hidden">
+                    <textarea id="code-editor" class="w-full h-full p-4 bg-transparent text-slate-200 resize-none outline-none fira-code text-sm leading-relaxed" spellcheck="false"># Example starter program
+from microbit import *
+
+while True:
+    display.scroll("Hello")
+    sleep(800)
+</textarea>
+                </div>
+            </div>
+
+            <!-- Controls and Output -->
+            <div class="lg:w-1/3 flex flex-col gap-6">
+                <!-- Controls -->
+                <div class="bg-slate-800 p-4 rounded-lg shadow-lg">
+                    <h2 class="text-lg font-semibold text-white mb-4">Controls</h2>
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-sm font-medium text-slate-400">Status:</span>
+                        <div id="status-indicator" class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-700">
+                            <div id="status-dot" class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                            <span id="status-text" class="text-sm font-medium text-slate-300">Disconnected</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3">
+                        <button id="ai-chat-button" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2">
+                            ✨ AI Code Gen
+                        </button>
+                        <button id="connect-button" class="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M3.5 5.5a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2a.5.5 0 0 1 .5-.5m3 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2a.5.5 0 0 1 .5-.5m3 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2a.5.5 0 0 1 .5-.5m-6 4.5a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2a.5.5 0 0 1 .5-.5m3 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2a.5.5 0 0 1 .5-.5m3 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2a.5.5 0 0 1 .5-.5"/><path d="M2 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zM1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z"/></svg>
+                            Connect micro:bit
+                        </button>
+                        <button id="run-button" disabled class="w-full bg-green-600 hover:bg-green-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+                            Run Code
+                        </button>
+                        <button id="stop-button" disabled class="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/></svg>
+                            Stop Program
+                        </button>
+                        <button id="disconnect-button" disabled class="w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/></svg>
+                            Disconnect
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Output Terminal -->
+                <div class="flex-1 flex flex-col min-h-0 bg-slate-800 p-4 rounded-lg shadow-lg">
+                    <div class="flex-shrink-0 flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold text-white">Device Output</h2>
+                         <div class="flex items-center gap-4">
+                            <button id="fix-with-ai-button" class="hidden text-xs bg-amber-600 hover:bg-amber-500 text-white font-semibold py-1 px-3 rounded-md">Fix with AI</button>
+                            <button id="clear-output-button" class="text-xs text-slate-400 hover:text-sky-400">Clear</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 bg-black rounded-md overflow-y-auto">
+                        <pre id="output" class="p-3 text-xs fira-code text-slate-300 whitespace-pre-wrap break-words"></pre>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Web Serial Support Message -->
+        <div id="serial-support-msg" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+             <div class="bg-slate-800 rounded-lg p-8 max-w-md text-center shadow-2xl">
+                <h2 class="text-2xl font-bold text-red-500 mb-4">Browser Not Supported</h2>
+                <p class="text-slate-300">This application requires the <b>Web Serial API</b>, which is not supported by your current browser. Please use a recent version of Google Chrome, Microsoft Edge, or Opera on a desktop computer.</p>
+            </div>
+        </div>
+        
+        <!-- Error Modal -->
+        <div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+            <div class="bg-slate-800 w-full max-w-md rounded-xl shadow-2xl flex flex-col">
+                <header class="flex items-center justify-between p-4 border-b border-slate-700">
+                    <h2 class="text-xl font-bold text-red-400">Code Error Detected</h2>
+                    <button id="error-modal-close" class="text-slate-400 hover:text-white text-3xl leading-none">×</button>
+                </header>
+                <div class="p-4">
+                    <div class="bg-red-900 bg-opacity-30 border border-red-500 rounded-lg p-3 mb-4">
+                        <h3 class="text-red-300 font-semibold mb-2">Error Message:</h3>
+                        <pre id="error-display" class="text-red-200 text-sm whitespace-pre-wrap font-mono"></pre>
+                    </div>
+                    <p class="text-slate-300 text-sm mb-4">
+                        Your micro:bit code encountered an error. Would you like AI assistance to diagnose and fix the problem?
+                    </p>
+                    <div class="flex gap-3">
+                        <button id="ai-fix-button" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-md transition-colors">
+                            Get AI Help
+                        </button>
+                        <button id="dismiss-error-button" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-md transition-colors">
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- AI Chat Modal -->
+        <div id="ai-chat-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-40">
+            <div class="bg-slate-800 w-full max-w-2xl h-[80vh] rounded-xl shadow-2xl flex flex-col">
+                <header class="flex items-center justify-between p-4 border-b border-slate-700 gap-4">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-xl font-bold text-white">AI Code Gen</h2>
+                        <span id="ai-status-badge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-700 text-slate-300">Not Ready</span>
+                    </div>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <button id="download-history-button" class="text-xs bg-green-600 hover:bg-green-500 text-white font-semibold py-2 px-3 rounded-md transition-colors whitespace-nowrap">
+                            📥 Download History
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <label for="ai-provider-select" class="text-sm font-medium text-slate-300 whitespace-nowrap">Provider:</label>
+                            <select id="ai-provider-select" class="bg-slate-700 text-slate-200 rounded-md px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="nano">Gemini Nano (On-Device)</option>
+                                <option value="gemini">Gemini (Cloud)</option>
+                                <option value="claude">Claude (Cloud)</option>
+                                <option value="chatgpt">ChatGPT (Cloud)</option>
+                            </select>
+                        </div>
+                        <button id="ai-modal-close-button" class="text-slate-400 hover:text-white text-3xl leading-none">×</button>
+                    </div>
+                </header>
+                 <div id="ai-settings-area" class="p-4 border-b border-slate-700">
+                    <div id="api-key-group" class="hidden w-full">
+                        <label for="api-key-input" id="api-key-label" class="text-sm font-medium text-slate-300 mb-1 block">API Key:</label>
+                        <div class="flex gap-2">
+                            <input type="password" id="api-key-input" placeholder="Enter your API key" class="flex-1 bg-slate-900 text-slate-200 rounded-md px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <button id="save-api-key-button" class="bg-green-600 hover:bg-green-500 text-white font-bold px-4 py-1.5 rounded-md text-sm">Save</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="ai-chat-history" class="flex-1 p-4 overflow-y-auto space-y-4">
+                    <!-- Chat messages will be appended here -->
+                </div>
+                <footer class="p-4 border-t border-slate-700">
+                    <div class="mb-3">
+                        <div class="flex items-center gap-4 mb-2">
+                            <span class="text-sm font-medium text-slate-300">Mode:</span>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="ai-mode" value="code" id="code-mode" class="text-blue-600" checked>
+                                <span class="text-sm text-slate-200">Generate Code</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="ai-mode" value="question" id="question-mode" class="text-blue-600">
+                                <span class="text-sm text-slate-200">Ask Question</span>
+                            </label>
+                        </div>
+                        <div id="mode-description" class="text-xs text-slate-400">
+                            Generate MicroPython code for your micro:bit
+                        </div>
+                    </div>
+                    <form id="ai-prompt-form" class="flex gap-3">
+                        <input type="text" id="ai-prompt-input" placeholder="e.g., show a beating heart on the display" class="flex-1 bg-slate-700 text-slate-200 rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="button" id="voice-input-button" class="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-600 text-white font-bold px-3 py-2 rounded-md transition-colors" title="Voice input">
+                            🎤
+                        </button>
+                        <button type="submit" id="ai-prompt-send" class="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white font-bold px-4 py-2 rounded-md transition-colors">Send</button>
+                    </form>
+                </footer>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // --- DOM Elements ---
+        const connectButton = document.getElementById('connect-button');
+        const disconnectButton = document.getElementById('disconnect-button');
+        const runButton = document.getElementById('run-button');
+        const stopButton = document.getElementById('stop-button');
+        const clearOutputButton = document.getElementById('clear-output-button');
+        const codeEditor = document.getElementById('code-editor');
+        const output = document.getElementById('output');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const serialSupportMsg = document.getElementById('serial-support-msg');
+        const fixWithAiButton = document.getElementById('fix-with-ai-button');
+
+        // --- Error Modal DOM Elements ---
+        const errorModal = document.getElementById('error-modal');
+        const errorModalClose = document.getElementById('error-modal-close');
+        const errorDisplay = document.getElementById('error-display');
+        const aiFixButton = document.getElementById('ai-fix-button');
+        const dismissErrorButton = document.getElementById('dismiss-error-button');
+
+        // --- AI Chat DOM Elements ---
+        const aiChatButton = document.getElementById('ai-chat-button');
+        const aiChatModal = document.getElementById('ai-chat-modal');
+        const aiModalCloseButton = document.getElementById('ai-modal-close-button');
+        const aiStatusBadge = document.getElementById('ai-status-badge');
+        const aiChatHistory = document.getElementById('ai-chat-history');
+        const aiPromptForm = document.getElementById('ai-prompt-form');
+        const aiPromptInput = document.getElementById('ai-prompt-input');
+        const aiPromptSend = document.getElementById('ai-prompt-send');
+        const aiProviderSelect = document.getElementById('ai-provider-select');
+        const apiKeyGroup = document.getElementById('api-key-group');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const saveApiKeyButton = document.getElementById('save-api-key-button');
+        const apiKeyLabel = document.getElementById('api-key-label');
+        const downloadHistoryButton = document.getElementById('download-history-button');
+        const codeModeRadio = document.getElementById('code-mode');
+        const questionModeRadio = document.getElementById('question-mode');
+        const modeDescription = document.getElementById('mode-description');
+        const voiceInputButton = document.getElementById('voice-input-button');
+
+        // --- Web Serial State ---
+        let port = null;
+        let reader = null;
+        let writer = null;
+        const textEncoder = new TextEncoder();
+
+        // --- AI State ---
+        let aiSession = null;
+        let aiStatus = 'uninitialized';
+        let selectedProvider = 'nano';
+        let apiKey = '';
+        let lastRunCode = '';
+        let isStopping = false;
+        let conversationHistory = [];
+        let fullChatHistory = [];
+        let currentErrorData = null;
+
+        // --- Speech Recognition State ---
+        let recognition = null;
+        let isListening = false;
+
+        const SYSTEM_PROMPT = "You are an expert in MicroPython programming for the BBC micro:bit. When asked to generate code, provide concise, complete, and correct MicroPython code snippets enclosed in markdown code blocks (```python ... ```). When asked questions about micro:bit programming, provide clear explanations and examples. Always consider conversation history for context. Pay attention to data types - convert numbers to strings using str() before passing to functions like display.scroll().";
+
+        const NANO_SYSTEM_PROMPT = `You are a micro:bit MicroPython expert. 
+
+FOR CODE GENERATION:
+Generate ONLY micro:bit compatible code using the microbit library.
+
+CRITICAL RULES FOR MICRO:BIT:
+1. ALWAYS start with: from microbit import *
+2. NEVER use: import machine, import time, or any other imports
+3. Use sleep(milliseconds) NOT time.sleep()
+4. Use temperature() function directly - it returns degrees Celsius as integer
+5. Use display.scroll(str(value)) to show text on LED matrix
+6. Use display.show(Image.HEART) for icons
+
+MICRO:BIT SPECIFIC FUNCTIONS (use these ONLY):
+- Temperature sensor: temperature() - returns integer degrees Celsius
+- Accelerometer: accelerometer.get_x(), accelerometer.get_y(), accelerometer.get_z()
+- Compass: compass.heading() 
+- Buttons: button_a.is_pressed(), button_b.is_pressed()
+- Display: display.scroll("text"), display.show(Image.HEART)
+- Sleep: sleep(1000) for 1 second delay
+- Pins: pin0.read_analog(), pin0.write_digital(1)
+
+NEVER use machine.ADC, machine.Pin, or any low-level hardware access!
+
+FOR QUESTIONS:
+Provide clear, helpful explanations about micro:bit programming. Use examples when helpful.
+
+EXAMPLE TEMPERATURE CODE:
+\`\`\`python
+from microbit import *
+
+while True:
+    temp = temperature()
+    display.scroll(str(temp) + "C")
+    sleep(1000)
+\`\`\`
+
+Always use real micro:bit functions like shown above.`;
+
+        const SYSTEM_PROMPT_FOR_MODE = (provider, isCodeMode) => {
+            if (provider === 'nano') {
+                return NANO_SYSTEM_PROMPT;
+            }
+            return SYSTEM_PROMPT;
+        };
+
+        // --- Speech Recognition Functions ---
+        const initializeSpeechRecognition = () => {
+            // Check for speech recognition support
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                voiceInputButton.style.display = 'none';
+                log('Speech recognition not supported in this browser.', 'info');
+                return false;
+            }
+
+            // Check if we're on HTTPS or localhost (required for speech recognition)
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                voiceInputButton.style.display = 'none';
+                log('Speech recognition requires HTTPS or localhost.', 'info');
+                return false;
+            }
+
+            try {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+                recognition.maxAlternatives = 1;
+
+                recognition.onstart = () => {
+                    isListening = true;
+                    voiceInputButton.textContent = '🔴';
+                    voiceInputButton.title = 'Listening... Click to stop';
+                    voiceInputButton.classList.remove('bg-purple-600', 'hover:bg-purple-500');
+                    voiceInputButton.classList.add('bg-red-600', 'hover:bg-red-500', 'animate-pulse');
+                    log('🎤 Listening for speech...', 'info');
+                };
+
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    const confidence = event.results[0][0].confidence;
+                    aiPromptInput.value = transcript;
+                    log(`🎤 Speech recognized: "${transcript}" (confidence: ${Math.round(confidence * 100)}%)`, 'success');
+                };
+
+                recognition.onend = () => {
+                    isListening = false;
+                    voiceInputButton.textContent = '🎤';
+                    voiceInputButton.title = 'Voice input';
+                    voiceInputButton.classList.remove('bg-red-600', 'hover:bg-red-500', 'animate-pulse');
+                    voiceInputButton.classList.add('bg-purple-600', 'hover:bg-purple-500');
+                    log('🎤 Speech recognition ended.', 'info');
+                };
+
+                recognition.onerror = (event) => {
+                    isListening = false;
+                    voiceInputButton.textContent = '🎤';
+                    voiceInputButton.title = 'Voice input';
+                    voiceInputButton.classList.remove('bg-red-600', 'hover:bg-red-500', 'animate-pulse');
+                    voiceInputButton.classList.add('bg-purple-600', 'hover:bg-purple-500');
+                    
+                    switch(event.error) {
+                        case 'not-allowed':
+                            log('🎤 Microphone access denied. Please allow microphone access and try again.', 'error');
+                            break;
+                        case 'no-speech':
+                            log('🎤 No speech detected. Try speaking closer to the microphone.', 'info');
+                            break;
+                        case 'audio-capture':
+                            log('🎤 No microphone found. Please check your microphone connection.', 'error');
+                            break;
+                        case 'network':
+                            log('🎤 Network error during speech recognition.', 'error');
+                            break;
+                        default:
+                            log(`🎤 Speech recognition error: ${event.error}`, 'error');
+                    }
+                };
+
+                log('🎤 Speech recognition initialized successfully.', 'success');
+                return true;
+            } catch (error) {
+                voiceInputButton.style.display = 'none';
+                log(`🎤 Failed to initialize speech recognition: ${error.message}`, 'error');
+                return false;
+            }
+        };
+
+        const toggleVoiceInput = () => {
+            console.log('Voice input button clicked, isListening:', isListening, 'recognition:', !!recognition);
+            
+            if (!recognition) {
+                log('🎤 Speech recognition not available. Please use a supported browser (Chrome, Edge, Safari) on HTTPS.', 'error');
+                return;
+            }
+
+            try {
+                if (isListening) {
+                    log('🎤 Stopping speech recognition...', 'info');
+                    recognition.stop();
+                } else {
+                    log('🎤 Starting speech recognition...', 'info');
+                    recognition.start();
+                }
+            } catch (error) {
+                log(`🎤 Error toggling speech recognition: ${error.message}`, 'error');
+            }
+        };
+
+        // --- UI Update Functions ---
+        const log = (message, type = 'info') => {
+            const color = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-sky-400';
+            output.innerHTML += `<span class="${color}">> ${message}\n</span>`;
+            output.scrollTop = output.scrollHeight;
+        };
+        
+        const logDeviceData = (data) => {
+             const hasError = !isStopping && (data.includes('Traceback') || data.includes('Error:') || data.includes('SyntaxError') || data.includes('NameError') || data.includes('TypeError') || data.includes('ValueError'));
+             
+             if (hasError) {
+                 const errorDiv = document.createElement('div');
+                 errorDiv.className = 'error-border';
+                 errorDiv.textContent = data;
+                 output.appendChild(errorDiv);
+                 
+                 const errorMatch = data.match(/(.*Error:.*|.*Exception:.*)/);
+                 const cleanError = errorMatch ? errorMatch[1].trim() : data.trim();
+                 
+                 currentErrorData = {
+                     fullOutput: output.textContent,
+                     errorMessage: cleanError,
+                     code: lastRunCode || codeEditor.value
+                 };
+                 
+                 errorDisplay.textContent = cleanError;
+                 errorModal.classList.remove('hidden');
+             } else {
+                 output.textContent += data;
+             }
+             
+             output.scrollTop = output.scrollHeight;
+        };
+
+        const updateUIForConnection = () => {
+            statusText.textContent = 'Connected';
+            statusDot.classList.remove('bg-red-500', 'animate-pulse');
+            statusDot.classList.add('bg-green-500');
+            connectButton.disabled = true;
+            disconnectButton.disabled = false;
+            runButton.disabled = false;
+            stopButton.disabled = false;
+            log('micro:bit connected successfully!', 'success');
+        };
+
+        const updateUIForDisconnection = () => {
+            statusText.textContent = 'Disconnected';
+            statusDot.classList.remove('bg-green-500');
+            statusDot.classList.add('bg-red-500', 'animate-pulse');
+            connectButton.disabled = false;
+            disconnectButton.disabled = true;
+            runButton.disabled = true;
+            stopButton.disabled = true;
+        };
+
+        // --- Web Serial Core Functions ---
+        async function connect() {
+            try {
+                if (!('serial' in navigator)) {
+                    serialSupportMsg.classList.remove('hidden');
+                    throw new Error('Web Serial API not available');
+                }
+                log('Requesting serial port...');
+                port = await navigator.serial.requestPort({
+                    filters: [{ usbVendorId: 0x0d28 }]
+                });
+
+                log('Opening port at 115200 baud...');
+                await port.open({ 
+                    baudRate: 115200,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: 'none',
+                    flowControl: 'none'
+                });
+
+                startReadLoop();
+                writer = port.writable.getWriter();
+                updateUIForConnection();
+
+                navigator.serial.addEventListener('disconnect', (e) => {
+                    if (e.port === port) {
+                        log('Device was disconnected.', 'error');
+                        disconnect();
+                    }
+                });
+
+            } catch (err) {
+                if (err.message.includes('Failed to open serial port')) {
+                    log('Connection failed: The serial port is already in use.', 'error');
+                    log('Please close any other program using the micro:bit (e.g., Mu, Thonny) and try again.', 'info');
+                } else {
+                    log(`Connection failed: ${err.message}`, 'error');
+                }
+                await disconnect();
+            }
+        }
+
+        async function disconnect() {
+            try {
+                if (reader) { await reader.cancel(); reader = null; }
+                if (writer) { if (port && port.writable) { writer.releaseLock(); } writer = null; }
+                if (port) { if (port.readable) { await port.close(); } port = null; }
+            } catch (err) { console.error("Error during disconnect:", err); } 
+            finally { updateUIForDisconnection(); log('Disconnected.'); }
+        }
+
+        async function startReadLoop() {
+            try {
+                const readerStream = port.readable.pipeThrough(new TextDecoderStream());
+                reader = readerStream.getReader();
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    if (value) logDeviceData(value);
+                }
+            } catch (err) {
+                if (!err.message.includes('The user aborted a request.')) { log(`Read error: ${err.message}`, 'error'); }
+            }
+        }
+
+        async function sendString(str) {
+            if (!writer) return;
+            const data = textEncoder.encode(str);
+            await writer.write(data);
+        }
+
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        async function runCode() {
+            if (!port) { log('Cannot run code, device not connected.', 'error'); return; }
+            
+            const code = codeEditor.value;
+            if (!code.trim()) {
+                log('No code to run', 'error');
+                return;
+            }
+
+            fixWithAiButton.classList.add('hidden');
+            lastRunCode = code;
+            
+            const formattedCode = code.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '\r\n');
+            log('Entering paste mode...');
+            try {
+                await sendString('\x03'); await sleep(120);
+                await sendString('\x05'); await sleep(80);
+                log('Sending code...');
+                await sendString(formattedCode); await sleep(80);
+                log('Executing...');
+                await sendString('\x04'); await sleep(150);
+                await sendString('\x02');
+            } catch (err) { log(`Failed to run code: ${err.message}`, 'error'); await disconnect(); }
+        }
+
+        async function stopCode() {
+            if (!port) {
+                log('Not connected.', 'error');
+                return;
+            }
+            isStopping = true;
+            log('Stopping program and resetting REPL...');
+            try {
+                await sendString('\x03');
+                await sleep(100);
+                await sendString('\x02');
+                log('Stop signal sent. Device should be ready.', 'info');
+            } catch (err) {
+                log(`Failed to send stop signal: ${err.message}`, 'error');
+                await disconnect();
+            } finally {
+                setTimeout(() => { isStopping = false; }, 500);
+            }
+        }
+
+        // --- Error Modal Functions ---
+        const closeErrorModal = () => {
+            errorModal.classList.add('hidden');
+            currentErrorData = null;
+        };
+
+        const sendErrorToAI = async () => {
+            if (!currentErrorData) return;
+            
+            const fixPrompt = `I'm having trouble with my micro:bit MicroPython code. Here's what happened:
+
+ORIGINAL CODE:
+\`\`\`python
+${currentErrorData.code}
+\`\`\`
+
+ERROR OUTPUT:
+\`\`\`
+${currentErrorData.fullOutput.split('\n').slice(-20).join('\n')}
+\`\`\`
+
+Please analyze this error and provide a corrected version of the code. Focus on:
+1. What caused the error
+2. How to fix it  
+3. A complete working version of the code
+
+Remember this is for BBC micro:bit, so use micro:bit specific functions like temperature(), display.scroll(), sleep(), etc.`;
+
+            closeErrorModal();
+            aiChatModal.classList.remove('hidden');
+            
+            codeModeRadio.checked = true;
+            updateModeUI();
+            
+            if (aiStatus === 'uninitialized') { 
+                loadAISettings(); 
+                setTimeout(() => {
+                    if (aiStatus === 'ready') {
+                        submitAIPrompt(fixPrompt);
+                    } else {
+                        aiPromptInput.value = "Help me fix this micro:bit error";
+                        addMessageToChat('ai', 'AI is initializing. I have the error details and will help you fix it once ready.');
+                    }
+                }, 500);
+            } else if (aiStatus === 'ready') {
+                submitAIPrompt(fixPrompt);
+            } else {
+                aiPromptInput.value = "Help me fix this micro:bit error";
+                addMessageToChat('ai', 'Please ensure AI is configured and ready, then ask for help with your error.');
+            }
+        };
+
+        // --- AI Chat Functions ---
+        const updateAIStatus = (newStatus, message) => {
+            aiStatus = newStatus;
+            aiStatusBadge.textContent = message;
+            aiStatusBadge.className = 'px-2 py-0.5 text-xs font-semibold rounded-full ';
+            switch (newStatus) {
+                case 'ready':
+                    aiStatusBadge.classList.add('bg-green-700', 'text-green-200');
+                    aiPromptInput.disabled = false;
+                    aiPromptSend.disabled = false;
+                    break;
+                case 'initializing': case 'busy':
+                    aiStatusBadge.classList.add('bg-yellow-700', 'text-yellow-200');
+                    aiPromptInput.disabled = true;
+                    aiPromptSend.disabled = true;
+                    break;
+                case 'unavailable':
+                    aiStatusBadge.classList.add('bg-red-700', 'text-red-200');
+                    aiPromptInput.disabled = true;
+                    aiPromptSend.disabled = true;
+                    break;
+            }
+        };
+        
+        const addMessageToChat = (sender, content) => {
+            const messageDiv = document.createElement('div');
+            const contentDiv = document.createElement('div');
+            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            if (sender === 'user') {
+                messageDiv.className = "flex justify-end";
+                contentDiv.className = "bg-blue-600 text-white p-3 rounded-lg max-w-xs md:max-w-md word-wrap break-words";
+            } else {
+                messageDiv.className = "flex justify-start";
+                contentDiv.className = "bg-slate-700 text-slate-200 p-3 rounded-lg max-w-xs md:max-w-md word-wrap break-words";
+            }
+            // Add proper word wrapping styles
+            contentDiv.style.wordWrap = 'break-word';
+            contentDiv.style.wordBreak = 'break-word';
+            contentDiv.style.overflowWrap = 'break-word';
+            contentDiv.style.hyphens = 'auto';
+            
+            messageDiv.appendChild(contentDiv);
+            aiChatHistory.appendChild(messageDiv);
+            aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
+            return contentDiv;
+        };
+
+        const initializeAIProvider = async (provider) => {
+            aiSession = null;
+            conversationHistory = [];
+            updateAIStatus('initializing', 'Initializing...');
+            if (provider === 'nano') {
+                try {
+                    if (typeof LanguageModel === 'undefined') throw new Error("LanguageModel API not available. Try enabling chrome://flags/#prompt-api-for-gemini-nano");
+                    const availability = await LanguageModel.availability();
+                    if (!["available", "readily"].includes(availability)) throw new Error(`Nano model not ready. Status: ${availability}`);
+                    aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
+                    updateAIStatus('ready', 'Ready');
+                    addMessageToChat('ai', 'Gemini Nano is ready with micro:bit expertise. What would you like to create?');
+                } catch (error) {
+                    updateAIStatus('unavailable', 'Error');
+                    addMessageToChat('ai', `<b>Error:</b> ${error.message}`);
+                }
+            } else {
+                if (apiKey) {
+                    updateAIStatus('ready', 'Ready');
+                    addMessageToChat('ai', `Ready to use ${provider.charAt(0).toUpperCase() + provider.slice(1)}. What would you like to create?`);
+                } else {
+                    updateAIStatus('unavailable', 'API Key Needed');
+                    addMessageToChat('ai', `Please enter and save your API key for ${provider.charAt(0).toUpperCase() + provider.slice(1)}.`);
+                }
+            }
+        };
+        
+        async function getAICode(prompt, provider, key, isCodeMode = true) {
+             updateAIStatus('busy', 'Generating...');
+             try {
+                const systemPrompt = SYSTEM_PROMPT_FOR_MODE(provider, isCodeMode);
+                
+                if (provider === 'nano') {
+                    if (!aiSession) throw new Error("Gemini Nano session not initialized.");
+                    let fullPrompt = prompt;
+                    const modeContext = isCodeMode ? 
+                        "\n\nIMPORTANT: This is for BBC micro:bit CODE GENERATION. Use ONLY micro:bit functions:" :
+                        "\n\nIMPORTANT: This is a QUESTION about micro:bit programming. Provide a helpful explanation.";
+                    
+                    if (conversationHistory.length > 0) {
+                        const historyContext = conversationHistory.map(msg => 
+                            `${msg.role}: ${msg.content}`
+                        ).join('\n');
+                        fullPrompt = `Previous conversation:\n${historyContext}\n\nCurrent request: ${prompt}${modeContext}
+- from microbit import * (required first line for code)  
+- temperature() for temperature sensor
+- display.scroll(str(value)) to show text
+- sleep(milliseconds) for delays
+- NO machine, time, or other imports
+- NO machine.ADC or machine.Pin
+- Use the built-in temperature() function that returns degrees Celsius`;
+                    } else {
+                        fullPrompt = `${prompt}${modeContext}
+- from microbit import * (required first line for code)  
+- temperature() for temperature sensor
+- display.scroll(str(value)) to show text
+- sleep(milliseconds) for delays
+- NO machine, time, or other imports
+- NO machine.ADC or machine.Pin
+- Use the built-in temperature() function that returns degrees Celsius`;
+                    }
+                    const stream = aiSession.promptStreaming(fullPrompt);
+                    let fullResponse = "";
+                    for await (const chunk of stream) { fullResponse += chunk; }
+                    return fullResponse;
+                }
+                
+                let url, headers, body;
+                switch (provider) {
+                    case 'gemini':
+                        url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+                        headers = { 'Content-Type': 'application/json' };
+                        const geminiHistory = conversationHistory.length > 0 ? 
+                            conversationHistory.map(msg => ({ 
+                                parts: [{ text: msg.content }], 
+                                role: msg.role === 'assistant' ? 'model' : 'user'
+                            })) : [];
+                        body = {
+                            contents: [
+                                ...geminiHistory,
+                                { parts: [{ text: prompt }], role: 'user' }
+                            ],
+                            systemInstruction: { parts: [{ text: systemPrompt }] }
+                        };
+                        break;
+                    case 'claude':
+                        url = 'https://api.anthropic.com/v1/messages';
+                        headers = { 
+                            'x-api-key': key, 
+                            'anthropic-version': '2023-06-01', 
+                            'content-type': 'application/json',
+                            'anthropic-dangerous-direct-browser-access': 'true'
+                        };
+                        const claudeMessages = conversationHistory.length > 0 ?
+                            [...conversationHistory, { role: 'user', content: prompt }] :
+                            [{ role: 'user', content: prompt }];
+                        body = { 
+                            model: 'claude-3-5-sonnet-20240620', 
+                            max_tokens: 1024, 
+                            system: systemPrompt, 
+                            messages: claudeMessages 
+                        };
+                        break;
+                    case 'chatgpt':
+                        url = 'https://api.openai.com/v1/chat/completions';
+                        headers = { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' };
+                        const chatGPTMessages = [
+                            { role: 'system', content: systemPrompt },
+                            ...conversationHistory,
+                            { role: 'user', content: prompt }
+                        ];
+                        body = { 
+                            model: 'gpt-4', 
+                            messages: chatGPTMessages 
+                        };
+                        break;
+                    default:
+                        throw new Error("Unknown AI provider.");
+                }
+
+                const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                
+                switch (provider) {
+                    case 'gemini': return data.candidates[0].content.parts[0].text;
+                    case 'claude': return data.content[0].text;
+                    case 'chatgpt': return data.choices[0].message.content;
+                }
+
+            } catch(error) {
+                console.error("AI Generation Error:", error);
+                 if (provider === 'chatgpt' && error.message.includes('401')) {
+                    throw new Error("The provided OpenAI API key is incorrect or invalid. Please check your key at platform.openai.com and save it again.");
+                }
+                 if (provider === 'claude' && error instanceof TypeError) {
+                    throw new Error("Failed to fetch. This is likely a CORS error. The Anthropic API is not designed to be called directly from a browser and requires a server-side proxy, which cannot be implemented in this app.");
+                }
+                throw error;
+            }
+        }
+
+        const updateModeUI = () => {
+            const isCodeMode = codeModeRadio.checked;
+            if (isCodeMode) {
+                modeDescription.textContent = "Generate MicroPython code for your micro:bit";
+                aiPromptInput.placeholder = "e.g., show a beating heart on the display";
+            } else {
+                modeDescription.textContent = "Ask questions about micro:bit programming, get explanations";
+                aiPromptInput.placeholder = "e.g., how does the temperature sensor work?";
+            }
+        };
+
+        async function submitAIPrompt(prompt) {
+            if (!prompt || aiStatus !== 'ready') return;
+            
+            const timestamp = new Date().toISOString();
+            const isCodeMode = codeModeRadio.checked;
+            
+            addMessageToChat('user', prompt);
+            console.log('User Prompt:', prompt, 'Mode:', isCodeMode ? 'code' : 'question');
+            aiPromptInput.value = '';
+            
+            fullChatHistory.push({
+                timestamp: timestamp,
+                provider: selectedProvider,
+                role: 'user',
+                content: prompt,
+                mode: isCodeMode ? 'code' : 'question'
+            });
+            
+            try {
+                const responseText = await getAICode(prompt, selectedProvider, apiKey, isCodeMode);
+                console.log('AI Response:', responseText);
+                
+                fullChatHistory.push({
+                    timestamp: new Date().toISOString(),
+                    provider: selectedProvider,
+                    role: 'assistant',
+                    content: responseText,
+                    mode: isCodeMode ? 'code' : 'question'
+                });
+                
+                conversationHistory.push({ role: 'user', content: prompt });
+                conversationHistory.push({ role: 'assistant', content: responseText });
+                
+                if (conversationHistory.length > 20) {
+                    conversationHistory = conversationHistory.slice(-20);
+                }
+                
+                if (isCodeMode) {
+                    const codeBlockRegex = /```python\n([\s\S]*?)\n```/;
+                    const match = responseText.match(codeBlockRegex);
+
+                    if (match && match[1]) {
+                        const code = match[1];
+                        codeEditor.value = code;
+                        aiChatModal.classList.add('hidden');
+                        log('AI-generated code inserted into the editor.', 'info');
+                    } else {
+                        addMessageToChat('ai', responseText || "Sorry, I couldn't generate a valid code snippet for that request.");
+                    }
+                } else {
+                    addMessageToChat('ai', responseText || "Sorry, I couldn't provide an answer to that question.");
+                }
+            } catch (error) {
+                addMessageToChat('ai', `<b>Error:</b> ${error.message}`);
+            } finally {
+                updateAIStatus('ready', 'Ready');
+            }
+        }
+
+        function downloadChatHistory() {
+            if (fullChatHistory.length === 0) {
+                log('No chat history to download.', 'info');
+                return;
+            }
+
+            const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>micro:bit AI Chat History</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f8fafc; }
+        .header { background: #1e293b; color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .chat-entry { background: white; margin: 15px 0; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .user { border-left: 4px solid #3b82f6; }
+        .assistant { border-left: 4px solid #10b981; }
+        .meta { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+        .content { white-space: pre-wrap; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: 'Courier New', monospace; }
+        .code-block { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 8px; margin: 10px 0; overflow-x: auto; }
+        .provider-badge { display: inline-block; background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+        .stats { background: #e0f2fe; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 micro:bit AI Chat History</h1>
+        <p>Generated on ${new Date().toLocaleString()}</p>
+    </div>
+    
+    <div class="stats">
+        <h3>Session Statistics</h3>
+        <p><strong>Total Messages:</strong> ${fullChatHistory.length}</p>
+        <p><strong>User Messages:</strong> ${fullChatHistory.filter(m => m.role === 'user').length}</p>
+        <p><strong>AI Responses:</strong> ${fullChatHistory.filter(m => m.role === 'assistant').length}</p>
+        <p><strong>Providers Used:</strong> ${[...new Set(fullChatHistory.map(m => m.provider))].join(', ')}</p>
+        <p><strong>Session Start:</strong> ${fullChatHistory.length > 0 ? new Date(fullChatHistory[0].timestamp).toLocaleString() : 'N/A'}</p>
+        <p><strong>Session End:</strong> ${fullChatHistory.length > 0 ? new Date(fullChatHistory[fullChatHistory.length - 1].timestamp).toLocaleString() : 'N/A'}</p>
+    </div>
+
+    ${fullChatHistory.map(entry => {
+        const roleClass = entry.role;
+        const roleName = entry.role === 'user' ? '👤 You' : '🤖 AI';
+        const time = new Date(entry.timestamp).toLocaleString();
+        
+        let content = entry.content
+            .replace(/```python\n([\s\S]*?)\n```/g, '<div class="code-block">$1</div>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>');
+        
+        return `
+        <div class="chat-entry ${roleClass}">
+            <div class="meta">
+                ${roleName} 
+                <span class="provider-badge">${entry.provider}</span>
+                <span style="float: right;">${time}</span>
+            </div>
+            <div class="content">${content}</div>
+        </div>`;
+    }).join('')}
+
+    <div style="margin-top: 40px; text-align: center; color: #64748b; font-size: 12px;">
+        <p>Generated by micro:bit MicroPython Editor</p>
+    </div>
+</body>
+</html>`;
+
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `microbit-ai-chat-history-${new Date().toISOString().split('T')[0]}.html`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            log('Chat history downloaded successfully!', 'success');
+        }
+
+        const loadAISettings = () => {
+            selectedProvider = localStorage.getItem('ai_provider') || 'nano';
+            apiKey = localStorage.getItem(`ai_key_${selectedProvider}`) || '';
+            aiProviderSelect.value = selectedProvider;
+            apiKeyInput.value = apiKey;
+            updateAIProviderUI();
+        };
+
+        const saveAISettings = () => {
+            selectedProvider = aiProviderSelect.value;
+            apiKey = apiKeyInput.value.trim();
+            localStorage.setItem('ai_provider', selectedProvider);
+            if (selectedProvider !== 'nano') {
+                localStorage.setItem(`ai_key_${selectedProvider}`, apiKey);
+            }
+            addMessageToChat('ai', 'Settings saved.');
+            initializeAIProvider(selectedProvider);
+        };
+        
+        const updateAIProviderUI = () => {
+            selectedProvider = aiProviderSelect.value;
+            localStorage.setItem('ai_provider', selectedProvider);
+            aiChatHistory.innerHTML = '';
+            conversationHistory = [];
+            if (selectedProvider === 'nano') {
+                apiKeyGroup.classList.add('hidden');
+                initializeAIProvider('nano');
+            } else {
+                apiKeyLabel.textContent = `${selectedProvider.charAt(0).toUpperCase() + selectedProvider.slice(1)} API Key:`;
+                apiKeyGroup.classList.remove('hidden');
+                apiKey = localStorage.getItem(`ai_key_${selectedProvider}`) || '';
+                apiKeyInput.value = apiKey;
+                initializeAIProvider(selectedProvider);
+            }
+        };
+
+        const initializeApp = () => {
+            updateUIForDisconnection();
+            selectedProvider = localStorage.getItem('ai_provider') || 'nano';
+            aiProviderSelect.value = selectedProvider;
+            
+            // Initialize speech recognition if available
+            const speechAvailable = initializeSpeechRecognition();
+            if (!speechAvailable) {
+                log('Speech recognition not available in this browser.', 'info');
+            }
+        };
+
+        // Event Listeners
+        if (!('serial' in navigator)) { serialSupportMsg.classList.remove('hidden'); }
+        
+        connectButton.addEventListener('click', connect);
+        disconnectButton.addEventListener('click', disconnect);
+        runButton.addEventListener('click', runCode);
+        stopButton.addEventListener('click', stopCode);
+        clearOutputButton.addEventListener('click', () => { 
+            output.innerHTML = ''; 
+            fixWithAiButton.classList.add('hidden');
+        });
+
+        errorModalClose.addEventListener('click', closeErrorModal);
+        dismissErrorButton.addEventListener('click', closeErrorModal);
+        aiFixButton.addEventListener('click', sendErrorToAI);
+
+        aiChatButton.addEventListener('click', () => {
+            aiChatModal.classList.remove('hidden');
+            if (aiStatus === 'uninitialized') { loadAISettings(); }
+        });
+        aiModalCloseButton.addEventListener('click', () => { aiChatModal.classList.add('hidden'); });
+        aiProviderSelect.addEventListener('change', updateAIProviderUI);
+        saveApiKeyButton.addEventListener('click', saveAISettings);
+        downloadHistoryButton.addEventListener('click', downloadChatHistory);
+        
+        codeModeRadio.addEventListener('change', updateModeUI);
+        questionModeRadio.addEventListener('change', updateModeUI);
+        voiceInputButton.addEventListener('click', toggleVoiceInput);
+        
+        aiPromptForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitAIPrompt(aiPromptInput.value.trim());
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (!runButton.disabled) {
+                        runCode();
+                    }
+                }
+            }
+        });
+
+        initializeApp();
+
+    </script>
+</body>
+</html>
