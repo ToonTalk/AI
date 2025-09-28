@@ -465,7 +465,7 @@ Always use str() + "," + str() format, NEVER f-strings!`;
                 toggleDataLoggingButton.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
                 
                 const duration = dataStartTime ? (Date.now() - dataStartTime) / 1000 : 0;
-                const message = `Data logging stopped. Captured ${loggedData.length} data points over ${duration.toFixed(1)} seconds. Copied to clipboard.`;
+                const message = `Data logging stopped. Captured ${loggedData.length} data points over ${duration.toFixed(1)} seconds.`;
                 log(`📊 ${message}`, 'success');
                 showNotification(message, 'success');  // Add this line
             } else {
@@ -485,9 +485,10 @@ Always use str() + "," + str() format, NEVER f-strings!`;
         const copyDataToClipboard = async () => {
             if (loggedData.length === 0) {
                 log('📋 No data to copy. Start data logging first.', 'info');
+                showNotification('No data to copy - start logging first', 'warning');
                 return;
             }
-
+        
             try {
                 // Format data as CSV
                 const csvHeader = 'Timestamp,Relative_Time_ms,Data\n';
@@ -501,8 +502,9 @@ Always use str() + "," + str() format, NEVER f-strings!`;
                 // Copy to clipboard
                 await navigator.clipboard.writeText(fullCsv);
                 
-                log(`📋 ${loggedData.length} data points copied to clipboard as CSV format.`, 'success');
-                log('📊 Data includes: timestamp, relative time (ms), and captured values.', 'info');
+                const message = `${loggedData.length} data points copied to clipboard as CSV`;
+                log(`📋 ${message}`, 'success');
+                showNotification(message, 'success');
                 
             } catch (error) {
                 // Fallback for older browsers
@@ -519,9 +521,11 @@ Always use str() + "," + str() format, NEVER f-strings!`;
                 document.execCommand('copy');
                 document.body.removeChild(textArea);
                 
-                log(`📋 ${loggedData.length} data points copied to clipboard (fallback method).`, 'success');
+                const message = `${loggedData.length} data points copied to clipboard`;
+                log(`📋 ${message}`, 'success');
+                showNotification(message, 'success');
             }
-        };;
+        };
 
         const toggleVoiceInput = () => {
             console.log('Voice input button clicked, isListening:', isListening, 'recognition:', !!recognition);
@@ -552,15 +556,20 @@ Always use str() + "," + str() format, NEVER f-strings!`;
         };
         
         const logDeviceData = (data) => {
+            // More specific error detection - only catch actual programming errors
             const hasError = !isStopping && (
-                (data.includes('Traceback') && !data.includes('KeyboardInterrupt')) ||
                 data.includes('SyntaxError') || 
                 data.includes('NameError') || 
                 data.includes('TypeError') || 
                 data.includes('ValueError') ||
                 data.includes('AttributeError') ||
-                data.includes('IndentationError')
-            ) && !data.includes('KeyboardInterrupt');            
+                data.includes('IndentationError') ||
+                data.includes('ImportError') ||
+                (data.includes('Traceback') && 
+                 !data.includes('KeyboardInterrupt') && 
+                 (data.includes('SyntaxError') || data.includes('NameError') || data.includes('TypeError') || data.includes('ValueError')))
+            );
+            
             // If data logging is enabled, buffer and process complete lines
             if (isDataLogging && !hasError) {
                 // Add incoming data to buffer
@@ -584,7 +593,9 @@ Always use str() + "," + str() format, NEVER f-strings!`;
                         !cleanLine.includes('paste mode') &&
                         !cleanLine.includes('soft reboot') &&
                         !cleanLine.includes('Traceback') &&
-                        !cleanLine.includes('KeyboardInterrupt')) {
+                        !cleanLine.includes('KeyboardInterrupt') &&
+                        !cleanLine.includes('Error:') &&
+                        !cleanLine.includes('Exception:')) {
                         
                         const timestamp = Date.now();
                         const relativeTime = dataStartTime ? timestamp - dataStartTime : 0;
