@@ -128,6 +128,18 @@ while True:
                 <p class="text-slate-300">This application requires the <b>Web Serial API</b>, which is not supported by your current browser. Please use a recent version of Google Chrome, Microsoft Edge, or Opera on a desktop computer.</p>
             </div>
         </div>
+
+        <!-- Notification Toast -->
+        <div id="notification-toast" class="hidden fixed top-6 right-6 bg-green-600 text-white px-6 py-4 rounded-lg shadow-2xl z-50 max-w-md">
+            <div class="flex items-center gap-3">
+                <div class="flex-shrink-0">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div id="notification-message" class="font-medium"></div>
+            </div>
+        </div>
         
         <!-- Error Modal -->
         <div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
@@ -245,6 +257,9 @@ while True:
         const errorDisplay = document.getElementById('error-display');
         const aiFixButton = document.getElementById('ai-fix-button');
         const dismissErrorButton = document.getElementById('dismiss-error-button');
+        
+        const notificationToast = document.getElementById('notification-toast');
+        const notificationMessage = document.getElementById('notification-message');
 
         // --- AI Chat DOM Elements ---
         const aiChatButton = document.getElementById('ai-chat-button');
@@ -293,8 +308,7 @@ while True:
         let dataStartTime = null;
         let dataBuffer = ''; // Buffer for incomplete lines
 
-        const SYSTEM_PROMPT = "You are an expert in MicroPython programming for the BBC micro:bit. When asked to generate code, provide concise, complete, and correct MicroPython code snippets enclosed in markdown code blocks (```python ... ```). When asked questions about micro:bit programming, provide clear explanations and examples. Always consider conversation history for context. Pay attention to data types - convert numbers to strings using str() before passing to functions like display.scroll().";
-
+        const SYSTEM_PROMPT = "You are an expert in MicroPython programming for the BBC micro:bit. When asked to generate code, provide concise, complete, and correct MicroPython code snippets enclosed in markdown code blocks (```python ... ```). When asked questions about micro:bit programming, provide clear explanations and examples. Always consider conversation history for context. Pay attention to data types - convert numbers to strings using str() before passing to functions like display.scroll(). IMPORTANT: Never use f-string syntax like f'text {variable}' as the micro:bit runs older MicroPython that doesn't support it. Use string concatenation with str() + 'text' + str() instead.";
         const NANO_SYSTEM_PROMPT = `You are a micro:bit MicroPython expert. 
 
 FOR CODE GENERATION:
@@ -307,6 +321,8 @@ CRITICAL RULES FOR MICRO:BIT:
 4. Use temperature() function directly - it returns degrees Celsius as integer
 5. Use display.scroll(str(value)) to show text on LED matrix
 6. Use display.show(Image.HEART) for icons
+7. NEVER use f-strings like f"text {variable}" - use str() and + instead
+8. NEVER use print(f"...") - use print(str(x) + "," + str(y)) format
 
 MICRO:BIT SPECIFIC FUNCTIONS (use these ONLY):
 - Temperature sensor: temperature() - returns integer degrees Celsius
@@ -318,6 +334,7 @@ MICRO:BIT SPECIFIC FUNCTIONS (use these ONLY):
 - Pins: pin0.read_analog(), pin0.write_digital(1)
 
 NEVER use machine.ADC, machine.Pin, or any low-level hardware access!
+NEVER use f-strings - the micro:bit runs old MicroPython that doesn't support them!
 
 FOR QUESTIONS:
 Provide clear, helpful explanations about micro:bit programming. Use examples when helpful.
@@ -332,7 +349,19 @@ while True:
     sleep(1000)
 \`\`\`
 
-Always use real micro:bit functions like shown above.`;
+EXAMPLE SENSOR DATA CODE:
+\`\`\`python
+from microbit import *
+
+while True:
+    x = accelerometer.get_x()
+    y = accelerometer.get_y()
+    z = accelerometer.get_z()
+    print(str(x) + "," + str(y) + "," + str(z))
+    sleep(100)
+\`\`\`
+
+Always use str() + "," + str() format, NEVER f-strings!`;
 
         const SYSTEM_PROMPT_FOR_MODE = (provider, isCodeMode) => {
             if (provider === 'nano') {
@@ -436,7 +465,9 @@ Always use real micro:bit functions like shown above.`;
                 toggleDataLoggingButton.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
                 
                 const duration = dataStartTime ? (Date.now() - dataStartTime) / 1000 : 0;
-                log(`📊 Data logging stopped. Captured ${loggedData.length} data points over ${duration.toFixed(1)} seconds.`, 'success');
+                const message = `Data logging stopped. Captured ${loggedData.length} data points over ${duration.toFixed(1)} seconds. Copied to clipboard.`;
+                log(`📊 ${message}`, 'success');
+                showNotification(message, 'success');  // Add this line
             } else {
                 // Start logging
                 isDataLogging = true;
@@ -521,65 +552,74 @@ Always use real micro:bit functions like shown above.`;
         };
         
         const logDeviceData = (data) => {
-             const hasError = !isStopping && (data.includes('Traceback') || data.includes('Error:') || data.includes('SyntaxError') || data.includes('NameError') || data.includes('TypeError') || data.includes('ValueError'));
-             
-             // If data logging is enabled, buffer and process complete lines
-             if (isDataLogging && !hasError) {
-                 // Add incoming data to buffer
-                 dataBuffer += data;
-                 
-                 // Process complete lines (ending with \n or \r\n)
-                 const lines = dataBuffer.split(/\r?\n/);
-                 
-                 // Keep the last incomplete line in buffer
-                 dataBuffer = lines.pop() || '';
-                 
-                 // Process each complete line
-                 lines.forEach(line => {
-                     const cleanLine = line.replace(/^>\s*/, '').replace(/>>>\s*/, '').trim();
-                     
-                     // Only log actual data (skip empty lines, prompts, system messages)
-                     if (cleanLine && 
-                         !cleanLine.includes('MicroPython') && 
-                         !cleanLine.includes('Type "help()"') &&
-                         !cleanLine.includes('>>>') &&
-                         !cleanLine.includes('paste mode') &&
-                         !cleanLine.includes('soft reboot')) {
-                         
-                         const timestamp = Date.now();
-                         const relativeTime = dataStartTime ? timestamp - dataStartTime : 0;
-                         
-                         loggedData.push({
-                             timestamp: timestamp,
-                             relativeTime: relativeTime,
-                             data: cleanLine
-                         });
-                     }
-                 });
-             }
-             
-             if (hasError) {
-                 const errorDiv = document.createElement('div');
-                 errorDiv.className = 'error-border';
-                 errorDiv.textContent = data;
-                 output.appendChild(errorDiv);
-                 
-                 const errorMatch = data.match(/(.*Error:.*|.*Exception:.*)/);
-                 const cleanError = errorMatch ? errorMatch[1].trim() : data.trim();
-                 
-                 currentErrorData = {
-                     fullOutput: output.textContent,
-                     errorMessage: cleanError,
-                     code: lastRunCode || codeEditor.value
-                 };
-                 
-                 errorDisplay.textContent = cleanError;
-                 errorModal.classList.remove('hidden');
-             } else {
-                 output.textContent += data;
-             }
-             
-             output.scrollTop = output.scrollHeight;
+            const hasError = !isStopping && (
+                (data.includes('Traceback') && !data.includes('KeyboardInterrupt')) ||
+                data.includes('SyntaxError') || 
+                data.includes('NameError') || 
+                data.includes('TypeError') || 
+                data.includes('ValueError') ||
+                data.includes('AttributeError') ||
+                data.includes('IndentationError')
+            ) && !data.includes('KeyboardInterrupt');            
+            // If data logging is enabled, buffer and process complete lines
+            if (isDataLogging && !hasError) {
+                // Add incoming data to buffer
+                dataBuffer += data;
+                
+                // Process complete lines (ending with \n or \r\n)
+                const lines = dataBuffer.split(/\r?\n/);
+                
+                // Keep the last incomplete line in buffer
+                dataBuffer = lines.pop() || '';
+                
+                // Process each complete line
+                lines.forEach(line => {
+                    const cleanLine = line.replace(/^>\s*/, '').replace(/>>>\s*/, '').trim();
+                    
+                    // Only log actual data (skip empty lines, prompts, system messages, errors)
+                    if (cleanLine && 
+                        !cleanLine.includes('MicroPython') && 
+                        !cleanLine.includes('Type "help()"') &&
+                        !cleanLine.includes('>>>') &&
+                        !cleanLine.includes('paste mode') &&
+                        !cleanLine.includes('soft reboot') &&
+                        !cleanLine.includes('Traceback') &&
+                        !cleanLine.includes('KeyboardInterrupt')) {
+                        
+                        const timestamp = Date.now();
+                        const relativeTime = dataStartTime ? timestamp - dataStartTime : 0;
+                        
+                        loggedData.push({
+                            timestamp: timestamp,
+                            relativeTime: relativeTime,
+                            data: cleanLine
+                        });
+                    }
+                });
+            }
+            
+            if (hasError) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-border';
+                errorDiv.textContent = data;
+                output.appendChild(errorDiv);
+                
+                const errorMatch = data.match(/(.*Error:.*|.*Exception:.*)/);
+                const cleanError = errorMatch ? errorMatch[1].trim() : data.trim();
+                
+                currentErrorData = {
+                    fullOutput: output.textContent,
+                    errorMessage: cleanError,
+                    code: lastRunCode || codeEditor.value
+                };
+                
+                errorDisplay.textContent = cleanError;
+                errorModal.classList.remove('hidden');
+            } else {
+                output.textContent += data;
+            }
+            
+            output.scrollTop = output.scrollHeight;
         };
 
         const updateUIForConnection = () => {
@@ -921,7 +961,8 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
 - sleep(milliseconds) for delays
 - NO machine, time, or other imports
 - NO machine.ADC or machine.Pin
-- Use the built-in temperature() function that returns degrees Celsius`;
+- Use the built-in temperature() function that returns degrees Celsius
+- NEVER use f-strings like f"text {var}" - use str(var) + "text" instead`;
                     } else {
                         fullPrompt = `${prompt}${modeContext}
 - from microbit import * (required first line for code)  
@@ -930,7 +971,8 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
 - sleep(milliseconds) for delays
 - NO machine, time, or other imports
 - NO machine.ADC or machine.Pin
-- Use the built-in temperature() function that returns degrees Celsius`;
+- Use the built-in temperature() function that returns degrees Celsius
+- NEVER use f-strings like f"text {var}" - use str(var) + "text" instead`;
                     }
                     const stream = aiSession.promptStreaming(fullPrompt);
                     let fullResponse = "";
@@ -1086,6 +1128,41 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
                 updateAIStatus('ready', 'Ready');
             }
         }
+        const showNotification = (message, type = 'success', duration = 4000) => {
+            notificationMessage.textContent = message;
+            
+            // Set colors based on type
+            notificationToast.className = 'fixed top-6 right-6 px-6 py-4 rounded-lg shadow-2xl z-50 max-w-md transition-all duration-300 transform';
+            switch (type) {
+                case 'success':
+                    notificationToast.classList.add('bg-green-600', 'text-white');
+                    break;
+                case 'error':
+                    notificationToast.classList.add('bg-red-600', 'text-white');
+                    break;
+                case 'info':
+                    notificationToast.classList.add('bg-blue-600', 'text-white');
+                    break;
+                case 'warning':
+                    notificationToast.classList.add('bg-amber-600', 'text-white');
+                    break;
+                default:
+                    notificationToast.classList.add('bg-slate-600', 'text-white');
+            }
+            
+            // Show the notification
+            notificationToast.classList.remove('hidden', 'translate-x-full', 'opacity-0');
+            notificationToast.classList.add('translate-x-0', 'opacity-100');
+            
+            // Hide after duration
+            setTimeout(() => {
+                notificationToast.classList.remove('translate-x-0', 'opacity-100');
+                notificationToast.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => {
+                    notificationToast.classList.add('hidden');
+                }, 300);
+            }, duration);
+        };
 
         function downloadChatHistory() {
             if (fullChatHistory.length === 0) {
