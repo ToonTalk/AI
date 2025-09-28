@@ -90,6 +90,14 @@ while True:
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/></svg>
                             Stop Program
                         </button>
+                        <button id="toggle-data-logging" disabled class="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg>
+                            Start Data Logging
+                        </button>
+                        <button id="copy-data-button" disabled class="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+                            Copy Data
+                        </button>
                         <button id="disconnect-button" disabled class="w-full bg-red-600 hover:bg-red-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-2">
                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/></svg>
                             Disconnect
@@ -228,6 +236,8 @@ while True:
         const statusText = document.getElementById('status-text');
         const serialSupportMsg = document.getElementById('serial-support-msg');
         const fixWithAiButton = document.getElementById('fix-with-ai-button');
+        const toggleDataLoggingButton = document.getElementById('toggle-data-logging');
+        const copyDataButton = document.getElementById('copy-data-button');
 
         // --- Error Modal DOM Elements ---
         const errorModal = document.getElementById('error-modal');
@@ -276,6 +286,12 @@ while True:
         // --- Speech Recognition State ---
         let recognition = null;
         let isListening = false;
+
+        // --- Data Logging State ---
+        let isDataLogging = false;
+        let loggedData = [];
+        let dataStartTime = null;
+        let dataBuffer = ''; // Buffer for incomplete lines
 
         const SYSTEM_PROMPT = "You are an expert in MicroPython programming for the BBC micro:bit. When asked to generate code, provide concise, complete, and correct MicroPython code snippets enclosed in markdown code blocks (```python ... ```). When asked questions about micro:bit programming, provide clear explanations and examples. Always consider conversation history for context. Pay attention to data types - convert numbers to strings using str() before passing to functions like display.scroll().";
 
@@ -407,7 +423,74 @@ Always use real micro:bit functions like shown above.`;
                 log(`🎤 Failed to initialize speech recognition: ${error.message}`, 'error');
                 return false;
             }
+        }
+
+        // --- Data Logging Functions ---
+        const toggleDataLogging = () => {
+            if (isDataLogging) {
+                // Stop logging
+                isDataLogging = false;
+                dataBuffer = ''; // Clear any remaining buffer
+                toggleDataLoggingButton.textContent = '📊 Start Data Logging';
+                toggleDataLoggingButton.classList.remove('bg-red-600', 'hover:bg-red-500');
+                toggleDataLoggingButton.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+                
+                const duration = dataStartTime ? (Date.now() - dataStartTime) / 1000 : 0;
+                log(`📊 Data logging stopped. Captured ${loggedData.length} data points over ${duration.toFixed(1)} seconds.`, 'success');
+            } else {
+                // Start logging
+                isDataLogging = true;
+                loggedData = [];
+                dataBuffer = ''; // Clear buffer
+                dataStartTime = Date.now();
+                toggleDataLoggingButton.textContent = '🔴 Stop Logging';
+                toggleDataLoggingButton.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+                toggleDataLoggingButton.classList.add('bg-red-600', 'hover:bg-red-500');
+                
+                log('📊 Data logging started. Complete lines will be captured.', 'info');
+            }
         };
+
+        const copyDataToClipboard = async () => {
+            if (loggedData.length === 0) {
+                log('📋 No data to copy. Start data logging first.', 'info');
+                return;
+            }
+
+            try {
+                // Format data as CSV
+                const csvHeader = 'Timestamp,Relative_Time_ms,Data\n';
+                const csvData = loggedData.map(entry => {
+                    const timestamp = new Date(entry.timestamp).toISOString();
+                    return `"${timestamp}",${entry.relativeTime},"${entry.data.replace(/"/g, '""')}"`;
+                }).join('\n');
+                
+                const fullCsv = csvHeader + csvData;
+                
+                // Copy to clipboard
+                await navigator.clipboard.writeText(fullCsv);
+                
+                log(`📋 ${loggedData.length} data points copied to clipboard as CSV format.`, 'success');
+                log('📊 Data includes: timestamp, relative time (ms), and captured values.', 'info');
+                
+            } catch (error) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                const csvHeader = 'Timestamp,Relative_Time_ms,Data\n';
+                const csvData = loggedData.map(entry => {
+                    const timestamp = new Date(entry.timestamp).toISOString();
+                    return `"${timestamp}",${entry.relativeTime},"${entry.data.replace(/"/g, '""')}"`;
+                }).join('\n');
+                
+                textArea.value = csvHeader + csvData;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                log(`📋 ${loggedData.length} data points copied to clipboard (fallback method).`, 'success');
+            }
+        };;
 
         const toggleVoiceInput = () => {
             console.log('Voice input button clicked, isListening:', isListening, 'recognition:', !!recognition);
@@ -439,6 +522,41 @@ Always use real micro:bit functions like shown above.`;
         
         const logDeviceData = (data) => {
              const hasError = !isStopping && (data.includes('Traceback') || data.includes('Error:') || data.includes('SyntaxError') || data.includes('NameError') || data.includes('TypeError') || data.includes('ValueError'));
+             
+             // If data logging is enabled, buffer and process complete lines
+             if (isDataLogging && !hasError) {
+                 // Add incoming data to buffer
+                 dataBuffer += data;
+                 
+                 // Process complete lines (ending with \n or \r\n)
+                 const lines = dataBuffer.split(/\r?\n/);
+                 
+                 // Keep the last incomplete line in buffer
+                 dataBuffer = lines.pop() || '';
+                 
+                 // Process each complete line
+                 lines.forEach(line => {
+                     const cleanLine = line.replace(/^>\s*/, '').replace(/>>>\s*/, '').trim();
+                     
+                     // Only log actual data (skip empty lines, prompts, system messages)
+                     if (cleanLine && 
+                         !cleanLine.includes('MicroPython') && 
+                         !cleanLine.includes('Type "help()"') &&
+                         !cleanLine.includes('>>>') &&
+                         !cleanLine.includes('paste mode') &&
+                         !cleanLine.includes('soft reboot')) {
+                         
+                         const timestamp = Date.now();
+                         const relativeTime = dataStartTime ? timestamp - dataStartTime : 0;
+                         
+                         loggedData.push({
+                             timestamp: timestamp,
+                             relativeTime: relativeTime,
+                             data: cleanLine
+                         });
+                     }
+                 });
+             }
              
              if (hasError) {
                  const errorDiv = document.createElement('div');
@@ -472,6 +590,8 @@ Always use real micro:bit functions like shown above.`;
             disconnectButton.disabled = false;
             runButton.disabled = false;
             stopButton.disabled = false;
+            toggleDataLoggingButton.disabled = false;
+            copyDataButton.disabled = false;
             log('micro:bit connected successfully!', 'success');
         };
 
@@ -483,6 +603,13 @@ Always use real micro:bit functions like shown above.`;
             disconnectButton.disabled = true;
             runButton.disabled = true;
             stopButton.disabled = true;
+            toggleDataLoggingButton.disabled = true;
+            copyDataButton.disabled = true;
+            
+            // Stop data logging if disconnected
+            if (isDataLogging) {
+                toggleDataLogging();
+            }
         };
 
         // --- Web Serial Core Functions ---
@@ -683,14 +810,17 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
         const addMessageToChat = (sender, content) => {
             const messageDiv = document.createElement('div');
             const contentDiv = document.createElement('div');
-            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            
             if (sender === 'user') {
                 messageDiv.className = "flex justify-end";
                 contentDiv.className = "bg-blue-600 text-white p-3 rounded-lg max-w-xs md:max-w-md word-wrap break-words";
+                contentDiv.innerHTML = content.replace(/\n/g, '<br>');
             } else {
                 messageDiv.className = "flex justify-start";
-                contentDiv.className = "bg-slate-700 text-slate-200 p-3 rounded-lg max-w-xs md:max-w-md word-wrap break-words";
+                contentDiv.className = "bg-slate-700 text-slate-200 p-3 rounded-lg max-w-xs md:max-w-md word-wrap break-words prose prose-invert prose-sm max-w-none";
+                contentDiv.innerHTML = renderMarkdown(content);
             }
+            
             // Add proper word wrapping styles
             contentDiv.style.wordWrap = 'break-word';
             contentDiv.style.wordBreak = 'break-word';
@@ -702,7 +832,45 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
             aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
             return contentDiv;
         };
-
+        
+        const renderMarkdown = (text) => {
+            return text
+                // Headers
+                .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold text-slate-100 mt-4 mb-2">$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold text-slate-100 mt-4 mb-2">$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold text-slate-100 mt-4 mb-2">$1</h1>')
+                
+                // Code blocks (must come before inline code)
+                .replace(/```python\n([\s\S]*?)\n```/g, '<div class="bg-slate-900 border border-slate-600 rounded-md p-3 my-3 overflow-x-auto"><pre class="text-green-400 text-sm font-mono whitespace-pre-wrap">$1</pre></div>')
+                .replace(/```([\s\S]*?)```/g, '<div class="bg-slate-900 border border-slate-600 rounded-md p-3 my-3 overflow-x-auto"><pre class="text-slate-300 text-sm font-mono whitespace-pre-wrap">$1</pre></div>')
+                
+                // Inline code
+                .replace(/`([^`]+)`/g, '<code class="bg-slate-800 text-green-400 px-1 py-0.5 rounded text-sm font-mono">$1</code>')
+                
+                // Bold and italic
+                .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-slate-100">$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em class="italic text-slate-200">$1</em>')
+                
+                // Unordered lists
+                .replace(/^\- (.+$)/gim, '<li class="ml-4 mb-1">• $1</li>')
+                .replace(/^(\d+)\. (.+$)/gim, '<li class="ml-4 mb-1">$1. $2</li>')
+                
+                // Wrap consecutive list items
+                .replace(/(<li[^>]*>.*<\/li>\s*)+/gs, '<ul class="my-2 space-y-1">$&</ul>')
+                
+                // Line breaks
+                .replace(/\n\n/g, '</p><p class="mb-2">')
+                .replace(/\n/g, '<br>')
+                
+                // Wrap in paragraphs if not already wrapped
+                .replace(/^(?!<[hul])/gm, '<p class="mb-2">')
+                .replace(/(?![>])$/gm, '</p>')
+                
+                // Clean up extra paragraph tags
+                .replace(/<p class="mb-2"><\/p>/g, '')
+                .replace(/<p class="mb-2">(<[hul])/g, '$1')
+                .replace(/(<\/[hul][^>]*>)<\/p>/g, '$1');
+        };
         const initializeAIProvider = async (provider) => {
             aiSession = null;
             conversationHistory = [];
@@ -1056,6 +1224,8 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
         disconnectButton.addEventListener('click', disconnect);
         runButton.addEventListener('click', runCode);
         stopButton.addEventListener('click', stopCode);
+        toggleDataLoggingButton.addEventListener('click', toggleDataLogging);
+        copyDataButton.addEventListener('click', copyDataToClipboard);
         clearOutputButton.addEventListener('click', () => { 
             output.innerHTML = ''; 
             fixWithAiButton.classList.add('hidden');
