@@ -955,6 +955,7 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
                 .replace(/<p class="mb-2">(<[hul])/g, '$1')
                 .replace(/(<\/[hul][^>]*>)<\/p>/g, '$1');
         };
+        
         const initializeAIProvider = async (provider) => {
             aiSession = null;
             conversationHistory = [];
@@ -972,10 +973,20 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
                     }
                     const availability = await LanguageModel.availability();
                     
-                    if (availability === "after-download") {
+                    if (availability === "downloadable") {
+                        updateAIStatus('unavailable', 'Download Needed');
+                        addMessageToChat('ai', 'Gemini Nano needs to be downloaded first (several GB, one-time download). Attempting to trigger download... If this fails, you may need to use a cloud AI provider instead.');
+                        // Attempt to trigger download
+                        try {
+                            aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
+                            updateAIStatus('ready', 'Ready');
+                            addMessageToChat('ai', 'Download complete! Gemini Nano is ready. What would you like to create?');
+                        } catch (downloadError) {
+                            throw new Error('Failed to download Gemini Nano. Please switch to a cloud provider (Gemini, Claude, or ChatGPT) or try again later.');
+                        }
+                    } else if (availability === "after-download") {
                         updateAIStatus('initializing', 'Downloading...');
-                        addMessageToChat('ai', 'Gemini Nano needs to be downloaded (several GB). This is a one-time download. The download will start automatically - please wait...');
-                        // Trigger download by attempting to create session
+                        addMessageToChat('ai', 'Gemini Nano is downloading (several GB). Please wait, this may take several minutes...');
                         aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
                         updateAIStatus('ready', 'Ready');
                         addMessageToChat('ai', 'Gemini Nano is ready with micro:bit expertise. What would you like to create?');
