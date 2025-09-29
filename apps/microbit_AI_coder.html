@@ -962,7 +962,6 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
             if (provider === 'nano') {
                 try {
                     if (typeof LanguageModel === 'undefined') {
-                        // Detect browser
                         const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
                         
                         if (!isChrome) {
@@ -972,10 +971,21 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
                         }
                     }
                     const availability = await LanguageModel.availability();
-                    if (!["available", "readily"].includes(availability)) throw new Error(`Nano model not ready. Status: ${availability}`);
-                    aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
-                    updateAIStatus('ready', 'Ready');
-                    addMessageToChat('ai', 'Gemini Nano is ready with micro:bit expertise. What would you like to create?');
+                    
+                    if (availability === "after-download") {
+                        updateAIStatus('initializing', 'Downloading...');
+                        addMessageToChat('ai', 'Gemini Nano needs to be downloaded (several GB). This is a one-time download. The download will start automatically - please wait...');
+                        // Trigger download by attempting to create session
+                        aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
+                        updateAIStatus('ready', 'Ready');
+                        addMessageToChat('ai', 'Gemini Nano is ready with micro:bit expertise. What would you like to create?');
+                    } else if (availability === "readily" || availability === "available") {
+                        aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
+                        updateAIStatus('ready', 'Ready');
+                        addMessageToChat('ai', 'Gemini Nano is ready with micro:bit expertise. What would you like to create?');
+                    } else {
+                        throw new Error(`Nano model not ready. Status: ${availability}. Please try again later or use a cloud provider.`);
+                    }
                 } catch (error) {
                     updateAIStatus('unavailable', 'Error');
                     addMessageToChat('ai', `<b>Error:</b> ${error.message}`);
