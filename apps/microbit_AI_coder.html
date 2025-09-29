@@ -1180,70 +1180,90 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
                 log('No chat history to download.', 'info');
                 return;
             }
-
+        
             const htmlContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>micro:bit AI Chat History</title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f8fafc; }
-        .header { background: #1e293b; color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-        .chat-entry { background: white; margin: 15px 0; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .user { border-left: 4px solid #3b82f6; }
-        .assistant { border-left: 4px solid #10b981; }
-        .meta { font-size: 12px; color: #64748b; margin-bottom: 8px; }
-        .content { white-space: pre-wrap; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: 'Courier New', monospace; }
-        .code-block { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 8px; margin: 10px 0; overflow-x: auto; }
-        .provider-badge { display: inline-block; background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
-        .stats { background: #e0f2fe; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🤖 micro:bit AI Chat History</h1>
-        <p>Generated on ${new Date().toLocaleString()}</p>
-    </div>
-    
-    <div class="stats">
-        <h3>Session Statistics</h3>
-        <p><strong>Total Messages:</strong> ${fullChatHistory.length}</p>
-        <p><strong>User Messages:</strong> ${fullChatHistory.filter(m => m.role === 'user').length}</p>
-        <p><strong>AI Responses:</strong> ${fullChatHistory.filter(m => m.role === 'assistant').length}</p>
-        <p><strong>Providers Used:</strong> ${[...new Set(fullChatHistory.map(m => m.provider))].join(', ')}</p>
-        <p><strong>Session Start:</strong> ${fullChatHistory.length > 0 ? new Date(fullChatHistory[0].timestamp).toLocaleString() : 'N/A'}</p>
-        <p><strong>Session End:</strong> ${fullChatHistory.length > 0 ? new Date(fullChatHistory[fullChatHistory.length - 1].timestamp).toLocaleString() : 'N/A'}</p>
-    </div>
-
-    ${fullChatHistory.map(entry => {
-        const roleClass = entry.role;
-        const roleName = entry.role === 'user' ? '👤 You' : '🤖 AI';
-        const time = new Date(entry.timestamp).toLocaleString();
-        
-        let content = entry.content
-            .replace(/```python\n([\s\S]*?)\n```/g, '<div class="code-block">$1</div>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>');
-        
-        return `
-        <div class="chat-entry ${roleClass}">
-            <div class="meta">
-                ${roleName} 
-                <span class="provider-badge">${entry.provider}</span>
-                <span style="float: right;">${time}</span>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>micro:bit AI Chat History</title>
+            <style>
+                body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f8fafc; line-height: 1.6; }
+                .header { background: #1e293b; color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+                .chat-entry { background: white; margin: 15px 0; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                .user { border-left: 4px solid #3b82f6; }
+                .assistant { border-left: 4px solid #10b981; }
+                .meta { font-size: 12px; color: #64748b; margin-bottom: 12px; font-weight: 600; }
+                .content { color: #1f2937; }
+                .content h1 { font-size: 1.5em; font-weight: bold; margin: 1em 0 0.5em 0; color: #111827; }
+                .content h2 { font-size: 1.3em; font-weight: bold; margin: 1em 0 0.5em 0; color: #374151; }
+                .content h3 { font-size: 1.1em; font-weight: bold; margin: 1em 0 0.5em 0; color: #4b5563; }
+                .content strong { font-weight: 600; color: #111827; }
+                .content em { font-style: italic; color: #374151; }
+                .content code { background: #f3f4f6; color: #059669; padding: 2px 6px; border-radius: 4px; font-family: 'Courier New', Monaco, monospace; font-size: 0.9em; }
+                .content .code-block { background: #1f2937; color: #e5e7eb; padding: 16px; border-radius: 8px; margin: 16px 0; overflow-x: auto; font-family: 'Courier New', Monaco, monospace; font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+                .content .python-code { color: #10b981; }
+                .content ul { margin: 12px 0; padding-left: 0; }
+                .content li { margin: 6px 0; padding-left: 20px; position: relative; }
+                .content li::before { content: "•"; color: #6b7280; font-weight: bold; position: absolute; left: 0; }
+                .content p { margin: 12px 0; }
+                .provider-badge { display: inline-block; background: #e5e7eb; color: #374151; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+                .stats { background: #dbeafe; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+                .stats h3 { margin-top: 0; color: #1e40af; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>🤖 micro:bit AI Chat History</h1>
+                <p>Generated on ${new Date().toLocaleString()}</p>
             </div>
-            <div class="content">${content}</div>
-        </div>`;
-    }).join('')}
-
-    <div style="margin-top: 40px; text-align: center; color: #64748b; font-size: 12px;">
-        <p>Generated by micro:bit MicroPython Editor</p>
-    </div>
-</body>
-</html>`;
-
+            
+            <div class="stats">
+                <h3>Session Statistics</h3>
+                <p><strong>Total Messages:</strong> ${fullChatHistory.length}</p>
+                <p><strong>User Messages:</strong> ${fullChatHistory.filter(m => m.role === 'user').length}</p>
+                <p><strong>AI Responses:</strong> ${fullChatHistory.filter(m => m.role === 'assistant').length}</p>
+                <p><strong>Providers Used:</strong> ${[...new Set(fullChatHistory.map(m => m.provider))].join(', ')}</p>
+                <p><strong>Session Start:</strong> ${fullChatHistory.length > 0 ? new Date(fullChatHistory[0].timestamp).toLocaleString() : 'N/A'}</p>
+                <p><strong>Session End:</strong> ${fullChatHistory.length > 0 ? new Date(fullChatHistory[fullChatHistory.length - 1].timestamp).toLocaleString() : 'N/A'}</p>
+            </div>
+        
+            ${fullChatHistory.map(entry => {
+                const roleClass = entry.role;
+                const roleName = entry.role === 'user' ? '👤 You' : '🤖 AI';
+                const time = new Date(entry.timestamp).toLocaleString();
+                
+                let content;
+                if (entry.role === 'assistant') {
+                    // Use the same renderMarkdown function as in the app
+                    content = renderMarkdown(entry.content);
+                } else {
+                    // User messages - simple HTML escaping and line breaks
+                    content = entry.content
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>');
+                }
+                
+                return `
+                <div class="chat-entry ${roleClass}">
+                    <div class="meta">
+                        ${roleName} 
+                        <span class="provider-badge">${entry.provider}</span>
+                        <span style="float: right;">${time}</span>
+                    </div>
+                    <div class="content">${content}</div>
+                </div>`;
+            }).join('')}
+        
+            <div style="margin-top: 40px; text-align: center; color: #64748b; font-size: 12px;">
+                <p>Generated by micro:bit MicroPython Editor</p>
+            </div>
+        </body>
+        </html>`;
+        
             const blob = new Blob([htmlContent], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1256,7 +1276,6 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
             
             log('Chat history downloaded successfully!', 'success');
         }
-
         const loadAISettings = () => {
             selectedProvider = localStorage.getItem('ai_provider') || 'nano';
             apiKey = localStorage.getItem(`ai_key_${selectedProvider}`) || '';
