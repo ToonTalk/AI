@@ -708,11 +708,44 @@ Always use str() + "," + str() format, NEVER f-strings!`;
 
         async function disconnect() {
             try {
-                if (reader) { await reader.cancel(); reader = null; }
-                if (writer) { if (port && port.writable) { writer.releaseLock(); } writer = null; }
-                if (port) { if (port.readable) { await port.close(); } port = null; }
-            } catch (err) { console.error("Error during disconnect:", err); } 
-            finally { updateUIForDisconnection(); log('Disconnected.'); }
+                // Stop the read loop and release reader
+                if (reader) { 
+                    try {
+                        await reader.cancel();
+                    } catch (e) {
+                        console.error("Error canceling reader:", e);
+                    }
+                    reader = null;
+                }
+                
+                // Release writer lock
+                if (writer) { 
+                    try {
+                        writer.releaseLock();
+                    } catch (e) {
+                        console.error("Error releasing writer:", e);
+                    }
+                    writer = null;
+                }
+                
+                // Give a small delay to ensure locks are fully released
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Close the port
+                if (port) { 
+                    try {
+                        await port.close();
+                    } catch (e) {
+                        console.error("Error closing port:", e);
+                    }
+                    port = null;
+                }
+            } catch (err) { 
+                console.error("Error during disconnect:", err); 
+            } finally { 
+                updateUIForDisconnection(); 
+                log('Disconnected.'); 
+            }
         }
 
         async function startReadLoop() {
@@ -928,7 +961,16 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
             updateAIStatus('initializing', 'Initializing...');
             if (provider === 'nano') {
                 try {
-                    if (typeof LanguageModel === 'undefined') throw new Error("LanguageModel API not available. Try enabling chrome://flags/#prompt-api-for-gemini-nano");
+                    if (typeof LanguageModel === 'undefined') {
+                        // Detect browser
+                        const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+                        
+                        if (!isChrome) {
+                            throw new Error("Gemini Nano is only available in Chrome. Please use Chrome browser or switch to a cloud AI provider (Gemini, Claude, or ChatGPT) in the dropdown above.");
+                        } else {
+                            throw new Error("LanguageModel API not available. Try enabling chrome://flags/#prompt-api-for-gemini-nano in Chrome, then restart your browser.");
+                        }
+                    }
                     const availability = await LanguageModel.availability();
                     if (!["available", "readily"].includes(availability)) throw new Error(`Nano model not ready. Status: ${availability}`);
                     aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
