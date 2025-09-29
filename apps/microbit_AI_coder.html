@@ -971,31 +971,28 @@ Remember this is for BBC micro:bit, so use micro:bit specific functions like tem
                             throw new Error("LanguageModel API not available. Try enabling chrome://flags/#prompt-api-for-gemini-nano in Chrome, then restart your browser.");
                         }
                     }
+                    
                     const availability = await LanguageModel.availability();
                     
-                    if (availability === "downloadable") {
-                        updateAIStatus('unavailable', 'Download Needed');
-                        addMessageToChat('ai', 'Gemini Nano needs to be downloaded first (several GB, one-time download). Attempting to trigger download... If this fails, you may need to use a cloud AI provider instead.');
-                        // Attempt to trigger download
-                        try {
-                            aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
-                            updateAIStatus('ready', 'Ready');
-                            addMessageToChat('ai', 'Download complete! Gemini Nano is ready. What would you like to create?');
-                        } catch (downloadError) {
-                            throw new Error('Failed to download Gemini Nano. Please switch to a cloud provider (Gemini, Claude, or ChatGPT) or try again later.');
-                        }
-                    } else if (availability === "after-download") {
-                        updateAIStatus('initializing', 'Downloading...');
-                        addMessageToChat('ai', 'Gemini Nano is downloading (several GB). Please wait, this may take several minutes...');
+                    if (availability === "unavailable") {
+                        throw new Error("Gemini Nano is not supported on your device (insufficient power or disk space). Please use a cloud AI provider instead.");
+                    } else if (availability === "downloadable") {
+                        updateAIStatus('initializing', 'Download Starting...');
+                        addMessageToChat('ai', 'Gemini Nano needs to be downloaded (several GB, one-time). Click below to start the download, then wait for it to complete. Keep this tab open.');
+                        // Calling create() will trigger the download
                         aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
                         updateAIStatus('ready', 'Ready');
                         addMessageToChat('ai', 'Gemini Nano is ready with micro:bit expertise. What would you like to create?');
-                    } else if (availability === "readily" || availability === "available") {
+                    } else if (availability === "downloading") {
+                        updateAIStatus('initializing', 'Downloading...');
+                        addMessageToChat('ai', 'Gemini Nano is currently downloading. Please wait, this may take several minutes. Keep this tab open and refresh when complete.');
+                        throw new Error("Model is still downloading. Please refresh the page in a few minutes once the download completes.");
+                    } else if (availability === "available") {
                         aiSession = await LanguageModel.create({ initialPrompts: [{ role: 'system', content: NANO_SYSTEM_PROMPT }] });
                         updateAIStatus('ready', 'Ready');
                         addMessageToChat('ai', 'Gemini Nano is ready with micro:bit expertise. What would you like to create?');
                     } else {
-                        throw new Error(`Nano model not ready. Status: ${availability}. Please try again later or use a cloud provider.`);
+                        throw new Error(`Unknown Gemini Nano status: ${availability}. Please try a cloud provider.`);
                     }
                 } catch (error) {
                     updateAIStatus('unavailable', 'Error');
