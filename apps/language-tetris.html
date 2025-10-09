@@ -641,13 +641,6 @@
         loadingModal.style.display = 'flex';
         loadingText.textContent = 'Initializing AI...';
 
-        // Correctly check for the browser's built-in LanguageModel API.
-        if (typeof LanguageModel === 'undefined') {
-            showCustomAlert("This feature requires a browser with built-in AI. Please use a recent version of Google Chrome.", true);
-            loadingModal.style.display = 'none';
-            return;
-        }
-
         const lang1 = lang1Input.value.trim();
         const lang2 = lang2Input.value.trim();
 
@@ -656,7 +649,6 @@
             loadingModal.style.display = 'none';
             return;
         }
-
         if (lang1.toLowerCase() === lang2.toLowerCase()) {
             showCustomAlert("Please enter two different languages.", true);
             loadingModal.style.display = 'none';
@@ -673,8 +665,40 @@
                 }
             }, 250);
         }
-        
-        const fullPrompt = `You are a helpful language assistant. Your task is to generate a list of word pairs for a language learning game.
+
+        try {
+            let jsonText;
+            let useBuiltInAI = false;
+            
+            // First, check if the on-device model is available and supported.
+            if (typeof LanguageModel !== 'undefined') {
+                const availability = await LanguageModel.availability();
+                if (availability !== 'unavailable') {
+                    useBuiltInAI = true;
+                } else {
+                     console.log("On-Device AI model is not supported, falling back to Cloud API.");
+                }
+            }
+
+            if (useBuiltInAI) {
+                // Use the browser's built-in AI
+                loadingText.textContent = 'Initializing On-Device AI...';
+                const availability = await LanguageModel.availability(); // Re-check for other states
+                if (availability === 'downloading') throw new Error("On-Device AI model is downloading. Please try again soon.");
+                if (availability === 'downloadable') loadingText.textContent = `Downloading On-Device AI...`;
+                
+                const session = await LanguageModel.create({
+                    monitor(m) {
+                        m.addEventListener('downloadprogress', (e) => {
+                            if (e.total) {
+                                const percent = Math.round(e.loaded / e.total * 100);
+                                loadingText.textContent = `Downloading On-Device AI: ${percent}%`;
+                            }
+                        });
+                    },
+                });
+
+                const fullPrompt = `You are a helpful language assistant. Your task is to generate a list of word pairs for a language learning game.
 The user will provide a category. You must return a valid JSON array of 15 objects.
 Each object should represent a translation pair between ${lang1} (lang1) and ${lang2} (lang2).
 The keys must be "lang1" for the ${lang1} word and "lang2" for the ${lang2} word.
@@ -682,41 +706,53 @@ The words should be common and relevant to the provided category.
 Ensure the words are lowercase.
 The user's category is: ${category}`;
 
-        try {
-            // Check for model availability as per the new documentation.
-            const availability = await LanguageModel.availability();
+                loadingText.textContent = 'Generating new words...';
+                jsonText = await session.prompt(fullPrompt);
+                session.destroy();
 
-            if (availability === 'unavailable') {
-                throw new Error("The AI model is not supported on this device.");
-            }
-             if (availability === 'downloading') {
-                loadingText.textContent = 'AI model is downloading...';
-                throw new Error("AI model is still downloading. Please try again in a moment.");
-            }
+            } else {
+                // Fallback to Gemini Flash API
+                console.log("On-Device AI not found or supported. Using Gemini Flash API fallback.");
+                loadingText.textContent = 'Using Cloud AI...';
 
-            // If 'available' or 'downloadable', the user click allows us to proceed.
-            console.log("Using browser's built-in AI (Prompt API). State: " + availability);
-            if (availability === 'downloadable') {
-                 loadingText.textContent = `Downloading AI model... (this may take a while)`;
-            }
-            
-            const session = await LanguageModel.create({
-                monitor(m) {
-                    m.addEventListener('downloadprogress', (e) => {
-                        if (e.total) {
-                            const percent = Math.round(e.loaded / e.total * 100);
-                            console.log(`Downloading model: ${percent}%`);
-                            loadingText.textContent = `Downloading AI model: ${percent}%`;
-                        } else {
-                            loadingText.textContent = `Downloading AI model...`;
+                const systemPrompt = `You are a helpful language assistant. Your task is to generate a list of word pairs for a language learning game.
+The user will provide a category. You must return a JSON array of 15 objects.
+Each object should represent a translation pair between ${lang1} (lang1) and ${lang2} (lang2).
+The keys must be "lang1" for the ${lang1} word and "lang2" for the ${lang2} word.
+The words should be common and relevant to the provided category.
+Ensure the words are lowercase.`;
+                const userQuery = `Category: ${category}`;
+                const apiKey = ""; // Provided by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: { "lang1": { "type": "STRING" }, "lang2": { "type": "STRING" } },
+                                required: ["lang1", "lang2"]
+                            }
                         }
-                    });
-                },
-            });
+                    }
+                };
 
-            loadingText.textContent = 'Generating new words...';
-            let jsonText = await session.prompt(fullPrompt);
-            session.destroy();
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Cloud API request failed with status ${response.status}`);
+                }
+                const result = await response.json();
+                jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            }
             
             if (jsonText) {
                 // Clean the response: The model sometimes wraps the JSON in markdown.
@@ -729,13 +765,8 @@ The user's category is: ${category}`;
                 const newWords = JSON.parse(jsonText);
                 if (Array.isArray(newWords) && newWords.length > 0) {
                     wordPairs = newWords;
-                    // Update current game settings after a successful fetch
-                    currentGameSettings = {
-                        lang1: lang1Input.value.trim(),
-                        lang2: lang2Input.value.trim(),
-                        category: categoryInput.value.trim()
-                    };
-                    showCustomAlert(`Successfully fetched new words for '${currentGameSettings.category}'!`);
+                    currentGameSettings = { lang1, lang2, category };
+                    showCustomAlert(`Successfully fetched new words for '${category}'!`);
                     resetGame();
                 } else {
                     throw new Error("Invalid data format received from AI.");
@@ -744,7 +775,7 @@ The user's category is: ${category}`;
                 throw new Error("No content received from AI.");
             }
         } catch (error) {
-            console.error("Error fetching words with browser AI:", error);
+            console.error("Error fetching words with AI:", error);
             showCustomAlert(`Could not fetch new words. ${error.message}`, true);
         } finally {
             loadingModal.style.display = 'none';
