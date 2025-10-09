@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Language Blocks</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            animation: slideIn 0.3s;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        canvas {
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #667eea;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="gradient-bg text-white flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl mx-auto flex flex-col lg:flex-row gap-8">
+        <!-- Game Canvas and Controls -->
+        <div class="flex-grow flex flex-col items-center">
+            <h1 class="text-4xl font-bold mb-4 tracking-tight">Language Blocks</h1>
+            <div id="game-container" class="relative">
+                 <canvas id="gameCanvas" width="420" height="700" class="bg-black bg-opacity-20 shadow-2xl"></canvas>
+                 <div id="pause-overlay" class="absolute inset-0 bg-black bg-opacity-50 text-white text-3xl font-bold items-center justify-center hidden">Paused</div>
+            </div>
+             <div class="mt-4 text-center text-sm text-gray-300 w-full max-w-sm">
+                <p>Use Arrow Keys or on-screen buttons to move and rotate.</p>
+                <p>'P' to pause. Match translated words to clear blocks!</p>
+            </div>
+        </div>
+
+        <!-- Sidebar with Score, Controls, and Word Generation -->
+        <div class="w-full lg:w-64 flex-shrink-0">
+            <div class="bg-black bg-opacity-20 p-6 rounded-lg shadow-xl space-y-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-300">Score</h2>
+                    <p id="score" class="text-4xl font-bold">0</p>
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-300">Level</h2>
+                    <p id="level" class="text-2xl font-bold">1</p>
+                </div>
+                <!-- Pronunciation Toggle -->
+                <div class="pt-4 border-t border-white border-opacity-20">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-gray-300">Speak Words</h2>
+                        <label for="speak-toggle" class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="speak-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                        </label>
+                    </div>
+                </div>
+                 <!-- On-screen controls for mobile -->
+                <div class="pt-4 grid grid-cols-3 gap-3 items-center">
+                    <button id="left-btn" class="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-3 transition-transform transform active:scale-90 col-span-1">←</button>
+                    <button id="rotate-btn" class="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-3 transition-transform transform active:scale-90 col-span-1">↻</button>
+                    <button id="right-btn" class="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-3 transition-transform transform active:scale-90 col-span-1">→</button>
+                    <button id="down-btn" class="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-3 transition-transform transform active:scale-90 col-span-3">↓</button>
+                </div>
+
+                <div class="pt-4 border-t border-white border-opacity-20">
+                    <h2 class="text-lg font-semibold text-gray-300 mb-3">Get New Words</h2>
+                    <div id="category-selector">
+                        <div class="mb-2">
+                            <label for="lang1-input" class="text-sm font-medium text-gray-400">Language 1</label>
+                            <input id="lang1-input" type="text" value="English" class="w-full mt-1 bg-white bg-opacity-10 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white">
+                        </div>
+                         <div class="mb-2">
+                            <label for="lang2-input" class="text-sm font-medium text-gray-400">Language 2</label>
+                            <input id="lang2-input" type="text" value="Spanish" class="w-full mt-1 bg-white bg-opacity-10 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white">
+                        </div>
+                        <input id="category-input" type="text" placeholder="e.g., animals, food" class="w-full mt-2 bg-white bg-opacity-10 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white">
+                        <button id="start-game-btn" class="w-full mt-2 bg-indigo-500 hover:bg-indigo-600 rounded-md py-2 font-semibold transition-all duration-200">Start New Game</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="game-over-modal" class="modal items-center justify-center">
+        <div class="modal-content bg-white text-gray-800 p-8 rounded-lg shadow-2xl text-center max-w-sm">
+            <h2 class="text-3xl font-bold mb-2">Game Over</h2>
+            <p class="text-lg mb-4">Your final score is <span id="final-score" class="font-bold">0</span>.</p>
+            <button id="restart-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Play Again</button>
+        </div>
+    </div>
+    
+    <div id="loading-modal" class="modal items-center justify-center">
+         <div class="modal-content bg-white bg-opacity-10 backdrop-blur-md text-white p-8 rounded-lg shadow-2xl text-center flex flex-col items-center gap-4">
+            <div class="loader"></div>
+            <p id="loading-text" class="text-lg font-semibold">Fetching new words with AI...</p>
+        </div>
+    </div>
+
+    <!-- Custom Alert Notification -->
+    <div id="custom-alert" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transition-all duration-300 transform">
+        <p id="custom-alert-message"></p>
+    </div>
+
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const levelEl = document.getElementById('level');
+    const finalScoreEl = document.getElementById('final-score');
+    const gameOverModal = document.getElementById('game-over-modal');
+    const loadingModal = document.getElementById('loading-modal');
+    const restartBtn = document.getElementById('restart-btn');
+    const startGameBtn = document.getElementById('start-game-btn');
+    const categoryInput = document.getElementById('category-input');
+    const pauseOverlay = document.getElementById('pause-overlay');
+    const customAlert = document.getElementById('custom-alert');
+    const customAlertMessage = document.getElementById('custom-alert-message');
+    const loadingText = document.getElementById('loading-text');
+    const lang1Input = document.getElementById('lang1-input');
+    const lang2Input = document.getElementById('lang2-input');
+    const speakToggle = document.getElementById('speak-toggle');
+
+    // --- Speech Synthesis Setup ---
+    let voices = [];
+    function populateVoiceList() {
+        if (typeof speechSynthesis === 'undefined') {
+            return;
+        }
+        voices = speechSynthesis.getVoices();
+    }
+    // Initial population and update when voices change
+    populateVoiceList();
+    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = populateVoiceList;
+    }
+
+    // Game constants
+    const COLS = 12;
+    const ROWS = 20;
+    const BLOCK_SIZE = 35;
+
+    ctx.canvas.width = COLS * BLOCK_SIZE;
+    ctx.canvas.height = ROWS * BLOCK_SIZE;
+
+    // Game state
+    let board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    let score = 0;
+    let level = 1;
+    let dropCounter = 0;
+    let dropInterval = 1000; // ms
+    let lastTime = 0;
+    let activePiece = null;
+    let isPaused = false;
+    let isGameOver = false;
+    let upcomingWords = [];
+    let gameHasStarted = false;
+    let currentGameSettings = { lang1: '', lang2: '', category: '' };
+
+    // Word Pairs (English to Spanish) - Default set
+    let wordPairs = [
+        { lang1: 'hello', lang2: 'hola' },
+        { lang1: 'goodbye', lang2: 'adiós' },
+        { lang1: 'cat', lang2: 'gato' },
+        { lang1: 'dog', lang2: 'perro' },
+        { lang1: 'house', lang2: 'casa' },
+        { lang1: 'water', lang2: 'agua' },
+        { lang1: 'friend', lang2: 'amigo' },
+        { lang1: 'love', lang2: 'amor' },
+        { lang1: 'sun', lang2: 'sol' },
+        { lang1: 'moon', lang2: 'luna' }
+    ];
+
+    const shapes = [
+        [[1,1,1,1]], // I
+        [[1,1],[1,1]], // O
+        [[0,1,0],[1,1,1]], // T
+        [[0,1,1],[1,1,0]], // S
+        [[1,1,0],[0,1,1]], // Z
+        [[1,0,0],[1,1,1]], // L
+        [[0,0,1],[1,1,1]] // J
+    ];
+    
+    const colors = ['#f94144', '#f3722c', '#f8961e', '#f9c74f', '#90be6d', '#43aa8b', '#577590'];
+
+    class Piece {
+        constructor(shape, wordData) {
+            this.shape = shape;
+            this.color = colors[Math.floor(Math.random() * colors.length)];
+            this.wordData = wordData;
+            this.x = Math.floor(COLS / 2) - Math.floor(this.shape[0].length / 2);
+            this.y = 0;
+        }
+
+        draw() {
+            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 2;
+            this.shape.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value > 0) {
+                        const blockX = (this.x + x) * BLOCK_SIZE;
+                        const blockY = (this.y + y) * BLOCK_SIZE;
+                        
+                        // Set the piece color for each block before drawing to prevent drawing white blocks
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(blockX, blockY, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.strokeRect(blockX, blockY, BLOCK_SIZE, BLOCK_SIZE);
+
+                        // Draw word on each block
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = '14px Inter';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(this.wordData.word, blockX + BLOCK_SIZE / 2, blockY + BLOCK_SIZE / 2);
+                    }
+                });
+            });
+        }
+    }
+
+    function createNewPiece() {
+        const shape = shapes[Math.floor(Math.random() * shapes.length)];
+        let wordData;
+
+        // As level increases, the chance of getting a non-matching piece increases
+        const randomChance = Math.min(0.5, (level - 1) * 0.05); // Capped at 50%
+
+        if (upcomingWords.length > 0 && Math.random() > randomChance) {
+            // Serve the next queued translation
+            wordData = upcomingWords.shift();
+        } else {
+            // Generate a new random word pair
+            const wordPair = wordPairs[Math.floor(Math.random() * wordPairs.length)];
+            const isLang1 = Math.random() > 0.5;
+
+            // Set the data for the current piece
+            wordData = {
+                word: isLang1 ? wordPair.lang1 : wordPair.lang2,
+                translation: isLang1 ? wordPair.lang2 : wordPair.lang1,
+                lang: isLang1 ? 1 : 2
+            };
+
+            // Add its translation to the upcoming words queue to be used later
+            upcomingWords.push({
+                word: isLang1 ? wordPair.lang2 : wordPair.lang1,
+                translation: isLang1 ? wordPair.lang1 : wordPair.lang2,
+                lang: isLang1 ? 2 : 1
+            });
+        }
+        
+        const piece = new Piece(shape, wordData);
+        
+        if (speakToggle.checked) {
+            const langName = piece.wordData.lang === 1 ? lang1Input.value : lang2Input.value;
+            speakWord(piece.wordData.word, langName);
+        }
+
+        return piece;
+    }
+
+    // --- Speech Synthesis Functions ---
+
+    // Moved to global scope to be accessible by multiple functions
+    function getLangCode(lang) {
+        const langMap = {
+            'english': 'en-US',
+            'spanish': 'es-ES',
+            'french': 'fr-FR',
+            'german': 'de-DE',
+            'italian': 'it-IT',
+            'portuguese': 'pt-BR',
+            'dutch': 'nl-NL',
+            'russian': 'ru-RU',
+            'japanese': 'ja-JP',
+            'korean': 'ko-KR',
+            'chinese': 'zh-CN'
+        };
+        return langMap[lang.toLowerCase()] || lang.toLowerCase(); // Fallback to the language name itself
+    }
+
+    function hasVoiceForLanguage(langName) {
+        if (!('speechSynthesis' in window) || voices.length === 0) return false;
+        
+        const langCode = getLangCode(langName);
+        const langCodeShort = langCode.split('-')[0];
+        
+        return voices.some(voice => voice.lang === langCode || voice.lang.startsWith(langCodeShort + '-'));
+    }
+
+    function speakWord(word, langName) {
+        if (!('speechSynthesis' in window)) {
+            console.warn("Speech Synthesis is not supported in this browser.");
+            // The main warning is now handled by the event listener, so no alert here.
+            return;
+        }
+
+        // Cancel any previous speech
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(word);
+        utterance.lang = getLangCode(langName);
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function drawBoard() {
+        board.forEach((row, y) => {
+            row.forEach((cell, x) => {
+                if (cell) {
+                    ctx.fillStyle = cell.color;
+                    ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    
+                    // Draw word
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '14px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(cell.wordData.word, x * BLOCK_SIZE + BLOCK_SIZE / 2, y * BLOCK_SIZE + BLOCK_SIZE / 2);
+                }
+            });
+        });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBoard();
+        if(activePiece) activePiece.draw();
+    }
+    
+    function update(time = 0) {
+        if (isPaused || isGameOver) return;
+        
+        const deltaTime = time - lastTime;
+        lastTime = time;
+        dropCounter += deltaTime;
+
+        if (dropCounter > dropInterval) {
+            playerDrop();
+        }
+
+        draw();
+        requestAnimationFrame(update);
+    }
+    
+    function playerDrop() {
+        if (!activePiece) return;
+        activePiece.y++;
+        if (checkCollision()) {
+            activePiece.y--;
+            mergePiece();
+            checkMatches();
+            activePiece = createNewPiece();
+            if (checkCollision()) {
+                gameOver();
+            }
+        }
+        dropCounter = 0;
+    }
+
+    function checkCollision() {
+        if (!activePiece) return false;
+        const { shape, x, y } = activePiece;
+        for (let row = 0; row < shape.length; row++) {
+            for (let col = 0; col < shape[row].length; col++) {
+                if (shape[row][col] && 
+                   (board[y + row] && board[y + row][x + col]) !== null) {
+                    return true;
+                }
+                if (shape[row][col] && (y + row >= ROWS || x + col < 0 || x + col >= COLS)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function mergePiece() {
+        if (!activePiece) return;
+        activePiece.shape.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value) {
+                    const boardY = activePiece.y + y;
+                    const boardX = activePiece.x + x;
+                    if(boardY >= 0) {
+                       board[boardY][boardX] = {
+                           color: activePiece.color,
+                           wordData: activePiece.wordData
+                       };
+                    }
+                }
+            });
+        });
+    }
+    
+    function checkMatches() {
+        let matchedCells = new Set();
+
+        for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+                const currentCell = board[y][x];
+                if (!currentCell) continue;
+
+                const neighbors = [
+                    { dx: 0, dy: -1 }, // Top
+                    { dx: 0, dy: 1 },  // Bottom
+                    { dx: -1, dy: 0 }, // Left
+                    { dx: 1, dy: 0 }   // Right
+                ];
+                
+                neighbors.forEach(n => {
+                    const nx = x + n.dx;
+                    const ny = y + n.dy;
+
+                    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+                        const neighborCell = board[ny][nx];
+                        if (neighborCell &&
+                            neighborCell.wordData.lang !== currentCell.wordData.lang &&
+                            neighborCell.wordData.word === currentCell.wordData.translation) {
+                            
+                            matchedCells.add(`${y},${x}`);
+                            matchedCells.add(`${ny},${nx}`);
+                        }
+                    }
+                });
+            }
+        }
+        
+        if (matchedCells.size > 0) {
+            matchedCells.forEach(cell => {
+                const [y, x] = cell.split(',').map(Number);
+                board[y][x] = null;
+            });
+            updateScore(matchedCells.size * 10);
+            clearLines();
+        }
+    }
+
+    function clearLines() {
+        let newBoard = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+        let newRow = ROWS - 1;
+        
+        for (let y = ROWS - 1; y >= 0; y--) {
+            let isEmptyRow = board[y].every(cell => cell === null);
+            let isFullRow = board[y].every(cell => cell !== null);
+            
+            // This logic is tricky for a Tetris-like drop with holes.
+            // A simpler gravity effect is better.
+        }
+
+        // Apply gravity
+        for (let x = 0; x < COLS; x++) {
+            let emptySpace = 0;
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (board[y][x] === null) {
+                    emptySpace++;
+                } else if (emptySpace > 0) {
+                    board[y + emptySpace][x] = board[y][x];
+                    board[y][x] = null;
+                }
+            }
+        }
+    }
+
+
+    function updateScore(points) {
+        score += points;
+        scoreEl.textContent = score;
+        
+        const newLevel = Math.floor(score / 500) + 1;
+        if (newLevel > level) {
+            level = newLevel;
+            levelEl.textContent = level;
+            dropInterval = Math.max(200, 1000 - (level - 1) * 50);
+        }
+    }
+    
+    function playerMove(offset) {
+        if (!activePiece) return;
+        activePiece.x += offset;
+        if (checkCollision()) {
+            activePiece.x -= offset;
+        }
+    }
+
+    function rotate() {
+        if (!activePiece) return;
+        const originalShape = activePiece.shape;
+        const rotated = originalShape[0].map((_, colIndex) => originalShape.map(row => row[colIndex])).reverse();
+        activePiece.shape = rotated;
+        if (checkCollision()) {
+            activePiece.shape = originalShape; // Revert if collision
+        }
+    }
+    
+    function gameOver() {
+        isGameOver = true;
+        finalScoreEl.textContent = score;
+        gameOverModal.style.display = 'flex';
+    }
+
+    function resetGame() {
+        board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+        score = 0;
+        level = 1;
+        dropInterval = 1000;
+        isGameOver = false;
+        gameHasStarted = true;
+        upcomingWords = [];
+        updateScore(0);
+        levelEl.textContent = level;
+        activePiece = createNewPiece();
+        gameOverModal.style.display = 'none';
+        
+        // Start the game loop only when reset is called
+        lastTime = 0; // Reset time for consistent drop speed
+        requestAnimationFrame(update);
+    }
+    
+    function togglePause() {
+        if (!gameHasStarted || isGameOver) return;
+        isPaused = !isPaused;
+        pauseOverlay.style.display = isPaused ? 'flex' : 'none';
+        if (!isPaused) {
+            update();
+        }
+    }
+
+    // Keyboard controls
+    document.addEventListener('keydown', event => {
+        if (isPaused && event.key !== 'p' && event.key !== 'P') return;
+        
+        switch (event.key) {
+            case 'ArrowLeft':
+                playerMove(-1);
+                break;
+            case 'ArrowRight':
+                playerMove(1);
+                break;
+            case 'ArrowDown':
+                playerDrop();
+                break;
+            case 'ArrowUp':
+                rotate();
+                break;
+            case 'p':
+            case 'P':
+                togglePause();
+                break;
+        }
+    });
+
+    // On-screen button controls
+    document.getElementById('left-btn').addEventListener('click', () => playerMove(-1));
+    document.getElementById('right-btn').addEventListener('click', () => playerMove(1));
+    document.getElementById('down-btn').addEventListener('click', () => playerDrop());
+    document.getElementById('rotate-btn').addEventListener('click', () => rotate());
+
+    restartBtn.addEventListener('click', resetGame);
+
+    speakToggle.addEventListener('change', () => {
+        if (speakToggle.checked) {
+            // Use a small timeout to ensure the browser's async voice list has populated
+            setTimeout(() => {
+                const lang1 = lang1Input.value.trim();
+                const lang2 = lang2Input.value.trim();
+
+                if (!hasVoiceForLanguage(lang1)) {
+                    showCustomAlert(`Warning: No voice for ${lang1} in this browser.`, true);
+                }
+                if (!hasVoiceForLanguage(lang2)) {
+                    showCustomAlert(`Warning: No voice for ${lang2} in this browser.`, true);
+                }
+            }, 250);
+        }
+    });
+    
+    // --- Custom Alert Function ---
+    let alertTimeout;
+    function showCustomAlert(message, isError = false) {
+        clearTimeout(alertTimeout);
+        customAlertMessage.textContent = message;
+        
+        customAlert.classList.remove('hidden', 'opacity-0', 'translate-y-4', 'bg-green-500', 'bg-red-500');
+        customAlert.classList.add(isError ? 'bg-red-500' : 'bg-green-500');
+
+        // Trigger fade in
+        setTimeout(() => {
+             customAlert.classList.add('opacity-100', '-translate-y-0');
+        }, 10);
+
+        alertTimeout = setTimeout(() => {
+            customAlert.classList.remove('opacity-100', '-translate-y-0');
+            setTimeout(() => customAlert.classList.add('hidden'), 300);
+        }, 3000);
+    }
+
+    // --- AI Integration ---
+    async function getWordsFromGemini(category) {
+        loadingModal.style.display = 'flex';
+        loadingText.textContent = 'Initializing AI...';
+
+        // Correctly check for the browser's built-in LanguageModel API.
+        if (typeof LanguageModel === 'undefined') {
+            showCustomAlert("This feature requires a browser with built-in AI. Please use a recent version of Google Chrome.", true);
+            loadingModal.style.display = 'none';
+            return;
+        }
+
+        const lang1 = lang1Input.value.trim();
+        const lang2 = lang2Input.value.trim();
+
+        if (!lang1 || !lang2) {
+            showCustomAlert("Please enter both languages.", true);
+            loadingModal.style.display = 'none';
+            return;
+        }
+
+        if (lang1.toLowerCase() === lang2.toLowerCase()) {
+            showCustomAlert("Please enter two different languages.", true);
+            loadingModal.style.display = 'none';
+            return;
+        }
+
+        if (speakToggle.checked) {
+            setTimeout(() => {
+                if (!hasVoiceForLanguage(lang1)) {
+                     showCustomAlert(`Warning: No voice for ${lang1} in this browser.`, true);
+                }
+                if (!hasVoiceForLanguage(lang2)) {
+                     showCustomAlert(`Warning: No voice for ${lang2} in this browser.`, true);
+                }
+            }, 250);
+        }
+        
+        const fullPrompt = `You are a helpful language assistant. Your task is to generate a list of word pairs for a language learning game.
+The user will provide a category. You must return a valid JSON array of 15 objects.
+Each object should represent a translation pair between ${lang1} (lang1) and ${lang2} (lang2).
+The keys must be "lang1" for the ${lang1} word and "lang2" for the ${lang2} word.
+The words should be common and relevant to the provided category.
+Ensure the words are lowercase.
+The user's category is: ${category}`;
+
+        try {
+            // Check for model availability as per the new documentation.
+            const availability = await LanguageModel.availability();
+
+            if (availability === 'unavailable') {
+                throw new Error("The AI model is not supported on this device.");
+            }
+             if (availability === 'downloading') {
+                loadingText.textContent = 'AI model is downloading...';
+                throw new Error("AI model is still downloading. Please try again in a moment.");
+            }
+
+            // If 'available' or 'downloadable', the user click allows us to proceed.
+            console.log("Using browser's built-in AI (Prompt API). State: " + availability);
+            if (availability === 'downloadable') {
+                 loadingText.textContent = `Downloading AI model... (this may take a while)`;
+            }
+            
+            const session = await LanguageModel.create({
+                monitor(m) {
+                    m.addEventListener('downloadprogress', (e) => {
+                        if (e.total) {
+                            const percent = Math.round(e.loaded / e.total * 100);
+                            console.log(`Downloading model: ${percent}%`);
+                            loadingText.textContent = `Downloading AI model: ${percent}%`;
+                        } else {
+                            loadingText.textContent = `Downloading AI model...`;
+                        }
+                    });
+                },
+            });
+
+            loadingText.textContent = 'Generating new words...';
+            let jsonText = await session.prompt(fullPrompt);
+            session.destroy();
+            
+            if (jsonText) {
+                // Clean the response: The model sometimes wraps the JSON in markdown.
+                if (jsonText.startsWith("```json")) {
+                    jsonText = jsonText.substring(7, jsonText.length - 3).trim();
+                } else if (jsonText.startsWith("```")) {
+                    jsonText = jsonText.substring(3, jsonText.length - 3).trim();
+                }
+
+                const newWords = JSON.parse(jsonText);
+                if (Array.isArray(newWords) && newWords.length > 0) {
+                    wordPairs = newWords;
+                    // Update current game settings after a successful fetch
+                    currentGameSettings = {
+                        lang1: lang1Input.value.trim(),
+                        lang2: lang2Input.value.trim(),
+                        category: categoryInput.value.trim()
+                    };
+                    showCustomAlert(`Successfully fetched new words for '${currentGameSettings.category}'!`);
+                    resetGame();
+                } else {
+                    throw new Error("Invalid data format received from AI.");
+                }
+            } else {
+                throw new Error("No content received from AI.");
+            }
+        } catch (error) {
+            console.error("Error fetching words with browser AI:", error);
+            showCustomAlert(`Could not fetch new words. ${error.message}`, true);
+        } finally {
+            loadingModal.style.display = 'none';
+            loadingText.textContent = 'Fetching new words with AI...';
+        }
+    }
+    
+    startGameBtn.addEventListener('click', () => {
+        const newLang1 = lang1Input.value.trim();
+        const newLang2 = lang2Input.value.trim();
+        const newCategory = categoryInput.value.trim();
+
+        if (!newCategory) {
+            showCustomAlert("Please enter a category to start.", true);
+            return;
+        }
+
+        const settingsChanged = 
+            newLang1 !== currentGameSettings.lang1 ||
+            newLang2 !== currentGameSettings.lang2 ||
+            newCategory !== currentGameSettings.category;
+
+        if (!gameHasStarted || settingsChanged) {
+            getWordsFromGemini(newCategory);
+        } else {
+            resetGame();
+        }
+    });
+    
+    function drawStartScreen() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.textAlign = 'center';
+        
+        ctx.font = 'bold 28px Inter';
+        ctx.fillText('Language Blocks', canvas.width / 2, canvas.height / 2 - 60);
+
+        ctx.font = '16px Inter';
+        ctx.fillText("Choose your languages and a category.", canvas.width / 2, canvas.height / 2);
+        ctx.fillText("Then press 'Start New Game' to begin!", canvas.width / 2, canvas.height / 2 + 30);
+    }
+    
+    // Initial game start
+    drawStartScreen();
+</script>
+</body>
+</html>
+
