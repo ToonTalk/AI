@@ -128,6 +128,27 @@
         </div>
     </div>
     
+    <!-- API Key Modal -->
+    <div id="api-key-modal" class="modal items-center justify-center">
+        <div class="modal-content bg-white text-gray-800 p-8 rounded-lg shadow-2xl text-left max-w-md">
+            <h2 class="text-2xl font-bold mb-4">Gemini API Key Required</h2>
+            <p class="text-base mb-4">
+                To generate new words, this game uses the Google Gemini API. Since your browser's built-in AI is not available, a cloud API key is needed.
+            </p>
+            <p class="text-sm mb-4 text-gray-600">
+                You can get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-indigo-600 hover:underline">Google AI Studio</a>. Your key is saved only in your browser.
+            </p>
+            <div>
+                <label for="api-key-input" class="block text-sm font-medium text-gray-700">Your Gemini API Key</label>
+                <input type="password" id="api-key-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+            <div class="mt-6 flex justify-end gap-4">
+                <button id="api-key-cancel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors">Cancel</button>
+                <button id="api-key-save-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">Save & Continue</button>
+            </div>
+        </div>
+    </div>
+
     <div id="loading-modal" class="modal items-center justify-center">
          <div class="modal-content bg-white bg-opacity-10 backdrop-blur-md text-white p-8 rounded-lg shadow-2xl text-center flex flex-col items-center gap-4">
             <div class="loader"></div>
@@ -159,6 +180,10 @@
     const lang1Input = document.getElementById('lang1-input');
     const lang2Input = document.getElementById('lang2-input');
     const speakToggle = document.getElementById('speak-toggle');
+    const apiKeyModal = document.getElementById('api-key-modal');
+    const apiKeyInput = document.getElementById('api-key-input');
+    const apiKeySaveBtn = document.getElementById('api-key-save-btn');
+    const apiKeyCancelBtn = document.getElementById('api-key-cancel-btn');
 
     // --- Speech Synthesis Setup ---
     let voices = [];
@@ -195,6 +220,7 @@
     let upcomingWords = [];
     let gameHasStarted = false;
     let currentGameSettings = { lang1: '', lang2: '', category: '' };
+    let geminiApiKey = '';
 
     // Word Pairs (English to Spanish) - Default set
     let wordPairs = [
@@ -598,6 +624,29 @@
     document.getElementById('rotate-btn').addEventListener('click', () => rotate());
 
     restartBtn.addEventListener('click', resetGame);
+    
+    apiKeySaveBtn.addEventListener('click', () => {
+        const key = apiKeyInput.value.trim();
+        if (key) {
+            geminiApiKey = key;
+            localStorage.setItem('wordfall_gemini_api_key', key);
+            apiKeyModal.style.display = 'none';
+            showCustomAlert('API Key saved successfully!');
+            // Re-trigger the word fetch now that we have a key
+            const category = categoryInput.value.trim();
+            if (category) {
+                getWordsFromGemini(category);
+            }
+        } else {
+            showCustomAlert('Please enter a valid API key.', true);
+        }
+    });
+
+    apiKeyCancelBtn.addEventListener('click', () => {
+        apiKeyModal.style.display = 'none';
+        loadingModal.style.display = 'none'; // Also hide loading modal if it was open
+    });
+
 
     speakToggle.addEventListener('change', () => {
         if (speakToggle.checked) {
@@ -713,6 +762,14 @@ The user's category is: ${category}`;
             } else {
                 // Fallback to Gemini Flash API
                 console.log("On-Device AI not found or supported. Using Gemini Flash API fallback.");
+
+                // Check for a user-provided API key
+                if (!geminiApiKey) {
+                    loadingModal.style.display = 'none'; // Hide loading spinner
+                    apiKeyModal.style.display = 'flex'; // Show API key prompt
+                    return; // Stop execution until key is provided
+                }
+
                 loadingText.textContent = 'Using Cloud AI...';
 
                 const systemPrompt = `You are a helpful language assistant. Your task is to generate a list of word pairs for a language learning game.
@@ -722,8 +779,7 @@ The keys must be "lang1" for the ${lang1} word and "lang2" for the ${lang2} word
 The words should be common and relevant to the provided category.
 Ensure the words are lowercase.`;
                 const userQuery = `Category: ${category}`;
-                const apiKey = ""; // Provided by the environment
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
 
                 const payload = {
                     contents: [{ parts: [{ text: userQuery }] }],
@@ -748,6 +804,12 @@ Ensure the words are lowercase.`;
                 });
 
                 if (!response.ok) {
+                    if (response.status === 400 || response.status === 403) {
+                        // Bad key. Clear it and re-prompt.
+                        geminiApiKey = '';
+                        localStorage.removeItem('wordfall_gemini_api_key');
+                        throw new Error(`Cloud API Key is invalid. Please enter a new one.`);
+                    }
                     throw new Error(`Cloud API request failed with status ${response.status}`);
                 }
                 const result = await response.json();
@@ -818,8 +880,13 @@ Ensure the words are lowercase.`;
         ctx.fillText("Then press 'Start New Game' to begin!", canvas.width / 2, canvas.height / 2 + 30);
     }
     
+    function loadApiKey() {
+        geminiApiKey = localStorage.getItem('wordfall_gemini_api_key') || '';
+    }
+
     // Initial game start
     drawStartScreen();
+    loadApiKey();
 </script>
 </body>
 </html>
