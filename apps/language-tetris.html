@@ -53,6 +53,10 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        #difficulty-select option {
+            background-color: #475569; /* A dark slate color */
+            color: white;
+        }
     </style>
 </head>
 <body class="gradient-bg text-white flex items-center justify-center min-h-screen p-4">
@@ -78,10 +82,7 @@
                     <h2 class="text-lg font-semibold text-gray-300">Score</h2>
                     <p id="score" class="text-4xl font-bold">0</p>
                 </div>
-                <div>
-                    <h2 class="text-lg font-semibold text-gray-300">Level</h2>
-                    <p id="level" class="text-2xl font-bold">1</p>
-                </div>
+                
                 <!-- Pronunciation Toggle -->
                 <div class="pt-4 border-t border-white border-opacity-20">
                     <div class="flex items-center justify-between">
@@ -103,6 +104,14 @@
                 <div class="pt-4 border-t border-white border-opacity-20">
                     <h2 class="text-lg font-semibold text-gray-300 mb-3">Game Settings</h2>
                     <div id="category-selector">
+                        <div class="mb-2">
+                            <label for="difficulty-select" class="text-sm font-medium text-gray-400">Difficulty</label>
+                            <select id="difficulty-select" class="w-full mt-1 bg-white bg-opacity-10 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white">
+                                <option value="easy">Easy</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="hard">Hard</option>
+                            </select>
+                        </div>
                         <div class="mb-2">
                             <label for="lang1-input" class="text-sm font-medium text-gray-400">Language 1</label>
                             <input id="lang1-input" type="text" value="English" class="w-full mt-1 bg-white bg-opacity-10 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white">
@@ -166,7 +175,6 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('score');
-    const levelEl = document.getElementById('level');
     const finalScoreEl = document.getElementById('final-score');
     const gameOverModal = document.getElementById('game-over-modal');
     const loadingModal = document.getElementById('loading-modal');
@@ -184,6 +192,7 @@
     const apiKeyInput = document.getElementById('api-key-input');
     const apiKeySaveBtn = document.getElementById('api-key-save-btn');
     const apiKeyCancelBtn = document.getElementById('api-key-cancel-btn');
+    const difficultySelect = document.getElementById('difficulty-select');
 
     // --- Speech Synthesis Setup ---
     let voices = [];
@@ -210,7 +219,6 @@
     // Game state
     let board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     let score = 0;
-    let level = 1;
     let dropCounter = 0;
     let dropInterval = 1000; // ms
     let lastTime = 0;
@@ -219,7 +227,7 @@
     let isGameOver = false;
     let upcomingWords = [];
     let gameHasStarted = false;
-    let currentGameSettings = { lang1: '', lang2: '', category: '' };
+    let currentGameSettings = { lang1: '', lang2: '', category: '', difficulty: '' };
     let geminiApiKey = '';
 
     // Word Pairs (English to Spanish) - Default set
@@ -288,7 +296,13 @@
         let wordData;
 
         // As level increases, the chance of getting a non-matching piece increases
-        const randomChance = Math.min(0.5, (level - 1) * 0.05); // Capped at 50%
+        const difficulty = difficultySelect.value;
+        const difficultySettings = {
+            easy: { chance: 0.10 },
+            medium: { chance: 0.25 },
+            hard: { chance: 0.40 }
+        };
+        const randomChance = difficultySettings[difficulty].chance;
 
         if (upcomingWords.length > 0 && Math.random() > randomChance) {
             // Serve the next queued translation
@@ -533,13 +547,6 @@
     function updateScore(points) {
         score += points;
         scoreEl.textContent = score;
-        
-        const newLevel = Math.floor(score / 500) + 1;
-        if (newLevel > level) {
-            level = newLevel;
-            levelEl.textContent = level;
-            dropInterval = Math.max(200, 1000 - (level - 1) * 50);
-        }
     }
     
     function playerMove(offset) {
@@ -569,13 +576,19 @@
     function resetGame() {
         board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
         score = 0;
-        level = 1;
-        dropInterval = 1000;
+        
+        const difficulty = difficultySelect.value;
+        const difficultySettings = {
+            easy: { interval: 1200 },
+            medium: { interval: 1000 },
+            hard: { interval: 800 }
+        };
+        dropInterval = difficultySettings[difficulty].interval;
+
         isGameOver = false;
         gameHasStarted = true;
         upcomingWords = [];
         updateScore(0);
-        levelEl.textContent = level;
         activePiece = createNewPiece();
         gameOverModal.style.display = 'none';
         
@@ -692,6 +705,8 @@
 
         const lang1 = lang1Input.value.trim();
         const lang2 = lang2Input.value.trim();
+        const difficulty = difficultySelect.value;
+        const wordCount = { easy: 10, medium: 15, hard: 25 }[difficulty];
 
         if (!lang1 || !lang2) {
             showCustomAlert("Please enter both languages.", true);
@@ -748,7 +763,7 @@
                 });
 
                 const fullPrompt = `You are a helpful language assistant. Your task is to generate a list of word pairs for a language learning game.
-The user will provide a category. You must return a valid JSON array of 15 objects.
+The user will provide a category. You must return a valid JSON array of ${wordCount} objects.
 Each object should represent a translation pair between ${lang1} (lang1) and ${lang2} (lang2).
 The keys must be "lang1" for the ${lang1} word and "lang2" for the ${lang2} word.
 The words should be common and relevant to the provided category.
@@ -763,8 +778,11 @@ The user's category is: ${category}`;
                 // Fallback to Gemini Flash API
                 console.log("On-Device AI not found or supported. Using Gemini Flash API fallback.");
 
-                // Check for a user-provided API key
-                if (!geminiApiKey) {
+                // A reliable check for the Gemini Canvas environment.
+                const isGeminiCanvas = typeof __app_id !== 'undefined';
+
+                // Only prompt for a key if we are NOT in the canvas and the key is missing.
+                if (!geminiApiKey && !isGeminiCanvas) {
                     loadingModal.style.display = 'none'; // Hide loading spinner
                     apiKeyModal.style.display = 'flex'; // Show API key prompt
                     return; // Stop execution until key is provided
@@ -773,7 +791,7 @@ The user's category is: ${category}`;
                 loadingText.textContent = 'Using Cloud AI...';
 
                 const systemPrompt = `You are a helpful language assistant. Your task is to generate a list of word pairs for a language learning game.
-The user will provide a category. You must return a JSON array of 15 objects.
+The user will provide a category. You must return a JSON array of ${wordCount} objects.
 Each object should represent a translation pair between ${lang1} (lang1) and ${lang2} (lang2).
 The keys must be "lang1" for the ${lang1} word and "lang2" for the ${lang2} word.
 The words should be common and relevant to the provided category.
@@ -827,7 +845,7 @@ Ensure the words are lowercase.`;
                 const newWords = JSON.parse(jsonText);
                 if (Array.isArray(newWords) && newWords.length > 0) {
                     wordPairs = newWords;
-                    currentGameSettings = { lang1, lang2, category };
+                    currentGameSettings = { lang1, lang2, category, difficulty };
                     showCustomAlert(`Successfully fetched new words for '${category}'!`);
                     resetGame();
                 } else {
@@ -849,6 +867,7 @@ Ensure the words are lowercase.`;
         const newLang1 = lang1Input.value.trim();
         const newLang2 = lang2Input.value.trim();
         const newCategory = categoryInput.value.trim();
+        const newDifficulty = difficultySelect.value;
 
         if (!newCategory) {
             showCustomAlert("Please enter a category to start.", true);
@@ -858,7 +877,8 @@ Ensure the words are lowercase.`;
         const settingsChanged = 
             newLang1 !== currentGameSettings.lang1 ||
             newLang2 !== currentGameSettings.lang2 ||
-            newCategory !== currentGameSettings.category;
+            newCategory !== currentGameSettings.category ||
+            newDifficulty !== currentGameSettings.difficulty;
 
         if (!gameHasStarted || settingsChanged) {
             getWordsFromGemini(newCategory);
@@ -890,4 +910,3 @@ Ensure the words are lowercase.`;
 </script>
 </body>
 </html>
-
