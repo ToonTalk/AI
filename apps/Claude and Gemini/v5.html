@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sisi & Ada's Dream Weaver v7</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #f0f0f0; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px 0; }
+    .container { max-width: 600px; width: 95%; text-align: center; background-color: #2a2a2a; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    #memoryTrailContainer { height: 60px; width: 100%; background-color: #333; border-radius: 8px; margin-bottom: 20px; }
+    #artwork { width: 100%; height: auto; border-radius: 8px; margin-bottom: 20px; border: 2px solid #444; min-height: 300px; background-color: #333; }
+    #story { text-align: left; line-height: 1.6; margin-bottom: 20px; padding: 15px; background-color: #333; border-radius: 8px; max-height: 200px; overflow-y: auto;}
+    #choicesContainer { display: flex; justify-content: space-around; align-items: center; min-height: 120px; padding: 10px; flex-wrap: wrap; }
+    .choice-orb { flex-shrink: 0; margin: 5px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, #5c4a93, #3a2e5c); display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; transition: all 0.3s; border: 2px solid #7e57c2; box-shadow: 0 0 15px rgba(126, 87, 194, 0.5); }
+    .choice-orb:hover { transform: scale(1.1); box-shadow: 0 0 25px rgba(157, 121, 217, 0.8); }
+    .choice-orb span { font-size: 0.8em; color: white; padding: 5px; }
+    #dreamLogicBtn { background-color: #d95d7a; margin-top: 15px; width: auto; padding: 10px 15px; font-style: italic; border: none; border-radius: 5px; cursor: pointer; transition: all 0.5s; }
+  </style>
+</head>
+<body>
+
+  <div id="mainApp" class="container">
+    <div id="memoryTrailContainer"><svg id="memoryTrail" width="100%" height="100%"></svg></div>
+    <img id="artwork" src="" alt="The dream unfolds...">
+    <div id="story"></div>
+    <div id="choicesContainer"></div>
+    <button id="dreamLogicBtn" onclick="invokeDreamLogic()">Invoke Dream Logic ✧</button>
+  </div>
+
+  <script>
+    // THE STORY ENGINE - Based on Sisi & Claude's Design Doc!
+    const storyWeb = {
+      "scene_1_seed": {
+        narrative: "You enter a pawn shop that doesn’t buy goods, it buys memories. The shopkeeper offers you a choice: trade a memory of first love for a key, or trade a nightmare for a compass that points to what you’ve lost.",
+        artPrompt: "A mysterious, cluttered pawn shop filled with glowing objects...",
+        artUrl: "https://storage.googleapis.com/gemini-prod/images/prototype_start.png",
+        choices: [ { text: "Trade the nightmare for the compass.", nextNode: "scene_2_compass", flagChanges: {"nightmare_traded": true} } ]
+      },
+      "scene_2_compass": {
+        narrative: "The old woman smiles. She plucks the nightmare from your mind, and a brass compass materializes in your hand, its needle spinning wildly.",
+        artPrompt: "A brass compass held in a hand, needle glowing...",
+        artUrl: "https://storage.googleapis.com/gemini-prod/images/surreal_compass.png",
+        choices: [
+          { text: "Follow the compass immediately.", nextNode: "scene_3A_corridor", flagChanges: {"compassFollowed": true, "sawOwnHistory": true} },
+          { text: "Ask what you've lost.", nextNode: "scene_3B_mirror", flagChanges: {"askedAboutLoss": true} }
+        ]
+      },
+      // BRANCH A
+      "scene_3A_corridor": {
+        narrative: "The compass points behind you, to a door that wasn't there before. It opens onto a corridor lined with photographs—all of you, at different ages.",
+        artPrompt: "An impossible corridor lined with vintage photos of the same person...",
+        artUrl: "https://storage.googleapis.com/gemini-prod/images/memory_corridor.png",
+        choices: [
+          { text: "Enter the corridor.", nextNode: "scene_5_convergence", flagChanges: {"enteredCorridor": true} },
+          { text: "Smash the compass.", nextNode: "scene_5_convergence", flagChanges: {"compassBroken": true} }
+        ]
+      },
+      // BRANCH B
+      "scene_3B_mirror": {
+        narrative: "She pulls out a small, tarnished mirror. 'That nightmare was protecting you,' she says. In the reflection, you're younger, holding someone's hand you don't recognize.",
+        artPrompt: "A tarnished silver mirror reflecting a forgotten memory...",
+        artUrl: "https://storage.googleapis.com/gemini-prod/images/tarnished_mirror.png",
+        choices: [
+          { text: "Ask who it was.", nextNode: "scene_5_convergence", flagChanges: {"namedTheForgotten": true} },
+          { text: "Choose to forget.", nextNode: "scene_5_convergence", flagChanges: {"choseForgetfulness": true} }
+        ]
+      },
+      "scene_5_convergence": {
+        // This is a dynamic node!
+        baseNarrative: "The shop shifts around you. You understand: this place is the space between choosing and chosen. 'Everyone who comes here,' the shopkeeper says, 'is looking for a way to live with what they’ve lost.'",
+        baseArtPrompt: "The pawn shop revealed with impossible M.C. Escher geometry...",
+        baseArtUrl: "https://storage.googleapis.com/gemini-prod/images/convergence.png",
+        choices: [ /* Final choices would go here */ ]
+      }
+    };
+    
+    let storyState;
+
+    function startGame() {
+      storyState = {
+        currentNode: "scene_1_seed",
+        history: ["scene_1_seed"],
+        worldFlags: { dreamLogicUsed: false }
+      };
+      displayScene(storyState.currentNode);
+    }
+
+    function handleChoice(choice) {
+      // Apply flag changes from the choice
+      if (choice.flagChanges) {
+        Object.assign(storyState.worldFlags, choice.flagChanges);
+      }
+      
+      storyState.currentNode = choice.nextNode;
+      storyState.history.push(choice.nextNode);
+      
+      displayScene(storyState.currentNode);
+    }
+    
+    function displayScene(nodeId) {
+      let sceneData = storyWeb[nodeId];
+      let narrative = sceneData.narrative;
+      let artUrl = sceneData.artUrl;
+
+      // THE CONVERGENCE LOGIC
+      if (nodeId === "scene_5_convergence") {
+          const convergenceResult = buildConvergenceScene();
+          narrative = convergenceResult.narrative;
+          artUrl = convergenceResult.artUrl; // In real app, we'd generate art
+      }
+
+      document.getElementById('artwork').src = artUrl;
+      document.getElementById('story').innerHTML = `<p>${narrative}</p>`;
+      
+      const choicesDiv = document.getElementById('choicesContainer');
+      choicesDiv.innerHTML = '';
+      sceneData.choices.forEach(choice => {
+        const orb = document.createElement('div');
+        orb.className = 'choice-orb';
+        orb.onclick = () => handleChoice(choice);
+        orb.innerHTML = `<span>${choice.text}</span>`;
+        choicesDiv.appendChild(orb);
+      });
+      renderMemoryTrail();
+    }
+
+    // THIS IS THE IMPLEMENTATION OF CLAUDE'S PSEUDOCODE!
+    function buildConvergenceScene() {
+        let narrative = storyWeb.scene_5_convergence.baseNarrative;
+        let artUrl = storyWeb.scene_5_convergence.baseArtUrl; // Base art
+        let artPrompt = storyWeb.scene_5_convergence.baseArtPrompt;
+
+        // Add echoes based on flags
+        if (storyState.worldFlags.dreamLogicUsed) {
+            narrative += '\n\nThe shopkeeper whispers, "You’ve already been here. Or you will be."';
+        }
+        if (storyState.worldFlags.compassBroken) {
+            narrative += '\n\nBrass butterflies from your shattered compass circle overhead, ticking softly.';
+            artPrompt += ' with brass butterflies circling in the air';
+        }
+        if (storyState.worldFlags.sawOwnHistory) {
+            narrative += '\n\nThe photographs from the corridor line the walls here too. They’re all watching.';
+        }
+        if (storyState.worldFlags.namedTheForgotten) {
+            narrative += '\n\nSomewhere in the shop, something whispers a name. It sounds like gratitude.';
+        }
+        
+        console.log("Dynamic Art Prompt for Gemini:", artPrompt);
+        // In a real app, we would now call Gemini with this dynamic prompt.
+        // For the prototype, we just show the base art but the logic is ready.
+
+        return { narrative, artUrl };
+    }
+    
+    function renderMemoryTrail() { /* ... from v6 ... */ }
+    function invokeDreamLogic() { /* ... from v6 ... */ }
+    
+    // Kick it all off!
+    startGame();
+  </script>
+
+</body>
+</html>

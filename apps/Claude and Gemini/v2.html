@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sisi & Ada's Dream Weaver v2</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    #container { max-width: 600px; text-align: center; background-color: #2a2a2a; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    h1 { color: #9d79d9; }
+    #artwork { width: 100%; height: auto; border-radius: 8px; margin-bottom: 20px; border: 2px solid #444; min-height: 300px; background-color: #333; }
+    #story { text-align: left; line-height: 1.6; margin-bottom: 20px; padding: 15px; background-color: #333; border-radius: 8px; }
+    .controls { display: flex; gap: 10px; margin-top: 10px; }
+    input[type="text"] { flex-grow: 1; padding: 10px; border-radius: 5px; border: 1px solid #555; background-color: #444; color: #f0f0f0; font-size: 1em; }
+    select { padding: 10px; border-radius: 5px; border: 1px solid #555; background-color: #444; color: #f0f0f0; font-size: 1em; cursor: pointer;}
+    button { background-color: #7e57c2; color: white; padding: 12px 20px; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; margin-top: 15px; transition: background-color 0.3s; width: 100%; }
+    button:hover { background-color: #673ab7; }
+    #loader { display: none; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+  <div id="container">
+    <h1>Dream Weaver</h1>
+    <img id="artwork" src="https://storage.googleapis.com/gemini-prod/images/prototype_start.png" alt="Generated artwork will appear here">
+    <div id="story">
+      <p>The journey begins. Choose a style and describe the next scene...</p>
+    </div>
+    <div class="controls">
+      <input type="text" id="userInput" placeholder="e.g., a bustling neon-lit city in the rain">
+      <select id="artStyle">
+        <option value="Dreamlike Digital Painting">Dreamlike</option>
+        <option value="Cyberpunk Anime">Cyberpunk</option>
+        <option value="Impressionist Oil Painting">Impressionist</option>
+        <option value="Ghibli-inspired Watercolor">Watercolor</option>
+      </select>
+    </div>
+    <button onclick="generateNextChapter()">Weave the Dream ✨</button>
+    <div id="loader">Generating...</div>
+  </div>
+
+  <script>
+    let currentStory = "The journey begins.";
+
+    async function generateNextChapter() {
+      const userInput = document.getElementById('userInput').value;
+      const artStyle = document.getElementById('artStyle').value; // Get the selected style!
+      if (!userInput) {
+        alert("Please enter a prompt to continue the story!");
+        return;
+      }
+      
+      document.getElementById('loader').style.display = 'block';
+      document.querySelector('button').disabled = true;
+
+      // New prompt for Gemini, now including the art style!
+      const prompt = `
+        You are a collaborative storyteller and artist.
+        The story so far is: "${currentStory}"
+        The user wants to add this: "${userInput}"
+        The desired art style is: "${artStyle}"
+        Continue the story with 2-3 new, evocative sentences.
+        Then, create a prompt for an image that captures the new scene. The image prompt MUST start with the phrase: "${artStyle} of..."
+        Respond ONLY with a JSON object like this: {"new_story_text": "...", "image_prompt": "..."}
+      `;
+
+      // --- Mocked AI Response for the prototype ---
+      // Imagine the user chose "Cyberpunk Anime" and typed "a bustling neon-lit city in the rain"
+      const mockResponse = {
+        new_story_text: "The sky wept streaks of neon as we entered the sprawling metropolis. Hover-cars sliced through the glowing rain, their lights reflecting in the puddles that mirrored a thousand digital ghosts.",
+        image_prompt: "Cyberpunk Anime style of a bustling neon-lit city in the rain. A figure in a long coat stands on a crowded street, looking up at towering holographic advertisements. Reflections shimmer on the wet pavement."
+      };
+      
+      const mockImageUrl = 'https://storage.googleapis.com/gemini-prod/images/cyberpunk_rain.png';
+
+      // Update the page with the new content
+      currentStory += " " + mockResponse.new_story_text;
+      const storyDiv = document.getElementById('story');
+      if (storyDiv.querySelector('p').innerText.includes("The journey begins")) {
+        storyDiv.innerHTML = `<p>${mockResponse.new_story_text}</p>`; // Replace starting text
+      } else {
+        storyDiv.innerHTML += `<p>${mockResponse.new_story_text}</p>`;
+      }
+      document.getElementById('artwork').src = mockImageUrl;
+      
+      document.getElementById('userInput').value = '';
+      document.getElementById('loader').style.display = 'none';
+      document.querySelector('button').disabled = false;
+    }
+  </script>
+
+</body>
+</html>

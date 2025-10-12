@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sisi & Ada's Dream Weaver v4</title>
+  <style>
+    @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0px); }
+    }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #f0f0f0; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .container { max-width: 600px; text-align: center; background-color: #2a2a2a; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    h1 { color: #9d79d9; margin-top: 0; }
+    #artwork { width: 100%; height: auto; border-radius: 8px; margin-bottom: 20px; border: 2px solid #444; min-height: 300px; background-color: #333; }
+    #story { text-align: left; line-height: 1.6; margin-bottom: 20px; padding: 15px; background-color: #333; border-radius: 8px; max-height: 200px; overflow-y: auto;}
+    #startScreen { display: block; }
+    #mainApp { display: none; }
+    .seed-card { background-color: #333; border: 1px solid #555; padding: 20px; margin: 10px 0; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, border-color 0.3s; }
+    .seed-card:hover { background-color: #444; border-color: #7e57c2; }
+    .seed-card h3 { margin: 0 0 5px 0; color: #c5a9f2; }
+    #choicesContainer { display: flex; justify-content: space-around; align-items: center; min-height: 150px; padding: 10px; }
+    .choice-orb {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: radial-gradient(circle, #5c4a93, #3a2e5c);
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; cursor: pointer;
+      animation: float 6s ease-in-out infinite;
+      transition: transform 0.3s, box-shadow 0.3s;
+      border: 2px solid #7e57c2;
+      box-shadow: 0 0 15px rgba(126, 87, 194, 0.5);
+    }
+    .choice-orb:nth-child(2) { animation-delay: 2s; }
+    .choice-orb:nth-child(3) { animation-delay: 4s; }
+    .choice-orb:hover { transform: scale(1.1); box-shadow: 0 0 25px rgba(157, 121, 217, 0.8); }
+    .choice-orb span { font-size: 0.8em; color: white; padding: 5px; opacity: 0; transition: opacity 0.3s; }
+    .choice-orb:hover span { opacity: 1; }
+    #dreamLogicBtn { background-color: #d95d7a; margin-top: 15px; width: auto; padding: 10px 15px; font-style: italic; }
+    #dreamLogicBtn:hover { background-color: #c24360; }
+  </style>
+</head>
+<body>
+
+  <div id="startScreen" class="container">
+    <h1>Welcome to Dream Weaver</h1>
+    <p>Choose a memory to begin...</p>
+    <div class="seed-card" onclick="startGame('You enter a pawn shop that doesn’t buy goods, it buys memories. The shopkeeper is a kind old woman who offers you a choice: trade a memory of your first love for a key that opens any door, or trade a memory of a recurring nightmare for a compass that points to what you’ve lost.')">
+      <h3>The Pawn Shop of Lost Memories</h3>
+      <p>Trade memories you aren't sure ever happened.</p>
+    </div>
+     </div>
+
+  <div id="mainApp" class="container">
+    <img id="artwork" src="https://storage.googleapis.com/gemini-prod/images/prototype_start.png" alt="Generated artwork will appear here">
+    <div id="story"></div>
+    <div id="choicesContainer"></div>
+    <button id="dreamLogicBtn">Invoke Dream Logic?</button>
+  </div>
+
+  <script>
+    let storyState = {
+      fullText: "",
+      worldFlags: {}
+    };
+
+    function startGame(seedText) {
+      storyState.fullText = seedText;
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      document.getElementById('story').innerHTML = `<p>${seedText}</p>`;
+      generateNextChapter(seedText); 
+    }
+
+    async function generateNextChapter(userInput) {
+      // For now, clear choices and show a 'thinking' state
+      document.getElementById('choicesContainer').innerHTML = '<p>Weaving the dream...</p>';
+
+      const prompt = `
+        Current Story: "${storyState.fullText}"
+        User's Choice: "${userInput}"
+        Current world flags: ${JSON.stringify(storyState.worldFlags)}
+        
+        Task:
+        1. Continue the story (2-3 sentences).
+        2. Create an image prompt in a "Surrealist Oil Painting" style.
+        3. Provide 2 short, evocative choices.
+        4. Define a 'toneSignature' string (e.g., "melancholy, mysterious, dusty").
+        5. Update the worldFlags JSON object.
+        Respond ONLY with a JSON object with keys: "new_story_text", "image_prompt", "choices", "toneSignature", "updatedFlags".
+      `;
+
+      // --- Mocked AI Response based on your amazing new seed ---
+      const mockResponse = {
+        new_story_text: "You choose the compass. The old woman smiles, a gentle, knowing look in her eyes. She plucks the nightmare from your mind like a spider from its web, and the compass materializes in your hand, its needle spinning wildly before settling on a direction you've never known.",
+        image_prompt: "Surrealist Oil Painting of a compass held in a hand. The compass needle glows with an inner light, pointing out of the frame towards an unseen destination. In the background, a kind old woman's face fades into dusty shelves of forgotten objects.",
+        choices: ["Follow the compass immediately.", "Ask the woman what you've lost."],
+        toneSignature: "nostalgic, mysterious, hopeful",
+        updatedFlags: {"nightmare_traded": true, "has_compass": true}
+      };
+      
+      const mockImageUrl = 'https://storage.googleapis.com/gemini-prod/images/surreal_compass.png';
+      
+      updatePage(mockResponse, mockImageUrl);
+    }
+    
+    function updatePage(response, imageUrl) {
+        storyState.fullText += " " + response.new_story_text;
+        storyState.worldFlags = response.updatedFlags; // Update our state!
+        
+        document.getElementById('story').innerHTML += `<p>${response.new_story_text}</p>`;
+        document.getElementById('story').scrollTop = document.getElementById('story').scrollHeight; // Auto-scroll
+        document.getElementById('artwork').src = imageUrl;
+
+        displayChoices(response.choices);
+        console.log("New Tone:", response.toneSignature); // Logging the tone for now
+        console.log("World State:", storyState.worldFlags);
+    }
+    
+    function displayChoices(choices) {
+        const choicesDiv = document.getElementById('choicesContainer');
+        choicesDiv.innerHTML = '';
+        choices.forEach(choiceText => {
+            const orb = document.createElement('div');
+            orb.className = 'choice-orb';
+            orb.onclick = () => generateNextChapter(choiceText);
+            
+            const textSpan = document.createElement('span');
+            textSpan.innerText = choiceText;
+            
+            orb.appendChild(textSpan);
+            choicesDiv.appendChild(orb);
+        });
+    }
+  </script>
+
+</body>
+</html>
