@@ -2,31 +2,46 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Exact Fraction Calculator (Canvas v3 - fixed negative mixed form)</title>
+<title>Exact Fraction Calculator (v12 – syntax fix & robust bounds)</title>
 <style>
   body { font-family: system-ui, sans-serif; padding: 1rem; }
   input, select, button { font-size: 1rem; margin: 0.3rem; }
   #result { margin-top: 1rem; font-weight: 700; }
   #work { margin-top: .75rem; line-height: 1.5; }
   .step { padding:.25rem .5rem; border-left: 3px solid #999; margin:.25rem 0; background: #f7f7f7; }
-  code.frac { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  code.frac, code.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .table { border-collapse: collapse; margin-top:.5rem; }
+  .table th, .table td { border:1px solid #ccc; padding:.2rem .35rem; text-align:left; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .highlight { background:#ffe9a8; }
+  #tests { margin-top: 1.25rem; }
+  #tests .ok { color: #0a7d27; }
+  #tests .fail { color: #b00020; }
+  .controls { display:flex; gap:.5rem; align-items:center; flex-wrap: wrap; }
+  .note { color:#555; font-size:.9rem; }
 </style>
 </head>
 <body>
-<h2>Exact Fraction Calculator (v3) — fixed negative mixed form</h2>
-<p>
+<h2>Exact Fraction Calculator (v12) — fixed stray brace; correct decimal bounds; more tests</h2>
+<p class="controls">
   <input id="a" placeholder="a (e.g. 3/4 or 2)" size="12">
   <select id="op">
     <option>+</option>
     <option>-</option>
     <option>*</option>
     <option>/</option>
+    <option>^</option>
   </select>
-  <input id="b" placeholder="b (e.g. 5/6)" size="12">
+  <input id="b" placeholder="b (e.g. 5/6 or 3)" size="12">
   <button id="compute">Compute</button>
 </p>
+<div class="controls">
+  <label>Max decimal steps: <input id="maxSteps" type="number" min="1" value="200" style="width:6rem"></label>
+  <label><input id="autoSteps" type="checkbox" checked> Auto (≤ denominator without 2s and 5s, capped at 5000)</label>
+  <span class="note">Controls how many long-division steps to display. Auto uses a math bound so we don’t stop too early.</span>
+</div>
 <div id="result"></div>
 <div id="work"></div>
+<div id="tests"></div>
 <script>
 class Rational {
   constructor(n, d = 1n) {
@@ -65,6 +80,13 @@ class Rational {
   sub(r) { return new Rational(this.n * r.d - r.n * this.d, this.d * r.d); }
   mul(r) { return new Rational(this.n * r.n, this.d * r.d); }
   div(r) { return new Rational(this.n * r.d, this.d * r.n); }
+  pow(exp) {
+    exp = BigInt(exp);
+    if (exp === 0n) return new Rational(1n, 1n);
+    if (exp > 0n) return new Rational(this.n ** exp, this.d ** exp);
+    exp = -exp;
+    return new Rational(this.d ** exp, this.n ** exp);
+  }
   mixed() {
     if (this.d === 1n) return { sign: this.n < 0n ? -1n : 1n, i: this.n, n: 0n, d: 1n };
     const sign = this.n < 0n ? -1n : 1n;
@@ -73,20 +95,119 @@ class Rational {
     const rem = absn % this.d;
     return { sign, i, n: rem, d: this.d };
   }
-  toString() {
+  // Always returns a simple a/b (or integer) with sign on the numerator
+  toFractionString() {
     if (this.d === 1n) return this.n.toString();
+    const sign = this.n < 0n ? '-' : '';
+    const absn = this.n < 0n ? -this.n : this.n;
+    return `${sign}${absn}/${this.d}`;
+  }
+  // Returns canonical mixed form with a leading minus if negative
+  toMixedString() {
     const m = this.mixed();
-    if (m.i === 0n) {
-      const frac = `${m.sign < 0n ? '-' : ''}${this.n < 0n ? -this.n : this.n}/${this.d}`;
-      return frac;
-    }
     if (m.n === 0n) return `${m.sign < 0n ? '-' : ''}${m.i}`;
+    if (m.i === 0n) return `${m.sign < 0n ? '-' : ''}${m.n}/${m.d}`;
     return `${m.sign < 0n ? '-' : ''}${m.i} + ${m.n}/${m.d}`;
   }
+  // Keep toString as fraction form to avoid ambiguity in inline expressions
+  toString() { return this.toFractionString(); }
+
+  // Repeating decimal with explicit maxDigits bound (no external state)
+  toRepeatingDecimal(maxDigits = 200) {
+    let n = this.n;
+    let d = this.d;
+    const sign = n < 0n ? '-' : '';
+    n = n < 0n ? -n : n;
+    const integerPart = n / d;
+    n = n % d;
+    if (n === 0n) return sign + integerPart.toString() + '.0';
+    const seen = new Map();
+    let decimals = '';
+    let pos = 0;
+    let repeatStart = -1;
+    while (n !== 0n && pos < maxDigits) {
+      if (seen.has(n)) { repeatStart = seen.get(n); break; }
+      seen.set(n, pos);
+      n *= 10n;
+      const digit = n / d;
+      decimals += digit.toString();
+      n = n % d;
+      pos++;
+    }
+    if (repeatStart === -1) {
+      return sign + integerPart.toString() + '.' + decimals;
+    } else {
+      const nonRep = decimals.slice(0, repeatStart);
+      const rep = decimals.slice(repeatStart);
+      return sign + integerPart.toString() + '.' + nonRep + '(' + rep + ')';
+    }
+  }
+
+  equals(r) { return this.n === r.n && this.d === r.d; }
 }
 
 function fmtFrac(n, d) {
   return `<code class="frac">${n.toString()}/${d.toString()}</code>`;
+}
+
+function decimalLongDivisionSteps(R, opts = {}) {
+  // Returns HTML showing each step of the remainder → digit process
+  const { maxDigits = 200, auto = true, cap = 5000 } = opts;
+  let n = R.n;
+  const d = R.d;
+  const sign = n < 0n ? '-' : '';
+  n = n < 0n ? -n : n;
+  const integerPart = n / d;
+  n = n % d;
+  let html = `<div class="step">Decimal long division for ${fmtFrac(R.n, R.d)}:</div>`;
+  html += `<div class="step">Integer part = <code class="mono">${sign}${integerPart.toString()}</code>; remainder starts at <code class="mono">${n.toString()}</code></div>`;
+  if (n === 0n) {
+    html += `<div class="step">Remainder is 0, so decimal terminates: <code class="mono">${sign}${integerPart}.0</code></div>`;
+    return html;
+  }
+  const rows = [];
+  const seen = new Map();
+  let decimals = '';
+  let pos = 0;
+  let repeatAt = -1;
+  // Determine dynamic bound if auto: denominator with 2 and 5 factors removed (at most that many distinct non-zero remainders)
+  let bound = maxDigits;
+  if (auto) {
+    let dPrime = d;
+    while (dPrime % 2n === 0n) dPrime /= 2n;
+    while (dPrime % 5n === 0n) dPrime /= 5n;
+    if (dPrime <= BigInt(cap)) bound = Number(dPrime); else bound = cap;
+  }
+  while (n !== 0n && pos < bound) {
+    if (seen.has(n)) { repeatAt = seen.get(n); break; }
+    seen.set(n, pos);
+    const before = n;
+    n *= 10n;
+    const digit = n / d;
+    const after = n % d;
+    rows.push({ pos, remainder: before, tenRemainder: n, digit, nextRemainder: after });
+    decimals += digit.toString();
+    n = after;
+    pos++;
+  }
+  // Build table
+  html += `<table class="table"><thead><tr><th>pos</th><th>remainder</th><th>×10</th><th>digit</th><th>next remainder</th></tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const cls = (repeatAt !== -1 && i === repeatAt) ? ' class="highlight"' : '';
+    html += `<tr${cls}><td>${i}</td><td>${r.remainder}</td><td>${r.tenRemainder}</td><td>${r.digit}</td><td>${r.nextRemainder}</td></tr>`;
+  });
+  html += `</tbody></table>`;
+  if (repeatAt === -1) {
+    // If we stopped because we hit the bound, warn that steps are truncated
+    html += `<div class="step">${pos >= bound ? `No remainder repeated within <strong>${bound}</strong> steps (display truncated).` : `No remainder repeated within ${bound} steps → terminating decimal.`}</div>`;
+    html += `<div class="step">Decimal (truncated if long): <code class="mono">${sign}${integerPart}.${decimals}</code></div>`;
+  } else {
+    const nonRep = decimals.slice(0, repeatAt);
+    const rep = decimals.slice(repeatAt);
+    html += `<div class="step highlight">First repeating remainder occurred at position ${repeatAt}. Digits from here repeat.</div>`;
+    html += `<div class="step">Decimal = <code class="mono">${sign}${integerPart}.${nonRep}(${rep})</code></div>`;
+  }
+  return html;
 }
 
 function showWork(op, A, B, R) {
@@ -107,44 +228,74 @@ function showWork(op, A, B, R) {
     const rn = sum / g, rd = L / g;
     w.push(`<div class="step">Reduce by gcd(${sum < 0n ? -sum : sum}, ${L}) = ${g} → ${fmtFrac(rn, rd)}</div>`);
   } else if (op === '*') {
-    const c1 = Rational.gcd(A.n < 0n ? -A.n : A.n, B.d);
-    const c2 = Rational.gcd(B.n < 0n ? -B.n : B.n, A.d);
-    const aN = A.n / c1, bD = B.d / c1;
-    const bN = B.n / c2, aD = A.d / c2;
-    w.push(`<div class="step">Cross-cancel: gcd(|${A.n}|, ${B.d})=${c1}, gcd(|${B.n}|, ${A.d})=${c2}</div>`);
-    w.push(`<div class="step">After cancel: ${fmtFrac(aN, aD)} × ${fmtFrac(bN, bD)}</div>`);
-    const n = aN * bN, d = aD * bD;
+    // Clarify simplification before multiplying (formerly "cross-cancel")
+    const g1 = Rational.gcd(A.n < 0n ? -A.n : A.n, B.d);
+    const g2 = Rational.gcd(B.n < 0n ? -B.n : B.n, A.d);
+    const aN1 = A.n / g1;   // A numerator after removing g1
+    const bD1 = B.d / g1;   // B denominator after removing g1
+    const bN2 = B.n / g2;   // B numerator after removing g2
+    const aD2 = A.d / g2;   // A denominator after removing g2
+
+    w.push(`<div class="step">Simplify before multiplying:</div>`);
+    w.push(`<div class="step">1) Common factor between A's numerator and B's denominator: gcd(|${A.n}|, ${B.d}) = ${g1}</div>`);
+    w.push(`<div class="step">   Write: ${A.n} = ${g1}·${aN1},  ${B.d} = ${g1}·${bD1} → cancel ${g1} to get ${fmtFrac(aN1, A.d)} × ${fmtFrac(B.n, bD1)}</div>`);
+
+    w.push(`<div class="step">2) Common factor between B's numerator and A's denominator: gcd(|${B.n}|, ${A.d}) = ${g2}</div>`);
+    w.push(`<div class="step">   Write: ${B.n} = ${g2}·${bN2},  ${A.d} = ${g2}·${aD2} → cancel ${g2} to get ${fmtFrac(aN1, aD2)} × ${fmtFrac(bN2, bD1)}</div>`);
+
+    const n = aN1 * bN2, d = aD2 * bD1;
     const g = Rational.gcd(n < 0n ? -n : n, d);
-    w.push(`<div class="step">Multiply: numerators ${aN}·${bN}=${n}, denominators ${aD}·${bD}=${d}</div>`);
-    w.push(`<div class="step">Reduce by gcd(${n < 0n ? -n : n}, ${d})=${g} → ${fmtFrac(n/g, d/g)}</div>`);
+    w.push(`<div class="step">3) Multiply simplified parts: numerators ${aN1}·${bN2}=${n}, denominators ${aD2}·${bD1}=${d}</div>`);
+    w.push(`<div class="step">4) Final reduction: gcd(${n < 0n ? -n : n}, ${d}) = ${g} → ${fmtFrac(n/g, d/g)}</div>`);
   } else if (op === '/') {
     w.push(`<div class="step">Reciprocal of B: ${fmtFrac(B.d, B.n)}</div>`);
-    const c1 = Rational.gcd(A.n < 0n ? -A.n : A.n, B.n < 0n ? -B.n : B.n);
-    const c2 = Rational.gcd(B.d, A.d);
-    const aN = A.n / c1, bN = B.n / c1;
-    const bD = B.d / c2, aD = A.d / c2;
-    w.push(`<div class="step">Cross-cancel: gcd(|${A.n}|, |${B.n}|)=${c1}, gcd(${B.d}, ${A.d})=${c2}</div>`);
-    w.push(`<div class="step">After cancel: ${fmtFrac(aN, aD)} ÷ ${fmtFrac(bN, bD)} = ${fmtFrac(aN * bD, aD * bN)}</div>`);
-    const n = aN * bD, d = aD * bN;
+    w.push(`<div class="step">Division by a fraction = multiply by its reciprocal: ${fmtFrac(A.n, A.d)} × ${fmtFrac(B.d, B.n)}</div>`);
+
+    const g1 = Rational.gcd(A.n < 0n ? -A.n : A.n, B.n < 0n ? -B.n : B.n);
+    const g2 = Rational.gcd(B.d, A.d);
+    const aN1 = A.n / g1;   // after removing g1 from A.n and B.n
+    const bN1 = B.n / g1;
+    const bD2 = B.d / g2;   // after removing g2 from B.d and A.d
+    const aD2 = A.d / g2;
+
+    w.push(`<div class="step">Simplify before multiplying (after taking reciprocal):</div>`);
+    w.push(`<div class="step">1) Common factor between A's numerator and (reciprocal B)'s numerator: gcd(|${A.n}|, |${B.n}|) = ${g1}</div>`);
+    w.push(`<div class="step">   Write: ${A.n} = ${g1}·${aN1},  ${B.n} = ${g1}·${bN1} → cancel ${g1} to get ${fmtFrac(aN1, A.d)} × ${fmtFrac(B.d, bN1)}</div>`);
+
+    w.push(`<div class="step">2) Common factor between (reciprocal B)'s denominator and A's denominator: gcd(${B.d}, ${A.d}) = ${g2}</div>`);
+    w.push(`<div class="step">   Write: ${B.d} = ${g2}·${bD2},  ${A.d} = ${g2}·${aD2} → cancel ${g2} to get ${fmtFrac(aN1, aD2)} × ${fmtFrac(bD2, bN1)}</div>`);
+
+    const n = aN1 * bD2, d = aD2 * bN1;
     const g = Rational.gcd(n < 0n ? -n : n, d);
-    w.push(`<div class="step">Reduce by gcd(${n < 0n ? -n : n}, ${d})=${g} → ${fmtFrac(n/g, d/g)}</div>`);
+    w.push(`<div class="step">3) Multiply simplified parts: ${aN1}·${bD2}=${n} (numerators), ${aD2}·${bN1}=${d} (denominators)</div>`);
+    w.push(`<div class="step">4) Final reduction: gcd(${n < 0n ? -n : n}, ${d}) = ${g} → ${fmtFrac(n/g, d/g)}</div>`);
+  } else if (op === '^') {
+    const exp = B.n / B.d;
+    if (B.d !== 1n) {
+      w.push(`<div class="step">Only integer exponents are supported (got ${B.n}/${B.d}).</div>`);
+    } else {
+      const e = exp;
+      if (e >= 0n) {
+        w.push(`<div class="step">Raise numerator and denominator to power ${e}</div>`);
+        w.push(`<div class="step">(${A.n})^${e} = ${A.n ** e}, (${A.d})^${e} = ${A.d ** e}</div>`);
+      } else {
+        const absE = -e;
+        w.push(`<div class="step">Negative exponent: invert and raise to power ${absE}</div>`);
+        w.push(`<div class="step">(${A.d})^${absE} = ${A.d ** absE}, (${A.n})^${absE} = ${A.n ** absE}</div>`);
+      }
+    }
   }
-  const m = R.mixed();
-  let mixedStr;
-  if (m.n === 0n) {
-    mixedStr = `${m.sign < 0n ? '-' : ''}${m.i}`;
-  } else if (m.i === 0n) {
-    mixedStr = `${m.sign < 0n ? '-' : ''}${m.n}/${m.d}`;
-  } else {
-    mixedStr = `${m.sign < 0n ? '-' : ''}${m.i} + ${m.n}/${m.d}`;
-  }
-  w.push(`<div class="step">Mixed form: ${mixedStr}</div>`);
+  // Always show decimal long division for the final result R
+  const maxStepsInput = document.getElementById('maxSteps');
+  const autoSteps = document.getElementById('autoSteps');
+  const bound = parseInt(maxStepsInput.value || '200', 10);
+  w.push(decimalLongDivisionSteps(R, { maxDigits: isFinite(bound) ? bound : 200, auto: autoSteps.checked, cap: 5000 }));
   document.getElementById('work').innerHTML = w.join('');
 }
 
-function parseRational(str) {
-  return new Rational(str);
-}
+function parseRational(str) { return new Rational(str); }
+
+// UI handler
 
 document.getElementById('compute').onclick = () => {
   try {
@@ -157,14 +308,61 @@ document.getElementById('compute').onclick = () => {
       case '-': r = a.sub(b); break;
       case '*': r = a.mul(b); break;
       case '/': r = a.div(b); break;
+      case '^':
+        if (b.d !== 1n) throw new Error('Exponent must be an integer');
+        r = a.pow(b.n);
+        break;
     }
-    document.getElementById('result').textContent = `${a} ${op} ${b} = ${r}`;
+    const opText = op;
+    const fracLine = `${a.toFractionString()} ${opText} ${b.toFractionString()} = ${r.toFractionString()}`;
+    const mixedLine = `(${a.toMixedString()}) ${opText} (${b.toMixedString()}) = ${r.toMixedString()}`;
+    document.getElementById('result').innerHTML = `<div><strong>Fraction:</strong> ${fracLine}</div><div><strong>Mixed:</strong> ${mixedLine}</div>`;
     showWork(op, a, b, r);
   } catch (e) {
     document.getElementById('result').textContent = e.message;
     document.getElementById('work').innerHTML = '';
   }
 };
+
+// --- Simple test harness ---
+(function runTests(){
+  const el = document.getElementById('tests');
+  const results = [];
+  function assert(name, cond, detail=''){
+    results.push({name, cond, detail});
+  }
+  function R(x){ return new Rational(x); }
+
+  // Fraction arithmetic
+  assert('3/4 + 5/6 = 19/12', R('3/4').add(R('5/6')).equals(new Rational(19n,12n)));
+  assert('-3/4 + 5/12 = -1/3', R('-3/4').add(R('5/12')).equals(new Rational(-1n,3n)));
+  assert('7/9 * 27/14 = 3/2', R('7/9').mul(R('27/14')).equals(new Rational(3n,2n)));
+  assert('5/12 / 10/9 = 3/8', R('5/12').div(R('10/9')).equals(new Rational(3n,8n)));
+  assert('22/15 / 11/5 = 2/3', R('22/15').div(R('11/5')).equals(new Rational(2n,3n)));
+
+  // Exponentiation
+  assert('3/4 ^ 3 = 27/64', R('3/4').pow(3n).equals(new Rational(27n,64n)));
+  assert('2 ^ -5 = 1/32', R('2').pow(-5n).equals(new Rational(1n,32n)));
+  assert('(-3/5)^2 = 9/25', R('-3/5').pow(2n).equals(new Rational(9n,25n)));
+  assert('(-3/5)^3 = -27/125', R('-3/5').pow(3n).equals(new Rational(-27n,125n)));
+
+  // Repeating/terminating decimals
+  assert('1/7 = 0.(142857)', R('1/7').toRepeatingDecimal() === '0.(142857)');
+  assert('5/12 = 0.41(6)', R('5/12').toRepeatingDecimal() === '0.41(6)');
+  assert('1/40 = 0.025', R('1/40').toRepeatingDecimal() === '0.025');
+  assert('-3/11 = -0.(27)', R('-3/11').toRepeatingDecimal() === '-0.(27)');
+  assert('1/6 = 0.1(6)', R('1/6').toRepeatingDecimal() === '0.1(6)');
+
+  // Division sign behaviour
+  assert('(-2/3) / (4/9) = -3/2', R('-2/3').div(R('4/9')).equals(new Rational(-3n,2n)));
+
+  // Render results
+  const ok = results.filter(r=>r.cond).length;
+  const total = results.length;
+  let html = `<h3>Self-tests: <span class="${ok===total?'ok':'fail'}">${ok}/${total} passed</span></h3>`;
+  html += '<ul>' + results.map(r=>`<li class="${r.cond?'ok':'fail'}">${r.name}${r.cond?'':' — FAILED'}${r.detail?': '+r.detail:''}</li>`).join('') + '</ul>';
+  el.innerHTML = html;
+})();
 </script>
 </body>
 </html>
