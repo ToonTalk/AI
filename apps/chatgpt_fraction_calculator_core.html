@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Exact Fraction Calculator (Canvas v3 - fixed negative mixed form)</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 1rem; }
+  input, select, button { font-size: 1rem; margin: 0.3rem; }
+  #result { margin-top: 1rem; font-weight: 700; }
+  #work { margin-top: .75rem; line-height: 1.5; }
+  .step { padding:.25rem .5rem; border-left: 3px solid #999; margin:.25rem 0; background: #f7f7f7; }
+  code.frac { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body>
+<h2>Exact Fraction Calculator (v3) — fixed negative mixed form</h2>
+<p>
+  <input id="a" placeholder="a (e.g. 3/4 or 2)" size="12">
+  <select id="op">
+    <option>+</option>
+    <option>-</option>
+    <option>*</option>
+    <option>/</option>
+  </select>
+  <input id="b" placeholder="b (e.g. 5/6)" size="12">
+  <button id="compute">Compute</button>
+</p>
+<div id="result"></div>
+<div id="work"></div>
+<script>
+class Rational {
+  constructor(n, d = 1n) {
+    if (typeof n === 'string') {
+      const s = n.trim();
+      if (s.includes('/')) {
+        const [ns, ds] = s.split('/');
+        n = BigInt(ns.trim());
+        d = BigInt((d === 1n ? ds : d).toString().trim());
+      } else {
+        n = BigInt(s);
+        d = BigInt(d);
+      }
+    } else {
+      n = BigInt(n);
+      d = BigInt(d);
+    }
+    if (d === 0n) throw new Error('Denominator cannot be zero');
+    if (d < 0n) { n = -n; d = -d; }
+    const g = Rational.gcd(n < 0n ? -n : n, d);
+    this.n = n / g;
+    this.d = d / g;
+  }
+  static gcd(a, b) {
+    a = a < 0n ? -a : a;
+    b = b < 0n ? -b : b;
+    while (b !== 0n) [a, b] = [b, a % b];
+    return a;
+  }
+  static lcm(a, b) {
+    a = a < 0n ? -a : a; b = b < 0n ? -b : b;
+    if (a === 0n || b === 0n) return 0n;
+    return (a / Rational.gcd(a, b)) * b;
+  }
+  add(r) { return new Rational(this.n * r.d + r.n * this.d, this.d * r.d); }
+  sub(r) { return new Rational(this.n * r.d - r.n * this.d, this.d * r.d); }
+  mul(r) { return new Rational(this.n * r.n, this.d * r.d); }
+  div(r) { return new Rational(this.n * r.d, this.d * r.n); }
+  mixed() {
+    if (this.d === 1n) return { sign: this.n < 0n ? -1n : 1n, i: this.n, n: 0n, d: 1n };
+    const sign = this.n < 0n ? -1n : 1n;
+    const absn = this.n < 0n ? -this.n : this.n;
+    const i = absn / this.d;
+    const rem = absn % this.d;
+    return { sign, i, n: rem, d: this.d };
+  }
+  toString() {
+    if (this.d === 1n) return this.n.toString();
+    const m = this.mixed();
+    if (m.i === 0n) {
+      const frac = `${m.sign < 0n ? '-' : ''}${this.n < 0n ? -this.n : this.n}/${this.d}`;
+      return frac;
+    }
+    if (m.n === 0n) return `${m.sign < 0n ? '-' : ''}${m.i}`;
+    return `${m.sign < 0n ? '-' : ''}${m.i} + ${m.n}/${m.d}`;
+  }
+}
+
+function fmtFrac(n, d) {
+  return `<code class="frac">${n.toString()}/${d.toString()}</code>`;
+}
+
+function showWork(op, A, B, R) {
+  const w = [];
+  w.push(`<div class="step">Start: A = ${fmtFrac(A.n, A.d)}, B = ${fmtFrac(B.n, B.d)}</div>`);
+  if (op === '+' || op === '-') {
+    const L = Rational.lcm(A.d, B.d);
+    const k1 = L / A.d;
+    const k2 = L / B.d;
+    const aN = A.n * k1;
+    const bN = B.n * k2;
+    const sign = op === '+' ? '+' : '−';
+    w.push(`<div class="step">Common denominator L = lcm(${A.d}, ${B.d}) = ${L}</div>`);
+    w.push(`<div class="step">Scale: A → ${fmtFrac(aN, L)} (×${k1}), B → ${fmtFrac(bN, L)} (×${k2})</div>`);
+    const sum = op === '+' ? (aN + bN) : (aN - bN);
+    w.push(`<div class="step">Combine numerators: ${aN} ${sign} ${bN} = ${sum}</div>`);
+    const g = Rational.gcd(sum < 0n ? -sum : sum, L);
+    const rn = sum / g, rd = L / g;
+    w.push(`<div class="step">Reduce by gcd(${sum < 0n ? -sum : sum}, ${L}) = ${g} → ${fmtFrac(rn, rd)}</div>`);
+  } else if (op === '*') {
+    const c1 = Rational.gcd(A.n < 0n ? -A.n : A.n, B.d);
+    const c2 = Rational.gcd(B.n < 0n ? -B.n : B.n, A.d);
+    const aN = A.n / c1, bD = B.d / c1;
+    const bN = B.n / c2, aD = A.d / c2;
+    w.push(`<div class="step">Cross-cancel: gcd(|${A.n}|, ${B.d})=${c1}, gcd(|${B.n}|, ${A.d})=${c2}</div>`);
+    w.push(`<div class="step">After cancel: ${fmtFrac(aN, aD)} × ${fmtFrac(bN, bD)}</div>`);
+    const n = aN * bN, d = aD * bD;
+    const g = Rational.gcd(n < 0n ? -n : n, d);
+    w.push(`<div class="step">Multiply: numerators ${aN}·${bN}=${n}, denominators ${aD}·${bD}=${d}</div>`);
+    w.push(`<div class="step">Reduce by gcd(${n < 0n ? -n : n}, ${d})=${g} → ${fmtFrac(n/g, d/g)}</div>`);
+  } else if (op === '/') {
+    w.push(`<div class="step">Reciprocal of B: ${fmtFrac(B.d, B.n)}</div>`);
+    const c1 = Rational.gcd(A.n < 0n ? -A.n : A.n, B.n < 0n ? -B.n : B.n);
+    const c2 = Rational.gcd(B.d, A.d);
+    const aN = A.n / c1, bN = B.n / c1;
+    const bD = B.d / c2, aD = A.d / c2;
+    w.push(`<div class="step">Cross-cancel: gcd(|${A.n}|, |${B.n}|)=${c1}, gcd(${B.d}, ${A.d})=${c2}</div>`);
+    w.push(`<div class="step">After cancel: ${fmtFrac(aN, aD)} ÷ ${fmtFrac(bN, bD)} = ${fmtFrac(aN * bD, aD * bN)}</div>`);
+    const n = aN * bD, d = aD * bN;
+    const g = Rational.gcd(n < 0n ? -n : n, d);
+    w.push(`<div class="step">Reduce by gcd(${n < 0n ? -n : n}, ${d})=${g} → ${fmtFrac(n/g, d/g)}</div>`);
+  }
+  const m = R.mixed();
+  let mixedStr;
+  if (m.n === 0n) {
+    mixedStr = `${m.sign < 0n ? '-' : ''}${m.i}`;
+  } else if (m.i === 0n) {
+    mixedStr = `${m.sign < 0n ? '-' : ''}${m.n}/${m.d}`;
+  } else {
+    mixedStr = `${m.sign < 0n ? '-' : ''}${m.i} + ${m.n}/${m.d}`;
+  }
+  w.push(`<div class="step">Mixed form: ${mixedStr}</div>`);
+  document.getElementById('work').innerHTML = w.join('');
+}
+
+function parseRational(str) {
+  return new Rational(str);
+}
+
+document.getElementById('compute').onclick = () => {
+  try {
+    const a = parseRational(document.getElementById('a').value);
+    const b = parseRational(document.getElementById('b').value);
+    const op = document.getElementById('op').value;
+    let r;
+    switch (op) {
+      case '+': r = a.add(b); break;
+      case '-': r = a.sub(b); break;
+      case '*': r = a.mul(b); break;
+      case '/': r = a.div(b); break;
+    }
+    document.getElementById('result').textContent = `${a} ${op} ${b} = ${r}`;
+    showWork(op, a, b, r);
+  } catch (e) {
+    document.getElementById('result').textContent = e.message;
+    document.getElementById('work').innerHTML = '';
+  }
+};
+</script>
+</body>
+</html>

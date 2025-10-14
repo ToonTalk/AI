@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fraction Calculator with BigInt</title>
+    <style>
+        body { font-family: monospace; padding: 20px; max-width: 800px; }
+        input { width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box; }
+        button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+        #result { 
+            margin-top: 20px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            word-wrap: break-word;
+        }
+        .info { color: #666; font-size: 14px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Exact Fraction Calculator (with Big Integers)</h1>
+    <p>Enter expression like: 3/4 + 1/2</p>
+    <p class="info">Try big numbers! Like: 123456789012345678901234567890/987654321098765432109876543210 + 1/2</p>
+    <input type="text" id="input" placeholder="3/4 + 1/2">
+    <button onclick="calculate()">Calculate</button>
+    <div id="result"></div>
+
+    <script>
+        // ========== BIG INTEGER LIBRARY ==========
+        // Using your design: arrays of digits, left-to-right, pad to longest+1
+        
+        class BigInt {
+            constructor(value) {
+                if (typeof value === 'string') {
+                    // Remove leading zeros, but keep at least one digit
+                    value = value.replace(/^0+/, '') || '0';
+                    this.digits = value.split('').map(d => parseInt(d));
+                } else if (Array.isArray(value)) {
+                    this.digits = value;
+                } else if (typeof value === 'number') {
+                    this.digits = value.toString().split('').map(d => parseInt(d));
+                } else {
+                    this.digits = [0];
+                }
+                this.normalize();
+            }
+
+            // Remove leading zeros
+            normalize() {
+                while (this.digits.length > 1 && this.digits[0] === 0) {
+                    this.digits.shift();
+                }
+            }
+
+            // Addition using your algorithm
+            add(other) {
+                const a = this.digits;
+                const b = other.digits;
+                const maxLen = Math.max(a.length, b.length);
+                const targetLen = maxLen + 1; // Your idea: longest + 1
+                
+                // Pad both to targetLen
+                const aPadded = new Array(targetLen - a.length).fill(0).concat(a);
+                const bPadded = new Array(targetLen - b.length).fill(0).concat(b);
+                
+                const result = [];
+                let carry = 0;
+                
+                // Loop backwards from ones column
+                for (let i = targetLen - 1; i >= 0; i--) {
+                    const sum = aPadded[i] + bPadded[i] + carry;
+                    result.unshift(sum % 10);  // Take last digit
+                    carry = Math.floor(sum / 10);  // Carry if over 9
+                }
+                
+                return new BigInt(result);
+            }
+
+            // Multiplication (for fraction arithmetic)
+            multiply(other) {
+                const a = this.digits;
+                const b = other.digits;
+                const result = new Array(a.length + b.length).fill(0);
+                
+                // Grade school multiplication - accumulate all products first
+                for (let i = a.length - 1; i >= 0; i--) {
+                    for (let j = b.length - 1; j >= 0; j--) {
+                        const product = a[i] * b[j];
+                        const pos = i + j + 1;
+                        result[pos] += product;
+                    }
+                }
+                
+                // Now propagate carries in a separate pass
+                let carry = 0;
+                for (let i = result.length - 1; i >= 0; i--) {
+                    result[i] += carry;
+                    carry = Math.floor(result[i] / 10);
+                    result[i] %= 10;
+                }
+                
+                return new BigInt(result);
+            }
+
+            // Division (returns [quotient, remainder])
+            divmod(other) {
+                if (other.isZero()) throw new Error("Division by zero");
+                
+                let quotient = new BigInt([0]);
+                let remainder = new BigInt([0]);
+                
+                // Long division algorithm
+                for (let digit of this.digits) {
+                    remainder = remainder.multiply(new BigInt([10])).add(new BigInt([digit]));
+                    
+                    let count = 0;
+                    while (remainder.greaterThanOrEqual(other)) {
+                        remainder = remainder.subtract(other);
+                        count++;
+                    }
+                    
+                    quotient = quotient.multiply(new BigInt([10])).add(new BigInt([count]));
+                }
+                
+                return [quotient, remainder];
+            }
+
+            // Subtraction (assuming a >= b)
+            subtract(other) {
+                const a = this.digits;
+                const b = other.digits;
+                const maxLen = Math.max(a.length, b.length);
+                
+                const aPadded = new Array(maxLen - a.length).fill(0).concat(a);
+                const bPadded = new Array(maxLen - b.length).fill(0).concat(b);
+                
+                const result = [];
+                let borrow = 0;
+                
+                for (let i = maxLen - 1; i >= 0; i--) {
+                    let diff = aPadded[i] - bPadded[i] - borrow;
+                    if (diff < 0) {
+                        diff += 10;
+                        borrow = 1;
+                    } else {
+                        borrow = 0;
+                    }
+                    result.unshift(diff);
+                }
+                
+                return new BigInt(result);
+            }
+
+            // Comparison helpers
+            greaterThanOrEqual(other) {
+                if (this.digits.length !== other.digits.length) {
+                    return this.digits.length > other.digits.length;
+                }
+                for (let i = 0; i < this.digits.length; i++) {
+                    if (this.digits[i] !== other.digits[i]) {
+                        return this.digits[i] > other.digits[i];
+                    }
+                }
+                return true;
+            }
+
+            isZero() {
+                return this.digits.length === 1 && this.digits[0] === 0;
+            }
+
+            toString() {
+                return this.digits.join('');
+            }
+        }
+
+        // ========== FRACTION ARITHMETIC ==========
+        
+        function gcdBigInt(a, b) {
+            while (!b.isZero()) {
+                const [_, remainder] = a.divmod(b);
+                a = b;
+                b = remainder;
+            }
+            return a;
+        }
+
+        function lcmBigInt(a, b) {
+            const product = a.multiply(b);
+            const gcd = gcdBigInt(a, b);
+            const [lcm, _] = product.divmod(gcd);
+            return lcm;
+        }
+
+        function addFractions(n1, d1, n2, d2) {
+            const commonDenom = lcmBigInt(d1, d2);
+            const [mult1, _1] = commonDenom.divmod(d1);
+            const [mult2, _2] = commonDenom.divmod(d2);
+            
+            const newN1 = n1.multiply(mult1);
+            const newN2 = n2.multiply(mult2);
+            
+            return [newN1.add(newN2), commonDenom];
+        }
+
+        function simplify(numerator, denominator) {
+            const g = gcdBigInt(numerator, denominator);
+            const [newNum, _1] = numerator.divmod(g);
+            const [newDen, _2] = denominator.divmod(g);
+            return [newNum, newDen];
+        }
+
+        function formatFraction(numerator, denominator) {
+            if (denominator.toString() === '1') {
+                return numerator.toString();
+            }
+            return `${numerator.toString()}/${denominator.toString()}`;
+        }
+
+        function toMixedFraction(numerator, denominator) {
+            const [whole, remainder] = numerator.divmod(denominator);
+            if (remainder.isZero()) {
+                return whole.toString();
+            }
+            if (whole.toString() === '0') {
+                return `${numerator.toString()}/${denominator.toString()}`;
+            }
+            return `${whole.toString()} ${remainder.toString()}/${denominator.toString()}`;
+        }
+
+        function toDecimal(numerator, denominator, maxDigits = 1000) {
+            const [whole, remainder] = numerator.divmod(denominator);
+            
+            if (remainder.isZero()) {
+                return whole.toString() + ".0";
+            }
+
+            let decimalPart = [];
+            let remainders = [];
+            let currentRemainder = remainder;
+
+            // Long division to find decimal digits
+            while (!currentRemainder.isZero() && decimalPart.length < maxDigits) {
+                // Check if we've seen this remainder before
+                let repeatIndex = -1;
+                for (let i = 0; i < remainders.length; i++) {
+                    if (remainders[i].toString() === currentRemainder.toString()) {
+                        repeatIndex = i;
+                        break;
+                    }
+                }
+
+                if (repeatIndex !== -1) {
+                    // Found a repeat!
+                    const nonRepeating = decimalPart.slice(0, repeatIndex).join('');
+                    const repeating = decimalPart.slice(repeatIndex).join('');
+                    return `${whole.toString()}.${nonRepeating}(${repeating})`;
+                }
+
+                remainders.push(currentRemainder);
+                
+                // Multiply remainder by 10 and divide
+                const newDividend = currentRemainder.multiply(new BigInt([10]));
+                const [digit, newRemainder] = newDividend.divmod(denominator);
+                
+                decimalPart.push(digit.toString());
+                currentRemainder = newRemainder;
+            }
+
+            // Terminating decimal or hit max digits
+            if (currentRemainder.isZero()) {
+                return `${whole.toString()}.${decimalPart.join('')}`;
+            } else {
+                return `${whole.toString()}.${decimalPart.join('')}... (truncated at ${maxDigits} digits)`;
+            }
+        }
+
+        // ========== UI ==========
+        
+        function calculate() {
+            const input = document.getElementById('input').value;
+            const match = input.match(/(\d+)\/(\d+)\s*\+\s*(\d+)\/(\d+)/);
+            
+            if (!match) {
+                document.getElementById('result').textContent = 'Invalid format. Use: 3/4 + 1/2';
+                return;
+            }
+
+            const n1 = new BigInt(match[1]);
+            const d1 = new BigInt(match[2]);
+            const n2 = new BigInt(match[3]);
+            const d2 = new BigInt(match[4]);
+
+            const [sumNum, sumDen] = addFractions(n1, d1, n2, d2);
+            const [finalNum, finalDen] = simplify(sumNum, sumDen);
+            
+            const fraction = formatFraction(finalNum, finalDen);
+            const mixed = toMixedFraction(finalNum, finalDen);
+            const decimal = toDecimal(finalNum, finalDen, 5000);
+            
+            const digitCount = fraction.replace('/', '').length;
+            
+            document.getElementById('result').innerHTML = 
+                `<strong>Fraction:</strong> ${fraction}<br>` +
+                `<strong>Mixed:</strong> ${mixed}<br>` +
+                `<strong>Decimal:</strong> ${decimal}<br>` +
+                `<span class="info">(${digitCount} total digits in fraction)</span>`;
+        }
+    </script>
+</body>
+</html>

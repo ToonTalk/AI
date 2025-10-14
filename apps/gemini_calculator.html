@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fraction Calculator</title>
+    <script src="https://cdn.jsdelivr.net/npm/fraction.js@4.2.0/fraction.min.js"></script>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            padding: 2em; 
+            line-height: 1.6; 
+            background-color: #f0f2f5;
+            color: #1c1e21;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 2em;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 0.5em;
+            color: #333;
+        }
+        .calculator { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            gap: 1.5em; 
+            margin-bottom: 2em; 
+            flex-wrap: wrap; 
+            padding: 1.5em;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+        }
+        .fraction-input { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+        }
+        input[type="number"] { 
+            width: 70px; 
+            text-align: center; 
+            font-size: 1.4em; 
+            padding: 8px; 
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .divider { 
+            border-bottom: 2px solid black; 
+            width: 70px; 
+            margin: 4px 0; 
+        }
+        select, button { 
+            font-size: 1.8em; 
+            padding: 10px 15px; 
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #results { 
+            border: 1px solid #e0e0e0; 
+            padding: 1.5em; 
+            background-color: #f9f9f9; 
+            min-height: 100px; 
+            border-radius: 8px;
+        }
+        code { 
+            background-color: #eef; 
+            padding: 3px 6px; 
+            border-radius: 4px; 
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            font-size: 1.1em;
+        }
+        ol { 
+            padding-left: 25px; 
+        }
+        li { 
+            margin-bottom: 0.75em; 
+        }
+        hr {
+            border: none;
+            border-top: 1px solid #eee;
+            margin: 1.5em 0;
+        }
+        p > strong {
+            font-size: 1.1em;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Fraction Calculator & Explainer</h1>
+
+        <div class="calculator">
+            <div class="fraction-input">
+                <input type="number" id="num1" value="9" aria-label="Numerator 1">
+                <div class="divider"></div>
+                <input type="number" id="den1" value="18" aria-label="Denominator 1">
+            </div>
+
+            <select id="operator" aria-label="Operator">
+                <option value="add">+</option>
+                <option value="sub">-</option>
+                <option value="mul">*</option>
+                <option value="div">/</option>
+            </select>
+
+            <div class="fraction-input">
+                <input type="number" id="num2" value="1" aria-label="Numerator 2">
+                <div class="divider"></div>
+                <input type="number" id="den2" value="7" aria-label="Denominator 2">
+            </div>
+
+            <button id="calculateBtn" title="Calculate">=</button>
+        </div>
+
+        <h2>How it Worked Out:</h2>
+        <div id="results">
+            Enter two fractions and an operator, then click "=" to see the magic.
+        </div>
+    </div>
+
+    <script>
+        function getRepeatingDecimal(numerator, denominator) {
+            if (denominator === 0) return "Cannot divide by zero";
+            if (numerator === 0) return "0";
+
+            let sign = (numerator < 0) ^ (denominator < 0) ? "-" : "";
+            numerator = Math.abs(numerator);
+            denominator = Math.abs(denominator);
+
+            let integerPart = Math.floor(numerator / denominator);
+            let remainder = numerator % denominator;
+
+            if (remainder === 0) {
+                return sign + integerPart.toString();
+            }
+
+            let decimalPart = '';
+            const remainders = new Map();
+
+            while (remainder !== 0 && !remainders.has(remainder)) {
+                remainders.set(remainder, decimalPart.length);
+                remainder *= 10;
+                let digit = Math.floor(remainder / denominator);
+                decimalPart += digit;
+                remainder %= denominator;
+            }
+
+            if (remainder === 0) {
+                return `${sign}${integerPart}.${decimalPart}`;
+            } else {
+                const startOfCycle = remainders.get(remainder);
+                const nonRepeatingPart = decimalPart.substring(0, startOfCycle);
+                const repeatingPart = decimalPart.substring(startOfCycle);
+                return `${sign}${integerPart}.${nonRepeatingPart}(${repeatingPart})`;
+            }
+        }
+
+        const calculateBtn = document.getElementById('calculateBtn');
+        const resultsDiv = document.getElementById('results');
+
+        calculateBtn.onclick = function() {
+            try {
+                const num1 = parseInt(document.getElementById('num1').value);
+                const den1 = parseInt(document.getElementById('den1').value);
+                const num2 = parseInt(document.getElementById('num2').value);
+                const den2 = parseInt(document.getElementById('den2').value);
+                const operator = document.getElementById('operator').value;
+
+                if (den1 === 0 || den2 === 0) {
+                    throw new Error("Denominator cannot be zero.");
+                }
+
+                const fraction1 = new Fraction(num1, den1);
+                const fraction2 = new Fraction(num2, den2);
+
+                let result;
+                let explanation;
+                let unsimplifiedNum, unsimplifiedDen;
+
+                switch (operator) {
+                    case 'add':
+                        result = fraction1.add(fraction2);
+                        unsimplifiedNum = (num1 * den2) + (num2 * den1);
+                        unsimplifiedDen = den1 * den2;
+                        explanation = `<strong>Addition:</strong> To add fractions, they must have a common denominator.
+                                      <ol>
+                                          <li><strong>Find Common Denominator:</strong> We multiply the two denominators: <code>${den1} &times; ${den2} = ${unsimplifiedDen}</code>.</li>
+                                          <li><strong>Adjust First Fraction:</strong> We multiply the numerator of the first fraction (<code>${num1}</code>) by the denominator of the second (<code>${den2}</code>): <code>${num1} &times; ${den2} = ${num1 * den2}</code>.</li>
+                                          <li><strong>Adjust Second Fraction:</strong> We multiply the numerator of the second fraction (<code>${num2}</code>) by the denominator of the first (<code>${den1}</code>): <code>${num2} &times; ${den1} = ${num2 * den1}</code>.</li>
+                                          <li><strong>Add New Numerators:</strong> Now we add the adjusted numerators: <code>${num1 * den2} + ${num2 * den1} = ${unsimplifiedNum}</code>.</li>
+                                          <li>This gives the unsimplified result of <code>${unsimplifiedNum}/${unsimplifiedDen}</code>.</li>
+                                      </ol>`;
+                        break;
+                    case 'sub':
+                        result = fraction1.sub(fraction2);
+                        unsimplifiedNum = (num1 * den2) - (num2 * den1);
+                        unsimplifiedDen = den1 * den2;
+                        explanation = `<strong>Subtraction:</strong> This also requires a common denominator.
+                                      <ol>
+                                          <li><strong>Find Common Denominator:</strong> <code>${den1} &times; ${den2} = ${unsimplifiedDen}</code>.</li>
+                                          <li><strong>Adjust Numerators:</strong> The first numerator becomes <code>${num1} &times; ${den2} = ${num1 * den2}</code>. The second becomes <code>${num2} &times; ${den1} = ${num2 * den1}</code>.</li>
+                                          <li><strong>Subtract New Numerators:</strong> We subtract the second from the first: <code>${num1 * den2} - ${num2 * den1} = ${unsimplifiedNum}</code>.</li>
+                                          <li>This gives the unsimplified result of <code>${unsimplifiedNum}/${unsimplifiedDen}</code>.</li>
+                                      </ol>`;
+                        break;
+                    case 'mul':
+                        result = fraction1.mul(fraction2);
+                        unsimplifiedNum = num1 * num2;
+                        unsimplifiedDen = den1 * den2;
+                        explanation = `<strong>Multiplication:</strong> This is the most direct operation.
+                                      <ol>
+                                          <li><strong>Multiply Numerators:</strong> <code>${num1} &times; ${num2} = ${unsimplifiedNum}</code>.</li>
+                                          <li><strong>Multiply Denominators:</strong> <code>${den1} &times; ${den2} = ${unsimplifiedDen}</code>.</li>
+                                          <li>This gives the unsimplified result of <code>${unsimplifiedNum}/${unsimplifiedDen}</code>.</li>
+                                      </ol>`;
+                        break;
+                    case 'div':
+                        result = fraction1.div(fraction2);
+                        unsimplifiedNum = num1 * den2;
+                        unsimplifiedDen = den1 * num2;
+                        explanation = `<strong>Division:</strong> To divide by a fraction, we "invert and multiply".
+                                      <ol>
+                                          <li><strong>Invert the Divisor:</strong> We flip the second fraction, <code>${num2}/${den2}</code>, to get its reciprocal: <code>${den2}/${num2}</code>.</li>
+                                          <li><strong>Rewrite as Multiplication:</strong> The problem becomes <code>${num1}/${den1} &times; ${den2}/${num2}</code>.</li>
+                                          <li><strong>Multiply Numerators:</strong> <code>${num1} &times; ${den2} = ${unsimplifiedNum}</code>.</li>
+                                          <li><strong>Multiply Denominators:</strong> <code>${den1} &times; ${num2} = ${unsimplifiedDen}</code>.</li>
+                                          <li>This gives the unsimplified result of <code>${unsimplifiedNum}/${unsimplifiedDen}</code>.</li>
+                                      </ol>`;
+                        break;
+                }
+                
+                let outputHTML = `
+                    <p><strong>Step 1: The Problem</strong></p>
+                    <p><code>${fraction1.toFraction()} ${document.getElementById('operator').selectedOptions[0].text} ${fraction2.toFraction()}</code></p>
+                    <hr>
+                    <p><strong>Step 2: The Logic & Calculation Steps</strong></p>
+                    ${explanation}
+                    <hr>
+                    <p><strong>Step 3: The Answer</strong></p>
+                    <p><strong>As an unsimplified fraction:</strong> <code>${unsimplifiedNum}/${unsimplifiedDen}</code></p>
+                    <p><strong>As a simplified fraction:</strong> <code>${result.toFraction()}</code></p>
+                    <p><strong>As an exact decimal:</strong> <code>${getRepeatingDecimal(result.n, result.d)}</code></p>
+                `;
+
+                resultsDiv.innerHTML = outputHTML;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<p style="color: red;"><strong>Error:</strong> ${error.message}.</p>`;
+                console.error("Calculation Error:", error);
+            }
+        };
+        
+        // Trigger initial calculation on page load
+        calculateBtn.click();
+    </script>
+
+</body>
+</html>
