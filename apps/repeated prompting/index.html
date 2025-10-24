@@ -3,30 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Repeating LLM Prompter</title>
+    <title>Repeating LLM Prompter (LanguageModel API)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
             padding: 10px;
+            background-color: #f4f4f9;
+            color: #333;
         }
         .container {
             max-width: 600px;
             margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #444;
         }
         select, textarea, button, input {
             width: 100%;
             margin: 10px 0;
-            padding: 8px;
-        }
-        .responses {
-            margin-top: 20px;
-        }
-        .response-item {
-            border: 1px solid #ccc;
             padding: 10px;
-            margin-bottom: 10px;
             border-radius: 5px;
+            border: 1px solid #ccc;
+            box-sizing: border-box; /* Ensures padding doesn't affect width */
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
         }
         .response-display {
             border: 1px solid #ccc;
@@ -34,6 +48,7 @@
             margin-top: 10px;
             border-radius: 5px;
             min-height: 60px;
+            background-color: #e9ecef;
         }
         .popup {
             display: none;
@@ -41,6 +56,7 @@
             top: 50%;
             left: 50%;
             width: 80%;
+            max-width: 700px;
             height: 60%;
             overflow-y: auto;
             background-color: white;
@@ -48,9 +64,14 @@
             padding: 20px;
             transform: translate(-50%, -50%);
             z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
         .popup-close {
             margin-top: 10px;
+            background-color: #dc3545;
+        }
+        .popup-close:hover {
+            background-color: #c82333;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/12.3.2/markdown-it.min.js"></script>
@@ -59,24 +80,22 @@
     <div class="container">
         <h1>Repeating LLM Prompter</h1>
         <select id="llmSelect">
-            <option value="geminiNano">Gemini Nano</option>
+            <option value="geminiNano">Gemini Nano (In-Browser)</option>
             <option value="gemini">Gemini Flash</option>
             <option value="cohere">Cohere.ai</option>
             <option value="gpt4">ChatGPT-4o-mini</option>
         </select>
 
-        <input type="password" id="apiKeyInput" placeholder="Enter API key" style="display: none;">
-        
+        <input type="password" id="apiKeyInput" placeholder="Enter API key for cloud models" style="display: none;">
+                
         <textarea id="text1" rows="3" placeholder="Enter first part of the prompt"></textarea>
-        <textarea id="text2" rows="3" placeholder="Enter second part of the prompt"></textarea>
+        <textarea id="text2" rows="3" placeholder="Enter second part of the prompt (will be replaced by response)"></textarea>
 
         <button id="submitBtn">Submit Prompt</button>
         <button id="showAllResponsesBtn">Show All Responses</button>
-
-        <div id="responseDisplay" class="response-display">Response will also appear here...</div>
-
-        <div class="responses" id="responses"></div>
-
+        
+        <div id="responseDisplay" class="response-display">Response will appear here...</div>
+        
         <div id="popup" class="popup">
             <h2>All Responses (Starting with Initial Prompt)</h2>
             <div id="allResponses"></div>
@@ -85,73 +104,106 @@
     </div>
 
     <script src="api.js"></script>
+    
     <script>
         const md = window.markdownit();
         let initialPrompt = '';
         let allResponsesList = [];
+        let nanoSession = null; // ✨ Variable to hold our Gemini Nano session
 
         document.getElementById('llmSelect').addEventListener('change', function() {
-            const llmType = this.value;
             const apiKeyInput = document.getElementById('apiKeyInput');
-            if (llmType === 'geminiNano') {
-                apiKeyInput.style.display = 'none';
-            } else {
-                apiKeyInput.style.display = 'block';
-            }
+            apiKeyInput.style.display = (this.value === 'geminiNano') ? 'none' : 'block';
         });
 
         async function handleSubmit() {
             const llmType = document.getElementById('llmSelect').value;
-            const apiKey = document.getElementById('apiKeyInput').value;
             const text1 = document.getElementById('text1').value;
             const text2 = document.getElementById('text2').value;
-            const fullPrompt = text1 + " " + text2;
+            const fullPrompt = text1.trim() + " " + text2.trim();
+            const responseDisplay = document.getElementById('responseDisplay');
 
-            // Save the initial prompt only once
             if (!initialPrompt) {
                 initialPrompt = fullPrompt;
             }
 
-            const agent = {
-                role: 'user', // This can be changed if needed
-                llmType: llmType,
-                apiKey: apiKey,  // Pass the API key to the agent
-                messages: [],
-                session: null  // Adding session initialization for geminiNano
-            };
-
-            if (llmType === 'geminiNano') {
-                // For Gemini Nano, we must create a session
-                agent.session = await ai.assistant.create({
-                    systemPrompt: `You are a ${agent.role} agent.`
-                });
-            }
+            let response = '';
 
             try {
-                let response = await processMessage(agent, fullPrompt);
+                responseDisplay.textContent = 'Generating response...';
 
-                // Record the full response
+                if (llmType === 'geminiNano') {
+                    // ==========================================================
+                    // 🔄 UPDATED GEMINI NANO LOGIC with LanguageModel API
+                    // ==========================================================
+                    
+                    if (!window.LanguageModel) {
+                        throw new Error("LanguageModel API is not available in this browser.");
+                    }
+
+                    // 1. Check model availability.
+                    const availability = await window.LanguageModel.availability();
+                    if (availability === 'unavailable') {
+                         responseDisplay.textContent = '⚠️ On-device model is unavailable. Check hardware requirements and Chrome settings.';
+                         return;
+                    }
+                    
+                    // A user interaction (like this button click) is required before downloading.
+                    if (availability === 'downloading' || availability === 'downloadable') {
+                        responseDisplay.textContent = '⏳ Model is downloading. Please wait...';
+                        // In a real app, you might monitor download progress here.
+                    }
+
+                    // 2. Create a session if one doesn't exist yet.
+                    if (!nanoSession) {
+                        responseDisplay.textContent = 'Creating AI session...';
+                        nanoSession = await window.LanguageModel.create();
+                    }
+
+                    // 3. Prompt the session.
+                    responseDisplay.textContent = 'Prompting the model...';
+                    response = await nanoSession.prompt(fullPrompt);
+
+                } else {
+                    // ==========================================================
+                    // LOGIC FOR OTHER MODELS (Requires api.js) - Unchanged
+                    // ==========================================================
+                    const apiKey = document.getElementById('apiKeyInput').value;
+                    if (!apiKey) {
+                        alert('Please enter an API key for the selected cloud model.');
+                        return;
+                    }
+                    const agent = {
+                        role: 'user',
+                        llmType: llmType,
+                        apiKey: apiKey,
+                        messages: []
+                    };
+                    response = await processMessage(agent, fullPrompt);
+                }
+
+                // Update UI with the response (same for all models)
                 allResponsesList.push(response);
-
-                // Remove content between <ignore> and </ignore> for the text area update
-                const cleanedResponse = response.replace(/<ignore>.*?<\/ignore>/gs, '');
-
-                // Update the second text area with the cleaned response
+                
+                const cleanedResponse = response.replace(/<ignore>.*?<\/ignore>/gs, '').trim();
+                
                 document.getElementById('text2').value = cleanedResponse;
-
-                // Render the full response in the display area as markdown
-                const renderedResponse = md.render(response);
-                document.getElementById('responseDisplay').innerHTML = renderedResponse;
+                responseDisplay.innerHTML = md.render(response);
 
             } catch (error) {
                 console.error("Error processing the prompt:", error);
+                responseDisplay.textContent = `Error: ${error.message}`;
             }
         }
 
         function showAllResponses() {
             const allResponsesDiv = document.getElementById('allResponses');
-            allResponsesDiv.innerHTML = `<p><strong>Initial Prompt:</strong> ${md.render(initialPrompt)}</p>` +
-                allResponsesList.map(response => `<p><strong>Response:</strong> ${md.render(response)}</p>`).join('');
+            let htmlContent = `<div><strong>Initial Prompt:</strong>${md.render(initialPrompt)}</div><hr>`;
+            htmlContent += allResponsesList.map((res, index) => 
+                `<div><strong>Response #${index + 1}:</strong>${md.render(res)}</div><hr>`
+            ).join('');
+            
+            allResponsesDiv.innerHTML = htmlContent;
             document.getElementById('popup').style.display = 'block';
         }
 
