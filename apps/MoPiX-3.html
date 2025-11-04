@@ -3286,11 +3286,36 @@
                 div.style.cssText = 'display: flex; align-items: center; gap: 5px; margin: 5px 0; padding: 5px; background: white; border-radius: 4px; font-size: 12px;';
                 div.innerHTML = `
                     <span style="font-weight: 600; font-family: monospace; white-space: nowrap;">${name}</span>
-                    <span style="flex: 1; color: #667eea; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${value}</span>
+                    <span onclick="editVariableValue('${name}')" style="flex: 1; color: #667eea; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; padding: 2px 4px; border-radius: 3px;" onmouseenter="this.style.background='#f0f0ff'" onmouseleave="this.style.background=''" title="Click to edit value">${value}</span>
                     <button onclick="deleteVariable('${name}')" style="padding: 2px 6px; font-size: 11px; background: #dc3545; flex-shrink: 0;">×</button>
                 `;
                 listEl.appendChild(div);
             });
+        }
+
+        function editVariableValue(name) {
+            const currentValue = userVariables.get(name);
+            const newValue = prompt(`Edit value for "${name}":`, currentValue);
+
+            if (newValue === null) return; // User cancelled
+
+            const numValue = parseFloat(newValue);
+            if (isNaN(numValue)) {
+                alert('Please enter a valid numeric value');
+                return;
+            }
+
+            userVariables.set(name, numValue);
+
+            // Clear all equation caches since variables changed
+            objects.forEach(obj => {
+                if (obj.equations) {
+                    obj.equations.forEach(eq => eq.cache.clear());
+                }
+            });
+
+            updateVariablesList();
+            renderFrame(animationController.currentFrame);
         }
 
         function addVariable() {
