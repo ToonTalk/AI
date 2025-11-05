@@ -3025,14 +3025,10 @@
             obj.x = newX;
             obj.y = newY;
 
-            // Clear x and y equations when manually dragging
-            // Dragging is an explicit override of position
-            if (obj.equations.has('x')) {
-                obj.equations.delete('x');
-            }
-            if (obj.equations.has('y')) {
-                obj.equations.delete('y');
-            }
+            // NOTE: We no longer delete x/y equations when dragging
+            // The render below uses renderScene (not renderFrame) which doesn't evaluate equations
+            // This allows temporary repositioning without losing equations
+            // If you want to permanently override position, delete the equations via the UI
 
             obj.equations.forEach(eq => eq.cache.clear());
 
@@ -4202,6 +4198,10 @@
                                         description: eqDesc || '',
                                         cache: new Map()
                                     });
+                                } else {
+                                    // Log parsing failures during import for debugging
+                                    console.error(`Failed to parse equation for ${objData.id}.${attr}: ${result.error}`);
+                                    console.error(`  Equation text: ${eqText}`);
                                 }
                             }
                         }
@@ -4227,12 +4227,15 @@
                 }
 
                 // Ensure all standard properties have default values
+                // DEBUG: Log import values
+                console.log(`[IMPORT] Object ${objData.id}: x=${objData.x}, y=${objData.y}, Vx=${objData.Vx}, Vy=${objData.Vy}`);
+
                 const obj = {
                     // Standard properties
                     id: objData.id,
                     name: objData.name || objData.id,
-                    x: objData.x || 0,
-                    y: objData.y || 0,
+                    x: objData.x !== undefined ? objData.x : 0,
+                    y: objData.y !== undefined ? objData.y : 0,
                     width: objData.width || 50,
                     height: objData.height || 50,
                     rotation: objData.rotation || 0,
@@ -4618,6 +4621,8 @@
                 } catch (err) {
                     alert('Error importing: ' + err.message);
                 }
+                // Reset file input so the same file can be imported again
+                event.target.value = '';
             };
             reader.readAsText(file);
         }
@@ -4641,6 +4646,11 @@
             const data = JSON.parse(jsonString);
             deserializeObjects(data.objects);
 
+            // CRITICAL: Initialize previous frame values IMMEDIATELY after deserializing
+            // This must happen BEFORE any code that might evaluate equations (like setFrame)
+            // Otherwise equations with prev.x, prev.y will use 0 instead of imported values
+            initializePreviousFrameValues();
+
             // Load variables
             userVariables.clear();
             if (data.variables) {
@@ -4656,13 +4666,19 @@
             trailManager.clearAll();
             selectedObjectId = null;
             historyManager.clear();
+
             saveHistoryState();
 
             updateVariablesList();
             updateObjectList();
             updatePropertyPanel();
             updateHistoryUI();
-            renderFrame(animationController.currentFrame);
+
+            // Render without evaluating equations - imported values are already correct
+            const trails = trailManager.getAllTrails();
+            const objectsArray = Array.from(objects.values());
+            console.log('[IMPORT RENDER] Objects at render time:', objectsArray.map(o => `${o.id}: x=${o.x}, y=${o.y}`));
+            renderer.renderScene(objectsArray, trails, selectedObjectId);
         }
 
         // ==================== Sample Models ====================
@@ -5055,6 +5071,9 @@
                 delete prevValues.text;
                 delete prevValues.equations;
                 previousFrameValues.set(obj.id, prevValues);
+
+                // DEBUG: Log what we're storing
+                console.log(`[INIT PREV] ${obj.id}: x=${prevValues.x}, y=${prevValues.y}, Vx=${prevValues.Vx}, Vy=${prevValues.Vy}`);
             });
         }
 
