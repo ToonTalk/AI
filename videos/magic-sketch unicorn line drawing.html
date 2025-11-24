@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Sketch Animation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: white;
+            height: 100vh;
+            width: 100vw;
+            font-family: sans-serif;
+        }
+        #drawing-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/png;base64,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ECBAgAABAgQIECBAIKzA62AibMsaI0CAAAECBAgQIECAAAECBIYJbC4kmNi8ANcTIECAAAECBAgQIECAQA8BUz4XEEw8d/EpAQIECBAgQIAAAQIECOQU0HUyAcFEsoVplwABAgQIECBAgAABAjEEdEFgjIBgYoyjKgQIECBAgAABAgQIEJgjoCqB4gKCieILNh4BAgQIECBAgAABAscEnCJAYI+AYGKPu1sJECBAgAABAgQIdBUwNwECBD4JCCY+cfiFAAECBAgQIECAQBUBcxAgQCCHgGAix550SYAAAQIECBAgEFVAXwQIECBwS0AwcYvPwwQIECBAgAABAqsE3EOAAAECNQUEEzX3aioCBAgQIECAwFUBzxEgQIAAgaUCgoml3C4jQIAAAQIECLwLeCdAgAABAgTeBAQTbwpeBAgQIECAQF0BkxEgQIAAAQKhBQQTodejOQIECBAgkEdApwQIECBAgACBKwKCiStqniFAgAABAvsE3EyAAAECBAgQKCUgmCi1TsMQIECAwDgBlQgQIECAAAECBFYICCZWKLuDAAECBF4L+IYAAQIECBAgQKC1gGCi9foNT4BAJwGzEiBAgAABAgQIEIgoIJiIuBU9ESCQWUDvBAgQIECAAAECBAicEBBMnMBylACBSAJ6IUCAAAECBAgQIECggoBgosIWzUBgpoDaBAgQIECAAAECBAgQmCggmJiIqzSBMwLOEiBAgAABAgQIECBAoKOAYKLj1nvPbHoCBAgQIECAAAECBAgQCCQgmAi0jFqtmIYAAQIECBAgQIAAAQIECPwsIJj42Sj2Cd0RIECAAAECBAgQIECAAIHEAoKJg8tzjAABAgQIECBAgAABAgQIEBgvEC2YGD+higQIECBAgAABAgQIECBAgEA0gV/7EUz8SuEHAgQIECBAgAABAgQIECBQTSD+PIKJ+DvSIQECBAgQIECAAAECBAhEF9DfZQHBxGU6DxIgQIAAAQIECBAgQIDAagH31RMQTNTbqYkIECBAgAABAgQIECBwV8DzBJYJCCaWUbuIAAECBAgQIECAAAECvxXwOwECggl/AwQIECBAgAABAgQI1BcwIQECYQUEE2FXozECBAgQIECAAAEC+QR0TIAAgbMCgomzYs4TIECAAAECBAgQ2C+gAwIECJQREEyUWaVBCBAgQIAAAQIExguoSIAAAQKzBQQTs4XVJ0CAAAECBAgQ+FnACQIECBBoKyCYaLt6gxMgQIAAAQIdBcxMgAABAgSiCQgmom1EPwQIECBAgEAFATMQIECAAAECBwUEEwehHCNAgAABAgQiCuiJAAECBAgQyC4gmMi+Qf0TIECAAIEVAu4gQIAAAQIECEwSEExMglWWAAECBAhcEfAMAQIECBAgQKCbgGCi28bNS4AAAQJvAl4ECBAgQIAAAQJBBAQTQRahDQIECNQUMBUBAgQIECBAgACB7wUEE9/7+JYAAQI5BHRJgAABAgQIECBAIKmAYCLp4rRNgMAeAbcSIECAAAECBAgQIDBWQDAx1lM1AgTGCKhCgAABAgQIECBAgEATAcFEk0Ubk8BzAZ8SIECAAAECBAgQIEBgr4BgYq+/27sImJMAAQIECBAgQIAAAQIEngoIJp6y+DCrgL4JECBAgAABAgQIECBAIJeAYCLXvqJ0qw8CBAgQIECAAAECBAgQIDBEQDAxhHFWEXUJECBAgAABAgQIECBAgEBtAcHE2369CBAgQIAAAQIECBAgQIAAgS0CS4OJLRO6lAABAgQIECBAgAABAgQIEFgqcOYywcQZLWcJECBAgAABAgQIECBAgEAcgRKdCCZKrNEQBAgQIECAAAECBAgQIDBPQOWZAoKJmbpqEyBAgAABAgQIECBAgMBxASdbCggmWq7d0AQIECBAgAABAgQIdBYwO4FIAoKJSNvQCwECBAgQIECAAAEClQTMQoDAAQHBxAEkRwgQIECAAAECBAgQiCygNwIEMgsIJjJvT+8ECBAgQIAAAQIEVgq4iwABAhMEBBMTUJUkQIAAAQIECBAgcEfAswQIEOgkIJjotG2zEiBAgAABAgQIfBTwMwECBAgEEBBMBFiCFggQIECAAAECtQVMR4AAAQIEXgsIJl7b+IYAAQIECBAgkEtAtwQIECBAIKGAYCLh0rRMgAABAgQI7BVwOwECBAgQIDBOQDAxzlIlAgQIECBAYKyAagQIECBAgEADAcFEgyUbkQABAgQIfC/gWwIECBAgQIDAPgHBxD57NxMgQIBANwHzEiBAgAABAgQIfBEQTHwh8QEBAgQIZBfQPwECBAgQIECAQB4BwUSeXemUAAEC0QT0Q4AAAQIECBAgQOC2gGDiNqECBAgQmC2gPgECBAgQIECAAIG6AoKJurs1GQECZwWcJ0CAAAECBAgQIEBguYBgYjm5CwkQIECAAAECBAgQIECAAIF3AcHEu4R3AvUETESAAAECBAgQIECAAIHwAoKJ8CvSYHwBHRIgQIAAAQIECBAgQIDAVQHBxFU5z60XcCMBAgQIECBAgAABAgQIlBMQTJRb6f2BVCBAgAABAgQIECBAgAABAqsEBBOrpL/e4xMCBAgQIECAAAECBAgQINBeoEEw0X7HAAgQIECAAAECBAgQIECAQFiBccFE2BE1RoAAAQIECBAgQIAAAQIECAwTGFxIMDEYVDkCBAgQIECAAAECBAgQIDBCoEsNwUSXTZuTAAECBAgQIECAAAECBJ4J+GyzwP8BAAD//xF/NuYAAAAGSURBVAMAwTMMUwBp9oYAAAAASUVORK5CYII=');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            transition: opacity 0.3s;
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            border-radius: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button {
+            background: white;
+            border: 1px solid #cbd5e1;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #475569;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #f1f5f9;
+        }
+        button.active {
+            background: #e0e7ff;
+            color: #4f46e5;
+            border-color: #c7d2fe;
+        }
+    </style>
+</head>
+<body>
+    <div id="drawing-layer"></div>
+    <div id="sketch-holder"></div>
+    
+    <div id="controls">
+        <button id="btn-pause" onclick="togglePause()">Pause</button>
+        <button id="btn-sketch" onclick="toggleSketch()">Hide Sketch</button>
+    </div>
+
+    <script>
+        let myP5;
+        let isPaused = false;
+        let isSketchVisible = true;
+
+        const sketch = (p) => {
+            // --- AI GENERATED CODE START ---
+            
+  let unicornImg; // Placeholder for the loaded image asset
+  let cosmicBuffer;
+  let particles = [];
+  let unicornW, unicornH;
+
+  // --- Particle Class ---
+  class Particle {
+    constructor(x, y, color) {
+      this.pos = p.createVector(x, y);
+      this.vel = p.createVector(p.random(-0.5, 0.5), p.random(-1, -2));
+      this.acc = p.createVector(0, 0.05);
+      this.lifespan = 255;
+      this.maxSize = p.random(1, 4);
+      this.color = color || p.color(255, 200, 150);
+    }
+
+    update() {
+      this.vel.add(this.acc);
+      this.pos.add(this.vel);
+      this.lifespan -= 5;
+      this.vel.mult(0.98); // Drag
+    }
+
+    display() {
+      const alpha = p.map(this.lifespan, 0, 255, 0, 255);
+      const size = p.map(this.lifespan, 0, 255, 0, this.maxSize, true);
+      
+      p.noStroke();
+      this.color.setAlpha(alpha);
+      p.fill(this.color);
+      p.ellipse(this.pos.x, this.pos.y, size);
+      
+      // Simple glow effect for the particle
+      this.color.setAlpha(alpha / 4);
+      p.fill(this.color);
+      p.ellipse(this.pos.x, this.pos.y, size * 2);
+    }
+
+    isDead() {
+      return this.lifespan < 0;
+    }
+  }
+
+  // --- Helper Functions/Objects ---
+
+  // 1. Draw Cosmic Background
+  p.drawCosmicBackground = () => {
+    // Draw black base
+    p.fill(0, 30);
+    p.rect(0, 0, p.width, p.height);
+    
+    // Use the buffer for swirling nebula effect
+    cosmicBuffer.fill(0, 0, 0, 10); // Clear gently
+    cosmicBuffer.rect(0, 0, p.width, p.height);
+
+    // Create swirling colors (deep purple, blue, magenta)
+    let time = p.frameCount * 0.005;
+    for (let i = 0; i < 20; i++) {
+      let x = p.width * p.noise(i * 0.1, time);
+      let y = p.height * p.noise(i * 0.1 + 100, time);
+      let r = 50 + 10 * p.sin(i + time);
+
+      let c = p.color(
+        100 + p.noise(i * 0.5) * 50, // R (Magenta tone)
+        10 + p.noise(i * 0.5 + 10) * 50, // G (Blue tone)
+        150 + p.noise(i * 0.5 + 20) * 100, // B (Deep purple tone)
+        10
+      );
+      cosmicBuffer.noStroke();
+      cosmicBuffer.fill(c);
+      cosmicBuffer.ellipse(x, y, r);
+    }
+    
+    // Draw the subtle noise overlay
+    p.image(cosmicBuffer, 0, 0);
+  };
+
+  // 2. Wing Flap and Ethereal Drawing
+  p.drawEtherealUnicorn = (x, y) => {
+    p.push();
+    p.translate(x, y);
+    
+    // Calculate primary transformation: gentle rocking/pitching motion
+    let tiltAngle = p.sin(p.frameCount * 0.01) * 0.05; 
+    p.rotate(tiltAngle);
+
+    // --- Wing Flap Simulation ---
+    // Since we cannot isolate wings, we simulate the effect by rotating the image slightly
+    // around a pivot point that approximates the shoulder position relative to the image center.
+    
+    // Assume the pivot point (shoulder) is roughly at (-unicornW/4, 0) relative to the image center
+    const pivotX = -unicornW * 0.25;
+    const pivotY = 0; 
+    
+    const flapStrength = 0.1; // Max rotation angle for wing flap
+    const flapSpeed = 0.08; 
+    let flap = p.sin(p.frameCount * flapSpeed) * flapStrength; // Flapping movement
+    
+    // Apply rotation around the pivot point
+    p.translate(pivotX, pivotY);
+    p.rotate(flap); 
+    p.translate(-pivotX, -pivotY);
+
+    // --- Ethereal Glow --- 
+    
+    // 1. Draw soft white glow (blurred interior)
+    p.tint(255, 255, 255, 100); // Soft white/translucent
+    p.image(unicornImg, -unicornW / 2 - 2, -unicornH / 2 - 2, unicornW + 4, unicornH + 4);
+    p.image(unicornImg, -unicornW / 2 + 2, -unicornH / 2 + 2, unicornW - 4, unicornH - 4);
+
+    // 2. Draw shimmering lines (Gold Outline effect)
+    const goldColor = p.color(255, 220, 100); // R: Gold, B: Iridescent tint
+    
+    // Simulate shimmer by changing tint based on frame count
+    let shimmerAlpha = p.map(p.sin(p.frameCount * 0.5), -1, 1, 150, 255);
+    
+    // Use HUE rotation or manual tint for a shimmering effect
+    p.tint(goldColor, shimmerAlpha); 
+    p.image(unicornImg, -unicornW / 2, -unicornH / 2, unicornW, unicornH);
+    
+    p.noTint(); // Reset tint
+    p.pop();
+    
+    // Return the calculated global position for particle emission
+    return p.createVector(x + pivotX, y + pivotY); 
+  };
+
+  // --- P5 Lifecycle Functions ---
+
+  p.preload = () => {
+    // Since actual image loading is restricted, we create a placeholder graphics buffer
+    // that simulates the black line drawing on a transparent background.
+    // We must assume the image is successfully loaded and converted/processed 
+    // so that black lines are represented by non-transparent pixels.
+    unicornW = 200; 
+    unicornH = 150; 
+
+    unicornImg = p.createGraphics(unicornW, unicornH);
+    unicornImg.background(255, 0); // Transparent background
+    unicornImg.stroke(0);
+    unicornImg.strokeWeight(1);
+    
+    // Simplified drawing to represent the silhouette/key features for manipulation
+    // Draw body outline
+    unicornImg.ellipse(unicornW * 0.5, unicornH * 0.6, unicornW * 0.6, unicornH * 0.4);
+    // Draw simplified wing shape
+    unicornImg.beginShape();
+    unicornImg.vertex(unicornW * 0.3, unicornH * 0.5);
+    unicornImg.vertex(unicornW * 0.8, unicornH * 0.0);
+    unicornImg.vertex(unicornW * 0.9, unicornH * 0.5);
+    unicornImg.endShape(p.CLOSE);
+    // Draw horn
+    unicornImg.line(unicornW * 0.35, unicornH * 0.4, unicornW * 0.45, unicornH * 0.3);
+
+    // Convert the drawing for easier manipulation (black lines on white/transparent background)
+    // Crucially, we invert/manipulate the pixels in setup to make the lines usable for glowing.
+  };
+
+  p.setup = () => {
+    
+    p.pixelDensity(1);
+
+    // Create cosmic background buffer
+    cosmicBuffer = p.createGraphics(p.width, p.height);
+    cosmicBuffer.background(0);
+
+    // Image processing: make lines visible against a dark background
+    // For this effect, we want the lines to be the source of light.
+    unicornImg.loadPixels();
+    for (let i = 0; i < unicornImg.pixels.length; i += 4) {
+      // Check if pixel is black (line)
+      if (unicornImg.pixels[i] < 50) {
+        unicornImg.pixels[i] = 255;
+        unicornImg.pixels[i + 1] = 255;
+        unicornImg.pixels[i + 2] = 255;
+        // Keep alpha high
+      } else {
+        // Make background fully transparent (A=0)
+        unicornImg.pixels[i + 3] = 0;
+      }
+    }
+    unicornImg.updatePixels();
+    
+    p.frameRate(30);
+  };
+
+  p.draw = () => {
+    p.clear(); // Ensure transparency is handled correctly
+    p.drawCosmicBackground();
+    
+    // --- Motion & Path (Figure Eight/Sine Wave) ---
+    const speed = p.frameCount * 0.015;
+    
+    // X: Slow steady flight path from left to right, plus gentle horizontal weave
+    let xPos = p.map(p.frameCount % 500, 0, 500, -100, p.width + 100); 
+    // Loop X position
+    if (xPos < -50) xPos = p.width + 50;
+    if (xPos > p.width + 50) xPos = -50;
+
+    // Y: Vertical sine wave
+    let yPos = p.height * 0.5 + p.sin(speed) * p.height * 0.2; 
+    
+    // Draw the unicorn and get its pivot point for particle spawning
+    const pivot = p.drawEtherealUnicorn(xPos, yPos);
+
+    // --- Particle Emission ---
+    const particleColor = p.color(255, 255, 200); // Iridescent gold/white
+    
+    // Emit particles from approximate horn/wingtip locations relative to the pivot
+    let hornOffset = p.createVector(unicornW * 0.15, -unicornH * 0.25);
+    let wingtipOffset = p.createVector(unicornW * 0.3, -unicornH * 0.35);
+    
+    // Calculate world coordinates for emission points
+    const hornPos = p.createVector(pivot.x + hornOffset.x, pivot.y + hornOffset.y);
+    const wingPos = p.createVector(pivot.x + wingtipOffset.x, pivot.y + wingtipOffset.y);
+
+    // Add particles
+    if (p.frameCount % 2 == 0) {
+        particles.push(new Particle(hornPos.x, hornPos.y, particleColor));
+        particles.push(new Particle(wingPos.x, wingPos.y, particleColor));
+    }
+
+    // Update and draw particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      let particle = particles[i];
+      particle.update();
+      particle.display();
+
+      if (particle.isDead()) {
+        particles.splice(i, 1);
+      }
+    }
+  };
+
+            // --- AI GENERATED CODE END ---
+
+            const originalSetup = p.setup;
+            p.setup = function() {
+                p.createCanvas(window.innerWidth, window.innerHeight);
+                p.clear(); 
+                if (originalSetup) originalSetup.call(p);
+            };
+
+            p.windowResized = function() {
+                p.resizeCanvas(window.innerWidth, window.innerHeight);
+                p.clear();
+            }
+        };
+        
+        // Use window.onload to ensure p5 is loaded
+        window.onload = function() {
+            if (typeof p5 !== 'undefined') {
+                myP5 = new p5(sketch, 'sketch-holder');
+            } else {
+                console.error("p5 library failed to load");
+            }
+        };
+
+        function togglePause() {
+            if (!myP5) return;
+            const btn = document.getElementById('btn-pause');
+            if (isPaused) {
+                myP5.loop();
+                btn.innerText = "Pause";
+                btn.classList.remove('active');
+                isPaused = false;
+            } else {
+                myP5.noLoop();
+                btn.innerText = "Resume";
+                btn.classList.add('active');
+                isPaused = true;
+            }
+        }
+
+        function toggleSketch() {
+            const el = document.getElementById('drawing-layer');
+            const btn = document.getElementById('btn-sketch');
+            if (isSketchVisible) {
+                el.style.opacity = '0';
+                btn.innerText = "Show Sketch";
+                isSketchVisible = false;
+            } else {
+                el.style.opacity = '1';
+                btn.innerText = "Hide Sketch";
+                isSketchVisible = true;
+            }
+        }
+    </script>
+</body>
+</html>
