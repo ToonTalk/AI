@@ -1,268 +1,156 @@
 // background.js — Chrome Extension service worker (Manifest V3)
-// v12 — paragraph-vs-sentence context, clean notifications, click-to-expand
+// Core logic:
+//  - Build/maintain a right-click context menu for selected text
+//  - Collect selection + light context from the active tab
+//  - Use on-device Gemini Nano (LanguageModel API) to define in context
+//  - Prefer in-page UI via content.js; fall back to notifications
 
-/* global LanguageModel, chrome */
 'use strict';
 
-const MENU_ID   = 'getMeaning';
-const NOTIF_ID  = 'ai-download';       // used for model download progress
-const ICON_URL  = 'icon.png';          // ensure this exists in your extension root
+// ====== Config ======
+const MENU_ID = 'meaning-in-context';
+const ICON_URL = 'icon.png'; // ensure this exists in your extension root
+
 let session = null;
 
-// Store full results keyed by notification id (for click-to-open)
+// Store full HTML for clickable notifications (we show preview in notification, full on click)
 const notifStore = new Map();
 
-/* ===================== Badge helpers ===================== */
-function showBadge(text) {
-  if (chrome.action?.setBadgeText) {
-    chrome.action.setBadgeBackgroundColor({ color: '#3b82f6' });
-    chrome.action.setBadgeText({ text });
-  }
-}
-function clearBadge() {
-  if (chrome.action?.setBadgeText) chrome.action.setBadgeText({ text: '' });
+// ====== Utilities ======
+function clampText(s, maxLen) {
+  s = (s || '').trim();
+  if (s.length <= maxLen) return s;
+  return s.slice(0, maxLen - 1) + '…';
 }
 
-/* ===================== Markdown helpers ===================== */
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function escapeHtml(str) {
+  return (str || '').replace(/[&<>"']/g, (m) => (
+    m === '&' ? '&amp;'
+      : m === '<' ? '&lt;'
+        : m === '>' ? '&gt;'
+          : m === '"' ? '&quot;'
+            : '&#039;'
+  ));
 }
 
-// Convert common Markdown → plain text for notifications (toasts can't render MD)
-function mdToPlain(md) {
-  let s = String(md || '');
-  s = s.replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, '').trim()); // code blocks
-  s = s.replace(/`([^`]+)`/g, '$1');                                     // inline code
-  s = s.replace(/(\*\*|__)(.*?)\1/g, '$2');                              // bold
-  s = s.replace(/(\*|_)(.*?)\1/g, '$2');                                 // italic
-  s = s.replace(/~~(.*?)~~/g, '$1');                                     // strike
-  s = s.replace(/!\[.*?\]\(.*?\)/g, '');                                 // images
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');                  // links
-  s = s.replace(/^\s{0,3}#{1,6}\s+/gm, '');                              // headings
-  s = s.replace(/^\s{0,3}>\s?/gm, '');                                   // quotes
-  s = s.replace(/^\s*[-*+]\s+/gm, '• ');                                 // bullets
-  s = s.replace(/^\s*\d+\.\s+/gm, (m) => m.replace(/\d+\./, '•'));       // ordered
-  s = s.replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();            // tidy
-  return s;
-}
-
-// Minimal, safe-ish Markdown → HTML for the full view window
+// Very small markdown -> HTML converter (safe-ish for our use)
 function mdToHtml(md) {
-  let html = escapeHtml(String(md || ''));
-  html = html.replace(/```([\s\S]*?)```/g, (_m, p1) => `<pre><code>${escapeHtml(p1)}</code></pre>`);   // code blocks
-  html = html.replace(/`([^`]+)`/g, (_m, p1) => `<code>${escapeHtml(p1)}</code>`);                      // inline code
-  html = html.replace(/(\*\*|__)(.*?)\1/g, (_m, _p, p2) => `<strong>${p2}</strong>`);                  // bold
-  html = html.replace(/(\*|_)(.*?)\1/g, (_m, _p, p2) => `<em>${p2}</em>`);                             // italic
-  html = html.replace(/~~(.*?)~~/g, (_m, p1) => `<del>${p1}</del>`);                                   // strike
-  html = html.replace(/!\[.*?\]\((.*?)\)/g, '');                                                        // drop images
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
-    (_m, text, url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`);
-  html = html.replace(/^\s{0,3}######\s+(.*)$/gm, '<h6>$1</h6>')
-             .replace(/^\s{0,3}#####\s+(.*)$/gm, '<h5>$1</h5>')
-             .replace(/^\s{0,3}####\s+(.*)$/gm, '<h4>$1</h4>')
-             .replace(/^\s{0,3}###\s+(.*)$/gm, '<h3>$1</h3>')
-             .replace(/^\s{0,3}##\s+(.*)$/gm, '<h2>$1</h2>')
-             .replace(/^\s{0,3}#\s+(.*)$/gm, '<h1>$1</h1>');
-  html = html.replace(/^\s{0,3}>\s?(.*)$/gm, '<blockquote>$1</blockquote>');                           // quotes
-  // Simple paragraphs (avoid double-wrapping block elements)
-  html = html.replace(/^(?!<h\d|<pre>|<blockquote>|<p>|<\/)(.+)$/gm, '<p>$1</p>');
-  return html;
+  const safe = escapeHtml(md || '');
+  // headings
+  let html = safe
+    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.*)$/gm, '<h1>$1</h1>');
+  // bold / italics
+  html = html.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  html = html.replace(/\*(.+?)\*/g, '<i>$1</i>');
+  // bullets
+  html = html.replace(/^\s*-\s+(.*)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+  // line breaks
+  html = html.replace(/\n/g, '<br>');
+  return `<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 10px;">${html}</div>`;
 }
 
-function truncateForToast(s, max = 240) {
-  s = String(s || '');
-  if (s.length <= max) return s;
-  return s.slice(0, max - 1).trimEnd() + '…';
+function markdownToPlain(md) {
+  // crude but effective for notification previews
+  return (md || '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/[#>*_`]/g, '')
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
-/* ===================== Notification helpers ===================== */
-async function createOrUpdateProgressNotification(pct, subtitle = '') {
-  const options = {
-    type: 'progress',
-    iconUrl: ICON_URL,
-    title: 'Downloading on-device AI',
-    message: subtitle || 'Chrome is preparing the model…',
-    progress: Math.max(0, Math.min(100, Math.floor(pct))),
-    priority: 2,
-    requireInteraction: true, // keep visible until it’s done
-  };
-  try {
-    await chrome.notifications.update(NOTIF_ID, options).catch(async () => {
-      await chrome.notifications.create(NOTIF_ID, options);
-    });
-  } catch (e) {
-    console.warn('[notif] progress failed', e, chrome.runtime.lastError);
-  }
+function shortenForToast(text, maxLen = 250) {
+  const t = (text || '').trim();
+  if (t.length <= maxLen) return t;
+  return t.slice(0, maxLen - 1) + '…';
 }
 
-async function showReadyNotification() {
-  try {
-    await chrome.notifications.update(NOTIF_ID, {
-      type: 'basic',
-      iconUrl: ICON_URL,
-      title: 'AI ready',
-      message: 'The on-device model is available.',
-      priority: 1,
-      requireInteraction: true,
-    }).catch(async () => {
-      await chrome.notifications.create(NOTIF_ID, {
-        type: 'basic',
-        iconUrl: ICON_URL,
-        title: 'AI ready',
-        message: 'The on-device model is available.',
-        priority: 1,
-        requireInteraction: true,
-      });
-    });
-  } catch (e) {
-    console.warn('[notif] ready failed', e, chrome.runtime.lastError);
-  }
-}
-
-// Clicking the result toast opens a small rendered view
-chrome.notifications.onClicked.addListener((id) => {
-  const item = notifStore.get(id);
-  if (!item) return;
-  openFullResultWindow(item.title, item.html);
-});
-chrome.notifications.onClosed?.addListener((id) => {
-  notifStore.delete(id);
-});
-
-// Open a small window that shows the full (rendered) result
-function openFullResultWindow(title, html) {
-  const doc = `
-<!doctype html>
-<meta charset="utf-8">
-<title>${escapeHtml(title)}</title>
-<style>
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-         line-height: 1.5; padding: 16px; background:#f6f7f9; }
-  h1 { font-size: 16px; margin: 0 0 8px; }
-  .box { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; }
-  pre { overflow:auto; background:#f8fafc; padding:8px; border-radius:8px; }
-  code { background:#f8fafc; padding:0 4px; border-radius:4px; }
-  blockquote { border-left:4px solid #e5e7eb; margin:8px 0; padding:4px 8px; color:#374151; background:#fbfdff; }
-  a { color:#2563eb; }
-</style>
-<h1>${escapeHtml(title)}</h1>
-<div class="box">${html}</div>
-`;
-  const url = 'data:text/html;charset=utf-8,' + encodeURIComponent(doc);
-  chrome.windows.create({ url, type: 'popup', width: 520, height: 640 });
-}
-
-/* ===================== AI session ===================== */
+// ====== Gemini Nano session handling ======
 async function getOrCreateSession() {
   if (session) return session;
 
+  // LanguageModel is currently available in Chromium builds that support Gemini Nano on-device
   if (typeof LanguageModel === 'undefined') {
-    throw new Error('The LanguageModel API is not available in this browser.');
+    throw new Error('LanguageModel API not available in this browser build.');
   }
 
   const availability = await LanguageModel.availability();
   console.log('[AI] Availability:', availability);
-  if (availability === 'unavailable') throw new Error('AI model is unavailable on this device.');
+  if (availability !== 'available') {
+    throw new Error(`AI availability is "${availability}".`);
+  }
 
   console.log('Creating new AI session...');
-  // Even if "available", Chrome may emit 0→100% instantly; still show a hint.
-  createOrUpdateProgressNotification(0, availability === 'available' ? 'Checking model…' : 'Starting download…');
-  showBadge(availability === 'available' ? '…' : '0%');
+  session = await LanguageModel.create({
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e) => {
+        console.log(`[AI] Gemini Nano download: ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  });
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    console.warn('[AI] Session creation timed out; aborting.');
-    controller.abort();
-    clearBadge();
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: ICON_URL,
-      title: 'AI download paused',
-      message: 'Timed out. Check network/policies and try again.',
-      priority: 1,
-      requireInteraction: true,
-    });
-  }, 180_000);
-
-  try {
-    session = await LanguageModel.create({
-      initialPrompts: [{ role: 'system', content: 'You are a concise dictionary.' }],
-      signal: controller.signal,
-      monitor(m) {
-        m.addEventListener('downloadprogress', (e) => {
-          const pct = Math.floor((e.loaded || 0) * 100);
-          console.log(`[AI] Gemini Nano download: ${pct}%`);
-          createOrUpdateProgressNotification(pct);
-          showBadge(`${pct}%`);
-        });
-      },
-    });
-    console.log('[AI] Session ready.');
-    showReadyNotification();
-    clearBadge();
-    return session;
-  } finally {
-    clearTimeout(timeout);
-  }
+  console.log('[AI] Session ready.');
+  return session;
 }
 
-/* ===================== Context extraction ===================== */
-// Returns selection + best context:
-// - Prefer the enclosing paragraph (≤ PAR_MAX chars)
-// - Otherwise, sentence containing the selection ± its neighbor sentence
+// ====== Selection + context extraction ======
 async function getSelectionAndContext(tabId) {
   const [res] = await chrome.scripting.executeScript({
     target: { tabId },
     func: () => {
-      const sel = window.getSelection?.();
-      const text = (sel && sel.toString()) || '';
-      if (!text) return { text: '', sentence: '', paragraph: '', heading: '', title: document.title || '' };
+      const selection = window.getSelection();
+      const text = (selection && selection.toString() || '').trim();
 
-      // Find the nearest block ancestor (paragraph/list/etc.)
-      function findBlock(node) {
-        let n = node && (node.nodeType === 3 ? node.parentNode : node);
-        const BLOCK_TAGS = /^(P|LI|DD|DT|BLOCKQUOTE|ARTICLE|SECTION|MAIN|ASIDE|DIV)$/i;
-        while (n && n !== document.body) {
-          if (n.nodeType === 1 && BLOCK_TAGS.test(n.tagName)) return n;
-          n = n.parentNode;
-        }
-        return document.body;
-      }
+      // best effort context capture
+      const anchorNode = selection && selection.anchorNode;
+      let container = anchorNode && (anchorNode.nodeType === Node.ELEMENT_NODE ? anchorNode : anchorNode.parentElement);
 
-      const anchorNode = sel.anchorNode || document.body;
-      const block = findBlock(anchorNode);
-      const paragraph = (block?.innerText || block?.textContent || '').replace(/\s+/g, ' ').trim();
-
-      // Try to capture a nearby heading for extra context
-      let heading = '';
-      for (let el = block; el; el = el.previousElementSibling) {
-        if (el.tagName && /^H[1-6]$/i.test(el.tagName)) { heading = el.innerText.trim(); break; }
-      }
-
-      // Extract the sentence containing the selection
-      const idxInPar = paragraph ? paragraph.indexOf(text) : -1;
+      // walk up a bit to find a meaningful block
       let sentence = '';
-      if (idxInPar >= 0) {
-        let segments = [];
-        try {
-          if ('Intl' in window && Intl.Segmenter) {
-            const seg = new Intl.Segmenter(undefined, { granularity: 'sentence' });
-            for (const s of seg.segment(paragraph)) {
-              segments.push({ start: s.index, end: s.index + s.segment.length, s: s.segment });
-            }
+      let paragraph = '';
+      let heading = '';
+
+      if (container) {
+        // try nearest heading
+        const h = container.closest('h1,h2,h3,h4,h5,h6');
+        heading = h ? h.textContent.trim() : '';
+
+        // paragraph-like container
+        const p = container.closest('p,li,blockquote,div,span');
+        paragraph = p ? (p.textContent || '').trim() : (container.textContent || '').trim();
+
+        // sentence approximation: try splitting paragraph around selected text
+        if (paragraph && text) {
+          const idx = paragraph.toLowerCase().indexOf(text.toLowerCase());
+          if (idx >= 0) {
+            // find sentence boundaries around idx
+            const before = paragraph.slice(0, idx);
+            const after = paragraph.slice(idx + text.length);
+            const start = Math.max(
+              before.lastIndexOf('.'),
+              before.lastIndexOf('!'),
+              before.lastIndexOf('?')
+            );
+            const endDot = after.indexOf('.');
+            const endEx = after.indexOf('!');
+            const endQ = after.indexOf('?');
+            const endRel = [endDot, endEx, endQ].filter(x => x >= 0).sort((a, b) => a - b)[0];
+            const startIdx = start >= 0 ? start + 1 : 0;
+            const endIdx = endRel != null ? (idx + text.length + endRel + 1) : paragraph.length;
+            sentence = paragraph.slice(startIdx, endIdx).trim();
+          } else {
+            sentence = paragraph.split(/(?<=[.!?])\s+/)[0] || paragraph;
           }
-        } catch (_) {}
-        if (!segments.length) {
-          const parts = paragraph.split(/(?<=[.!?])\s+/);
-          let pos = 0;
-          segments = parts.map(p => { const start = pos; pos += p.length + 1; return { start, end: start + p.length, s: p }; });
         }
-        sentence = (segments.find(seg => seg.start <= idxInPar && idxInPar < seg.end)?.s || '').trim();
       }
 
-      return { text, sentence, paragraph, heading, title: document.title || '' };
+      // Title
+      const title = document.title || '';
+
+      return { text, sentence, paragraph, heading, title };
     },
   });
 
@@ -287,40 +175,44 @@ async function defineSelectedInContext(tab) {
 
     const sess = await getOrCreateSession();
 
-    // Choose context
-    const PAR_MAX = 1200;
-    let context = '';
-    if (paragraph && paragraph.length <= PAR_MAX) {
-      context = paragraph;
-    } else if (paragraph) {
-      // Use sentence ± neighbor when paragraph is too long
-      const parts = paragraph.split(/(?<=[.!?])\s+/);
-      const i = parts.findIndex(p => p.includes(text));
-      const bundle = [parts[i - 1], parts[i], parts[i + 1]].filter(Boolean).join(' ');
-      context = bundle || sentence || paragraph.slice(0, PAR_MAX);
-    } else {
-      context = sentence || '';
-    }
+    // System prompt tuned for short, in-context meaning
+    const prompt = `
+You are a concise, accurate assistant that defines the selected word/phrase in its context.
+Return:
+1) A brief meaning (1-2 sentences).
+2) If ambiguous, list up to 3 plausible senses and pick the best match for the provided sentence.
+3) Provide one short paraphrase of the sentence using the chosen sense.
+4) Provide one synonym (if appropriate).
+Avoid hallucinations. If you can't infer, say so.
 
-    const metaTitle = heading || title || '';
-    const prompt =
-`You are a precise glossary assistant.
-Given the passage, explain the highlighted phrase IN CONTEXT in ≤ 50 words.
-Prefer the sense most consistent with the passage; if still ambiguous, say so.
+Selected: "${text}"
 
-Title: ${metaTitle || '(none)'}
-Passage:
-${context || '(no additional context available)'}
+Page title: "${title}"
+Heading: "${heading}"
 
-Phrase: "${text}"
-Definition:`;
+Sentence: "${sentence}"
+Paragraph (may include noise): "${paragraph}"
+`.trim();
 
-    const markdown = await sess.prompt(prompt);
+    const result = await sess.prompt(prompt);
 
-    // Toast: plain text (no Markdown), truncated so OS doesn't hard-cut mid-sentence
-    const plain    = mdToPlain(markdown);
-    const preview  = truncateForToast(plain, 240);
+    const markdown = `## Meaning (in context)\n${result}\n`;
+    const plain = markdownToPlain(markdown);
+    const preview = shortenForToast(plain, 240);
     const notifId  = 'def-' + (crypto?.randomUUID?.() || Date.now());
+
+    // Prefer an in-page popup via content.js (more reliable than OS notifications).
+    // If messaging fails (e.g., content script not injected, restricted page), fall back to a notification.
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        action: 'showMeaning',
+        word: text,
+        meaning: plain,
+      });
+      return;
+    } catch (e) {
+      console.warn('Could not show in-page result; falling back to notification:', e);
+    }
 
     notifStore.set(notifId, {
       title: `Meaning of: ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}`,
@@ -354,23 +246,37 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     (async () => {
       try {
         if (typeof LanguageModel === 'undefined') {
-          sendResponse({ available: false, details: 'LanguageModel API not found' });
+          sendResponse({ available: false, detail: 'LanguageModel API not available.' });
           return;
         }
         const availability = await LanguageModel.availability();
-        // Optionally kick off creation so the user sees progress
-        getOrCreateSession().catch(console.warn);
-        sendResponse({ available: availability === 'available', details: availability });
+        sendResponse({ available: availability === 'available', detail: availability });
       } catch (e) {
-        sendResponse({ available: false, details: String(e?.message || e) });
+        sendResponse({ available: false, detail: (e && e.message) || String(e) });
       }
     })();
-    return true; // async sendResponse
+    return true; // async response
   }
-  return false;
+
+  // If the popup asks to show a stored notification detail
+  if (msg?.action === 'getNotificationHtml' && msg?.id) {
+    const entry = notifStore.get(msg.id);
+    sendResponse({ ok: !!entry, ...entry });
+    return;
+  }
 });
 
-/* ===================== Lifecycle & menu ===================== */
+/* ===================== Notification click handling ===================== */
+chrome.notifications.onClicked.addListener((notificationId) => {
+  const entry = notifStore.get(notificationId);
+  if (!entry) return;
+
+  // Open an extension page to show full HTML
+  const url = chrome.runtime.getURL(`notification.html?id=${encodeURIComponent(notificationId)}`);
+  chrome.tabs.create({ url });
+});
+
+/* ===================== Context menu ===================== */
 function ensureContextMenu() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
@@ -385,12 +291,22 @@ function ensureContextMenu() {
   });
 }
 
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === MENU_ID && tab?.id != null) {
+    defineSelectedInContext(tab);
+  }
+});
+
+// If your manifest does NOT define a default_popup for the action, this will fire when the
+// user clicks the extension icon. If you DO have a default_popup, you need to trigger
+// defineSelectedInContext from popup.js instead.
+chrome.action.onClicked.addListener((tab) => {
+  if (tab?.id != null) defineSelectedInContext(tab);
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   ensureContextMenu();
 });
 chrome.runtime.onStartup.addListener(() => {
   ensureContextMenu();
-});
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === MENU_ID && tab?.id != null) defineSelectedInContext(tab);
 });
