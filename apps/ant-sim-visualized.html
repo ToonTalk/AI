@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ant Colony Logic Explorer</title>
+    <style>
+        /* --- CSS STYLES --- */
+        :root {
+            --bg-color: #f1f5f9;
+            --panel-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #334155;
+            --text-sub: #64748b;
+            --accent-color: #3b82f6;
+            
+            /* Task Colors */
+            --color-forager: #f59e0b;
+            --color-patroller: #3b82f6;
+            --color-nest: #8b5cf6;
+            --color-midden: #10b981;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1, h2, h3 { margin: 0; }
+
+        .layout {
+            display: flex;
+            gap: 20px;
+            height: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* --- LEFT PANEL: SIMULATION --- */
+        .sim-container {
+            flex: 1;
+            background: var(--panel-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fffbeb; /* Amber tint */
+        }
+
+        .canvas-wrapper {
+            flex: 1;
+            position: relative;
+            background: #fef3c7; /* Amber-50 */
+            cursor: crosshair;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .overlay-instruction {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* --- RIGHT PANEL: INSPECTOR --- */
+        .inspector-panel {
+            width: 350px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .card {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-header {
+            padding: 12px 15px;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: bold;
+            font-size: 14px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-body {
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        /* Ant Details */
+        .ant-identity {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .ant-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            background: #ccc;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: #f8fafc;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-label { font-size: 10px; color: var(--text-sub); text-transform: uppercase; margin-bottom: 2px; }
+        .stat-value { font-family: monospace; font-weight: bold; font-size: 13px; color: var(--accent-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Flowchart */
+        .flowchart {
+            position: relative;
+            padding: 10px 0;
+        }
+        
+        .flowchart::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e2e8f0;
+            transform: translateX(-50%);
+            z-index: 0;
+        }
+
+        .node {
+            position: relative;
+            z-index: 1;
+            padding: 8px;
+            margin-bottom: 10px;
+            background: #e2e8f0;
+            color: #94a3b8;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .node.active {
+            color: white;
+            transform: scale(1.02);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .node.type-process.active { background: #3b82f6; } /* Blue */
+        .node.type-decision.active { background: #8b5cf6; } /* Purple */
+        .node.type-action.active { background: #10b981; } /* Green */
+        .node.type-no.active { background: #ef4444; } /* Red */
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-sub);
+        }
+        .empty-icon { font-size: 40px; margin-bottom: 10px; opacity: 0.5; }
+
+        /* Legend */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-bottom: 6px;
+            color: var(--text-sub);
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    </style>
+</head>
+<body>
+
+    <div class="layout">
+        
+        <div class="sim-container">
+            <div class="header">
+                <h2 style="font-size: 16px; color: #78350f;">🐜 Colony Sim</h2>
+                <div id="fps-counter" style="font-family: monospace; font-size: 12px; background: #fef3c7; padding: 4px 8px; border-radius: 4px; color: #92400e;">
+                    FPS: 60 | Ants: 40
+                </div>
+            </div>
+            <div class="canvas-wrapper" id="canvasWrapper">
+                <canvas id="simCanvas" width="600" height="600"></canvas>
+                <div class="overlay-instruction">Click an ant to inspect logic</div>
+            </div>
+        </div>
+
+        <div class="inspector-panel">
+            
+            <div class="card" style="flex: 1;">
+                <div class="card-header">
+                    <span>🧠 Logic Inspector</span>
+                </div>
+                <div class="card-body" id="inspectorBody">
+                    
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <p><strong>No Ant Selected</strong></p>
+                        <p style="font-size: 12px;">Click on any ant in the simulation to visualize its decision-making process.</p>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Map Legend</div>
+                <div class="card-body">
+                    <div class="legend-item"><div class="dot" style="background: var(--color-forager);"></div> Forager (Finds Food)</div>
+                    <div class="legend-item"><div class="dot" style="background: var(--color-patroller);"></div> Patroller (Guards)</div>
+                    <div class="legend-item"><div class="dot" style="background: var(--color-nest);"></div> Nest Worker</div>
+                    <div class="legend-item"><div class="dot" style="background: #84cc16;"></div> Food Source</div>
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; font-size: 12px; display: flex; justify-content: space-between;">
+                        <span>Total Food:</span>
+                        <span id="food-count" style="font-weight: bold; color: green;">50</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTS & CONFIG ---
+        const NEST_CENTER = { x: 300, y: 300 };
+        const NEST_RADIUS = 60;
+        const WORLD_RADIUS = 280;
+        const CANVAS_SIZE = 600;
+
+        const COLORS = {
+            forager: '#f59e0b',
+            patroller: '#3b82f6',
+            nestWorker: '#8b5cf6',
+            middenWorker: '#10b981'
+        };
+
+        // --- GLOBAL STATE ---
+        const ants = [];
+        const foods = [];
+        let trails = [];
+        let selectedAntId = null;
+        let colonyFood = 50;
+        
+        // Canvas Setup
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const inspectorBody = document.getElementById('inspectorBody');
+        const foodCountEl = document.getElementById('food-count');
+        const fpsEl = document.getElementById('fps-counter');
+
+        // --- ENTITY CREATION ---
+        function createAnt(id, task) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 40 + 20;
+            return {
+                id, 
+                task,
+                x: NEST_CENTER.x + Math.cos(angle) * dist,
+                y: NEST_CENTER.y + Math.sin(angle) * dist,
+                angle: Math.random() * Math.PI * 2,
+                speed: 1.5 + Math.random() * 0.5,
+                carryingFood: false,
+                state: 'idle', // 'idle', 'moving_to_food', 'tracking', 'returning'
+                lastDecision: 'Exploring...',
+            };
+        }
+
+        function createFood(id) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = NEST_RADIUS + 50 + Math.random() * (WORLD_RADIUS - NEST_RADIUS - 60);
+            return {
+                id,
+                x: NEST_CENTER.x + Math.cos(angle) * dist,
+                y: NEST_CENTER.y + Math.sin(angle) * dist,
+                amount: 5 + Math.floor(Math.random() * 5)
+            };
+        }
+
+        // --- INITIALIZATION ---
+        function init() {
+            // Spawn Ants
+            const tasks = ['forager', 'forager', 'forager', 'patroller', 'nestWorker'];
+            for (let i = 0; i < 40; i++) {
+                ants.push(createAnt(i, tasks[i % tasks.length]));
+            }
+            // Spawn Food
+            for (let i = 0; i < 6; i++) {
+                foods.push(createFood(i));
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- PHYSICS & AI ENGINE ---
+        function update() {
+            // 1. Fade Trails
+            trails.forEach(t => t.strength -= 0.5);
+            trails = trails.filter(t => t.strength > 0);
+
+            // 2. Update Ants
+            ants.forEach(ant => {
+                let decision = "Wandering...";
+                
+                // --- ANT BRAIN LOGIC ---
+                if (ant.task === 'forager') {
+                    if (ant.carryingFood) {
+                        // STATE: RETURNING
+                        const angleToNest = Math.atan2(NEST_CENTER.y - ant.y, NEST_CENTER.x - ant.x);
+                        ant.angle = angleToNest + (Math.random() - 0.5) * 0.2;
+                        decision = "Returning to Nest";
+                        ant.state = 'returning';
+                        
+                        // Drop Pheromone
+                        if (Math.random() < 0.2) {
+                            trails.push({ x: ant.x, y: ant.y, strength: 100 });
+                        }
+
+                        // Dropping Food
+                        const distToNest = Math.hypot(NEST_CENTER.x - ant.x, NEST_CENTER.y - ant.y);
+                        if (distToNest < NEST_RADIUS) {
+                            ant.carryingFood = false;
+                            colonyFood++;
+                            ant.angle += Math.PI; // Turn around
+                            ant.state = 'idle';
+                        }
+                    } else {
+                        // STATE: SEARCHING
+                        let targetFood = null;
+                        let minDist = 60; // Vision range
+
+                        // 1. Check Vision (Food)
+                        foods.forEach(f => {
+                            const dist = Math.hypot(f.x - ant.x, f.y - ant.y);
+                            if (dist < minDist && f.amount > 0) {
+                                minDist = dist;
+                                targetFood = f;
+                            }
+                        });
+
+                        if (targetFood) {
+                            // Found Food Visual
+                            ant.angle = Math.atan2(targetFood.y - ant.y, targetFood.x - ant.x);
+                            decision = "Found Food (Visual)";
+                            ant.state = 'moving_to_food';
+
+                            // Pickup
+                            if (minDist < 10) {
+                                ant.carryingFood = true;
+                                targetFood.amount--;
+                                ant.state = 'returning';
+                            }
+                        } else {
+                            // 2. Check Smell (Pheromones)
+                            // Find strongest trail nearby
+                            const strongTrail = trails.find(t => 
+                                Math.hypot(t.x - ant.x, t.y - ant.y) < 30 && t.strength > 40
+                            );
+
+                            if (strongTrail) {
+                                ant.angle = Math.atan2(strongTrail.y - ant.y, strongTrail.x - ant.x) + (Math.random() - 0.5);
+                                decision = "Following Trail";
+                                ant.state = 'tracking';
+                            } else {
+                                // 3. Random Walk
+                                ant.angle += (Math.random() - 0.5) * 0.5;
+                                decision = "Exploring Randomly";
+                                ant.state = 'idle';
+                            }
+                        }
+                    }
+                } else if (ant.task === 'patroller') {
+                    // Simple patrol logic
+                    const dist = Math.hypot(ant.x - NEST_CENTER.x, ant.y - NEST_CENTER.y);
+                    const patrolR = NEST_RADIUS + 40;
+                    if (Math.abs(dist - patrolR) > 20) {
+                        const toCenter = Math.atan2(NEST_CENTER.y - ant.y, NEST_CENTER.x - ant.x);
+                        ant.angle = dist > patrolR ? toCenter : toCenter + Math.PI;
+                    } else {
+                        ant.angle += 0.05 + (Math.random() - 0.5) * 0.2;
+                    }
+                    decision = "Patrolling Perimeter";
+                    ant.state = 'patrolling';
+                } else {
+                    // Nest workers
+                    const dist = Math.hypot(ant.x - NEST_CENTER.x, ant.y - NEST_CENTER.y);
+                    if (dist > NEST_RADIUS - 10) {
+                        ant.angle = Math.atan2(NEST_CENTER.y - ant.y, NEST_CENTER.x - ant.x);
+                    } else {
+                        ant.angle += (Math.random() - 0.5);
+                    }
+                    decision = "Maintaing Nest";
+                    ant.state = 'working';
+                }
+
+                // Move
+                const nextX = ant.x + Math.cos(ant.angle) * ant.speed;
+                const nextY = ant.y + Math.sin(ant.angle) * ant.speed;
+
+                // Bounds check
+                if (Math.hypot(nextX - NEST_CENTER.x, nextY - NEST_CENTER.y) < WORLD_RADIUS) {
+                    ant.x = nextX;
+                    ant.y = nextY;
+                } else {
+                    ant.angle += Math.PI;
+                }
+                
+                ant.lastDecision = decision;
+            });
+
+            // Cleanup empty food and respawn
+            for (let i = foods.length - 1; i >= 0; i--) {
+                if (foods[i].amount <= 0) foods.splice(i, 1);
+            }
+            if (foods.length < 4 && Math.random() < 0.01) {
+                foods.push(createFood(Date.now()));
+            }
+        }
+
+        // --- DRAWING ---
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#fef3c7';
+            ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+            // Draw Nest
+            ctx.beginPath();
+            ctx.arc(NEST_CENTER.x, NEST_CENTER.y, NEST_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = '#d4b07a';
+            ctx.fill();
+            ctx.strokeStyle = '#92400e';
+            ctx.stroke();
+
+            // Draw Trails
+            trails.forEach(t => {
+                ctx.beginPath();
+                ctx.arc(t.x, t.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(245, 158, 11, ${t.strength / 100})`;
+                ctx.fill();
+            });
+
+            // Draw Food
+            foods.forEach(f => {
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, 5 + f.amount, 0, Math.PI * 2);
+                ctx.fillStyle = '#84cc16';
+                ctx.fill();
+                ctx.fillStyle = '#365314';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(f.amount, f.x, f.y + 4);
+            });
+
+            // Draw Ants
+            ants.forEach(ant => {
+                ctx.save();
+                ctx.translate(ant.x, ant.y);
+                ctx.rotate(ant.angle + Math.PI / 2);
+
+                // Selection Ring
+                if (selectedAntId === ant.id) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 15, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#ef4444';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // Ant Body
+                ctx.fillStyle = COLORS[ant.task];
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 4, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Ant Head
+                ctx.beginPath();
+                ctx.arc(0, -6, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Carrying Food
+                if (ant.carryingFood) {
+                    ctx.beginPath();
+                    ctx.arc(0, -9, 3, 0, Math.PI * 2);
+                    ctx.fillStyle = '#84cc16';
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            });
+        }
+
+        // --- UI UPDATER ---
+        function updateUI() {
+            foodCountEl.innerText = colonyFood;
+
+            // Update Inspector Logic
+            if (selectedAntId !== null) {
+                const ant = ants.find(a => a.id === selectedAntId);
+                if (ant) {
+                    renderInspector(ant);
+                } else {
+                    selectedAntId = null; // Ant died or vanished
+                }
+            }
+        }
+
+        function renderInspector(ant) {
+            const isForager = ant.task === 'forager';
+            
+            // Logic States
+            const s_hasFood = ant.carryingFood;
+            const s_seeFood = ant.state === 'moving_to_food';
+            const s_trackTrail = ant.state === 'tracking';
+            
+            let html = `
+                <div class="ant-identity">
+                    <div class="ant-icon" style="background-color: ${COLORS[ant.task]}">🐜</div>
+                    <div>
+                        <div style="font-weight:bold; font-size:16px;">Ant #${ant.id}</div>
+                        <div style="font-size:12px; color:#64748b; text-transform:uppercase;">${ant.task}</div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-label">Current Action</div>
+                        <div class="stat-value" style="color: #3b82f6;">${ant.lastDecision}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Holding Item</div>
+                        <div class="stat-value" style="color: ${ant.carryingFood ? '#16a34a' : '#cbd5e1'}">
+                            ${ant.carryingFood ? 'SEED' : 'NONE'}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (isForager) {
+                html += `
+                    <div style="font-size:10px; font-weight:bold; color:#94a3b8; text-transform:uppercase; margin-bottom:10px;">Decision Tree</div>
+                    <div class="flowchart">
+                        <div class="node type-process active">INPUT: Sensors Check</div>
+                        
+                        <div class="node type-decision ${s_hasFood ? 'active' : ''}">Has Food?</div>
+                        
+                        ${s_hasFood ? `
+                            <div class="node type-action active">ACTION: Return to Nest</div>
+                        ` : `
+                            <div class="node type-decision ${s_seeFood ? 'active' : ''}">See Food?</div>
+                            ${s_seeFood ? `
+                                <div class="node type-action active">ACTION: Move to Food</div>
+                            ` : `
+                                <div class="node type-decision ${s_trackTrail ? 'active' : ''}">Smell Pheromone?</div>
+                                ${s_trackTrail ? `
+                                    <div class="node type-action active">ACTION: Follow Trail</div>
+                                ` : `
+                                    <div class="node type-action active">ACTION: Random Walk</div>
+                                `}
+                            `}
+                        `}
+                    </div>
+                `;
+            } else {
+                html += `<div style="text-align:center; padding:20px; color:#94a3b8; font-size:12px;">Logic visualization only available for Foragers in this demo.</div>`;
+            }
+
+            inspectorBody.innerHTML = html;
+        }
+
+        // --- INTERACTION ---
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            // Map click to canvas coordinates (considering CSS resize)
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            let closestDist = 30;
+            let foundId = null;
+
+            ants.forEach(ant => {
+                const dist = Math.hypot(ant.x - x, ant.y - y);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    foundId = ant.id;
+                }
+            });
+
+            selectedAntId = foundId;
+            if (selectedAntId === null) {
+                inspectorBody.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <p><strong>No Ant Selected</strong></p>
+                        <p style="font-size: 12px;">Click on any ant in the simulation to visualize its decision-making process.</p>
+                    </div>
+                `;
+            } else {
+                // Immediate update
+                updateUI();
+            }
+        });
+
+        // --- GAME LOOP ---
+        let lastTime = 0;
+        function gameLoop(time) {
+            const dt = time - lastTime;
+            lastTime = time;
+
+            update();
+            draw();
+            
+            // Limit UI updates to save performance (every 5 frames approx)
+            if (Math.floor(time) % 5 === 0) {
+                updateUI();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+</html>
