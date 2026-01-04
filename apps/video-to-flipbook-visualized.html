@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video to PDF: Interactive Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Custom Inputs */
+        input[type="file"]::file-selector-button {
+            @apply bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md cursor-pointer transition-colors duration-300;
+        }
+        select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+            appearance: none;
+        }
+        
+        /* Custom Range Slider */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%;
+            background: #818cf8;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            background: #4b5563;
+            border-radius: 2px;
+        }
+
+        /* Algorithm Step Arrows */
+        .algo-step:not(:last-child)::after {
+            content: '→';
+            position: absolute;
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6b7280;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        @media (max-width: 768px) {
+            .algo-step:not(:last-child)::after {
+                content: '↓';
+                right: 50%;
+                top: auto;
+                bottom: -25px;
+                transform: translateX(50%);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden">
+
+    <nav class="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shrink-0 z-10">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-xl">🎞️</div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight">Video Contact Sheet</h1>
+                <p class="text-xs text-gray-400">Interactive Algorithm Visualizer</p>
+            </div>
+        </div>
+        <div class="text-xs text-gray-500 hidden md:block">
+            Processes locally in browser via Canvas API & jsPDF
+        </div>
+    </nav>
+
+    <div class="flex flex-1 overflow-hidden">
+        
+        <div class="w-full md:w-1/3 lg:w-1/4 bg-gray-900 p-6 overflow-y-auto border-r border-gray-800 flex flex-col gap-8">
+            
+            <section>
+                <h2 class="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-3">1. Input</h2>
+                <label class="block mb-2 text-sm text-gray-400">Select Video File</label>
+                <input type="file" id="video-input" accept="video/*" class="block w-full text-sm text-gray-400 file:mr-4 file:bg-gray-800 file:border-0 file:text-indigo-400 file:hover:bg-gray-700">
+            </section>
+
+            <section id="sampling-section" class="opacity-50 pointer-events-none transition-opacity">
+                <h2 class="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-3">2. Sampling Logic</h2>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="text-xs text-gray-500">Start (s)</label>
+                        <input type="number" id="start-time" step="0.1" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm focus:border-indigo-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">End (s)</label>
+                        <input type="number" id="end-time" step="0.1" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm focus:border-indigo-500 outline-none">
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="text-xs text-gray-500 flex justify-between">
+                        <span>Total Frames to Extract</span>
+                        <span id="frame-count-display" class="text-indigo-400 font-mono">30</span>
+                    </label>
+                    <input type="range" id="frames-to-sample" min="1" max="100" value="30" class="w-full mt-2">
+                </div>
+
+                <div class="mt-4 bg-gray-800 rounded p-3 border border-gray-700">
+                    <div class="flex justify-between text-xs text-gray-500 mb-1">
+                        <span>0s</span>
+                        <span id="timeline-total-duration">--s</span>
+                    </div>
+                    <div class="relative h-6 bg-gray-700 rounded overflow-hidden" id="timeline-track">
+                        <div id="timeline-range" class="absolute h-full bg-indigo-900/50 border-l border-r border-indigo-500"></div>
+                        <div id="timeline-ticks" class="absolute inset-0"></div>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-2 text-center">
+                        Visualizing frame extraction points
+                    </p>
+                </div>
+            </section>
+
+            <section id="processing-section" class="opacity-50 pointer-events-none transition-opacity">
+                <h2 class="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-3">3. Pixel Pipeline</h2>
+                
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-sm text-gray-300">Enable Filters</span>
+                    <input type="checkbox" id="line-drawing-toggle" class="accent-indigo-500 w-4 h-4 cursor-pointer">
+                </div>
+
+                <div id="effect-controls" class="hidden space-y-4 pl-3 border-l-2 border-indigo-900/50">
+                    <div>
+                        <label class="text-xs text-gray-500">Algorithm</label>
+                        <select id="effect-style-select" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm mt-1 focus:border-indigo-500 outline-none">
+                            <option value="sketch">Edge Sketch (Gaussian)</option>
+                            <option value="coloring-book">Sobel Operator (Edges)</option>
+                            <option value="grayscale">Luminance Grayscale</option>
+                        </select>
+                    </div>
+
+                    <div id="slider-group-1">
+                        <label id="label-slider-1" class="text-xs text-gray-500 block">Parameter 1</label>
+                        <input type="range" id="slider-1" class="w-full mt-1">
+                    </div>
+                    <div id="slider-group-2">
+                        <label id="label-slider-2" class="text-xs text-gray-500 block">Parameter 2</label>
+                        <input type="range" id="slider-2" class="w-full mt-1">
+                    </div>
+
+                    <button id="visualize-pipeline-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-indigo-300 text-xs font-bold py-2 rounded border border-indigo-500/30 transition-all">
+                        👁️ Visualize Pipeline
+                    </button>
+                </div>
+            </section>
+
+            <section class="mt-auto pt-6 border-t border-gray-800">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="text-xs text-gray-500">Cols</label>
+                        <input type="number" id="columns" value="5" min="1" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">Rows</label>
+                        <input type="number" id="rows" value="6" min="1" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm">
+                    </div>
+                </div>
+                
+                <button id="generate-pdf-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded shadow-lg shadow-indigo-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Generate & Download PDF
+                </button>
+                <p id="status-msg" class="text-xs text-center text-gray-500 mt-2 h-4"></p>
+            </section>
+        </div>
+
+        <div class="flex-1 bg-black p-8 overflow-y-auto relative">
+            
+            <div id="dashboard-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-700">
+                <div class="text-6xl mb-4">🔬</div>
+                <h2 class="text-xl font-bold text-gray-600">Visualization Dashboard</h2>
+                <p class="max-w-md text-center mt-2 text-sm">Upload a video to analyze how the algorithms transform your footage into a printable document.</p>
+            </div>
+
+            <div id="pipeline-dashboard" class="hidden space-y-12">
+                
+                <div>
+                    <h3 class="text-indigo-400 font-bold text-lg mb-1 flex items-center gap-2">
+                        <span>🧬 Algorithm Internals</span>
+                        <span class="text-xs bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30" id="current-algo-name">Sobel Operator</span>
+                    </h3>
+                    <p class="text-gray-400 text-sm mb-6 max-w-2xl">
+                        See exactly how the computer sees your image at every step of the mathematical process.
+                    </p>
+
+                    <div class="flex flex-wrap gap-8 items-start" id="pipeline-steps-container">
+                        </div>
+                </div>
+
+                <div class="border-t border-gray-800 pt-8">
+                    <h3 class="text-indigo-400 font-bold text-lg mb-4">📐 Layout Logic</h3>
+                    <div class="flex gap-8 items-center">
+                        <div id="grid-preview" class="bg-white aspect-[1/1.41] h-64 shadow-xl flex flex-wrap content-start p-4 gap-1 overflow-hidden transition-all duration-300 relative">
+                            </div>
+                        <div class="text-sm text-gray-400 space-y-2">
+                            <p><strong>Page Logic:</strong></p>
+                            <ul class="list-disc pl-4 space-y-1">
+                                <li>Paper: <span class="mono text-gray-300">A4 Landscape</span></li>
+                                <li>Grid: <span class="mono text-gray-300" id="grid-dims-text">5x6</span></li>
+                                <li>Total Capacity: <span class="mono text-gray-300" id="grid-cap-text">30</span> frames/page</li>
+                                <li>Calculated Pages: <span class="mono text-indigo-400" id="grid-pages-text">1</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <video id="hidden-video" class="hidden"></video>
+
+    <script>
+        const { jsPDF } = window.jspdf;
+
+        // UI Refs
+        const els = {
+            videoInput: document.getElementById('video-input'),
+            sections: {
+                sampling: document.getElementById('sampling-section'),
+                processing: document.getElementById('processing-section'),
+            },
+            timeline: {
+                start: document.getElementById('start-time'),
+                end: document.getElementById('end-time'),
+                frames: document.getElementById('frames-to-sample'),
+                frameCountDisplay: document.getElementById('frame-count-display'),
+                duration: document.getElementById('timeline-total-duration'),
+                range: document.getElementById('timeline-range'),
+                ticks: document.getElementById('timeline-ticks'),
+            },
+            effects: {
+                toggle: document.getElementById('line-drawing-toggle'),
+                controls: document.getElementById('effect-controls'),
+                select: document.getElementById('effect-style-select'),
+                s1: document.getElementById('slider-1'),
+                s2: document.getElementById('slider-2'),
+                l1: document.getElementById('label-slider-1'),
+                l2: document.getElementById('label-slider-2'),
+                grp1: document.getElementById('slider-group-1'),
+                grp2: document.getElementById('slider-group-2'),
+                visualizeBtn: document.getElementById('visualize-pipeline-btn'),
+            },
+            layout: {
+                cols: document.getElementById('columns'),
+                rows: document.getElementById('rows'),
+                gridPreview: document.getElementById('grid-preview'),
+                textDims: document.getElementById('grid-dims-text'),
+                textCap: document.getElementById('grid-cap-text'),
+                textPages: document.getElementById('grid-pages-text'),
+            },
+            generateBtn: document.getElementById('generate-pdf-btn'),
+            status: document.getElementById('status-msg'),
+            dashboard: {
+                placeholder: document.getElementById('dashboard-placeholder'),
+                content: document.getElementById('pipeline-dashboard'),
+                algoName: document.getElementById('current-algo-name'),
+                stepsContainer: document.getElementById('pipeline-steps-container'),
+            },
+            video: document.getElementById('hidden-video'),
+        };
+
+        let videoDuration = 0;
+
+        // --- 1. INITIALIZATION & EVENTS ---
+
+        els.videoInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const url = URL.createObjectURL(file);
+            els.video.src = url;
+            
+            els.video.onloadedmetadata = () => {
+                videoDuration = els.video.duration;
+                
+                // Activate UI
+                els.sections.sampling.classList.remove('opacity-50', 'pointer-events-none');
+                els.sections.processing.classList.remove('opacity-50', 'pointer-events-none');
+                els.dashboard.placeholder.classList.add('hidden');
+                els.dashboard.content.classList.remove('hidden');
+
+                // Set defaults
+                els.timeline.start.max = videoDuration;
+                els.timeline.end.max = videoDuration;
+                els.timeline.end.value = videoDuration.toFixed(1);
+                els.timeline.start.value = 0;
+                els.timeline.duration.textContent = videoDuration.toFixed(1) + 's';
+
+                updateTimelineVisualizer();
+                updateLayoutVisualizer();
+                triggerPipelineVisualization(); // Show initial frame logic
+            };
+        });
+
+        // Timeline Events
+        [els.timeline.start, els.timeline.end, els.timeline.frames].forEach(input => {
+            input.addEventListener('input', () => {
+                els.timeline.frameCountDisplay.textContent = els.timeline.frames.value;
+                updateTimelineVisualizer();
+                updateLayoutVisualizer();
+            });
+        });
+
+        // Layout Events
+        [els.layout.cols, els.layout.rows].forEach(input => {
+            input.addEventListener('input', updateLayoutVisualizer);
+        });
+
+        // Effect Events
+        els.effects.toggle.addEventListener('change', (e) => {
+            els.effects.controls.classList.toggle('hidden', !e.target.checked);
+            if(e.target.checked) triggerPipelineVisualization();
+        });
+
+        els.effects.select.addEventListener('change', updateEffectUI);
+        els.effects.visualizeBtn.addEventListener('click', triggerPipelineVisualization);
+        [els.effects.s1, els.effects.s2].forEach(s => s.addEventListener('input', () => {
+            // Update labels with values?
+            triggerPipelineVisualization(); 
+        }));
+
+        els.generateBtn.addEventListener('click', handleGeneration);
+
+        // --- 2. VISUALIZERS ---
+
+        function updateTimelineVisualizer() {
+            if (videoDuration === 0) return;
+            const start = parseFloat(els.timeline.start.value);
+            const end = parseFloat(els.timeline.end.value);
+            const count = parseInt(els.timeline.frames.value);
+
+            // 1. Update Range Bar
+            const leftPct = (start / videoDuration) * 100;
+            const widthPct = ((end - start) / videoDuration) * 100;
+            els.timeline.range.style.left = `${leftPct}%`;
+            els.timeline.range.style.width = `${widthPct}%`;
+
+            // 2. Draw Ticks (The Sampling Points)
+            els.timeline.ticks.innerHTML = '';
+            const duration = end - start;
+            const interval = duration / Math.max(1, count - 1); // Fencepost logic
+
+            for(let i=0; i<count; i++) {
+                // If only 1 frame, put it in middle, otherwise distribute
+                const time = count === 1 ? start + (duration/2) : start + (i * interval);
+                const posPct = (time / videoDuration) * 100;
+                
+                const tick = document.createElement('div');
+                tick.className = 'absolute top-0 bottom-0 w-px bg-white/50';
+                tick.style.left = `${posPct}%`;
+                els.timeline.ticks.appendChild(tick);
+            }
+        }
+
+        function updateLayoutVisualizer() {
+            const cols = parseInt(els.layout.cols.value) || 1;
+            const rows = parseInt(els.layout.rows.value) || 1;
+            const frames = parseInt(els.timeline.frames.value);
+
+            els.layout.textDims.textContent = `${cols}x${rows}`;
+            els.layout.textCap.textContent = cols * rows;
+            els.layout.textPages.textContent = Math.ceil(frames / (cols * rows));
+
+            // Draw CSS Grid
+            els.layout.gridPreview.innerHTML = '';
+            const cellW = (100 / cols) - 1; 
+            const cellH = (100 / rows) - 1;
+
+            for(let i=0; i<(rows*cols); i++) {
+                const cell = document.createElement('div');
+                cell.style.width = `${cellW}%`;
+                cell.style.height = `${cellH}%`;
+                
+                if (i < frames) {
+                    cell.className = 'bg-indigo-200 border border-indigo-300 rounded-sm flex items-center justify-center text-[8px] text-indigo-800 font-mono';
+                    cell.textContent = i + 1;
+                } else {
+                    cell.className = 'bg-gray-100 border border-dashed border-gray-300 rounded-sm opacity-50';
+                }
+                els.layout.gridPreview.appendChild(cell);
+            }
+        }
+
+        function updateEffectUI() {
+            const algo = els.effects.select.value;
+            els.effects.grp2.classList.remove('hidden');
+            
+            if (algo === 'sketch') {
+                els.effects.l1.textContent = 'Detail (Blur Radius)';
+                els.effects.s1.min=1; els.effects.s1.max=10; els.effects.s1.value=2;
+                
+                els.effects.l2.textContent = 'Contrast';
+                els.effects.s2.min=1; els.effects.s2.max=5; els.effects.s2.step=0.1; els.effects.s2.value=1;
+            } else if (algo === 'coloring-book') {
+                els.effects.l1.textContent = 'Edge Threshold';
+                els.effects.s1.min=20; els.effects.s1.max=150; els.effects.s1.value=50;
+                els.effects.grp2.classList.add('hidden');
+            } else { // Grayscale
+                els.effects.l1.textContent = 'Gamma / Darkness';
+                els.effects.s1.min=0.2; els.effects.s1.max=3; els.effects.s1.step=0.1; els.effects.s1.value=1;
+                els.effects.grp2.classList.add('hidden');
+            }
+            triggerPipelineVisualization();
+        }
+
+        // --- 3. ALGORITHM PIPELINE (The "Secret Sauce" Visualizer) ---
+
+        async function triggerPipelineVisualization() {
+            if (!els.video.src) return;
+            
+            const start = parseFloat(els.timeline.start.value);
+            const end = parseFloat(els.timeline.end.value);
+            const midTime = start + (end - start)/2;
+            
+            els.video.currentTime = midTime;
+            
+            // Wait for seek
+            await new Promise(r => els.video.onseeked = r);
+
+            // Prepare Source Frame (Scaled down for performance)
+            const w = 320; // Analysis width
+            const h = (els.video.videoHeight / els.video.videoWidth) * w;
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(els.video, 0, 0, w, h);
+            
+            // Clear Dashboard
+            els.dashboard.stepsContainer.innerHTML = '';
+            
+            // Always show original
+            addPipelineStep('Original Input', canvas, 'Raw video frame pixel data.');
+
+            if (!els.effects.toggle.checked) return;
+
+            const algo = els.effects.select.value;
+            const p1 = parseFloat(els.effects.s1.value);
+            const p2 = parseFloat(els.effects.s2.value);
+
+            els.dashboard.algoName.textContent = els.effects.select.options[els.effects.select.selectedIndex].text;
+
+            if (algo === 'coloring-book') visualizeSobel(ctx, w, h, p1);
+            else if (algo === 'sketch') visualizeSketch(ctx, w, h, p1, p2);
+            else visualizeGrayscale(ctx, w, h, p1);
+        }
+
+        function addPipelineStep(title, sourceCanvasOrData, desc) {
+            const container = document.createElement('div');
+            container.className = 'algo-step relative flex flex-col gap-2 w-48 shrink-0';
+            
+            const header = document.createElement('div');
+            header.innerHTML = `<h4 class="text-sm font-bold text-gray-200">${title}</h4>`;
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'rounded overflow-hidden border border-gray-700 bg-gray-900 shadow-lg';
+            
+            const displayCanvas = document.createElement('canvas');
+            displayCanvas.width = sourceCanvasOrData.width;
+            displayCanvas.height = sourceCanvasOrData.height;
+            displayCanvas.className = 'w-full h-auto block';
+            
+            // Copy data
+            if (sourceCanvasOrData instanceof ImageData) {
+                displayCanvas.getContext('2d').putImageData(sourceCanvasOrData, 0, 0);
+            } else {
+                displayCanvas.getContext('2d').drawImage(sourceCanvasOrData, 0, 0);
+            }
+
+            const caption = document.createElement('p');
+            caption.className = 'text-xs text-gray-500 leading-snug';
+            caption.textContent = desc;
+
+            wrapper.appendChild(displayCanvas);
+            container.appendChild(header);
+            container.appendChild(wrapper);
+            container.appendChild(caption);
+            els.dashboard.stepsContainer.appendChild(container);
+        }
+
+        // --- ALGORITHM IMPLEMENTATIONS FOR VISUALIZATION ---
+
+        function visualizeGrayscale(ctx, w, h, gamma) {
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const pixels = imgData.data;
+
+            // Step 1: Grayscale Logic
+            for (let i = 0; i < pixels.length; i += 4) {
+                const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+                // Apply Gamma
+                const val = 255 * Math.pow(gray / 255, gamma);
+                pixels[i] = pixels[i + 1] = pixels[i + 2] = val;
+            }
+            
+            addPipelineStep('Luminance & Gamma', imgData, `Weighted average of RGB channels, scaled by gamma ${gamma}.`);
+        }
+
+        function visualizeSobel(ctx, w, h, threshold) {
+            // 1. Grayscale
+            const grayData = ctx.getImageData(0,0,w,h);
+            const grayPx = grayData.data;
+            const grayBuffer = new Uint8ClampedArray(w * h);
+
+            for(let i=0; i<grayPx.length; i+=4) {
+                const g = 0.299 * grayPx[i] + 0.587 * grayPx[i+1] + 0.114 * grayPx[i+2];
+                grayPx[i] = grayPx[i+1] = grayPx[i+2] = g;
+                grayBuffer[i/4] = g;
+            }
+            addPipelineStep('Step 1: Grayscale', grayData, 'Convert color to intensity values.');
+
+            // 2. Sobel Magnitude
+            const magData = ctx.createImageData(w, h);
+            const magPx = magData.data;
+            const magnitudes = new Float32Array(w * h);
+            const gx = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+            const gy = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+
+            for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    let sumX = 0, sumY = 0, k = 0;
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            const val = grayBuffer[(y + ky) * w + (x + kx)];
+                            sumX += val * gx[k];
+                            sumY += val * gy[k];
+                            k++;
+                        }
+                    }
+                    const mag = Math.sqrt(sumX*sumX + sumY*sumY);
+                    magnitudes[y*w+x] = mag;
+                    
+                    // Visualize magnitude (normalized loosely for display)
+                    const vis = Math.min(255, mag);
+                    const idx = (y*w+x)*4;
+                    magPx[idx] = magPx[idx+1] = magPx[idx+2] = vis;
+                    magPx[idx+3] = 255;
+                }
+            }
+            addPipelineStep('Step 2: Edge Magnitude', magData, 'Calculate gradient intensity using 3x3 convolution matrices.');
+
+            // 3. Threshold
+            const finalData = ctx.createImageData(w, h);
+            const finalPx = finalData.data;
+            for(let i=0; i<w*h; i++) {
+                const idx = i*4;
+                const isEdge = magnitudes[i] > threshold;
+                const val = isEdge ? 0 : 255; // Black edge, white background
+                finalPx[idx] = finalPx[idx+1] = finalPx[idx+2] = val;
+                finalPx[idx+3] = 255;
+            }
+            addPipelineStep('Step 3: Threshold', finalData, `Pixels with gradient > ${threshold} become black edges.`);
+        }
+
+        function visualizeSketch(ctx, w, h, blurRadius, contrast) {
+            // 1. Grayscale
+            const grayData = ctx.getImageData(0,0,w,h);
+            const px = grayData.data;
+            const grayArr = new Uint8ClampedArray(w*h);
+            const invertArr = new Uint8ClampedArray(w*h);
+
+            for(let i=0; i<px.length; i+=4) {
+                const g = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
+                px[i]=px[i+1]=px[i+2]=g;
+                grayArr[i/4] = g;
+                invertArr[i/4] = 255 - g;
+            }
+            addPipelineStep('Step 1: Grayscale', grayData, 'Remove color information.');
+
+            // 2. Invert
+            const invertData = ctx.createImageData(w,h);
+            const invPx = invertData.data;
+            for(let i=0; i<invertArr.length; i++) {
+                invPx[i*4] = invPx[i*4+1] = invPx[i*4+2] = invertArr[i];
+                invPx[i*4+3] = 255;
+            }
+            addPipelineStep('Step 2: Invert', invertData, 'Create a negative of the grayscale image.');
+
+            // 3. Gaussian Blur (Approximation for Vis)
+            const blurredArr = boxBlur(invertArr, w, h, blurRadius); 
+            const blurData = ctx.createImageData(w,h);
+            const blrPx = blurData.data;
+            for(let i=0; i<blurredArr.length; i++) {
+                blrPx[i*4] = blrPx[i*4+1] = blrPx[i*4+2] = blurredArr[i];
+                blrPx[i*4+3] = 255;
+            }
+            addPipelineStep('Step 3: Blur Negative', blurData, 'Soften the inverted image to define stroke width.');
+
+            // 4. Color Dodge Blend
+            const finalData = ctx.createImageData(w,h);
+            const fPx = finalData.data;
+            for(let i=0; i<grayArr.length; i++) {
+                const base = grayArr[i];
+                const blend = blurredArr[i];
+                let val = (blend === 255) ? 255 : Math.min(255, (base * 255) / (255 - blend));
+                
+                // Contrast adjust
+                if (val < 255) val = 255 - (255 - val) * contrast;
+                
+                const idx = i*4;
+                fPx[idx] = fPx[idx+1] = fPx[idx+2] = val;
+                fPx[idx+3] = 255;
+            }
+            addPipelineStep('Step 4: Color Dodge', finalData, 'Blend Original Grayscale with Blurred Negative to isolate details.');
+        }
+
+        // Fast Box Blur Helper for sketch visualization
+        function boxBlur(data, w, h, r) {
+            const len = w*h;
+            const res = new Uint8ClampedArray(len);
+            for(let y=0; y<h; y++) {
+                for(let x=0; x<w; x++) {
+                    let sum=0, count=0;
+                    for(let ky=-r; ky<=r; ky++) {
+                        for(let kx=-r; kx<=r; kx++) {
+                            const py = Math.min(h-1, Math.max(0, y+ky));
+                            const px = Math.min(w-1, Math.max(0, x+kx));
+                            sum += data[py*w+px];
+                            count++;
+                        }
+                    }
+                    res[y*w+x] = sum/count;
+                }
+            }
+            return res;
+        }
+
+        // --- 4. GENERATION (Original Logic Adapted) ---
+
+        async function handleGeneration() {
+            if (!els.video.src) return alert('Load video first');
+            
+            els.generateBtn.disabled = true;
+            els.generateBtn.textContent = 'Processing...';
+            els.status.textContent = 'Initializing extraction...';
+
+            const framesWanted = parseInt(els.timeline.frames.value);
+            const start = parseFloat(els.timeline.start.value);
+            const end = parseFloat(els.timeline.end.value);
+            const useFilter = els.effects.toggle.checked;
+            
+            // Gather params
+            const params = {
+                style: els.effects.select.value,
+                p1: parseFloat(els.effects.s1.value),
+                p2: parseFloat(els.effects.s2.value)
+            };
+
+            // Setup Canvas
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const images = [];
+
+            // Capture Loop
+            const duration = end - start;
+            const step = duration / Math.max(1, framesWanted); // Fencepost fix
+
+            for (let i = 0; i < framesWanted; i++) {
+                const time = start + (i * step);
+                els.status.textContent = `Capturing Frame ${i+1}/${framesWanted}`;
+                
+                els.video.currentTime = time;
+                await new Promise(r => els.video.onseeked = r);
+
+                canvas.width = els.video.videoWidth;
+                canvas.height = els.video.videoHeight;
+                ctx.drawImage(els.video, 0, 0);
+
+                if (useFilter) {
+                    if (params.style === 'sketch') applySketchFilter(ctx, canvas.width, canvas.height, params.p1, params.p2);
+                    else if (params.style === 'coloring-book') applyColoringBookFilter(ctx, canvas.width, canvas.height, params.p1);
+                    else applyGrayscaleFilter(ctx, canvas.width, canvas.height, params.p1);
+                }
+                
+                images.push(canvas.toDataURL('image/jpeg', 0.8));
+            }
+
+            // PDF Generation
+            els.status.textContent = 'Compiling PDF...';
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'px', format: 'a4' });
+            
+            const cols = parseInt(els.layout.cols.value);
+            const rows = parseInt(els.layout.rows.value);
+            
+            const pgW = doc.internal.pageSize.getWidth();
+            const pgH = doc.internal.pageSize.getHeight();
+            const cellW = pgW / cols;
+            const cellH = pgH / rows;
+
+            let idx = 0;
+            while(idx < images.length) {
+                if (idx > 0 && idx % (cols*rows) === 0) doc.addPage();
+                
+                const r = Math.floor((idx % (cols*rows)) / cols);
+                const c = idx % cols;
+                
+                const imgData = images[idx];
+                
+                // Fit image logic
+                const margin = cellW * 0.1;
+                const drawW = cellW - (margin*2);
+                const drawH = cellH - (margin*2);
+                
+                doc.addImage(imgData, 'JPEG', (c*cellW)+margin, (r*cellH)+margin, drawW, drawH);
+                doc.setLineWidth(0.5);
+                doc.setDrawColor(200);
+                doc.rect(c*cellW, r*cellH, cellW, cellH);
+                doc.setFontSize(8);
+                doc.text(String(idx+1), (c*cellW)+5, (r*cellH)+10);
+                
+                idx++;
+            }
+
+            doc.save('contact-sheet.pdf');
+            els.generateBtn.textContent = 'Generate & Download PDF';
+            els.generateBtn.disabled = false;
+            els.status.textContent = 'Download started!';
+            setTimeout(() => els.status.textContent = '', 3000);
+        }
+
+        // --- FILTER HELPERS (Reused for Generation) ---
+        // (These mirror the visualization logic but optimized for full size)
+
+        function applyGrayscaleFilter(ctx, w, h, gamma) {
+            const imgData = ctx.getImageData(0,0,w,h);
+            const px = imgData.data;
+            for(let i=0; i<px.length; i+=4) {
+                const g = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
+                const v = 255 * Math.pow(g/255, gamma);
+                px[i]=px[i+1]=px[i+2]=v;
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        function applyColoringBookFilter(ctx, w, h, thresh) {
+            const src = ctx.getImageData(0,0,w,h);
+            const px = src.data;
+            const gray = new Uint8ClampedArray(w*h);
+            for(let i=0; i<px.length; i+=4) gray[i/4] = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
+            
+            const out = ctx.createImageData(w,h);
+            const oPx = out.data;
+            const gx=[-1,0,1,-2,0,2,-1,0,1], gy=[-1,-2,-1,0,0,0,1,2,1];
+
+            for(let y=1; y<h-1; y++) {
+                for(let x=1; x<w-1; x++) {
+                    let sumX=0, sumY=0, k=0;
+                    for(let ky=-1; ky<=1; ky++) {
+                        for(let kx=-1; kx<=1; kx++) {
+                            const v = gray[(y+ky)*w + (x+kx)];
+                            sumX += v*gx[k]; sumY += v*gy[k];
+                            k++;
+                        }
+                    }
+                    const mag = Math.sqrt(sumX*sumX + sumY*sumY);
+                    const val = mag > thresh ? 0 : 255;
+                    const idx = (y*w+x)*4;
+                    oPx[idx]=oPx[idx+1]=oPx[idx+2]=val; oPx[idx+3]=255;
+                }
+            }
+            ctx.putImageData(out, 0, 0);
+        }
+
+        function applySketchFilter(ctx, w, h, radius, contrast) {
+            const src = ctx.getImageData(0,0,w,h);
+            const px = src.data;
+            const gray = new Uint8ClampedArray(w*h);
+            const inv = new Uint8ClampedArray(w*h);
+            for(let i=0; i<px.length; i+=4) {
+                const g = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
+                gray[i/4] = g; inv[i/4] = 255-g;
+            }
+            
+            // Note: BoxBlur is separate helper (defined above in visualization section, reused here)
+            // Ideally we'd optimize or use stackblur for massive images, but box is fine for demo
+            const blur = boxBlur(inv, w, h, radius);
+            
+            for(let i=0; i<px.length; i+=4) {
+                const b = gray[i/4];
+                const bl = blur[i/4];
+                let v = (bl===255)?255 : Math.min(255, (b*255)/(255-bl));
+                if(v<255) v = 255 - (255-v)*contrast;
+                px[i]=px[i+1]=px[i+2]=v;
+            }
+            ctx.putImageData(src, 0, 0);
+        }
+        
+        // Initial setup
+        updateEffectUI();
+
+    </script>
+</body>
+</html>
