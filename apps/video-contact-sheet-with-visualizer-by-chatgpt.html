@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video to PDF Contact Sheet</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF library for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* Custom styles for better UX */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom file input button style */
+        input[type="file"]::file-selector-button {
+            @apply bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md cursor-pointer transition-colors duration-300;
+        }
+        /* Ensure the download button has a distinct look */
+        #download-pdf-btn {
+             @apply bg-green-600 hover:bg-green-700;
+        }
+        /* Style for the select dropdown */
+        select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        /* Custom styles for range slider */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 9999px;
+            background: #a5b4fc; /* indigo-300 */
+            cursor: pointer;
+            margin-top: -6px; /* You need to specify a margin in Chrome, but not in Firefox */
+        }
+    </style>
+     <link rel="preconnect" href="https://fonts.googleapis.com">
+     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body class="bg-gray-900 text-white">
+
+    <div class="flex flex-col md:flex-row min-h-screen">
+
+        <!-- ===== CONTROLS PANEL ===== -->
+        <div class="w-full md:w-1/3 lg:w-1/4 p-6 bg-gray-800 shadow-lg flex flex-col">
+            <header class="mb-8">
+                <h1 class="text-2xl font-bold text-indigo-400">Video Contact Sheet 🎞️</h1>
+                <p class="text-gray-400 text-sm mt-1">Create a PDF contact sheet from a video file.</p>
+            </header>
+
+            <div class="space-y-6 flex-grow">
+                <!-- 1. Video Input -->
+                <div>
+                    <label for="video-input" class="block text-sm font-medium text-gray-300 mb-2">1. Upload Video</label>
+                    <input type="file" id="video-input" accept="video/*" class="block w-full text-sm text-gray-400 file:mr-4 file:border-0">
+                </div>
+                
+                <!-- 2. Time Range Selection -->
+                <div id="time-range-controls" class="hidden">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">2. Set Time Range (seconds)</label>
+                    <div class="flex space-x-4">
+                        <div class="flex-1">
+                            <label for="start-time" class="block text-xs font-medium text-gray-400">Start</label>
+                            <input type="number" id="start-time" value="0" min="0" step="0.1" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>
+                        </div>
+                        <div class="flex-1">
+                             <label for="end-time" class="block text-xs font-medium text-gray-400">End</label>
+                            <input type="number" id="end-time" value="0" min="0" step="0.1" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Frame Sampling -->
+                <div>
+                    <label for="frames-to-sample" class="block text-sm font-medium text-gray-300 mb-2">3. Total Frames to Sample</label>
+                    <input type="number" id="frames-to-sample" value="30" min="1" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <!-- 4. Layout Configuration -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">4. Page Layout</label>
+                     <div class="flex space-x-4">
+                        <div class="flex-1">
+                            <label for="columns" class="block text-xs font-medium text-gray-400">Columns</label>
+                            <input type="number" id="columns" value="5" min="1" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex-1">
+                             <label for="rows" class="block text-xs font-medium text-gray-400">Rows</label>
+                            <input type="number" id="rows" value="6" min="1" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Page Setup -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">5. Page Setup</label>
+                    <div class="flex space-x-4">
+                        <div class="flex-1">
+                            <label for="orientation-select" class="block text-xs font-medium text-gray-400">Orientation</label>
+                            <select id="orientation-select" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="landscape" selected>Landscape</option>
+                                <option value="portrait">Portrait</option>
+                            </select>
+                        </div>
+                         <div class="flex-1">
+                            <label for="page-size-select" class="block text-xs font-medium text-gray-400">Page Size</label>
+                            <select id="page-size-select" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="a4" selected>A4</option>
+                                <option value="letter">Letter</option>
+                                <option value="legal">Legal</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Effects -->
+                <div>
+                    <label for="line-drawing-toggle" class="flex items-center justify-between text-sm font-medium text-gray-300 cursor-pointer">
+                        <span>6. Line Drawing Effect ✍️</span>
+                        <div class="relative">
+                            <input type="checkbox" id="line-drawing-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-500/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </div>
+                    </label>
+                    <!-- Conditional controls for the line drawing effect -->
+                    <div id="line-drawing-controls" class="hidden mt-4 space-y-4 pl-4 border-l-2 border-gray-700">
+                        <div>
+                            <label for="effect-style-select" class="block text-xs font-medium text-gray-400">Effect Style</label>
+                            <select id="effect-style-select" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="sketch">Pencil Sketch</option>
+                                <option value="coloring-book">Coloring Book</option>
+                                <option value="grayscale">Grayscale</option>
+                            </select>
+                        </div>
+                        <div id="detail-level-container">
+                            <label for="detail-level-slider" id="detail-level-label" class="block text-xs font-medium text-gray-400">Detail Level</label>
+                            <div class="flex items-center space-x-3 mt-1">
+                                <input type="range" id="detail-level-slider" min="1" max="10" value="2" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                                <span id="detail-level-value" class="text-sm font-mono text-indigo-300 w-8 text-center bg-gray-700 rounded-md py-0.5">2</span>
+                            </div>
+                        </div>
+                        <div id="darkness-container">
+                            <label for="darkness-slider" id="darkness-label" class="block text-xs font-medium text-gray-400">Line Darkness</label>
+                            <div class="flex items-center space-x-3 mt-1">
+                                <input type="range" id="darkness-slider" min="1" max="5" value="1" step="0.1" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                                <span id="darkness-value" class="text-sm font-mono text-indigo-300 w-10 text-center bg-gray-700 rounded-md py-0.5">1.0</span>
+                            </div>
+                        </div>
+                        <div>
+                            <button id="preview-effect-btn" class="w-full text-sm bg-indigo-700 hover:bg-indigo-800 text-white font-bold py-2 px-4 rounded-md transition-colors duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                Generate Preview
+                            </button>
+                        </div>
+                        <div id="effect-preview-container" class="bg-gray-700/50 rounded-md p-2 flex items-center justify-center min-h-[100px]">
+                            <img id="effect-preview-img" src="" alt="Effect preview" class="max-w-full max-h-full rounded hidden">
+                             <p id="effect-preview-placeholder" class="text-xs text-gray-500">Preview will appear here</p>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 7. Process Visualization -->
+                <div>
+                    <label for="viz-toggle" class="flex items-center justify-between text-sm font-medium text-gray-300 cursor-pointer">
+                        <span>7. Show process visualization 🧭</span>
+                        <div class="relative">
+                            <input type="checkbox" id="viz-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-500/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </div>
+                    </label>
+                    <div id="viz-controls" class="hidden mt-4 space-y-3 pl-4 border-l-2 border-gray-700">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-xs font-medium text-gray-400">Animation speed</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Higher = less delay between internal steps</div>
+                            </div>
+                            <div class="flex items-center gap-3 w-44">
+                                <input type="range" id="viz-speed-slider" min="0.25" max="5" step="0.25" value="1" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                                <span id="viz-speed-value" class="text-sm font-mono text-indigo-300 w-10 text-center bg-gray-700 rounded-md py-0.5">1.00</span>
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-gray-500 leading-snug">
+                            Tip: Turn this on, click <span class="text-gray-300 font-semibold">Generate PDF</span>, and switch the output tab to <span class="text-gray-300 font-semibold">How it works</span>.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Action Buttons & Status -->
+            <div class="mt-8 space-y-3">
+                <button id="generate-pdf-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-md transition-colors duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed">
+                    Generate PDF
+                </button>
+                <button id="download-pdf-btn" class="w-full text-white font-bold py-3 px-4 rounded-md transition-colors duration-300 hidden">
+                    Download PDF
+                </button>
+                <p id="status" class="text-center text-gray-400 text-sm h-5"></p>
+            </div>
+        </div>
+
+        <!-- ===== PDF PREVIEW PANEL ===== -->
+        <div class="w-full md:w-2/3 lg:w-3/4 p-4 bg-gray-900 flex flex-col">
+ 
+            <div class="mb-3 flex items-center justify-between">
+                <div class="text-sm text-gray-300 font-medium">Output</div>
+                <div class="inline-flex rounded-md overflow-hidden border border-gray-700">
+                    <button id="tab-pdf" class="px-3 py-1.5 text-sm bg-gray-800 text-white hover:bg-gray-700 transition-colors">PDF Preview</button>
+                    <button id="tab-process" class="px-3 py-1.5 text-sm bg-gray-900 text-gray-400 hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>How it works</button>
+                </div>
+            </div>
+
+            <div class="flex-grow bg-gray-700 rounded-lg shadow-inner relative overflow-hidden">
+                <iframe id="pdf-preview" class="w-full h-full rounded-lg" title="PDF Preview"></iframe>
+                <div id="preview-placeholder" class="absolute inset-0 text-center text-gray-500 p-4 flex flex-col items-center justify-center">
+                    <p class="text-lg">PDF Preview will appear here</p>
+                    <p class="text-sm mt-2">(If preview is blank, use the 'Download PDF' button after generation)</p>
+                </div>
+
+                <!-- ===== PROCESS VISUALIZATION OVERLAY ===== -->
+                <div id="process-viz" class="absolute inset-0 hidden bg-gray-900 text-white overflow-auto">
+                    <div class="max-w-6xl mx-auto p-4 space-y-4">
+                        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                            <div class="flex items-start justify-between gap-4">
+                                <div>
+                                    <div class="text-sm font-semibold text-indigo-300">How this PDF is built</div>
+                                    <div id="viz-step-text" class="text-xs text-gray-400 mt-1">Idle</div>
+                                </div>
+                                <div class="text-xs text-gray-400 text-right">
+                                    <div id="viz-count">0 / 0 frames</div>
+                                    <div id="viz-range" class="mt-1">Range: —</div>
+                                </div>
+                            </div>
+                            <div class="mt-3 w-full bg-gray-700 rounded h-2 overflow-hidden">
+                                <div id="viz-progress-bar" class="bg-indigo-500 h-2" style="width:0%"></div>
+                            </div>
+                            <div id="viz-pipeline" class="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2 text-xs"></div>
+                        </div>
+
+                        <div class="grid lg:grid-cols-2 gap-4">
+                            <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-sm font-semibold text-gray-200">Sample timeline</div>
+                                    <div id="viz-current-time" class="text-xs text-gray-400 font-mono">t=—</div>
+                                </div>
+                                <div class="mt-3">
+                                    <div class="h-2 bg-gray-700 rounded relative overflow-hidden" id="viz-timeline-bar">
+                                        <div id="viz-timeline-cursor" class="absolute top-0 bottom-0 w-[2px] bg-indigo-400 opacity-80" style="left:0%"></div>
+                                    </div>
+                                    <div id="viz-timeline-dots" class="relative h-6 mt-1"></div>
+                                </div>
+                                <div class="mt-3 text-[11px] text-gray-500 leading-snug">
+                                    Dots show the exact times the app seeks to in the video. They light up as frames are captured.
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                                <div class="text-sm font-semibold text-gray-200">Layout preview (page 1)</div>
+                                <div class="mt-3" id="viz-layout"></div>
+                                <div class="mt-3 text-[11px] text-gray-500 leading-snug">
+                                    This is a lightweight preview: it shows the first page grid and fills cells as frames arrive.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                            <div class="flex items-center justify-between gap-4">
+                                <div class="text-sm font-semibold text-gray-200">Captured frames</div>
+                                <div class="text-xs text-gray-400">Thumbnails are downscaled for performance.</div>
+                            </div>
+                            <div id="viz-grid" class="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2"></div>
+                        </div>
+
+                        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                            <div class="text-sm font-semibold text-gray-200">Event log</div>
+                            <div id="viz-log" class="mt-2 text-xs text-gray-300 space-y-1 max-h-56 overflow-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+    <script>
+        const { jsPDF } = window.jspdf;
+
+        // --- DOM Elements ---
+        const videoInput = document.getElementById('video-input');
+        const timeRangeControls = document.getElementById('time-range-controls');
+        const startTimeInput = document.getElementById('start-time');
+        const endTimeInput = document.getElementById('end-time');
+        const framesToSampleInput = document.getElementById('frames-to-sample');
+        const columnsInput = document.getElementById('columns');
+        const rowsInput = document.getElementById('rows');
+        const orientationSelect = document.getElementById('orientation-select');
+        const pageSizeSelect = document.getElementById('page-size-select');
+        const lineDrawingToggle = document.getElementById('line-drawing-toggle');
+        const lineDrawingControls = document.getElementById('line-drawing-controls');
+        const effectStyleSelect = document.getElementById('effect-style-select');
+        const detailLevelContainer = document.getElementById('detail-level-container');
+        const detailLevelLabel = document.getElementById('detail-level-label');
+        const detailLevelSlider = document.getElementById('detail-level-slider');
+        const detailLevelValue = document.getElementById('detail-level-value');
+        const darknessContainer = document.getElementById('darkness-container');
+        const darknessLabel = document.getElementById('darkness-label');
+        const darknessSlider = document.getElementById('darkness-slider');
+        const darknessValue = document.getElementById('darkness-value');
+        const previewEffectBtn = document.getElementById('preview-effect-btn');
+        const effectPreviewImg = document.getElementById('effect-preview-img');
+        const effectPreviewPlaceholder = document.getElementById('effect-preview-placeholder');
+        const generateBtn = document.getElementById('generate-pdf-btn');
+        const downloadBtn = document.getElementById('download-pdf-btn');
+        const statusEl = document.getElementById('status');
+        const pdfPreview = document.getElementById('pdf-preview');
+        const previewPlaceholder = document.getElementById('preview-placeholder');
+
+        const tabPdfBtn = document.getElementById('tab-pdf');
+        const tabProcessBtn = document.getElementById('tab-process');
+        const processViz = document.getElementById('process-viz');
+
+        const vizToggle = document.getElementById('viz-toggle');
+        const vizControls = document.getElementById('viz-controls');
+        const vizSpeedSlider = document.getElementById('viz-speed-slider');
+        const vizSpeedValue = document.getElementById('viz-speed-value');
+
+        const vizStepText = document.getElementById('viz-step-text');
+        const vizProgressBar = document.getElementById('viz-progress-bar');
+        const vizPipeline = document.getElementById('viz-pipeline');
+        const vizTimelineBar = document.getElementById('viz-timeline-bar');
+        const vizTimelineDots = document.getElementById('viz-timeline-dots');
+        const vizTimelineCursor = document.getElementById('viz-timeline-cursor');
+        const vizCurrentTime = document.getElementById('viz-current-time');
+        const vizRange = document.getElementById('viz-range');
+        const vizGrid = document.getElementById('viz-grid');
+        const vizLayout = document.getElementById('viz-layout');
+        const vizLog = document.getElementById('viz-log');
+        const vizCount = document.getElementById('viz-count');
+
+        // --- State ---
+        let generatedPdfBlob = null;
+        let videoFileName = 'contact-sheet.pdf';
+
+
+        // --- Visualization state (for "How it works") ---
+        const VIZ_STEPS = [
+            { key: 'meta', label: 'Read metadata' },
+            { key: 'times', label: 'Compute times' },
+            { key: 'capture', label: 'Capture frames' },
+            { key: 'filter', label: 'Apply effect' },
+            { key: 'pdf', label: 'Build PDF' },
+            { key: 'done', label: 'Preview/Download' },
+        ];
+
+        let vizActiveStepKey = null;
+        let vizSampleTimes = [];
+        let vizTotalFrames = 0;
+        let vizCaptured = 0;
+        let vizDots = [];
+        let vizLayoutImgs = [];
+        let vizLogLines = [];
+
+        function isVizEnabled() { return !!(vizToggle && vizToggle.checked); }
+        function vizSpeed() {
+            const v = parseFloat(vizSpeedSlider?.value || '1');
+            if (!isFinite(v) || v <= 0) return 1;
+            return v;
+        }
+        function vizDelay(msBase) {
+            if (!isVizEnabled()) return 0;
+            return Math.max(0, Math.round(msBase / vizSpeed()));
+        }
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+        async function vizPause(msBase) {
+            const ms = vizDelay(msBase);
+            if (ms > 0) await sleep(ms);
+        }
+
+
+        // --- Event Listeners ---
+        generateBtn.addEventListener('click', handlePdfGeneration);
+        downloadBtn.addEventListener('click', handlePdfDownload);
+        videoInput.addEventListener('change', handleVideoUpload);
+        lineDrawingToggle.addEventListener('change', () => {
+            lineDrawingControls.classList.toggle('hidden', !lineDrawingToggle.checked);
+        });
+        effectStyleSelect.addEventListener('change', handleEffectStyleChange);
+        detailLevelSlider.addEventListener('input', () => {
+             detailLevelValue.textContent = detailLevelSlider.value;
+        });
+        darknessSlider.addEventListener('input', () => {
+            darknessValue.textContent = parseFloat(darknessSlider.value).toFixed(1);
+        });
+        previewEffectBtn.addEventListener('click', handleEffectPreview);
+
+
+        // Tabs
+        tabPdfBtn.addEventListener('click', () => setActiveOutputTab('pdf'));
+        tabProcessBtn.addEventListener('click', () => setActiveOutputTab('process'));
+
+        // Visualization toggle + speed
+        vizToggle.addEventListener('change', () => {
+            vizControls.classList.toggle('hidden', !vizToggle.checked);
+            tabProcessBtn.disabled = !vizToggle.checked;
+            if (!vizToggle.checked) setActiveOutputTab('pdf');
+        });
+        vizSpeedSlider.addEventListener('input', () => {
+            vizSpeedValue.textContent = parseFloat(vizSpeedSlider.value).toFixed(2);
+        });
+
+        /**
+         * Adjusts the UI controls based on the selected effect style.
+         */
+        function handleEffectStyleChange() {
+            const style = effectStyleSelect.value;
+            if (style === 'coloring-book') {
+                detailLevelContainer.classList.remove('hidden');
+                darknessContainer.classList.add('hidden');
+                detailLevelLabel.textContent = 'Edge Threshold';
+                detailLevelSlider.min = 20;
+                detailLevelSlider.max = 150;
+                detailLevelSlider.value = 50;
+                detailLevelValue.textContent = '50';
+            } else if (style === 'grayscale') {
+                detailLevelContainer.classList.add('hidden');
+                darknessContainer.classList.remove('hidden');
+                darknessLabel.textContent = 'Darkness';
+                darknessSlider.min = 0.2;
+                darknessSlider.max = 3;
+                darknessSlider.step = 0.1;
+                darknessSlider.value = 1;
+                darknessValue.textContent = '1.0';
+            } else { // sketch
+                detailLevelContainer.classList.remove('hidden');
+                darknessContainer.classList.remove('hidden');
+                detailLevelLabel.textContent = 'Detail Level';
+                detailLevelSlider.min = 1;
+                detailLevelSlider.max = 10;
+                detailLevelSlider.value = 2;
+                detailLevelValue.textContent = '2';
+                darknessLabel.textContent = 'Line Darkness';
+                darknessSlider.min = 1;
+                darknessSlider.max = 5;
+                darknessSlider.step = 0.1;
+                darknessSlider.value = 1;
+                darknessValue.textContent = '1.0';
+            }
+        }
+
+
+        // --- Output tab management ---
+        function setActiveOutputTab(tab) {
+            const isProcess = tab === 'process';
+            if (isProcess && tabProcessBtn.disabled) return;
+
+            // Toggle overlay
+            processViz.classList.toggle('hidden', !isProcess);
+
+            // Toggle PDF iframe + placeholder
+            pdfPreview.classList.toggle('hidden', isProcess);
+            previewPlaceholder.classList.toggle('hidden', isProcess);
+
+            // Button styling
+            if (isProcess) {
+                tabPdfBtn.classList.remove('bg-gray-800', 'text-white');
+                tabPdfBtn.classList.add('bg-gray-900', 'text-gray-400');
+
+                tabProcessBtn.classList.add('bg-gray-800', 'text-white');
+                tabProcessBtn.classList.remove('bg-gray-900', 'text-gray-400');
+            } else {
+                tabPdfBtn.classList.add('bg-gray-800', 'text-white');
+                tabPdfBtn.classList.remove('bg-gray-900', 'text-gray-400');
+
+                tabProcessBtn.classList.remove('bg-gray-800', 'text-white');
+                tabProcessBtn.classList.add('bg-gray-900', 'text-gray-400');
+            }
+        }
+
+        // --- Visualization rendering helpers ---
+        function escapeHtml(str) {
+            return String(str)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function vizLogPush(msg) {
+            if (!isVizEnabled()) return;
+            const stamp = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            vizLogLines.push(`[${stamp}] ${msg}`);
+            vizLogLines = vizLogLines.slice(-40);
+            vizLog.innerHTML = vizLogLines.map(line => `<div class="font-mono text-[11px] text-gray-300">${escapeHtml(line)}</div>`).join('');
+            vizLog.scrollTop = vizLog.scrollHeight;
+        }
+
+        function vizSetStep(stepKey, detail) {
+            if (!isVizEnabled()) return;
+            vizActiveStepKey = stepKey;
+            const step = VIZ_STEPS.find(s => s.key === stepKey);
+            vizStepText.textContent = step ? `${step.label}${detail ? ` • ${detail}` : ''}` : (detail || 'Working…');
+            renderVizPipeline();
+        }
+
+        function renderVizPipeline() {
+            if (!isVizEnabled()) return;
+            vizPipeline.innerHTML = VIZ_STEPS.map(s => {
+                const active = s.key === vizActiveStepKey;
+                const base = active
+                    ? 'border-indigo-500 bg-indigo-500/10 text-indigo-200'
+                    : 'border-gray-700 bg-gray-900/40 text-gray-400';
+                return `
+                    <div class="rounded-md border ${base} px-2 py-2">
+                        <div class="font-semibold">${escapeHtml(s.label)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function vizSetProgress(pct) {
+            if (!isVizEnabled()) return;
+            const clamped = Math.max(0, Math.min(100, pct));
+            vizProgressBar.style.width = `${clamped.toFixed(1)}%`;
+        }
+
+        function vizReset() {
+            vizActiveStepKey = null;
+            vizSampleTimes = [];
+            vizTotalFrames = 0;
+            vizCaptured = 0;
+            vizDots = [];
+            vizLayoutImgs = [];
+            vizLogLines = [];
+
+            vizStepText.textContent = 'Idle';
+            vizSetProgress(0);
+            vizCurrentTime.textContent = 't=—';
+            vizRange.textContent = 'Range: —';
+            vizCount.textContent = '0 / 0 frames';
+            vizGrid.innerHTML = '';
+            vizLayout.innerHTML = '';
+            vizTimelineDots.innerHTML = '';
+            vizTimelineCursor.style.left = '0%';
+            vizLog.innerHTML = '';
+
+            renderVizPipeline();
+        }
+
+        function vizInitTimeline(times, startTime, endTime) {
+            if (!isVizEnabled()) return;
+            vizSampleTimes = times.slice();
+            vizTotalFrames = times.length;
+            vizCaptured = 0;
+            vizDots = [];
+
+            vizRange.textContent = `Range: ${startTime.toFixed(2)}s → ${endTime.toFixed(2)}s`;
+            vizCount.textContent = `0 / ${vizTotalFrames} frames`;
+
+            // Render dots
+            vizTimelineDots.innerHTML = '';
+            const range = Math.max(0.0001, endTime - startTime);
+            times.forEach((t, i) => {
+                const pct = Math.max(0, Math.min(100, ((t - startTime) / range) * 100));
+                const dot = document.createElement('div');
+                dot.className = 'absolute top-1.5 w-2 h-2 rounded-full bg-gray-600';
+                dot.style.left = `calc(${pct}% - 4px)`;
+                dot.title = `#${i + 1} @ ${t.toFixed(2)}s`;
+                vizTimelineDots.appendChild(dot);
+                vizDots.push(dot);
+            });
+        }
+
+        function vizMarkCaptured(index, time, startTime, endTime) {
+            if (!isVizEnabled()) return;
+            vizCaptured = Math.max(vizCaptured, index + 1);
+            vizCount.textContent = `${vizCaptured} / ${vizTotalFrames} frames`;
+            if (vizDots[index]) vizDots[index].className = 'absolute top-1.5 w-2 h-2 rounded-full bg-indigo-400';
+
+            const range = Math.max(0.0001, endTime - startTime);
+            const pct = Math.max(0, Math.min(100, ((time - startTime) / range) * 100));
+            vizTimelineCursor.style.left = `${pct}%`;
+            vizCurrentTime.textContent = `t=${time.toFixed(2)}s`;
+        }
+
+        function vizAppendThumb(index, thumbUrl, time) {
+            if (!isVizEnabled()) return;
+            const card = document.createElement('div');
+            card.className = 'bg-gray-900/60 border border-gray-700 rounded-md overflow-hidden';
+            card.innerHTML = `
+                <img src="${thumbUrl}" alt="Frame ${index + 1}" class="w-full h-auto block" />
+                <div class="px-2 py-1 text-[11px] text-gray-300 flex justify-between font-mono">
+                    <span>#${index + 1}</span>
+                    <span>${time.toFixed(2)}s</span>
+                </div>
+            `;
+            vizGrid.appendChild(card);
+        }
+
+        function vizInitLayout(rows, columns) {
+            if (!isVizEnabled()) return;
+            vizLayoutImgs = [];
+
+            const cells = rows * columns;
+            vizLayout.innerHTML = '';
+
+            const grid = document.createElement('div');
+            grid.className = 'grid gap-1 bg-gray-900/50 p-2 rounded-md border border-gray-700';
+            grid.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+            vizLayout.appendChild(grid);
+
+            for (let i = 0; i < cells; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'aspect-video bg-gray-900 border border-gray-800 rounded overflow-hidden flex items-center justify-center';
+                const img = document.createElement('img');
+                img.className = 'w-full h-full object-cover hidden';
+                img.alt = `Cell ${i + 1}`;
+                const placeholder = document.createElement('div');
+                placeholder.className = 'text-[10px] text-gray-600 font-mono';
+                placeholder.textContent = `${i + 1}`;
+                cell.appendChild(img);
+                cell.appendChild(placeholder);
+                grid.appendChild(cell);
+                vizLayoutImgs.push({ img, placeholder });
+            }
+        }
+
+        function vizFillLayoutCell(index, thumbUrl) {
+            if (!isVizEnabled()) return;
+            if (!vizLayoutImgs[index]) return;
+            const { img, placeholder } = vizLayoutImgs[index];
+            img.src = thumbUrl;
+            img.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+        }
+
+        /**
+         * Handles the video file upload.
+         */
+        function handleVideoUpload() {
+            downloadBtn.classList.add('hidden');
+            pdfPreview.src = 'about:blank';
+            previewPlaceholder.style.display = 'flex';
+            generatedPdfBlob = null;
+            timeRangeControls.classList.add('hidden');
+
+            vizReset();
+            tabProcessBtn.disabled = !vizToggle.checked;
+            if (vizToggle.checked) { vizControls.classList.remove('hidden'); }
+
+            startTimeInput.disabled = true;
+            endTimeInput.disabled = true;
+            effectPreviewImg.src = '';
+            effectPreviewImg.classList.add('hidden');
+            effectPreviewPlaceholder.classList.remove('hidden');
+
+            const videoFile = videoInput.files[0];
+            if (!videoFile) return;
+
+            const tempVideo = document.createElement('video');
+            tempVideo.preload = 'metadata';
+            tempVideo.src = URL.createObjectURL(videoFile);
+
+            tempVideo.onloadedmetadata = () => {
+                const duration = tempVideo.duration;
+                startTimeInput.max = duration;
+                startTimeInput.value = 0;
+                endTimeInput.max = duration;
+                endTimeInput.value = duration.toFixed(2);
+                timeRangeControls.classList.remove('hidden');
+                startTimeInput.disabled = false;
+                endTimeInput.disabled = false;
+                URL.revokeObjectURL(tempVideo.src);
+            };
+        }
+
+        /**
+         * Generates a preview of the line drawing effect.
+         */
+        async function handleEffectPreview() {
+            const videoFile = videoInput.files[0];
+            if (!videoFile) {
+                alert('Please select a video file first.');
+                return;
+            }
+            
+            previewEffectBtn.disabled = true;
+            previewEffectBtn.textContent = 'Processing...';
+            effectPreviewPlaceholder.textContent = 'Capturing frame...';
+            effectPreviewImg.classList.add('hidden');
+            effectPreviewPlaceholder.classList.remove('hidden');
+
+            try {
+                const startTime = parseFloat(startTimeInput.value);
+                const endTime = parseFloat(endTimeInput.value);
+                const previewTime = startTime + (endTime - startTime) / 2;
+                const effectStyle = effectStyleSelect.value;
+                const lineDetail = parseInt(detailLevelSlider.value);
+                const lineDarkness = parseFloat(darknessSlider.value);
+
+                const frameDataUrl = await captureSingleFrame(videoFile, previewTime, true, effectStyle, lineDetail, lineDarkness);
+                
+                effectPreviewImg.src = frameDataUrl;
+                effectPreviewImg.classList.remove('hidden');
+                effectPreviewPlaceholder.classList.add('hidden');
+
+            } catch (error) {
+                console.error('Preview Error:', error);
+                effectPreviewPlaceholder.textContent = 'Error creating preview.';
+                alert(`Could not generate preview: ${error.message}`);
+            } finally {
+                previewEffectBtn.disabled = false;
+                previewEffectBtn.textContent = 'Generate Preview';
+            }
+        }
+
+
+        /**
+         * Main handler for PDF generation.
+         */
+        async function handlePdfGeneration() {
+            const videoFile = videoInput.files[0];
+            if (!videoFile) {
+                alert('Please select a video file first.');
+                return;
+            }
+            videoFileName = videoFile.name.split('.').slice(0, -1).join('.') + '-contact-sheet.pdf';
+            
+            const startTime = parseFloat(startTimeInput.value);
+            const endTime = parseFloat(endTimeInput.value);
+            const applyLineDrawing = lineDrawingToggle.checked;
+            const effectStyle = effectStyleSelect.value;
+            const lineDetail = parseInt(detailLevelSlider.value);
+            const lineDarkness = parseFloat(darknessSlider.value);
+
+            if (startTime >= endTime) {
+                alert('Start time must be less than end time.');
+                return;
+            }
+
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Working...';
+            downloadBtn.classList.add('hidden');
+            previewPlaceholder.style.display = 'none';
+            pdfPreview.src = 'about:blank';
+
+            try {
+
+                const totalFrames = parseInt(framesToSampleInput.value);
+
+                // Pre-compute exact seek times (these are what the algorithm really uses)
+                const clipDuration = endTime - startTime;
+                const interval = clipDuration > 0 ? clipDuration / totalFrames : 0;
+                const sampleTimes = Array.from({ length: totalFrames }, (_, i) => {
+                    const t = startTime + (i * interval) + (interval / 2);
+                    return Math.min(Math.max(t, startTime), endTime - 0.01);
+                });
+
+                // Visualization init
+                if (isVizEnabled()) {
+                    tabProcessBtn.disabled = false;
+                    setActiveOutputTab('process');
+                    vizReset();
+                    vizSetStep('meta', 'ready');
+                    vizLogPush(`Video range: ${startTime.toFixed(2)}s → ${endTime.toFixed(2)}s`);
+                    vizSetStep('times', `interval ≈ ${interval.toFixed(4)}s`);
+                    vizInitTimeline(sampleTimes, startTime, endTime);
+                    vizInitLayout(parseInt(rowsInput.value), parseInt(columnsInput.value));
+                    vizSetProgress(5);
+                    await vizPause(200);
+                }
+
+                statusEl.textContent = `Capturing ${totalFrames} frames...`;
+                if (isVizEnabled()) {
+                    vizSetStep(applyLineDrawing ? 'filter' : 'capture', `0/${totalFrames}`);
+                }
+
+                const { frames, dimensions } = await captureFrames(
+                    videoFile,
+                    sampleTimes,
+                    applyLineDrawing,
+                    effectStyle,
+                    lineDetail,
+                    lineDarkness,
+                    async ({ index, time, thumbUrl }) => {
+                        if (!isVizEnabled()) return;
+
+                        vizMarkCaptured(index, time, startTime, endTime);
+                        vizAppendThumb(index, thumbUrl, time);
+                        if (index < vizLayoutImgs.length) vizFillLayoutCell(index, thumbUrl);
+
+                        const pct = 5 + ((index + 1) / totalFrames) * 55;
+                        vizSetProgress(pct);
+                        vizSetStep(applyLineDrawing ? 'filter' : 'capture', `${index + 1}/${totalFrames}`);
+                        if ((index + 1) % 5 === 0) vizLogPush(`Captured ${index + 1}/${totalFrames} frames`);
+                        await vizPause(120);
+                    }
+                );
+
+                statusEl.textContent = 'Generating PDF...';
+
+                const layout = {
+                    columns: parseInt(columnsInput.value),
+                    rows: parseInt(rowsInput.value),
+                };
+                const orientation = orientationSelect.value;
+                const pageSize = pageSizeSelect.value;
+
+                if (isVizEnabled()) {
+                    vizSetStep('pdf', 'placing frames into pages');
+                    vizLogPush(`PDF layout: ${layout.columns}×${layout.rows} per page (${layout.columns * layout.rows} frames/page)`);
+                    vizSetProgress(62);
+                    await vizPause(200);
+                }
+
+                const doc = await createPdfDocument(frames, layout, dimensions, orientation, pageSize, async (placed, total) => {
+                    if (!isVizEnabled()) return;
+
+                    const base = 62;
+                    const pct = base + (placed / Math.max(1, total)) * 35;
+                    vizSetProgress(pct);
+
+                    if (placed === 1 || placed === total || placed % 20 === 0) {
+                        vizSetStep('pdf', `${placed}/${total}`);
+                    }
+                    if (placed % 8 === 0) await vizPause(30);
+                });
+                
+                generatedPdfBlob = doc.output('blob');
+                const pdfDataUri = doc.output('datauristring');
+
+                statusEl.textContent = 'Done! Ready for Preview or Download.';
+                pdfPreview.src = pdfDataUri;
+                downloadBtn.classList.remove('hidden');
+
+                if (isVizEnabled()) {
+                    vizSetStep('done', 'complete');
+                    vizSetProgress(100);
+                    vizLogPush('Done. You can switch back to PDF Preview.');
+                }
+
+
+            } catch (error) {
+                console.error('An error occurred:', error);
+                statusEl.textContent = 'An error occurred. Please check the console.';
+                alert(`Error: ${error.message}`);
+                previewPlaceholder.style.display = 'flex';
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate PDF';
+                setTimeout(() => { statusEl.textContent = '' }, 5000);
+            }
+        }
+
+        /**
+         * Handles the download of the generated PDF.
+         */
+        function handlePdfDownload() {
+            if (!generatedPdfBlob) {
+                alert('No PDF has been generated yet.');
+                return;
+            }
+            const url = URL.createObjectURL(generatedPdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = videoFileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        /**
+         * Applies the Pencil Sketch filter to a canvas context.
+         */
+        function applySketchFilter(ctx, width, height, radius, darkness) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const pixels = imageData.data;
+            const grayscale = new Uint8ClampedArray(width * height);
+            const inverted = new Uint8ClampedArray(width * height);
+
+            for (let i = 0; i < pixels.length; i += 4) {
+                const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+                const index = i / 4;
+                grayscale[index] = gray;
+                inverted[index] = 255 - gray;
+            }
+
+            const blurred = new Uint8ClampedArray(width * height);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let total = 0;
+                    let count = 0;
+                    for (let ky = -radius; ky <= radius; ky++) {
+                        for (let kx = -radius; kx <= radius; kx++) {
+                            const sampleX = Math.max(0, Math.min(width - 1, x + kx));
+                            const sampleY = Math.max(0, Math.min(height - 1, y + ky));
+                            total += inverted[sampleY * width + sampleX];
+                            count++;
+                        }
+                    }
+                    blurred[y * width + x] = total / count;
+                }
+            }
+
+            for (let i = 0; i < pixels.length; i += 4) {
+                const index = i / 4;
+                const bottom = grayscale[index];
+                const top = blurred[index];
+
+                let finalVal = (top === 255) ? 255 : Math.min(255, (bottom * 255) / (255 - top));
+
+                if (finalVal < 255) {
+                    finalVal = 255 - (255 - finalVal) * darkness;
+                }
+
+                pixels[i] = pixels[i + 1] = pixels[i + 2] = finalVal;
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+        
+        /**
+         * Applies the Coloring Book filter using a Sobel edge detection algorithm.
+         */
+        function applyColoringBookFilter(ctx, width, height, threshold) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const pixels = imageData.data;
+            const grayscale = new Uint8ClampedArray(width * height);
+
+            // 1. Convert to grayscale
+            for (let i = 0; i < pixels.length; i += 4) {
+                grayscale[i / 4] = 0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2];
+            }
+
+            const magnitudes = new Float32Array(width * height);
+            const sobelGx = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+            const sobelGy = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+
+            // 2. Apply Sobel Operator to find edge magnitudes
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    let gx = 0;
+                    let gy = 0;
+                    let k_i = 0;
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            const pixelVal = grayscale[(y + ky) * width + (x + kx)];
+                            gx += pixelVal * sobelGx[k_i];
+                            gy += pixelVal * sobelGy[k_i];
+                            k_i++;
+                        }
+                    }
+                    magnitudes[y * width + x] = Math.sqrt(gx * gx + gy * gy);
+                }
+            }
+
+            // 3. Threshold the magnitudes to create the final black and white image
+            for (let i = 0; i < pixels.length; i += 4) {
+                const magnitude = magnitudes[i / 4];
+                const finalVal = magnitude > threshold ? 0 : 255; // Edges are black
+                pixels[i] = pixels[i+1] = pixels[i+2] = finalVal;
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        /**
+         * Applies a simple grayscale filter with darkness/gamma control.
+         */
+        function applyGrayscaleFilter(ctx, width, height, darkness) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const pixels = imageData.data;
+            for (let i = 0; i < pixels.length; i += 4) {
+                const r = pixels[i];
+                const g = pixels[i + 1];
+                const b = pixels[i + 2];
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                const finalVal = 255 * Math.pow(gray / 255, darkness);
+                pixels[i] = pixels[i + 1] = pixels[i + 2] = finalVal;
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        /**
+         * Main dispatcher for applying image filters.
+         */
+        function applyLineDrawingFilter(ctx, width, height, style, detail, darkness) {
+            if (style === 'coloring-book') {
+                applyColoringBookFilter(ctx, width, height, detail);
+            } else if (style === 'sketch') {
+                applySketchFilter(ctx, width, height, detail, darkness);
+            } else if (style === 'grayscale') {
+                applyGrayscaleFilter(ctx, width, height, darkness);
+            }
+        }
+
+        /**
+         * Captures a single frame from a video file.
+         */
+        function captureSingleFrame(file, time, applyFilter, effectStyle, lineDetail, lineDarkness) {
+            return new Promise((resolve, reject) => {
+                const video = document.createElement('video');
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const videoUrl = URL.createObjectURL(file);
+                
+                video.preload = 'metadata';
+                video.muted = true;
+                video.playsInline = true;
+                video.src = videoUrl;
+
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    video.currentTime = time;
+                    video.onseeked = () => {
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        if (applyFilter) {
+                            applyLineDrawingFilter(ctx, canvas.width, canvas.height, effectStyle, lineDetail, lineDarkness);
+                        }
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                        URL.revokeObjectURL(videoUrl);
+                        resolve(dataUrl);
+                    };
+                    video.onerror = () => {
+                        URL.revokeObjectURL(videoUrl);
+                        reject(new Error('Error seeking video for preview.'));
+                    };
+                };
+                video.onerror = () => {
+                    URL.revokeObjectURL(videoUrl);
+                    reject(new Error('Failed to load video file for preview.'));
+                };
+            });
+        }
+
+
+        /**
+         * Captures multiple frames from a video file.
+         */
+        function captureFrames(file, sampleTimes, applyLineDrawing, effectStyle, lineDetail, lineDarkness, onProgress) {
+            return new Promise((resolve, reject) => {
+                const video = document.createElement('video');
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const frames = [];
+                let capturedCount = 0;
+                const numFrames = sampleTimes.length;
+
+                video.preload = 'metadata';
+                video.muted = true;
+                video.playsInline = true;
+                const videoUrl = URL.createObjectURL(file);
+                video.src = videoUrl;
+
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const dimensions = { width: video.videoWidth, height: video.videoHeight };
+
+                    const captureFrameAt = (time, index) => {
+                        return new Promise(resolveSeek => {
+                            video.currentTime = time;
+                            video.onseeked = async () => {
+                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                
+                                if (applyLineDrawing) {
+                                    applyLineDrawingFilter(ctx, canvas.width, canvas.height, effectStyle, lineDetail, lineDarkness);
+                                }
+                                
+                                const fullDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                                frames.push(fullDataUrl);
+                                capturedCount++;
+
+                                // Build a small thumbnail for the visualization UI (downscaled for performance)
+                                let thumbUrl = fullDataUrl;
+                                try {
+                                    const maxW = 220;
+                                    const scale = Math.min(1, maxW / canvas.width);
+                                    const tw = Math.max(1, Math.round(canvas.width * scale));
+                                    const th = Math.max(1, Math.round(canvas.height * scale));
+                                    const tCanvas = document.createElement('canvas');
+                                    tCanvas.width = tw;
+                                    tCanvas.height = th;
+                                    const tctx = tCanvas.getContext('2d');
+                                    tctx.drawImage(canvas, 0, 0, tw, th);
+                                    thumbUrl = tCanvas.toDataURL('image/jpeg', 0.7);
+                                } catch (_) {
+                                    // fallback: use full frame
+                                }
+
+                                if (typeof onProgress === 'function') {
+                                    await onProgress({ index: index ?? (capturedCount - 1), time, thumbUrl });
+                                }
+
+                                statusEl.textContent = `Capturing frame ${capturedCount} of ${numFrames}...`;
+                                resolveSeek();
+                            };
+                            video.onerror = () => reject(new Error('Error seeking video.'));
+                        });
+                    };
+
+                    const captureAll = async () => {
+                        for (let i = 0; i < numFrames; i++) {
+                            await captureFrameAt(sampleTimes[i], i);
+                        }
+                        URL.revokeObjectURL(videoUrl);
+                        resolve({ frames, dimensions });
+                    };
+
+                    captureAll().catch(reject);
+                };
+
+                video.onerror = (e) => {
+                    URL.revokeObjectURL(videoUrl);
+                    reject(new Error('Failed to load video file.'));
+                };
+            });
+        }
+
+        /**
+         * Creates a jsPDF document from an array of image frames.
+         */
+        async function createPdfDocument(frames, layout, videoDimensions, orientation, pageSize, onPlaceProgress) {
+                const doc = new jsPDF({
+                    orientation: orientation,
+                    unit: 'px',
+                    format: pageSize,
+                });
+
+                const { rows, columns } = layout;
+                const framesPerPage = rows * columns;
+                const totalPages = Math.ceil(frames.length / framesPerPage);
+
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+
+                const cellWidth = pageWidth / columns;
+                const cellHeight = pageHeight / rows;
+                
+                const videoAspectRatio = videoDimensions.width / videoDimensions.height;
+
+                let frameIndex = 0;
+
+                for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+                    if (pageNum > 0) {
+                        doc.addPage(pageSize, orientation);
+                    }
+
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < columns; c++) {
+                            if (frameIndex < frames.length) {
+                                const frameData = frames[frameIndex];
+                                const cellX = c * cellWidth;
+                                const cellY = r * cellHeight;
+                                
+                                // Define margin and image area
+                                const marginWidth = cellWidth * 0.20;
+                                const imageAreaWidth = cellWidth - marginWidth;
+
+                                // Aspect Ratio Calculation
+                                let imgWidth, imgHeight;
+                                if ((cellHeight * videoAspectRatio) > imageAreaWidth) {
+                                    imgWidth = imageAreaWidth;
+                                    imgHeight = imageAreaWidth / videoAspectRatio;
+                                } else {
+                                    imgHeight = cellHeight;
+                                    imgWidth = cellHeight * videoAspectRatio;
+                                }
+
+                                // Positioning Calculation (center image in the right 80% area)
+                                const imageAreaX = cellX + marginWidth;
+                                const imgX = imageAreaX + (imageAreaWidth - imgWidth) / 2;
+                                const imgY = cellY + (cellHeight - imgHeight) / 2;
+                                
+                                // Add the image
+                                doc.addImage(frameData, 'JPEG', imgX, imgY, imgWidth, imgHeight);
+                                
+                                // Draw the cell border
+                                doc.setDrawColor(200, 200, 200);
+                                doc.setLineWidth(0.5);
+                                doc.rect(cellX, cellY, cellWidth, cellHeight);
+                                
+                                // Add Frame Number (positioned within the left margin)
+                                const frameNumber = String(frameIndex + 1);
+                                const fontSize = 8;
+                                const textPadding = 3;
+                                const textYPos = cellY + fontSize + textPadding;
+                                const textXPos = cellX + textPadding;
+                                
+                                // Create a white "outline" for text
+                                doc.setFontSize(fontSize);
+                                doc.setTextColor(255, 255, 255);
+                                doc.text(frameNumber, textXPos - 0.5, textYPos);
+                                doc.text(frameNumber, textXPos + 0.5, textYPos);
+                                doc.text(frameNumber, textXPos, textYPos - 0.5);
+                                doc.text(frameNumber, textXPos, textYPos + 0.5);
+                                
+                                // Draw the main black text
+                                doc.setTextColor(0, 0, 0);
+                                doc.text(frameNumber, textXPos, textYPos);
+
+                                frameIndex++;
+                                if (typeof onPlaceProgress === 'function') {
+                                    await onPlaceProgress(frameIndex, frames.length);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return doc;
+            }
+
+        // Initial UI
+        setActiveOutputTab('pdf');
+        tabProcessBtn.disabled = !vizToggle.checked;
+        vizControls.classList.toggle('hidden', !vizToggle.checked);
+        vizSpeedValue.textContent = parseFloat(vizSpeedSlider.value).toFixed(2);
+        vizReset();
+</script>
+</body>
+</html>

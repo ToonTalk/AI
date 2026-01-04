@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Number → Words Visualizer (huge numbers, animated scale derivation)</title>
+  <style>
+    :root { --bg:#f8fafc; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --border:#e2e8f0; }
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); }
+    .wrap{ max-width:1100px; margin:0 auto; padding:16px; }
+    .top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    h1{ margin:0; font-size:22px; }
+    .sub{ margin-top:6px; font-size:13px; color:var(--muted); }
+    .pill{ display:inline-flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid var(--border); background:var(--card); border-radius:999px; font-size:12px; color:#334155; }
+    .grid{ display:grid; grid-template-columns: 1fr; gap:12px; margin-top:12px; }
+    @media(min-width: 980px){ .grid{ grid-template-columns: 1fr 1fr; } }
+    .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; }
+    label{ font-size:12px; color:#334155; font-weight:700; }
+    textarea{
+      width:100%; min-height:120px; margin-top:8px;
+      border:1px solid var(--border); background:#f1f5f9;
+      border-radius:14px; padding:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:12px; color:var(--ink); outline:none;
+    }
+    textarea:focus{ box-shadow: 0 0 0 3px rgba(148,163,184,.35); }
+    .row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    button{
+      border:1px solid var(--border); background:var(--card); color:#0f172a;
+      padding:9px 10px; border-radius:10px; font-weight:800; font-size:13px;
+      cursor:pointer;
+    }
+    button.primary{ background:#0f172a; color:#fff; border-color:#0f172a; }
+    button.secondary{ background:#059669; color:#fff; border-color:#047857; }
+    button.danger{ background:#e11d48; color:#fff; border-color:#be123c; }
+    button:disabled{ opacity:.45; cursor:not-allowed; }
+    pre{
+      margin:8px 0 0 0; white-space:pre-wrap; word-break:break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:12px;
+    }
+    .box{ border:1px solid var(--border); background:#f8fafc; border-radius:14px; padding:10px; }
+    .err{ border:1px solid #fecaca; background:#fff1f2; color:#9f1239; border-radius:14px; padding:10px; font-size:12px; margin-top:10px; }
+    .groups{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .g{
+      min-width:70px; text-align:center; border:1px solid var(--border); background:#fff; border-radius:14px;
+      padding:9px 10px;
+    }
+    .g.active{ border-color:#0f172a; box-shadow: 0 0 0 3px rgba(148,163,184,.35); }
+    .g.zero{ opacity:.6; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .muted{ color:var(--muted); }
+    .small{ font-size:11px; }
+    .kv{ display:flex; justify-content:space-between; gap:10px; font-size:12px; margin-top:6px; }
+    .kv .k{ color:var(--muted); }
+    .kv .v{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; text-align:right; }
+    .split2{ display:grid; grid-template-columns: 1fr; gap:10px; margin-top:10px; }
+    @media(min-width: 980px){ .split2{ grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>Number → Words Visualizer</h1>
+        <div class="sub">String-safe conversion for extremely large integers; animated scale-name derivation (including beyond <span class="mono">centillion</span>).</div>
+      </div>
+      <div style="text-align:right">
+        <div class="small muted">Status</div>
+        <div id="status" style="font-weight:800">Idle</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <label for="inp">Input (integer or fraction a/b)</label>
+        <textarea id="inp" spellcheck="false"></textarea>
+
+        <div class="row">
+          <button class="primary" id="btnBuild">Build steps</button>
+          <button class="secondary" id="btnPlay">Play</button>
+          <button id="btnPause">Pause</button>
+          <button id="btnStep">Step</button>
+          <button id="btnEnd">Skip to end</button>
+          <button class="danger" id="btnClear">Clear</button>
+        </div>
+
+        <div class="row">
+          <span class="pill">
+            <span class="muted">Speed</span>
+            <input id="fps" type="range" min="1" max="80" value="12"/>
+            <span class="mono" id="fpsLabel">12 fps</span>
+          </span>
+          <span class="pill">
+            <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+              <input id="headTail" type="checkbox" checked/>
+              <span class="muted">head+tail output</span>
+            </label>
+          </span>
+          <span class="pill">
+            <span class="muted">Frame</span>
+            <span class="mono" id="frameLabel">—</span>
+          </span>
+        </div>
+
+        <div id="err" class="err" style="display:none"></div>
+
+        <div class="box" style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+            <div style="font-size:12px;font-weight:800;color:#334155">Output</div>
+            <div class="mono small muted" id="counts">—</div>
+          </div>
+          <pre id="out">—</pre>
+        </div>
+
+        <div class="small muted" style="margin-top:10px">
+          Cleanup strips spaces/commas/underscores. Negative is supported. Fractions use “over”.
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+          <div>
+            <div class="small muted">Explanatory animation</div>
+            <div style="font-weight:900" id="partLabel">—</div>
+          </div>
+          <div style="text-align:right">
+            <div class="small muted">Current step</div>
+            <div class="mono small" id="stepLabel">—</div>
+          </div>
+        </div>
+
+        <div class="box" style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div style="font-size:12px;font-weight:800;color:#334155">3-digit groups (MS → LS)</div>
+            <div class="mono small muted" id="groupCount">0 groups</div>
+          </div>
+          <div id="groups" class="groups"></div>
+        </div>
+
+        <div class="split2">
+          <div class="box">
+            <div style="font-size:12px;font-weight:800;color:#334155">Current group conversion</div>
+            <div id="groupInfo" class="small" style="margin-top:8px"></div>
+          </div>
+          <div class="box">
+            <div style="font-size:12px;font-weight:800;color:#334155">Scale-name construction</div>
+            <div id="scaleInfo" class="small" style="margin-top:8px"></div>
+          </div>
+        </div>
+
+        <div class="small muted" style="margin-top:10px">
+          Playback speed updates live during play. Scale-name construction now emits multiple frames (so speed=1 advances one step per second).
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* =====================================================
+   Number → Words (string-safe + animated scale derivation)
+   ===================================================== */
+
+const NW_ONES  = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const NW_TEENS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const NW_TENS  = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+// Scale names up to centillion (authoritative lookup list)
+const NW_SCALES = [
+  '', 'thousand', 'million', 'billion', 'trillion', 'quadrillion', 'quintillion',
+  'sextillion', 'septillion', 'octillion', 'nonillion', 'decillion', 'undecillion',
+  'duodecillion', 'tredecillion', 'quattuordecillion', 'quindecillion', 'sexdecillion',
+  'septendecillion', 'octodecillion', 'novemdecillion', 'vigintillion', 'unvigintillion',
+  'duovigintillion', 'trevigintillion', 'quattuorvigintillion', 'quinvigintillion',
+  'sexvigintillion', 'septenvigintillion', 'octovigintillion', 'novemvigintillion',
+  'trigintillion', 'untrigintillion', 'duotrigintillion', 'tretrigintillion',
+  'quattuortrigintillion', 'quintrigintillion', 'sextrigintillion', 'septentrigintillion',
+  'octotrigintillion', 'novemtrigintillion', 'quadragintillion', 'unquadragintillion',
+  'duoquadragintillion', 'trequadragintillion', 'quattuorquadragintillion',
+  'quinquadragintillion', 'sexquadragintillion', 'septenquadragintillion',
+  'octoquadragintillion', 'novemquadragintillion', 'quinquagintillion', 'unquinquagintillion',
+  'duoquinquagintillion', 'trequinquagintillion', 'quattuorquinquagintillion',
+  'quinquinquagintillion', 'sexquinquagintillion', 'septenquinquagintillion',
+  'octoquinquagintillion', 'novemquinquagintillion', 'sexagintillion', 'unsexagintillion',
+  'duosexagintillion', 'tresexagintillion', 'quattuorsexagintillion', 'quinsexagintillion',
+  'sexsexagintillion', 'septensexagintillion', 'octosexagintillion', 'novemsexagintillion',
+  'septuagintillion', 'unseptuagintillion', 'duoseptuagintillion', 'treseptuagintillion',
+  'quattuorseptuagintillion', 'quinseptuagintillion', 'sexseptuagintillion',
+  'septenseptuagintillion', 'octoseptuagintillion', 'novemseptuagintillion', 'octogintillion',
+  'unoctogintillion', 'duooctogintillion', 'treoctogintillion', 'quattuoroctogintillion',
+  'quinoctogintillion', 'sexoctogintillion', 'septenoctogintillion', 'octooctogintillion',
+  'novemoctogintillion', 'nonagintillion', 'unnonagintillion', 'duononagintillion',
+  'trenonagintillion', 'quattuornonagintillion', 'quinnonagintillion', 'sexnonagintillion',
+  'septennonagintillion', 'octononagintillion', 'novemnonagintillion', 'centillion'
+];
+
+function nwSanitize(s){ return (s||'').trim().replace(/[,_\s]/g,''); }
+function nwSplitFraction(s){
+  const t = nwSanitize(s);
+  const i = t.indexOf('/');
+  return i>=0 ? { num: t.slice(0,i), den: t.slice(i+1) } : { num: t, den:'1' };
+}
+function nwStripSign(s){
+  const negative = s[0]==='-';
+  let abs = negative ? s.slice(1) : s;
+  abs = abs.replace(/^0+(?!$)/,'') || '0';
+  return { negative, abs };
+}
+function nwChunk3MS(absDigits){
+  let s = (absDigits||'0').replace(/^0+(?!$)/,'') || '0';
+  const out=[];
+  for(let i=s.length;i>0;i-=3) out.push(s.slice(Math.max(0,i-3), i));
+  return out.reverse(); // MS→LS
+}
+function nwGroupToWords(groupVal){
+  const groupWords=[];
+  const hundreds = Math.floor(groupVal/100);
+  if(hundreds!==0){ groupWords.push(NW_ONES[hundreds]); groupWords.push('hundred'); }
+  const remainder = groupVal%100;
+  if(remainder!==0){
+    if(remainder<20){
+      if(remainder<10) groupWords.push(NW_ONES[remainder]);
+      else groupWords.push(NW_TEENS[remainder-10]);
+    }else{
+      const t=Math.floor(remainder/10), o=remainder%10;
+      groupWords.push(NW_TENS[t]);
+      if(o!==0) groupWords.push(NW_ONES[o]);
+    }
+  }
+  return groupWords;
+}
+
+/* ---------- Algorithmic base-name generator (10..100, for explanation animation) ---------- */
+function nwBaseIllionGenerate(n) {
+  if (n === 0) return '';
+  if (n <= 9) return NW_SCALES[n]; // keep canonical small names
+  if (n === 10) return 'decillion';
+
+  if (n >= 11 && n <= 19) {
+    const teenPrefixes = ['', 'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'];
+    return teenPrefixes[n - 10] + 'decillion';
+  }
+
+  if (n === 100) return 'centillion';
+
+  const onesPrefixes = ['', 'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'];
+  const tensRoots = {
+    2: 'vigint',
+    3: 'trigint',
+    4: 'quadragint',
+    5: 'quinquagint',
+    6: 'sexagint',
+    7: 'septuagint',
+    8: 'octogint',
+    9: 'nonagint',
+  };
+
+  const ones = n % 10;
+  const tens = Math.floor(n / 10);
+  const root = tensRoots[tens] || '';
+  if (!root) return NW_SCALES[n] || '';
+  return (ones === 0 ? root : (onesPrefixes[ones] + root)) + 'illion';
+}
+
+function nwBaseIllionExplain(n) {
+  if (n === 0) return { n, generated: '', steps: ['index 0 has no scale name'] };
+  if (n <= 9) {
+    return {
+      n,
+      generated: NW_SCALES[n],
+      steps: [`index ${n} uses canonical base-name lookup: "${NW_SCALES[n]}"`]
+    };
+  }
+  if (n === 10) return { n, generated: 'decillion', steps: ['10 → dec + illion → "decillion"'] };
+  if (n >= 11 && n <= 19) {
+    const teenPrefixes = ['', 'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'];
+    const p = teenPrefixes[n - 10];
+    return { n, generated: p + 'decillion', steps: [`${n} → "${p}" + "decillion" → "${p}decillion"`] };
+  }
+  if (n === 100) return { n, generated: 'centillion', steps: ['100 → cent + illion → "centillion"'] };
+
+  const onesPrefixes = ['', 'un', 'duo', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'];
+  const tensRoots = {
+    2: 'vigint',
+    3: 'trigint',
+    4: 'quadragint',
+    5: 'quinquagint',
+    6: 'sexagint',
+    7: 'septuagint',
+    8: 'octogint',
+    9: 'nonagint',
+  };
+
+  const ones = n % 10;
+  const tens = Math.floor(n / 10);
+  const root = tensRoots[tens] || '';
+  const op = onesPrefixes[ones] || '';
+  const generated = (ones === 0 ? root : (op + root)) + 'illion';
+
+  const steps = [];
+  steps.push(`${n} → tens=${tens * 10}, ones=${ones}`);
+  steps.push(`tens root: ${tens * 10} → "${root}"`);
+  if (ones !== 0) steps.push(`ones prefix: ${ones} → "${op}"`);
+  steps.push(`concatenate: "${ones === 0 ? root : (op + root)}" + "illion" → "${generated}"`);
+  return { n, generated, steps };
+}
+
+/* ---------- Beyond-centillion scale-name generation (final naming) ---------- */
+function nwGetScaleName(index){
+  if(index===0) return '';
+  if(index < NW_SCALES.length) return NW_SCALES[index];
+
+  const centillionGroup = Math.floor((index-1)/100);
+  const positionInGroup = ((index-1)%100) + 1;
+
+  function getLatinPrefix(n){
+    const ones=['','un','du','tre','quattuor','quin','sex','septen','octo','novem'];
+    const tens=['','deci','viginti','triginta','quadraginta','quinquaginta','sexaginta','septuaginta','octoginta','nonaginta'];
+    const hundreds=['','centi','ducenti','trecenti','quadringenti','quingenti','sescenti','septingenti','octingenti','nongenti'];
+
+    let result='';
+
+    if(n>=1000){
+      const thousands=Math.floor(n/1000);
+      if(thousands===1) result+='milli';
+      else if(thousands<10) result += ones[thousands]+'milli';
+      else result += getLatinPrefix(thousands)+'milli';
+      n = n%1000;
+    }
+
+    if(n>=100){
+      const h=Math.floor(n/100);
+      result += hundreds[h];
+      n = n%100;
+    }
+
+    if(n>=20){
+      const t=Math.floor(n/10), o=n%10;
+      if(o>0) result += ones[o] + tens[t];
+      else result += tens[t];
+    }else if(n>=11){
+      result += ones[n-10] + 'deci';
+    }else if(n===10){
+      result += 'deci';
+    }else if(n>0){
+      result += ones[n];
+    }
+    return result;
+  }
+
+  const centillionPrefix = getLatinPrefix(centillionGroup);
+
+  if(positionInGroup===100) return centillionPrefix + 'centillion';
+
+  if(positionInGroup <= NW_SCALES.length-1){
+    const baseScale = NW_SCALES[positionInGroup];
+    if(centillionGroup===1) return baseScale;
+    return baseScale + '-' + centillionPrefix + 'centillion';
+  }
+
+  return 'scale-' + index;
+}
+
+/* ---------- Step-by-step explanation frames for scale derivation ---------- */
+function nwCentillionGroupExplain(index) {
+  const centillionGroup = Math.floor((index - 1) / 100);
+  const positionInGroup = ((index - 1) % 100) + 1;
+
+  function getLatinPrefix(n) {
+    const ones = ['', 'un', 'du', 'tre', 'quattuor', 'quin', 'sex', 'septen', 'octo', 'novem'];
+    const tens = ['', 'deci', 'viginti', 'triginta', 'quadraginta', 'quinquaginta', 'sexaginta', 'septuaginta', 'octoginta', 'nonaginta'];
+    const hundreds = ['', 'centi', 'ducenti', 'trecenti', 'quadringenti', 'quingenti', 'sescenti', 'septingenti', 'octingenti', 'nongenti'];
+
+    let result = '';
+    if (n >= 1000) {
+      const thousands = Math.floor(n / 1000);
+      if (thousands === 1) result += 'milli';
+      else if (thousands < 10) result += ones[thousands] + 'milli';
+      else result += getLatinPrefix(thousands) + 'milli';
+      n = n % 1000;
+    }
+    if (n >= 100) {
+      const h = Math.floor(n / 100);
+      result += hundreds[h];
+      n = n % 100;
+    }
+    if (n >= 20) {
+      const t = Math.floor(n / 10);
+      const o = n % 10;
+      if (o > 0) result += ones[o] + tens[t];
+      else result += tens[t];
+    } else if (n >= 11) {
+      result += ones[n - 10] + 'deci';
+    } else if (n === 10) {
+      result += 'deci';
+    } else if (n > 0) {
+      result += ones[n];
+    }
+    return result;
+  }
+
+  const centillionPrefix = getLatinPrefix(centillionGroup);
+  const centillionSuffix = centillionPrefix + 'centillion';
+
+  const baseLookup = (positionInGroup < NW_SCALES.length) ? NW_SCALES[positionInGroup] : '';
+  const baseGen = nwBaseIllionGenerate(positionInGroup);
+  const baseName = baseLookup || baseGen;
+
+  return { centillionGroup, positionInGroup, centillionPrefix, centillionSuffix, baseLookup, baseGen, baseName };
+}
+
+function nwScaleDerivationFrames(index) {
+  const frames = [];
+
+  // Base range: still animate the derivation steps, even though the final name comes from lookup.
+  if (index > 0 && index < NW_SCALES.length) {
+    const lookupName = NW_SCALES[index] || '';
+    const ex = nwBaseIllionExplain(index);
+    const steps = (ex.steps && ex.steps.length) ? ex.steps : [`lookup: "${lookupName}"`];
+    steps.forEach((t, i) => {
+      frames.push({
+        type: 'scaleStep',
+        scaleIndex: index,
+        stepNo: i + 1,
+        stepCount: steps.length,
+        text: t,
+        partial: (i === steps.length - 1) ? lookupName : ''
+      });
+    });
+    return frames;
+  }
+
+  // Extended (beyond centillion list)
+  const info = nwCentillionGroupExplain(index);
+  const finalName = nwGetScaleName(index);
+
+  const steps = [];
+  steps.push(`index ${index}: compute centillionGroup and positionInGroup`);
+  steps.push(`centillionGroup = floor((index-1)/100) = ${info.centillionGroup}`);
+  steps.push(`positionInGroup = ((index-1)%100)+1 = ${info.positionInGroup}`);
+  steps.push(`centillionPrefix(${info.centillionGroup}) → "${info.centillionPrefix}"`);
+  steps.push(`centillionSuffix → "${info.centillionSuffix}"`);
+  steps.push(`base scale @positionInGroup ${info.positionInGroup} → "${info.baseName}"`);
+  steps.push(`assemble → "${info.baseName}" + "-" + "${info.centillionSuffix}"`);
+  steps.push(`final → "${finalName}"`);
+
+  steps.forEach((t, i) => {
+    let partial = '';
+    if (i === 4) partial = info.centillionSuffix;
+    if (i === 5) partial = info.baseName;
+    if (i === 6) partial = `${info.baseName}-${info.centillionSuffix}`;
+    if (i === 7) partial = finalName;
+
+    frames.push({
+      type: 'scaleStep',
+      scaleIndex: index,
+      stepNo: i + 1,
+      stepCount: steps.length,
+      text: t,
+      partial
+    });
+  });
+
+  return frames;
+}
+
+/* ---------- Convert number-string to words; emit group frames in LS→MS order ---------- */
+function nwNumberStringToWords(absDigits, onStep, part){
+  const clean = (absDigits||'0').replace(/^0+(?!$)/,'') || '0';
+  if(clean==='0'){
+    onStep && onStep({ type:'group', part, groupIndex:0, groupStr:'0', group:0, skipped:false, groupWords:['zero'], scaleName:'' });
+    return 'zero';
+  }
+
+  const groupsMS = nwChunk3MS(clean); // MS→LS
+  const words = [];
+
+  let groupIndex = 0; // 0=ones
+  for(let gi = groupsMS.length-1; gi>=0; gi--){
+    const gStr = groupsMS[gi];
+    const groupVal = parseInt(gStr,10) || 0;
+    const skipped = (groupVal===0);
+    let groupWords=[], scaleName='';
+
+    if(!skipped){
+      groupWords = nwGroupToWords(groupVal);
+      if(groupIndex>0){
+        scaleName = nwGetScaleName(groupIndex);
+        if(scaleName) groupWords.push(scaleName);
+      }
+      words.unshift(...groupWords);
+    }
+
+    onStep && onStep({ type:'group', part, groupIndex, groupStr:gStr, group:groupVal, skipped, groupWords: groupWords.slice(), scaleName });
+    groupIndex++;
+  }
+
+  return words.join(' ');
+}
+
+function fmt3(g){ g=String(g); return g.length>=3?g:g.padStart(3,'0'); }
+
+/* =====================================================
+   UI / Animation
+   ===================================================== */
+
+const $ = (id)=>document.getElementById(id);
+
+const st = {
+  frames: [],
+  groups: { numerator: [], denominator: [] },
+  idx: 0,
+  playing: false,
+  output: '—',
+  status: 'Idle'
+};
+
+function setStatus(s){ st.status=s; $('status').textContent=s; }
+function setError(msg){
+  const e=$('err');
+  if(!msg){ e.style.display='none'; e.textContent=''; return; }
+  e.style.display='block'; e.textContent=msg;
+}
+function built(){ return st.frames && st.frames.length>0; }
+
+function updateFrameLabels(){
+  $('frameLabel').textContent = built() ? `${Math.min(st.frames.length, st.idx+1)}/${st.frames.length}` : '—';
+}
+
+function stop(){
+  st.playing = false;
+}
+
+function render(){
+  updateFrameLabels();
+
+  const f = st.frames[st.idx] || null;
+
+  // Determine current part by scanning back to nearest part marker
+  let part=null;
+  for(let i=st.idx; i>=0; i--){
+    if(st.frames[i] && st.frames[i].type==='part'){ part = st.frames[i].part; break; }
+  }
+  $('partLabel').textContent = part ? (part==='numerator'?'Numerator':'Denominator') : '—';
+
+  $('stepLabel').textContent = f
+    ? (f.type === 'part'
+        ? 'part marker'
+        : (f.type === 'scaleStep'
+            ? `scale step ${f.stepNo}/${f.stepCount} (index ${f.scaleIndex})`
+            : `groupIndex ${f.groupIndex}`))
+    : '—';
+
+  // Output preview head/tail
+  const ht = $('headTail').checked;
+  const words = st.output || '—';
+  if(words==='—'){ $('out').textContent='—'; }
+  else{
+    const maxHead=650, maxTail=450;
+    if(!ht || words.length <= (maxHead+maxTail+40)) $('out').textContent = words;
+    else $('out').textContent = words.slice(0,maxHead) + "\n\n… (truncated) …\n\n" + words.slice(-maxTail);
+  }
+
+  // Groups display for current part
+  const groups = part ? (st.groups[part]||[]) : [];
+  $('groupCount').textContent = `${groups.length} groups`;
+
+  // Active group highlight: use groupIndex from current frame when possible (scaleStep carries it)
+  let activeMSIndex = null;
+  if(f && (f.type==='group' || f.type==='scaleStep') && part && typeof f.groupIndex === 'number'){
+    const gs = st.groups[part] || [];
+    activeMSIndex = (gs.length - 1) - f.groupIndex; // groupIndex is LS-based
+  }
+
+  const gWrap = $('groups');
+  gWrap.innerHTML = '';
+  groups.forEach((g, i, arr)=>{
+    const val = parseInt(g,10) || 0;
+    const div = document.createElement('div');
+    div.className = 'g' + (i===activeMSIndex?' active':'') + (val===0?' zero':'');
+    const label = (i===0?'MS':(i===arr.length-1?'LS':''));
+    div.innerHTML = `<div class="mono">${fmt3(g)}</div><div class="small muted">${label}</div>`;
+    gWrap.appendChild(div);
+  });
+
+  // Details panels
+  const gi = $('groupInfo');
+  const si = $('scaleInfo');
+
+  if(!f){
+    gi.innerHTML = `<div class="muted">Build steps to begin.</div>`;
+    si.innerHTML = `<div class="muted">—</div>`;
+    return;
+  }
+
+  if(f.type==='part'){
+    gi.innerHTML = `
+      <div class="kv"><span class="k">part</span><span class="v">${f.part}</span></div>
+      <div class="kv"><span class="k">digits</span><span class="v">${f.digits}</span></div>
+      <div class="kv"><span class="k">groups</span><span class="v">${f.groups}</span></div>
+    `;
+    si.innerHTML = `<div class="muted">—</div>`;
+    return;
+  }
+
+  // Group panel should always show current group context, even during scaleStep
+  if(typeof f.groupIndex === 'number'){
+    gi.innerHTML = `
+      <div class="kv"><span class="k">groupIndex</span><span class="v">${f.groupIndex}</span></div>
+      <div class="kv"><span class="k">group digits</span><span class="v">${fmt3(f.groupStr ?? '0')}</span></div>
+      <div class="kv"><span class="k">group value</span><span class="v">${f.group ?? 0}</span></div>
+      <div class="kv"><span class="k">skipped</span><span class="v">${f.skipped ? 'true':'false'}</span></div>
+      <div class="kv"><span class="k">scaleName</span><span class="v">${f.groupIndex>0 ? (f.scaleName || '(empty)') : '(none)'}</span></div>
+      <div style="margin-top:8px">
+        <div class="muted">emitted words (for this group)</div>
+        <div class="mono" style="margin-top:3px">${(f.type==='group')
+          ? (f.skipped ? '(none)' : (f.groupWords||[]).join(' '))
+          : ((f.groupWords && f.groupWords.length) ? f.groupWords.join(' ') : '(see group frame)')}
+        </div>
+      </div>
+    `;
+  } else {
+    gi.innerHTML = `<div class="muted">—</div>`;
+  }
+
+  // Scale panel
+  if(f.type==='scaleStep'){
+    si.innerHTML = `
+      <div class="kv"><span class="k">kind</span><span class="v">animated</span></div>
+      <div class="kv"><span class="k">scaleIndex</span><span class="v">${f.scaleIndex}</span></div>
+      <div class="kv"><span class="k">step</span><span class="v">${f.stepNo}/${f.stepCount}</span></div>
+      <div style="margin-top:8px">
+        <div class="muted">this step</div>
+        <div class="mono" style="margin-top:3px">${f.text}</div>
+      </div>
+      <div style="margin-top:8px">
+        <div class="muted">partial result</div>
+        <div class="mono" style="margin-top:3px">${f.partial || '—'}</div>
+      </div>
+    `;
+    return;
+  }
+
+  // For regular group frames: show quick summary and offer the full derivation via subsequent scaleStep frames
+  if(f.groupIndex === 0){
+    si.innerHTML = `<div class="muted">groupIndex 0 has no scale name</div>`;
+  } else if(f.skipped){
+    si.innerHTML = `<div class="muted">group is zero; scale name not used</div>`;
+  } else {
+    const idx = f.groupIndex;
+    const direct = (idx > 0 && idx < NW_SCALES.length);
+    si.innerHTML = `
+      <div class="kv"><span class="k">mode</span><span class="v">${direct ? 'lookup + animated derivation' : 'extended + animated derivation'}</span></div>
+      <div class="kv"><span class="k">scaleIndex</span><span class="v">${idx}</span></div>
+      <div class="kv"><span class="k">final name</span><span class="v">${nwGetScaleName(idx)}</span></div>
+      <div style="margin-top:8px" class="muted">
+        (Use Play/Step to see the scale name constructed step-by-step in the next frames.)
+      </div>
+    `;
+  }
+}
+
+function build(){
+  stop();
+  setError('');
+  setStatus('Building');
+
+  const raw = $('inp').value;
+  const { num, den } = nwSplitFraction(raw);
+
+  if(!num){
+    setError('Enter an integer or fraction a/b.');
+    setStatus('Invalid input');
+    st.frames=[]; st.groups={numerator:[],denominator:[]}; st.idx=0; st.output='—';
+    $('counts').textContent='—';
+    render(); return;
+  }
+
+  const numOk = /^-?\d+$/.test(num);
+  const denOk = /^-?\d+$/.test(den);
+  if(!numOk || !denOk){
+    setError('Input must be digits (optional leading -). For fractions use a single /.');
+    setStatus('Invalid input');
+    st.frames=[]; st.groups={numerator:[],denominator:[]}; st.idx=0; st.output='—';
+    $('counts').textContent='—';
+    render(); return;
+  }
+
+  const denAbs = nwStripSign(den).abs;
+  if(denAbs==='0'){
+    setError('Denominator cannot be 0.');
+    setStatus('Invalid input');
+    st.frames=[]; st.groups={numerator:[],denominator:[]}; st.idx=0; st.output='—';
+    $('counts').textContent='—';
+    render(); return;
+  }
+
+  const n = nwStripSign(num);
+  const d = nwStripSign(den);
+  const negative = (n.negative !== d.negative);
+
+  st.groups = {
+    numerator: nwChunk3MS(n.abs),
+    denominator: (d.abs !== '1') ? nwChunk3MS(d.abs) : []
+  };
+
+  const frames=[];
+
+  function addPart(part, absDigits){
+    const gs = nwChunk3MS(absDigits);
+    frames.push({ type:'part', part, digits: absDigits.length, groups: gs.length });
+  }
+
+  function onStepWithScaleFrames(s){
+    frames.push(s);
+    if (s.type === 'group' && !s.skipped && s.groupIndex > 0) {
+      const more = nwScaleDerivationFrames(s.groupIndex);
+      for (const step of more) {
+        frames.push({
+          ...step,
+          // carry group context so highlighting stays stable during scaleStep frames
+          part: s.part,
+          groupIndex: s.groupIndex,
+          groupStr: s.groupStr,
+          group: s.group,
+          skipped: s.skipped,
+          groupWords: s.groupWords,
+          scaleName: s.scaleName
+        });
+      }
+    }
+  }
+
+  addPart('numerator', n.abs);
+  const numeratorWords = nwNumberStringToWords(n.abs, onStepWithScaleFrames, 'numerator');
+
+  let result='';
+  if(negative && n.abs!=='0') result += 'negative ';
+  if(d.abs==='1'){
+    result += numeratorWords;
+  }else{
+    addPart('denominator', d.abs);
+    const denominatorWords = nwNumberStringToWords(d.abs, onStepWithScaleFrames, 'denominator');
+    result += numeratorWords + ' over ' + denominatorWords;
+  }
+
+  st.frames = frames;
+  st.idx = 0;
+  st.output = result;
+
+  const groupCount = frames.filter(x=>x.type==='group').length;
+  const scaleStepCount = frames.filter(x=>x.type==='scaleStep').length;
+  const partCount = frames.filter(x=>x.type==='part').length;
+  $('counts').textContent = `${partCount} part markers • ${groupCount} group frames • ${scaleStepCount} scale-step frames • output chars ${result.length}`;
+
+  setStatus('Built');
+  render();
+}
+
+function play(){
+  if(!built()) return;
+  st.playing = true;
+  setStatus('Playing');
+
+  let lastTs = null;
+  let acc = 0;
+
+  function raf(ts){
+    if(!st.playing) return;
+
+    if(lastTs == null) lastTs = ts;
+    const dt = ts - lastTs;
+    lastTs = ts;
+    acc += dt;
+
+    const fps = Math.max(1, parseInt($('fps').value,10) || 12);
+    const interval = 1000 / fps;
+
+    while(acc >= interval){
+      acc -= interval;
+      st.idx = Math.min(st.frames.length - 1, st.idx + 1);
+      if(st.idx >= st.frames.length - 1){
+        st.playing = false;
+        setStatus('Done');
+        render();
+        return;
+      }
+    }
+
+    render();
+    requestAnimationFrame(raf);
+  }
+
+  requestAnimationFrame(raf);
+}
+
+function pause(){ stop(); if(built()) setStatus('Paused'); render(); }
+function step(){
+  if(!built()) return;
+  stop();
+  setStatus('Stepping');
+  st.idx = Math.min(st.frames.length-1, st.idx+1);
+  if(st.idx >= st.frames.length-1) setStatus('Done');
+  render();
+}
+function end(){
+  if(!built()) return;
+  stop();
+  st.idx = st.frames.length-1;
+  setStatus('Done');
+  render();
+}
+function clearAll(){
+  stop();
+  $('inp').value='';
+  st.frames=[]; st.groups={numerator:[],denominator:[]}; st.idx=0; st.output='—';
+  $('counts').textContent='—';
+  setError('');
+  setStatus('Idle');
+  render();
+}
+
+$('btnBuild').addEventListener('click', build);
+$('btnPlay').addEventListener('click', play);
+$('btnPause').addEventListener('click', pause);
+$('btnStep').addEventListener('click', step);
+$('btnEnd').addEventListener('click', end);
+$('btnClear').addEventListener('click', clearAll);
+
+$('fps').addEventListener('input', ()=>{ $('fpsLabel').textContent = `${$('fps').value} fps`; });
+$('headTail').addEventListener('change', render);
+
+// Seed default input (large) and build once
+$('inp').value = '123456789012345678901234567890';
+$('fpsLabel').textContent = `${$('fps').value} fps`;
+build();
+</script>
+</body>
+</html>
