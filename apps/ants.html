@@ -1,0 +1,1805 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ant Colony Simulation</title>
+
+  <!-- Tailwind Play CDN (demo-grade). -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Babel Standalone (JSX transpile in-browser). -->
+  <script src="https://unpkg.com/@babel/standalone@7.26.2/babel.min.js"></script>
+
+  <!-- Import map pins ONE React instance; Recharts is forced to use it via ?external= -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom"
+      }
+    }
+  </script>
+
+  <style>body { margin: 0; }</style>
+</head>
+<body class="bg-slate-50">
+  <div id="root"></div>
+
+  <script type="module">
+    import React from "react";
+    import * as ReactDOMClient from "react-dom/client";
+    import * as Recharts from "recharts";
+
+    // Your component source (JSX) as a string.
+    const SOURCE = `const TASK_COLORS = {
+  forager: '#f59e0b',
+  patroller: '#3b82f6', 
+  nestWorker: '#8b5cf6',
+  middenWorker: '#10b981'
+};
+
+const TASK_LABELS = {
+  forager: 'Forager',
+  patroller: 'Patroller',
+  nestWorker: 'Nest Worker',
+  middenWorker: 'Midden Worker'
+};
+
+const NEST_CENTER = { x: 200, y: 200 };
+const NEST_RADIUS = 50;
+const WORLD_RADIUS = 180;
+
+const ANT_LENGTH = 12;
+const ANT_SMELL_RANGE = 3 * ANT_LENGTH;
+const ANT_SIGHT_RANGE = 2 * ANT_LENGTH;
+const TRAIL_DETECT_RANGE = 2 * ANT_LENGTH;
+
+// Time speeds: how many sim-minutes pass per real second
+const TIME_SPEEDS = {
+  foraging: { label: "Foraging (1 sec = 1 min)", minsPerSec: 1 },
+  daily: { label: "Daily (1 sec = 1 hour)", minsPerSec: 60 },
+  colony: { label: "Colony (1 sec = 1 day)", minsPerSec: 1440 }
+};
+
+// Biology constants (in days)
+const EGG_DEVELOPMENT_DAYS = 14;
+const LARVA_DEVELOPMENT_DAYS = 14;
+const EGGS_PER_DAY = 15; // Queen lays ~15 eggs per day in good conditions (scaled for larger colony)
+const NEST_CAPACITY = 300; // Comfortable nest capacity
+const MAX_CAPACITY = 500; // Absolute maximum before severe problems
+const MAX_RENDERED_ANTS = 100; // Only render this many in foraging view for performance
+
+function createAnt(id, task) {
+  const angle = Math.random() * Math.PI * 2;
+  const dist = Math.random() * 40 + 20;
+  return {
+    id, task,
+    x: NEST_CENTER.x + Math.cos(angle) * dist,
+    y: NEST_CENTER.y + Math.sin(angle) * dist,
+    angle: Math.random() * Math.PI * 2,
+    speed: 1.2 + Math.random() * 0.4,
+    carryingFood: false,
+    taskTime: 0,
+    taskSwitches: 0,
+    foodDelivered: 0,
+    fighting: false
+  };
+}
+
+function createEnemyAnt(id) {
+  const angle = Math.random() * Math.PI * 2;
+  return {
+    id,
+    x: NEST_CENTER.x + Math.cos(angle) * (WORLD_RADIUS + 10),
+    y: NEST_CENTER.y + Math.sin(angle) * (WORLD_RADIUS + 10),
+    angle: angle + Math.PI,
+    speed: 0.6 + Math.random() * 0.3,
+    health: 2,
+    carryingFood: false
+  };
+}
+
+function createFoodSource(id) {
+  const angle = Math.random() * Math.PI * 2;
+  const dist = NEST_RADIUS + 30 + Math.random() * (WORLD_RADIUS - NEST_RADIUS - 40);
+  return {
+    id,
+    x: NEST_CENTER.x + Math.cos(angle) * dist,
+    y: NEST_CENTER.y + Math.sin(angle) * dist,
+    amount: 3 + Math.floor(Math.random() * 4)
+  };
+}
+
+function initializeAnts(count) {
+  // Start with a balanced colony: ~40% foragers, ~15% patrollers, ~30% nest workers, ~15% midden
+  const tasks = ['forager', 'forager', 'forager', 'forager', 'patroller', 'patroller', 'nestWorker', 'nestWorker', 'nestWorker', 'middenWorker'];
+  return Array.from({ length: count }, (_, i) => createAnt(i, tasks[i % tasks.length]));
+}
+
+function initializeFoodSources(count) {
+  return Array.from({ length: count }, (_, i) => createFoodSource(i));
+}
+
+function formatTime(totalMinutes) {
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const mins = Math.floor(totalMinutes % 60);
+  
+  if (days > 0) {
+    return \`Day \${days + 1}, \${hours.toString().padStart(2, '0')}:\${mins.toString().padStart(2, '0')}\`;
+  }
+  return \`\${hours.toString().padStart(2, '0')}:\${mins.toString().padStart(2, '0')}\`;
+}
+
+function AntColonySimulation() {
+  const [ants, setAnts] = useState(() => initializeAnts(60));
+  const [foodSources, setFoodSources] = useState(() => initializeFoodSources(8));
+  const [enemyAnts, setEnemyAnts] = useState([]);
+  const [predator, setPredator] = useState(null);
+  const [trails, setTrails] = useState([]);
+  const [nestFood, setNestFood] = useState(50);
+  const [nestHealth, setNestHealth] = useState(100);
+  const [eggs, setEggs] = useState([
+    { id: 1, birthDay: 0 }, { id: 2, birthDay: 0 }, { id: 3, birthDay: 0 }
+  ]);
+  const [larvae, setLarvae] = useState([
+    { id: 101, birthDay: 0 }, { id: 102, birthDay: 0 }
+  ]);
+  const [foodAvailability, setFoodAvailability] = useState(50);
+  const [enemyPressure, setEnemyPressure] = useState(30);
+  const [isPaused, setIsPaused] = useState(true);
+  const [timeSpeed, setTimeSpeed] = useState('foraging');
+  const [simTime, setSimTime] = useState(0); // in minutes
+  const [selectedAnt, setSelectedAnt] = useState(null);
+  const [stats, setStats] = useState({ forager: 0, patroller: 0, nestWorker: 0, middenWorker: 0 });
+  const [history, setHistory] = useState([]);
+  const [log, setLog] = useState([]);
+  const [showRules, setShowRules] = useState(false);
+  const [showExperiment, setShowExperiment] = useState(false);
+  const [experimentConfig, setExperimentConfig] = useState({
+    startingPopulation: 60,
+    startingFood: 50,
+    foodAvailability: 50,
+    enemyPressure: 30,
+    durationDays: 30,
+    numTrials: 3,
+    recordInterval: 24, // hours between data points
+  });
+  const [experimentRunning, setExperimentRunning] = useState(false);
+  const [experimentProgress, setExperimentProgress] = useState({ trial: 0, day: 0 });
+  const [experimentResults, setExperimentResults] = useState(null);
+  const [csvText, setCsvText] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
+  
+  // Refs
+  const nestFoodRef = useRef(50);
+  const nestHealthRef = useRef(100);
+  const eggsRef = useRef([{ id: 1, birthDay: 0 }, { id: 2, birthDay: 0 }, { id: 3, birthDay: 0 }]);
+  const larvaeRef = useRef([{ id: 101, birthDay: 0 }, { id: 102, birthDay: 0 }]);
+  const foodSourcesRef = useRef(initializeFoodSources(8));
+  const enemyAntsRef = useRef([]);
+  const predatorRef = useRef(null);
+  const trailsRef = useRef([]);
+  const frameRef = useRef();
+  const historyTimerRef = useRef(0);
+  const foodIdRef = useRef(100);
+  const enemyIdRef = useRef(0);
+  const antIdRef = useRef(100);
+  const eggIdRef = useRef(10);
+  const larvaIdRef = useRef(200);
+  const trailIdRef = useRef(0);
+  const foodAvailabilityRef = useRef(50);
+  const enemyPressureRef = useRef(30);
+  const antsRef = useRef(initializeAnts(60));
+  const simTimeRef = useRef(0);
+  const timeSpeedRef = useRef('foraging');
+  const lastEggLayRef = useRef(0);
+
+  useEffect(() => { foodAvailabilityRef.current = foodAvailability; }, [foodAvailability]);
+  useEffect(() => { enemyPressureRef.current = enemyPressure; }, [enemyPressure]);
+  useEffect(() => { timeSpeedRef.current = timeSpeed; }, [timeSpeed]);
+
+  const colonyHunger = Math.max(0, 100 - nestFood);
+  const threatLevel = enemyAnts.length * 10 + (predator ? 30 : 0);
+
+  useEffect(() => {
+    const counts = { forager: 0, patroller: 0, nestWorker: 0, middenWorker: 0 };
+    ants.forEach(ant => counts[ant.task]++);
+    setStats(counts);
+  }, [ants]);
+
+  const addLog = (message) => {
+    setLog(prev => [...prev.slice(-4), { time: Date.now(), message }]);
+  };
+
+  // Main simulation loop
+  useEffect(() => {
+    if (isPaused) return;
+
+    let frameCount = 0;
+    let lastTime = performance.now();
+
+    const simulate = () => {
+      frameCount++;
+      const now = performance.now();
+      const deltaRealSec = (now - lastTime) / 1000;
+      lastTime = now;
+      
+      // Calculate sim time advancement
+      const speed = TIME_SPEEDS[timeSpeedRef.current];
+      const simMinutesElapsed = deltaRealSec * speed.minsPerSec;
+      simTimeRef.current += simMinutesElapsed;
+      const currentDay = simTimeRef.current / 1440;
+      
+      // Colony eats (scaled by population and time)
+      const populationForFood = antsRef.current.length;
+      const foodConsumed = 0.3 * (populationForFood / 40) * (simMinutesElapsed / 60); // Scales with population
+      nestFoodRef.current = Math.max(0, nestFoodRef.current - foodConsumed);
+      
+      // Starvation
+      if (nestFoodRef.current < 5 && Math.random() < 0.01 * simMinutesElapsed / 60) {
+        const currentAntsForStarvation = antsRef.current;
+        if (currentAntsForStarvation.length > 0) {
+          const victimIndex = Math.floor(Math.random() * currentAntsForStarvation.length);
+          antsRef.current = currentAntsForStarvation.filter((_, i) => i !== victimIndex);
+          addLog("💀 Ant starved!");
+        }
+      }
+      
+      // Count workers
+      const currentAnts = antsRef.current;
+      const population = currentAnts.length;
+      const nestWorkerCount = currentAnts.filter(a => a.task === 'nestWorker').length;
+      const middenWorkerCount = currentAnts.filter(a => a.task === 'middenWorker').length;
+      
+      // Nest health - worker requirements scale with population
+      const requiredNestWorkers = Math.max(5, Math.floor(population / 20));
+      const requiredMiddenWorkers = Math.max(3, Math.floor(population / 30));
+      const nestWorkerDeficit = Math.max(0, requiredNestWorkers - nestWorkerCount);
+      const middenWorkerDeficit = Math.max(0, requiredMiddenWorkers - middenWorkerCount);
+      const totalDeficit = nestWorkerDeficit + middenWorkerDeficit;
+      
+      // Overcrowding penalty
+      const overcrowdingPenalty = population > NEST_CAPACITY 
+        ? 0.1 * (population - NEST_CAPACITY) / 10 
+        : 0;
+      
+      const healthChange = (totalDeficit > 0 ? -0.2 * totalDeficit : 0.1) * (simMinutesElapsed / 60) 
+        - overcrowdingPenalty * (simMinutesElapsed / 60);
+      nestHealthRef.current = Math.max(0, Math.min(100, nestHealthRef.current + healthChange));
+      
+      // Severe overcrowding warning
+      if (population > NEST_CAPACITY && Math.random() < 0.01 * simMinutesElapsed / 60) {
+        addLog("🏠 Nest overcrowded!");
+      }
+      
+      // Colony swarming - when very overpopulated, a new queen leaves with some workers
+      // More likely the more overcrowded it is
+      const overcrowdingRatio = population / MAX_CAPACITY;
+      if (population > MAX_CAPACITY && Math.random() < 0.1 * overcrowdingRatio * simMinutesElapsed / 60) {
+        const swarmSize = Math.floor(population * 0.3); // 30% leave
+        const remainingAnts = antsRef.current.slice(0, -swarmSize);
+        antsRef.current = remainingAnts;
+        eggsRef.current = eggsRef.current.slice(0, Math.floor(eggsRef.current.length * 0.5));
+        larvaeRef.current = larvaeRef.current.slice(0, Math.floor(larvaeRef.current.length * 0.5));
+        
+        // Force state update
+        setAnts([...remainingAnts]);
+        addLog(\`👑 New queen left with \${swarmSize} ants!\`);
+      }
+      
+      if (nestHealthRef.current < 30 && Math.random() < 0.01 * simMinutesElapsed / 60) {
+        nestFoodRef.current = Math.max(0, nestFoodRef.current - 2);
+        addLog("🏚️ Food spoiled!");
+      }
+      
+      // Queen lays eggs (based on time, not probability)
+      // Queen lays EGGS_PER_DAY eggs per day if conditions are good
+      const daysSinceLastEgg = currentDay - lastEggLayRef.current;
+      const eggInterval = 1 / EGGS_PER_DAY; // days between eggs
+      
+      if (daysSinceLastEgg >= eggInterval && 
+          nestHealthRef.current > 50 && 
+          nestFoodRef.current > 20) {
+        eggIdRef.current++;
+        eggsRef.current = [...eggsRef.current, { id: eggIdRef.current, birthDay: currentDay }];
+        nestFoodRef.current = Math.max(0, nestFoodRef.current - 0.5);
+        lastEggLayRef.current = currentDay;
+      }
+      
+      // Eggs develop into larvae after EGG_DEVELOPMENT_DAYS
+      let newLarvae = [];
+      eggsRef.current = eggsRef.current.filter(egg => {
+        const ageInDays = currentDay - egg.birthDay;
+        if (ageInDays >= EGG_DEVELOPMENT_DAYS && nestWorkerCount >= 2) {
+          larvaIdRef.current++;
+          newLarvae.push({ id: larvaIdRef.current, birthDay: currentDay });
+          addLog("🥚→🐛 Egg hatched!");
+          return false;
+        }
+        // Eggs die without care
+        if (nestWorkerCount < 2 && Math.random() < 0.005 * simMinutesElapsed / 60) {
+          addLog("💀 Egg died!");
+          return false;
+        }
+        return true;
+      });
+      larvaeRef.current = [...larvaeRef.current, ...newLarvae];
+      
+      // Larvae develop into adults after LARVA_DEVELOPMENT_DAYS
+      let newAntsToAdd = [];
+      larvaeRef.current = larvaeRef.current.filter(larva => {
+        const ageInDays = currentDay - larva.birthDay;
+        if (ageInDays >= LARVA_DEVELOPMENT_DAYS && 
+            nestWorkerCount >= 3 && 
+            nestFoodRef.current > 20) {
+          antIdRef.current++;
+          const tasks = ['forager', 'forager', 'patroller', 'nestWorker', 'middenWorker'];
+          const newTask = tasks[Math.floor(Math.random() * tasks.length)];
+          newAntsToAdd.push(createAnt(antIdRef.current, newTask));
+          nestFoodRef.current = Math.max(0, nestFoodRef.current - 2);
+          addLog("🐣 New ant matured!");
+          return false;
+        }
+        // Larvae starve without enough food (they need to be fed!)
+        if (nestFoodRef.current < 15 && Math.random() < 0.02 * simMinutesElapsed / 60) {
+          addLog("💀 Larva starved!");
+          return false;
+        }
+        // Larvae die without care
+        if (nestWorkerCount < 2 && Math.random() < 0.005 * simMinutesElapsed / 60) {
+          addLog("💀 Larva died!");
+          return false;
+        }
+        // Larvae can't wait forever - they die if too old without maturing
+        if (ageInDays > LARVA_DEVELOPMENT_DAYS * 2) {
+          return false;
+        }
+        return true;
+      });
+      
+      // Fade trails (scaled by time - trails last ~30 sim minutes)
+      trailsRef.current = trailsRef.current
+        .map(t => ({ ...t, strength: t.strength - 3 * simMinutesElapsed }))
+        .filter(t => t.strength > 0);
+      
+      // Spawn food (scaled by time)
+      if (Math.random() < foodAvailabilityRef.current / 100 * simMinutesElapsed / 60) {
+        if (foodSourcesRef.current.length < 15) {
+          foodIdRef.current++;
+          foodSourcesRef.current = [...foodSourcesRef.current, createFoodSource(foodIdRef.current)];
+        }
+      }
+      
+      // Spawn enemy ants (scaled by time)
+      if (Math.random() < enemyPressureRef.current / 100 * simMinutesElapsed / 60) {
+        enemyIdRef.current++;
+        enemyAntsRef.current = [...enemyAntsRef.current, createEnemyAnt(enemyIdRef.current)];
+        if (enemyAntsRef.current.length === 1) addLog("⚠️ Enemy spotted!");
+      }
+      
+      // Predator (appears ~once per sim day, stays ~30 sim minutes)
+      if (!predatorRef.current && Math.random() < 0.5 * simMinutesElapsed / 1440) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = NEST_RADIUS + 50 + Math.random() * 60;
+        predatorRef.current = {
+          x: NEST_CENTER.x + Math.cos(angle) * dist,
+          y: NEST_CENTER.y + Math.sin(angle) * dist,
+          timeLeft: 30 // 30 sim-minutes
+        };
+        addLog("🦎 Predator!");
+      }
+      if (predatorRef.current) {
+        predatorRef.current.timeLeft -= simMinutesElapsed;
+        if (predatorRef.current.timeLeft <= 0) {
+          predatorRef.current = null;
+          addLog("🦎 Predator left");
+        }
+      }
+      
+      // Move enemy ants (only meaningful in foraging view)
+      if (timeSpeedRef.current === 'foraging') {
+        enemyAntsRef.current = enemyAntsRef.current.map(enemy => {
+          let { x, y, angle, speed, health, carryingFood } = enemy;
+          
+          if (carryingFood) {
+            const toEdge = Math.atan2(y - NEST_CENTER.y, x - NEST_CENTER.x);
+            angle = toEdge + (Math.random() - 0.5) * 0.3;
+            x += Math.cos(angle) * speed;
+            y += Math.sin(angle) * speed;
+            const distFromCenter = Math.sqrt((x - NEST_CENTER.x) ** 2 + (y - NEST_CENTER.y) ** 2);
+            if (distFromCenter > WORLD_RADIUS) return null;
+          } else {
+            let nearestFood = null;
+            let nearestFoodDist = ANT_SMELL_RANGE;
+            
+            foodSourcesRef.current.forEach(food => {
+              if (food.amount > 0) {
+                const dist = Math.sqrt((food.x - x) ** 2 + (food.y - y) ** 2);
+                if (dist < nearestFoodDist) {
+                  nearestFoodDist = dist;
+                  nearestFood = food;
+                }
+              }
+            });
+            
+            if (nearestFood) {
+              angle = Math.atan2(nearestFood.y - y, nearestFood.x - x) + (Math.random() - 0.5) * 0.3;
+              x += Math.cos(angle) * speed;
+              y += Math.sin(angle) * speed;
+              
+              if (nearestFoodDist < 12) {
+                carryingFood = true;
+                foodSourcesRef.current = foodSourcesRef.current.map(f => 
+                  f.id === nearestFood.id ? { ...f, amount: f.amount - 1 } : f
+                ).filter(f => f.amount > 0);
+                addLog("🔴 Enemy stole seed!");
+              }
+            } else {
+              const toNest = Math.atan2(NEST_CENTER.y - y, NEST_CENTER.x - x);
+              angle = toNest + (Math.random() - 0.5) * 0.4;
+              x += Math.cos(angle) * speed;
+              y += Math.sin(angle) * speed;
+            }
+          }
+          return { ...enemy, x, y, angle, carryingFood };
+        }).filter(e => e !== null);
+        
+        enemyAntsRef.current = enemyAntsRef.current.filter(enemy => {
+          if (enemy.carryingFood) return true;
+          const distToNest = Math.sqrt((enemy.x - NEST_CENTER.x) ** 2 + (enemy.y - NEST_CENTER.y) ** 2);
+          if (distToNest < NEST_RADIUS) {
+            nestFoodRef.current = Math.max(0, nestFoodRef.current - 5);
+            addLog("🔴 Nest raided!");
+            return false;
+          }
+          return true;
+        });
+      } else {
+        // At faster speeds, just resolve enemies probabilistically
+        if (enemyAntsRef.current.length > 0) {
+          const patrollerCount = currentAnts.filter(a => a.task === 'patroller').length;
+          enemyAntsRef.current = enemyAntsRef.current.filter(() => {
+            if (patrollerCount > 0 && Math.random() < 0.3 * simMinutesElapsed / 60) {
+              addLog("⚔️ Enemy defeated!");
+              return false;
+            }
+            if (Math.random() < 0.1 * simMinutesElapsed / 60) {
+              nestFoodRef.current = Math.max(0, nestFoodRef.current - 3);
+              addLog("🔴 Enemy stole food!");
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+
+      const currentHunger = Math.max(0, 100 - nestFoodRef.current);
+      const currentThreat = enemyAntsRef.current.length * 10 + (predatorRef.current ? 30 : 0);
+      const currentNestHealth = nestHealthRef.current;
+
+      // Update ants (only do detailed movement in foraging mode)
+      if (timeSpeedRef.current === 'foraging') {
+        setAnts(prevAnts => {
+          let antsToRemove = [];
+          
+          const newAnts = prevAnts.map(ant => {
+            let { x, y, angle, speed, task, carryingFood, taskTime, taskSwitches, foodDelivered, fighting } = ant;
+            
+            const oldTask = task;
+            taskTime++;
+            fighting = false;
+            
+            // Predator danger
+            let fleeingPredator = false;
+            if (predatorRef.current && task === 'forager') {
+              const distToPredator = Math.sqrt(
+                (x - predatorRef.current.x) ** 2 + (y - predatorRef.current.y) ** 2
+              );
+              if (distToPredator < 50) {
+                if (distToPredator < 15) {
+                  antsToRemove.push(ant.id);
+                  addLog("🦎 Ate forager!");
+                  return ant;
+                }
+                fleeingPredator = true;
+                angle = Math.atan2(NEST_CENTER.y - y, NEST_CENTER.x - x);
+                x += Math.cos(angle) * speed * 1.5;
+                y += Math.sin(angle) * speed * 1.5;
+              }
+            }
+            
+            if (!fleeingPredator) {
+              if (task === 'forager') {
+                if (carryingFood) {
+                  if (frameCount % 10 === 0) {
+                    trailIdRef.current++;
+                    trailsRef.current.push({ id: trailIdRef.current, x, y, strength: 100 });
+                  }
+                  
+                  const toNest = Math.atan2(NEST_CENTER.y - y, NEST_CENTER.x - x);
+                  angle = toNest + (Math.random() - 0.5) * 0.3;
+                  x += Math.cos(angle) * speed * 1.2;
+                  y += Math.sin(angle) * speed * 1.2;
+                  
+                  const distToNest = Math.sqrt((x - NEST_CENTER.x) ** 2 + (y - NEST_CENTER.y) ** 2);
+                  if (distToNest < NEST_RADIUS) {
+                    carryingFood = false;
+                    foodDelivered++;
+                    nestFoodRef.current = Math.min(100, nestFoodRef.current + 2);
+                  }
+                } else {
+                  let avoidX = 0, avoidY = 0;
+                  if (predatorRef.current) {
+                    const distToPred = Math.sqrt(
+                      (x - predatorRef.current.x) ** 2 + (y - predatorRef.current.y) ** 2
+                    );
+                    if (distToPred < 80) {
+                      avoidX = (x - predatorRef.current.x) / distToPred * 2;
+                      avoidY = (y - predatorRef.current.y) / distToPred * 2;
+                    }
+                  }
+                  
+                  let nearestFood = null;
+                  let nearestDist = ANT_SMELL_RANGE;
+                  
+                  foodSourcesRef.current.forEach(food => {
+                    if (food.amount > 0) {
+                      const dist = Math.sqrt((food.x - x) ** 2 + (food.y - y) ** 2);
+                      if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestFood = food;
+                      }
+                    }
+                  });
+                  
+                  if (nearestFood) {
+                    const toFood = Math.atan2(nearestFood.y - y, nearestFood.x - x);
+                    angle = toFood + (Math.random() - 0.5) * 0.3;
+                    
+                    if (nearestDist < 12) {
+                      carryingFood = true;
+                      foodSourcesRef.current = foodSourcesRef.current.map(f => 
+                        f.id === nearestFood.id ? { ...f, amount: f.amount - 1 } : f
+                      ).filter(f => f.amount > 0);
+                    }
+                  } else {
+                    let strongestTrail = null;
+                    let strongestStrength = 0;
+                    
+                    trailsRef.current.forEach(trail => {
+                      const dist = Math.sqrt((trail.x - x) ** 2 + (trail.y - y) ** 2);
+                      if (dist < TRAIL_DETECT_RANGE && trail.strength > strongestStrength) {
+                        const trailDistFromNest = Math.sqrt((trail.x - NEST_CENTER.x) ** 2 + (trail.y - NEST_CENTER.y) ** 2);
+                        const myDistFromNest = Math.sqrt((x - NEST_CENTER.x) ** 2 + (y - NEST_CENTER.y) ** 2);
+                        if (trailDistFromNest > myDistFromNest) {
+                          strongestStrength = trail.strength;
+                          strongestTrail = trail;
+                        }
+                      }
+                    });
+                    
+                    if (strongestTrail) {
+                      angle = Math.atan2(strongestTrail.y - y, strongestTrail.x - x) + (Math.random() - 0.5) * 0.4;
+                    } else {
+                      let foragerToFollow = null;
+                      let followDist = ANT_SIGHT_RANGE;
+                      
+                      prevAnts.forEach(other => {
+                        if (other.id !== ant.id && other.task === 'forager' && other.carryingFood) {
+                          const dist = Math.sqrt((other.x - x) ** 2 + (other.y - y) ** 2);
+                          if (dist < followDist) {
+                            followDist = dist;
+                            foragerToFollow = other;
+                          }
+                        }
+                      });
+                      
+                      if (foragerToFollow) {
+                        angle = foragerToFollow.angle + Math.PI + (Math.random() - 0.5) * 0.5;
+                      } else {
+                        const distFromCenter = Math.sqrt((x - NEST_CENTER.x) ** 2 + (y - NEST_CENTER.y) ** 2);
+                        if (distFromCenter < NEST_RADIUS + 20) {
+                          angle = Math.atan2(y - NEST_CENTER.y, x - NEST_CENTER.x) + (Math.random() - 0.5) * 0.5;
+                        } else {
+                          angle += (Math.random() - 0.5) * 0.8;
+                        }
+                      }
+                    }
+                  }
+                  
+                  x += Math.cos(angle) * speed + avoidX;
+                  y += Math.sin(angle) * speed + avoidY;
+                }
+              }
+              else if (task === 'patroller') {
+                let targetEnemy = null;
+                let targetDist = 80;
+                
+                enemyAntsRef.current.forEach(enemy => {
+                  const dist = Math.sqrt((enemy.x - x) ** 2 + (enemy.y - y) ** 2);
+                  if (dist < targetDist) {
+                    targetDist = dist;
+                    targetEnemy = enemy;
+                  }
+                });
+                
+                if (targetEnemy) {
+                  angle = Math.atan2(targetEnemy.y - y, targetEnemy.x - x);
+                  x += Math.cos(angle) * speed * 1.3;
+                  y += Math.sin(angle) * speed * 1.3;
+                  
+                  if (targetDist < 12) {
+                    fighting = true;
+                    enemyAntsRef.current = enemyAntsRef.current.map(e => {
+                      if (e.id === targetEnemy.id) return { ...e, health: e.health - 1 };
+                      return e;
+                    }).filter(e => e.health > 0);
+                    
+                    if (Math.random() < 0.1) {
+                      antsToRemove.push(ant.id);
+                      addLog("💀 Patroller died!");
+                    }
+                  }
+                } else {
+                  const distFromCenter = Math.sqrt((x - NEST_CENTER.x) ** 2 + (y - NEST_CENTER.y) ** 2);
+                  const patrolDist = NEST_RADIUS + 40;
+                  
+                  if (Math.abs(distFromCenter - patrolDist) > 20) {
+                    const toCenter = Math.atan2(NEST_CENTER.y - y, NEST_CENTER.x - x);
+                    angle = distFromCenter > patrolDist ? toCenter : toCenter + Math.PI;
+                  } else {
+                    const tangent = Math.atan2(y - NEST_CENTER.y, x - NEST_CENTER.x) + Math.PI / 2;
+                    angle = tangent + (Math.random() - 0.5) * 0.3;
+                  }
+                  
+                  x += Math.cos(angle) * speed * 0.8;
+                  y += Math.sin(angle) * speed * 0.8;
+                }
+              }
+              else if (task === 'nestWorker') {
+                const distFromCenter = Math.sqrt((x - NEST_CENTER.x) ** 2 + (y - NEST_CENTER.y) ** 2);
+                if (distFromCenter > NEST_RADIUS - 10) {
+                  angle = Math.atan2(NEST_CENTER.y - y, NEST_CENTER.x - x) + (Math.random() - 0.5);
+                } else {
+                  angle += (Math.random() - 0.5) * 0.8;
+                }
+                x += Math.cos(angle) * speed * 0.5;
+                y += Math.sin(angle) * speed * 0.5;
+              }
+              else if (task === 'middenWorker') {
+                const distFromCenter = Math.sqrt((x - NEST_CENTER.x) ** 2 + (y - NEST_CENTER.y) ** 2);
+                const targetDist = NEST_RADIUS + 5;
+                
+                if (Math.abs(distFromCenter - targetDist) > 15) {
+                  const toCenter = Math.atan2(NEST_CENTER.y - y, NEST_CENTER.x - x);
+                  angle = distFromCenter > targetDist ? toCenter : toCenter + Math.PI;
+                } else {
+                  angle += (Math.random() - 0.5) * 0.6;
+                }
+                x += Math.cos(angle) * speed * 0.6;
+                y += Math.sin(angle) * speed * 0.6;
+              }
+            }
+            
+            // Keep in bounds
+            const distFromCenter = Math.sqrt((x - NEST_CENTER.x) ** 2 + (y - NEST_CENTER.y) ** 2);
+            if (distFromCenter > WORLD_RADIUS) {
+              x = NEST_CENTER.x + (x - NEST_CENTER.x) / distFromCenter * (WORLD_RADIUS - 5);
+              y = NEST_CENTER.y + (y - NEST_CENTER.y) / distFromCenter * (WORLD_RADIUS - 5);
+            }
+            
+            // Task switching
+            if (taskTime > 120 && Math.random() < 0.015 && !carryingFood) {
+              const r = Math.random();
+              
+              if (currentThreat > 30 && task !== 'patroller' && r < 0.35) {
+                task = 'patroller'; taskTime = 0;
+              }
+              else if (currentHunger > 60 && task !== 'forager' && r < 0.4) {
+                task = 'forager'; taskTime = 0;
+              }
+              else if (currentNestHealth < 50 && task !== 'nestWorker' && task !== 'middenWorker' && r < 0.3) {
+                task = r < 0.2 ? 'middenWorker' : 'nestWorker'; taskTime = 0;
+              }
+              else if (currentThreat < 10 && task === 'patroller' && r < 0.2) {
+                task = currentHunger > 30 ? 'forager' : 'nestWorker'; taskTime = 0;
+              }
+              else if (currentHunger < 20 && task === 'forager' && r < 0.15) {
+                task = 'nestWorker'; taskTime = 0;
+              }
+            }
+            
+            if (task !== oldTask) taskSwitches++;
+            
+            return { ...ant, x, y, angle, task, carryingFood, taskTime, taskSwitches, foodDelivered, fighting };
+          });
+          
+          const result = [...newAnts.filter(ant => !antsToRemove.includes(ant.id)), ...newAntsToAdd];
+          antsRef.current = result;
+          return result;
+        });
+      } else {
+        // At faster speeds, just add new ants without detailed movement
+        // AND simulate foraging abstractly
+        if (newAntsToAdd.length > 0) {
+          setAnts(prevAnts => {
+            const result = [...prevAnts, ...newAntsToAdd];
+            antsRef.current = result;
+            return result;
+          });
+        }
+        
+        // Simplified foraging at fast speeds
+        const foragerCount = antsRef.current.filter(a => a.task === 'forager').length;
+        const foodGathered = foragerCount * 0.25 * (foodAvailabilityRef.current / 100) * (simMinutesElapsed / 60);
+        nestFoodRef.current = Math.min(100, nestFoodRef.current + foodGathered);
+        
+        // Task switching at fast speeds - ants respond to colony needs
+        const currentHungerFast = Math.max(0, 100 - nestFoodRef.current);
+        const currentThreatFast = enemyAntsRef.current.length * 10 + (predatorRef.current ? 30 : 0);
+        const currentHealthFast = nestHealthRef.current;
+        const patrollerCount = antsRef.current.filter(a => a.task === 'patroller').length;
+        
+        // Calculate how many of each type we need
+        const targetForagers = Math.max(10, Math.floor(population * 0.35)); // ~35% foragers
+        const targetPatrollers = currentThreatFast > 20 ? Math.floor(population * 0.15) : Math.floor(population * 0.05);
+        const targetNestWorkers = requiredNestWorkers + 2; // A bit more than minimum
+        const targetMiddenWorkers = requiredMiddenWorkers + 1;
+        
+        // Ants switch jobs based on colony needs (probabilistic, scaled by time)
+        const switchChance = 0.1 * (simMinutesElapsed / 60); // ~10% per hour consider switching
+        
+        if (Math.random() < switchChance) {
+          setAnts(prevAnts => {
+            const updated = prevAnts.map(ant => {
+              if (ant.carryingFood) return ant; // Don't switch while carrying
+              
+              const r = Math.random();
+              let newTask = ant.task;
+              
+              // Critical: starving colony needs foragers!
+              if (currentHungerFast > 50 && ant.task !== 'forager') {
+                const currentForagers = prevAnts.filter(a => a.task === 'forager').length;
+                if (currentForagers < targetForagers && r < 0.3) {
+                  newTask = 'forager';
+                }
+              }
+              // High threat needs patrollers
+              else if (currentThreatFast > 30 && ant.task !== 'patroller') {
+                if (patrollerCount < targetPatrollers && r < 0.2) {
+                  newTask = 'patroller';
+                }
+              }
+              // Too many nest workers? Switch some to foraging
+              else if (ant.task === 'nestWorker') {
+                const currentNestWorkers = prevAnts.filter(a => a.task === 'nestWorker').length;
+                if (currentNestWorkers > targetNestWorkers * 1.5 && r < 0.2) {
+                  newTask = currentHungerFast > 30 ? 'forager' : 'patroller';
+                }
+              }
+              // Safe and fed? Patrollers can relax
+              else if (ant.task === 'patroller' && currentThreatFast < 10 && currentHungerFast < 30 && r < 0.1) {
+                newTask = 'nestWorker';
+              }
+              
+              if (newTask !== ant.task) {
+                return { ...ant, task: newTask, taskTime: 0, taskSwitches: ant.taskSwitches + 1 };
+              }
+              return ant;
+            });
+            antsRef.current = updated;
+            return updated;
+          });
+        }
+        
+        // Simplified enemy resolution already handled above
+      }
+      
+      // Sync state
+      if (frameCount % 3 === 0) {
+        setSimTime(simTimeRef.current);
+        setNestFood(nestFoodRef.current);
+        setNestHealth(nestHealthRef.current);
+        setEggs([...eggsRef.current]);
+        setLarvae([...larvaeRef.current]);
+        setFoodSources([...foodSourcesRef.current]);
+        setEnemyAnts([...enemyAntsRef.current]);
+        setPredator(predatorRef.current ? { ...predatorRef.current } : null);
+        setTrails([...trailsRef.current]);
+      }
+      
+      // Record history (every sim-hour in colony mode, every minute in foraging)
+      const historyInterval = timeSpeedRef.current === 'foraging' ? 60 : 
+                             timeSpeedRef.current === 'daily' ? 20 : 5;
+      historyTimerRef.current++;
+      if (historyTimerRef.current >= historyInterval) {
+        historyTimerRef.current = 0;
+        
+        setAnts(currentAnts => {
+          const counts = { forager: 0, patroller: 0, nestWorker: 0, middenWorker: 0 };
+          currentAnts.forEach(ant => counts[ant.task]++);
+          
+          setHistory(prev => {
+            const newEntry = {
+              time: Math.floor(simTimeRef.current / 60), // hours
+              ...counts,
+              population: currentAnts.length,
+              nestFood: Math.round(nestFoodRef.current),
+              nestHealth: Math.round(nestHealthRef.current),
+              eggs: eggsRef.current.length,
+              larvae: larvaeRef.current.length
+            };
+            return [...prev, newEntry].slice(-60);
+          });
+          
+          return currentAnts;
+        });
+      }
+      
+      frameRef.current = requestAnimationFrame(simulate);
+    };
+    
+    frameRef.current = requestAnimationFrame(simulate);
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [isPaused]);
+
+  const resetSimulation = () => {
+    const newAnts = initializeAnts(60);
+    const newFoodSources = initializeFoodSources(8);
+    const newEggs = [{ id: 1, birthDay: 0 }, { id: 2, birthDay: 0 }, { id: 3, birthDay: 0 }];
+    const newLarvae = [{ id: 101, birthDay: 0 }, { id: 102, birthDay: 0 }];
+    
+    setAnts(newAnts);
+    setFoodSources(newFoodSources);
+    setEnemyAnts([]);
+    setPredator(null);
+    setTrails([]);
+    setNestFood(50);
+    setNestHealth(100);
+    setEggs(newEggs);
+    setLarvae(newLarvae);
+    setSimTime(0);
+    setFoodAvailability(50);
+    setEnemyPressure(30);
+    setSelectedAnt(null);
+    setHistory([]);
+    setLog([]);
+    setIsPaused(true);
+    
+    nestFoodRef.current = 50;
+    nestHealthRef.current = 100;
+    eggsRef.current = newEggs;
+    larvaeRef.current = newLarvae;
+    simTimeRef.current = 0;
+    lastEggLayRef.current = 0;
+    foodSourcesRef.current = newFoodSources;
+    enemyAntsRef.current = [];
+    predatorRef.current = null;
+    trailsRef.current = [];
+    antsRef.current = newAnts;
+    historyTimerRef.current = 0;
+    foodIdRef.current = 100;
+    enemyIdRef.current = 0;
+    antIdRef.current = 100;
+    eggIdRef.current = 10;
+    larvaIdRef.current = 200;
+    trailIdRef.current = 0;
+  };
+
+  const radToDeg = (rad) => (rad * 180 / Math.PI) + 90;
+  const foragersCarrying = ants.filter(a => a.task === 'forager' && a.carryingFood).length;
+  const currentDay = Math.floor(simTime / 1440);
+
+  // Run experiment
+  const runExperiment = async () => {
+    setExperimentRunning(true);
+    setExperimentResults(null);
+    
+    const config = experimentConfig;
+    const allResults = [];
+    
+    for (let trial = 0; trial < config.numTrials; trial++) {
+      setExperimentProgress({ trial: trial + 1, day: 0 });
+      
+      // Initialize trial
+      const trialAnts = initializeAnts(config.startingPopulation);
+      const trialFoodSources = initializeFoodSources(8);
+      const trialEggs = [{ id: 1, birthDay: 0 }, { id: 2, birthDay: 0 }, { id: 3, birthDay: 0 }];
+      const trialLarvae = [{ id: 101, birthDay: 0 }, { id: 102, birthDay: 0 }];
+      
+      let simAnts = [...trialAnts];
+      let simFood = config.startingFood;
+      let simHealth = 100;
+      let simEggs = [...trialEggs];
+      let simLarvae = [...trialLarvae];
+      let simEnemies = [];
+      let simPredator = null;
+      let lastEggDay = 0;
+      let antIdCounter = 200;
+      let eggIdCounter = 50;
+      let larvaIdCounter = 300;
+      
+      // Stats tracking
+      let totalDeaths = { starvation: 0, combat: 0, predator: 0, neglect: 0 };
+      let totalBirths = 0;
+      let totalSwarms = 0;
+      
+      const trialData = [];
+      const totalMinutes = config.durationDays * 1440;
+      const recordIntervalMinutes = config.recordInterval * 60;
+      const simStepMinutes = 60; // Simulate 1 hour per step
+      
+      for (let simMinute = 0; simMinute <= totalMinutes; simMinute += simStepMinutes) {
+        const currentDay = simMinute / 1440;
+        
+        // Update progress every simulated day
+        if (simMinute % 1440 === 0) {
+          setExperimentProgress({ trial: trial + 1, day: Math.floor(currentDay) });
+          // Allow UI to update
+          await new Promise(r => setTimeout(r, 0));
+        }
+        
+        // --- SIMULATION LOGIC (simplified) ---
+        const population = simAnts.length;
+        
+        // Food consumption
+        simFood = Math.max(0, simFood - 0.3 * (population / 40));
+        
+        // Starvation
+        if (simFood < 5 && Math.random() < 0.05) {
+          if (simAnts.length > 0) {
+            simAnts.pop();
+            totalDeaths.starvation++;
+          }
+        }
+        
+        // Worker counts
+        const foragerCount = simAnts.filter(a => a.task === 'forager').length;
+        const nestWorkerCount = simAnts.filter(a => a.task === 'nestWorker').length;
+        const middenWorkerCount = simAnts.filter(a => a.task === 'middenWorker').length;
+        const patrollerCount = simAnts.filter(a => a.task === 'patroller').length;
+        
+        // Food gathering
+        const foodGathered = foragerCount * 0.25 * (config.foodAvailability / 100);
+        simFood = Math.min(100, simFood + foodGathered);
+        
+        // Nest health
+        const requiredNest = Math.max(5, Math.floor(population / 20));
+        const requiredMidden = Math.max(3, Math.floor(population / 30));
+        const deficit = Math.max(0, requiredNest - nestWorkerCount) + Math.max(0, requiredMidden - middenWorkerCount);
+        const overcrowding = population > NEST_CAPACITY ? 0.1 * (population - NEST_CAPACITY) / 10 : 0;
+        simHealth = Math.max(0, Math.min(100, simHealth + (deficit > 0 ? -0.2 * deficit : 0.1) - overcrowding));
+        
+        // Enemy spawning
+        if (Math.random() < config.enemyPressure / 100) {
+          simEnemies.push({ id: Date.now() });
+        }
+        
+        // Enemy resolution
+        simEnemies = simEnemies.filter(() => {
+          if (patrollerCount > 0 && Math.random() < 0.3) {
+            if (Math.random() < 0.1 && simAnts.length > 0) {
+              const idx = simAnts.findIndex(a => a.task === 'patroller');
+              if (idx >= 0) {
+                simAnts.splice(idx, 1);
+                totalDeaths.combat++;
+              }
+            }
+            return false; // Enemy defeated
+          }
+          if (Math.random() < 0.1) {
+            simFood = Math.max(0, simFood - 3);
+            return false; // Enemy stole food and left
+          }
+          return true;
+        });
+        
+        // Predator - only appears if enemy pressure > 0
+        if (!simPredator && config.enemyPressure > 0 && Math.random() < 0.02 * (config.enemyPressure / 50)) {
+          simPredator = { timeLeft: 30 };
+        }
+        if (simPredator) {
+          if (foragerCount > 0 && Math.random() < 0.1) {
+            const idx = simAnts.findIndex(a => a.task === 'forager');
+            if (idx >= 0) {
+              simAnts.splice(idx, 1);
+              totalDeaths.predator++;
+            }
+          }
+          simPredator.timeLeft -= 1;
+          if (simPredator.timeLeft <= 0) simPredator = null;
+        }
+        
+        // Queen lays eggs
+        if (currentDay - lastEggDay >= 1 / EGGS_PER_DAY && simHealth > 50 && simFood > 20) {
+          eggIdCounter++;
+          simEggs.push({ id: eggIdCounter, birthDay: currentDay });
+          simFood = Math.max(0, simFood - 0.5);
+          lastEggDay = currentDay;
+        }
+        
+        // Eggs hatch
+        simEggs = simEggs.filter(egg => {
+          if (currentDay - egg.birthDay >= EGG_DEVELOPMENT_DAYS && nestWorkerCount >= 2) {
+            larvaIdCounter++;
+            simLarvae.push({ id: larvaIdCounter, birthDay: currentDay });
+            return false;
+          }
+          if (nestWorkerCount < 2 && Math.random() < 0.01) {
+            totalDeaths.neglect++;
+            return false;
+          }
+          return true;
+        });
+        
+        // Larvae mature
+        simLarvae = simLarvae.filter(larva => {
+          const ageInDays = currentDay - larva.birthDay;
+          if (ageInDays >= LARVA_DEVELOPMENT_DAYS && nestWorkerCount >= 3 && simFood > 20) {
+            antIdCounter++;
+            const tasks = ['forager', 'forager', 'forager', 'patroller', 'nestWorker', 'nestWorker', 'middenWorker'];
+            simAnts.push(createAnt(antIdCounter, tasks[Math.floor(Math.random() * tasks.length)]));
+            simFood = Math.max(0, simFood - 2);
+            totalBirths++;
+            return false;
+          }
+          // Larvae starve without enough food
+          if (simFood < 15 && Math.random() < 0.02) {
+            totalDeaths.neglect++;
+            return false;
+          }
+          // Larvae die without care
+          if (nestWorkerCount < 2 && Math.random() < 0.01) {
+            totalDeaths.neglect++;
+            return false;
+          }
+          // Larvae die if too old without maturing
+          if (ageInDays > LARVA_DEVELOPMENT_DAYS * 2) {
+            totalDeaths.neglect++;
+            return false;
+          }
+          return true;
+        });
+        
+        // Swarming
+        if (population > MAX_CAPACITY && Math.random() < 0.05) {
+          const swarmSize = Math.floor(population * 0.3);
+          simAnts = simAnts.slice(0, -swarmSize);
+          totalSwarms++;
+        }
+        
+        // Task switching
+        if (Math.random() < 0.1) {
+          const hunger = 100 - simFood;
+          const threat = simEnemies.length * 10 + (simPredator ? 30 : 0);
+          
+          simAnts = simAnts.map(ant => {
+            const r = Math.random();
+            let newTask = ant.task;
+            
+            if (hunger > 50 && ant.task !== 'forager' && foragerCount < population * 0.4 && r < 0.2) {
+              newTask = 'forager';
+            } else if (threat > 30 && ant.task !== 'patroller' && r < 0.15) {
+              newTask = 'patroller';
+            } else if (ant.task === 'nestWorker' && nestWorkerCount > requiredNest * 1.5 && r < 0.15) {
+              newTask = 'forager';
+            }
+            
+            return { ...ant, task: newTask };
+          });
+        }
+        
+        // Record data at intervals
+        if (simMinute % recordIntervalMinutes === 0) {
+          const counts = { forager: 0, patroller: 0, nestWorker: 0, middenWorker: 0 };
+          simAnts.forEach(a => counts[a.task]++);
+          
+          trialData.push({
+            trial: trial + 1,
+            day: (simMinute / 1440).toFixed(1),
+            hour: simMinute / 60,
+            // Settings (so you know what conditions produced this data)
+            settingStartPop: config.startingPopulation,
+            settingStartFood: config.startingFood,
+            settingFoodAvail: config.foodAvailability,
+            settingEnemyPressure: config.enemyPressure,
+            // Measurements
+            population: simAnts.length,
+            food: Math.round(simFood),
+            health: Math.round(simHealth),
+            eggs: simEggs.length,
+            larvae: simLarvae.length,
+            foragers: counts.forager,
+            patrollers: counts.patroller,
+            nestWorkers: counts.nestWorker,
+            middenWorkers: counts.middenWorker,
+            enemies: simEnemies.length,
+            deathsStarvation: totalDeaths.starvation,
+            deathsCombat: totalDeaths.combat,
+            deathsPredator: totalDeaths.predator,
+            deathsNeglect: totalDeaths.neglect,
+            births: totalBirths,
+            swarms: totalSwarms
+          });
+        }
+      }
+      
+      allResults.push(...trialData);
+    }
+    
+    setExperimentResults(allResults);
+    setExperimentRunning(false);
+  };
+
+  // Download CSV
+  const downloadCSV = () => {
+    if (!experimentResults) return;
+    
+    const headers = Object.keys(experimentResults[0]);
+    const csvContent = [
+      headers.join(','),
+      ...experimentResults.map(row => headers.map(h => row[h]).join(','))
+    ].join('\\n');
+    
+    // Try download first
+    try {
+      const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+      const a = document.createElement('a');
+      a.href = dataUri;
+      a.download = \`ant-experiment-\${new Date().toISOString().slice(0,10)}.csv\`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) {
+      // If download fails, show the CSV text
+      setCsvText(csvContent);
+    }
+  };
+  
+  const copyCSV = () => {
+    if (!experimentResults) return;
+    
+    const headers = Object.keys(experimentResults[0]);
+    const csvContent = [
+      headers.join(','),
+      ...experimentResults.map(row => headers.map(h => row[h]).join(','))
+    ].join('\\n');
+    
+    navigator.clipboard.writeText(csvContent).then(() => {
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }).catch(() => {
+      setCsvText(csvContent);
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-amber-50 p-4">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-2xl font-bold text-amber-900 mb-1">🐜 Ant Colony Simulator</h1>
+        
+        {/* Time display and controls */}
+        <div className="flex flex-wrap items-center gap-4 mb-4 bg-white rounded-lg p-2 border border-amber-200">
+          <div className="text-lg font-mono font-bold text-amber-900">
+            🕐 {formatTime(simTime)}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-amber-700">Speed:</span>
+            <select 
+              value={timeSpeed}
+              onChange={(e) => setTimeSpeed(e.target.value)}
+              className="text-sm border border-amber-300 rounded px-2 py-1 bg-amber-50"
+            >
+              {Object.entries(TIME_SPEEDS).map(([key, val]) => (
+                <option key={key} value={key}>{val.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setIsPaused(!isPaused)}
+              className="py-1 px-4 rounded-lg font-medium bg-amber-500 hover:bg-amber-600 text-white text-sm">
+              {isPaused ? '▶️ Play' : '⏸️ Pause'}
+            </button>
+            <button onClick={resetSimulation}
+              className="py-1 px-4 rounded-lg font-medium bg-amber-200 hover:bg-amber-300 text-amber-900 text-sm">
+              🔄 Reset
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid lg:grid-cols-3 gap-4">
+          {/* Simulation View */}
+          <div className="bg-amber-100 rounded-xl p-4 border-2 border-amber-300">
+            <h2 className="font-bold text-amber-900 mb-2">🏠 Colony View</h2>
+            <div 
+              className="relative w-full bg-amber-200 rounded-lg overflow-hidden cursor-pointer"
+              style={{ paddingBottom: '100%' }}
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const clickX = ((e.clientX - rect.left) / rect.width) * 400;
+                const clickY = ((e.clientY - rect.top) / rect.height) * 400;
+                const clicked = ants.find(ant => {
+                  const dist = Math.sqrt((ant.x - clickX) ** 2 + (ant.y - clickY) ** 2);
+                  return dist < 20;
+                });
+                setSelectedAnt(clicked || null);
+              }}
+            >
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 400">
+                <circle cx="200" cy="200" r="180" fill="#c9a86c" stroke="#8b6914" strokeWidth="3"/>
+                <circle cx="200" cy="200" r="150" fill="#d4b07a"/>
+                
+                {trails.map(trail => (
+                  <circle key={trail.id} cx={trail.x} cy={trail.y} r={3}
+                    fill="#f59e0b" opacity={trail.strength / 150}/>
+                ))}
+                
+                <circle cx="200" cy="200" r="50" 
+                  fill={nestHealth > 70 ? '#8B4513' : nestHealth > 40 ? '#A0522D' : '#CD853F'} 
+                  stroke="#5D2E0C" strokeWidth="3"/>
+                <text x="200" y="190" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold">NEST</text>
+                <text x="200" y="200" textAnchor="middle" fill="#fff" fontSize="7">🌾{Math.round(nestFood)}% 🔧{Math.round(nestHealth)}%</text>
+                <text x="200" y="212" textAnchor="middle" fill="#fff" fontSize="7">🥚{eggs.length} 🐛{larvae.length}</text>
+                
+                {foodSources.map(food => (
+                  <g key={food.id}>
+                    <circle cx={food.x} cy={food.y} r={8 + food.amount} fill="#a3e635" opacity="0.3"/>
+                    <text x={food.x} y={food.y + 4} textAnchor="middle" fontSize={12 + food.amount}>🌾</text>
+                    <text x={food.x} y={food.y + 18} textAnchor="middle" fontSize="9" fill="#4d7c0f">×{food.amount}</text>
+                  </g>
+                ))}
+                
+                {predator && (
+                  <circle cx={predator.x} cy={predator.y} r="50" fill="#ef4444" opacity="0.15"/>
+                )}
+              </svg>
+              
+              {enemyAnts.map(enemy => (
+                <div key={enemy.id} className="absolute" style={{
+                  left: \`\${(enemy.x / 400) * 100}%\`, top: \`\${(enemy.y / 400) * 100}%\`,
+                  transform: \`translate(-50%, -50%) rotate(\${radToDeg(enemy.angle)}deg)\`,
+                  fontSize: '14px', filter: 'drop-shadow(0 0 3px #ef4444)'
+                }}>
+                  🐜
+                  {enemy.carryingFood && (
+                    <span style={{ position: 'absolute', top: '-6px', left: '50%', 
+                      transform: \`translateX(-50%) rotate(-\${radToDeg(enemy.angle)}deg)\`, fontSize: '8px' }}>🌾</span>
+                  )}
+                </div>
+              ))}
+              
+              {predator && (
+                <div className="absolute" style={{
+                  left: \`\${(predator.x / 400) * 100}%\`, top: \`\${(predator.y / 400) * 100}%\`,
+                  transform: 'translate(-50%, -50%)', fontSize: '28px'
+                }}>🦎</div>
+              )}
+              
+              {timeSpeed === 'foraging' && ants.slice(0, MAX_RENDERED_ANTS).map(ant => (
+                <div key={ant.id} className="absolute" style={{
+                  left: \`\${(ant.x / 400) * 100}%\`, top: \`\${(ant.y / 400) * 100}%\`,
+                  transform: \`translate(-50%, -50%) rotate(\${radToDeg(ant.angle)}deg)\`,
+                  fontSize: '16px',
+                  filter: ant.fighting ? 'drop-shadow(0 0 4px #fff)'
+                    : \`drop-shadow(0 0 2px \${TASK_COLORS[ant.task]})\`
+                }}>
+                  🐜
+                  {ant.carryingFood && (
+                    <span style={{ position: 'absolute', top: '-8px', left: '50%', 
+                      transform: \`translateX(-50%) rotate(-\${radToDeg(ant.angle)}deg)\`, fontSize: '10px' }}>🌾</span>
+                  )}
+                </div>
+              ))}
+              
+              {timeSpeed === 'foraging' && ants.length > MAX_RENDERED_ANTS && (
+                <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-xs">
+                  Showing {MAX_RENDERED_ANTS} of {ants.length} ants
+                </div>
+              )}
+              
+              {timeSpeed !== 'foraging' && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="bg-black/50 text-white px-4 py-2 rounded-lg text-sm">
+                    ⏩ Fast mode - switch to "Foraging" to see ants move
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex flex-wrap gap-2 mt-3 justify-center text-xs">
+              {Object.entries(TASK_COLORS).map(([task, color]) => (
+                <div key={task} className="flex items-center gap-1">
+                  <span style={{ filter: \`drop-shadow(0 0 2px \${color})\` }}>🐜</span>
+                  <span className="text-amber-900">{TASK_LABELS[task]}</span>
+                </div>
+              ))}
+            </div>
+            
+            {log.length > 0 && (
+              <div className="mt-3 bg-amber-900/10 rounded-lg p-2 text-xs space-y-1 max-h-16 overflow-hidden">
+                {log.map((entry, i) => (
+                  <div key={entry.time + i} className="text-amber-800">{entry.message}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Controls & Status */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl p-4 border-2 border-amber-200">
+              <h2 className="font-bold text-amber-900 mb-3">🏠 Colony Status</h2>
+              
+              <div className="space-y-2">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-amber-800">🌾 Food</span>
+                    <span className="font-medium">{Math.round(nestFood)}%</span>
+                  </div>
+                  <div className="h-3 bg-amber-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500" style={{ width: \`\${nestFood}%\`, transition: 'width 0.1s' }}/>
+                  </div>
+                  {nestFood < 5 && (
+                    <p className="text-xs text-red-600 font-bold mt-1 animate-pulse">⚠️ STARVATION!</p>
+                  )}
+                </div>
+                
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-amber-800">🔧 Health</span>
+                    <span className="font-medium">{Math.round(nestHealth)}%</span>
+                  </div>
+                  <div className="h-3 bg-amber-100 rounded-full overflow-hidden">
+                    <div className="h-full" style={{ 
+                      width: \`\${nestHealth}%\`,
+                      backgroundColor: nestHealth > 70 ? '#22c55e' : nestHealth > 40 ? '#f59e0b' : '#ef4444'
+                    }}/>
+                  </div>
+                </div>
+                
+                <div className="pt-2 border-t border-amber-100 grid grid-cols-2 gap-2 text-sm">
+                  <div className="text-amber-800">🥚 Eggs: <span className="font-bold">{eggs.length}</span></div>
+                  <div className="text-amber-800">🐛 Larvae: <span className="font-bold">{larvae.length}</span></div>
+                </div>
+                <p className="text-xs text-amber-600">
+                  Eggs hatch in {EGG_DEVELOPMENT_DAYS} days • Larvae mature in {LARVA_DEVELOPMENT_DAYS} days
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 border-2 border-amber-200">
+              <h2 className="font-bold text-amber-900 mb-3">🌍 Environment</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="flex justify-between text-sm text-amber-800 mb-1">
+                    <span>🌾 Food Availability</span>
+                    <span>{foodAvailability}%</span>
+                  </label>
+                  <input type="range" min="0" max="100" value={foodAvailability}
+                    onChange={(e) => setFoodAvailability(Number(e.target.value))}
+                    className="w-full accent-green-500"/>
+                </div>
+                <div>
+                  <label className="flex justify-between text-sm text-amber-800 mb-1">
+                    <span>🔴 Enemy Pressure</span>
+                    <span>{enemyPressure}%</span>
+                  </label>
+                  <input type="range" min="0" max="100" value={enemyPressure}
+                    onChange={(e) => setEnemyPressure(Number(e.target.value))}
+                    className="w-full accent-red-500"/>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 border-2 border-amber-200">
+              <h2 className="font-bold text-amber-900 mb-2">📊 Colony ({ants.length}/{NEST_CAPACITY} ants)</h2>
+              {ants.length > NEST_CAPACITY && (
+                <p className="text-xs text-orange-600 mb-2">⚠️ Overcrowded! Nest health declining.</p>
+              )}
+              {ants.length > MAX_CAPACITY && (
+                <p className="text-xs text-red-600 mb-2 animate-pulse">🚨 Severe overcrowding! Swarming imminent!</p>
+              )}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {Object.entries(stats).map(([task, count]) => {
+                  const required = task === 'nestWorker' ? Math.max(5, Math.floor(ants.length / 20)) :
+                                   task === 'middenWorker' ? Math.max(3, Math.floor(ants.length / 30)) : null;
+                  return (
+                    <div key={task} className="flex items-center gap-1">
+                      <span style={{ filter: \`drop-shadow(0 0 2px \${TASK_COLORS[task]})\`, fontSize: '12px' }}>🐜</span>
+                      <span className="text-amber-800">{TASK_LABELS[task]}:</span>
+                      <span className="font-bold">{count}</span>
+                      {required && <span className="text-xs text-amber-500">/{required}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          
+          {/* Graphs */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl p-4 border-2 border-amber-200">
+              <h2 className="font-bold text-amber-900 mb-2">📈 Population</h2>
+              <ResponsiveContainer width="100%" height={90}>
+                <LineChart data={history}>
+                  <XAxis dataKey="time" tick={{ fontSize: 9 }} unit="h" />
+                  <YAxis tick={{ fontSize: 9 }} domain={[0, 'auto']} />
+                  <Tooltip contentStyle={{ fontSize: 10 }} labelFormatter={v => \`Hour \${v}\`} />
+                  <Line type="monotone" dataKey="population" stroke="#000" name="Ants" dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="eggs" stroke="#f472b6" name="Eggs" dot={false} strokeWidth={1.5} />
+                  <Line type="monotone" dataKey="larvae" stroke="#a855f7" name="Larvae" dot={false} strokeWidth={1.5} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 border-2 border-amber-200">
+              <h2 className="font-bold text-amber-900 mb-2">🏠 Resources</h2>
+              <ResponsiveContainer width="100%" height={90}>
+                <LineChart data={history}>
+                  <XAxis dataKey="time" tick={{ fontSize: 9 }} unit="h" />
+                  <YAxis tick={{ fontSize: 9 }} domain={[0, 100]} />
+                  <Tooltip contentStyle={{ fontSize: 10 }} labelFormatter={v => \`Hour \${v}\`} />
+                  <Line type="monotone" dataKey="nestFood" stroke="#22c55e" name="Food" dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="nestHealth" stroke="#3b82f6" name="Health" dot={false} strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 border-2 border-amber-200">
+              <h2 className="font-bold text-amber-900 mb-2">📉 Jobs</h2>
+              <ResponsiveContainer width="100%" height={90}>
+                <AreaChart data={history}>
+                  <XAxis dataKey="time" tick={{ fontSize: 9 }} unit="h" />
+                  <YAxis tick={{ fontSize: 9 }} />
+                  <Tooltip contentStyle={{ fontSize: 10 }} labelFormatter={v => \`Hour \${v}\`} />
+                  <Area type="monotone" dataKey="forager" stackId="1" stroke={TASK_COLORS.forager} fill={TASK_COLORS.forager} />
+                  <Area type="monotone" dataKey="patroller" stackId="1" stroke={TASK_COLORS.patroller} fill={TASK_COLORS.patroller} />
+                  <Area type="monotone" dataKey="nestWorker" stackId="1" stroke={TASK_COLORS.nestWorker} fill={TASK_COLORS.nestWorker} />
+                  <Area type="monotone" dataKey="middenWorker" stackId="1" stroke={TASK_COLORS.middenWorker} fill={TASK_COLORS.middenWorker} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+        
+        {/* Rules Panel */}
+        <div className="mt-4 bg-white rounded-xl p-4 border-2 border-amber-200">
+          <button onClick={() => setShowRules(!showRules)}
+            className="w-full flex justify-between items-center font-bold text-amber-900">
+            <span>🧠 How Each Ant Decides What To Do</span>
+            <span>{showRules ? '▼' : '▶'}</span>
+          </button>
+          
+          {showRules && (
+            <div className="mt-4 space-y-4 text-sm text-amber-800">
+              
+              <div className="p-3 bg-orange-50 rounded-lg border-l-4 border-orange-400">
+                <h3 className="font-bold text-orange-700 mb-2">🟠 Forager Rules</h3>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li><strong>If carrying food:</strong> Head back to nest, leaving a pheromone trail. Drop off food when I arrive.</li>
+                  <li><strong>If NOT carrying food:</strong>
+                    <ul className="list-disc list-inside ml-4 mt-1">
+                      <li>Sniff for food nearby (~3 ant lengths)</li>
+                      <li>If no food, follow pheromone trails or other foragers</li>
+                      <li>Otherwise wander randomly</li>
+                    </ul>
+                  </li>
+                  <li><strong>If predator nearby:</strong> Run to nest!</li>
+                </ol>
+              </div>
+              
+              <div className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400">
+                <h3 className="font-bold text-blue-700 mb-2">🔵 Patroller Rules</h3>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li><strong>If enemy nearby:</strong> Chase and fight!</li>
+                  <li><strong>Otherwise:</strong> Patrol the nest perimeter.</li>
+                </ol>
+              </div>
+              
+              <div className="p-3 bg-purple-50 rounded-lg border-l-4 border-purple-400">
+                <h3 className="font-bold text-purple-700 mb-2">🟣 Nest Worker Rules</h3>
+                <p>Stay inside nest, caring for eggs and larvae. Need 1 per 20 ants (minimum 5) or nest health drops and young die!</p>
+              </div>
+              
+              <div className="p-3 bg-green-50 rounded-lg border-l-4 border-green-400">
+                <h3 className="font-bold text-green-700 mb-2">🟢 Midden Worker Rules</h3>
+                <p>Work at nest edge managing waste. Need 1 per 30 ants (minimum 3) or nest health drops!</p>
+              </div>
+              
+              <div className="p-3 bg-pink-50 rounded-lg border-l-4 border-pink-400">
+                <h3 className="font-bold text-pink-700 mb-2">🥚 Development Timeline</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Queen lays ~{EGGS_PER_DAY} eggs per day (if healthy & fed)</li>
+                  <li>Eggs → Larvae: {EGG_DEVELOPMENT_DAYS} days</li>
+                  <li>Larvae → Adults: {LARVA_DEVELOPMENT_DAYS} days (needs food {">"} 20%)</li>
+                  <li>Larvae starve if food stays below 15%</li>
+                  <li>Larvae die if they can't mature within {LARVA_DEVELOPMENT_DAYS * 2} days</li>
+                </ul>
+              </div>
+              
+              <div className="p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-400">
+                <h3 className="font-bold text-yellow-700 mb-2">💀 Death</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><strong>Starvation:</strong> When food drops below 5%</li>
+                  <li><strong>Combat:</strong> Patrollers may die fighting enemies</li>
+                  <li><strong>Predator:</strong> Foragers eaten by lizard</li>
+                  <li><strong>Neglect:</strong> Eggs/larvae die without enough nest workers</li>
+                </ul>
+              </div>
+              
+              <div className="p-3 bg-orange-50 rounded-lg border-l-4 border-orange-500">
+                <h3 className="font-bold text-orange-700 mb-2">🏠 Population Limits</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><strong>Comfortable capacity:</strong> {NEST_CAPACITY} ants</li>
+                  <li><strong>Overcrowding ({">"}  {NEST_CAPACITY}):</strong> Nest health declines from stress</li>
+                  <li><strong>Severe overcrowding ({">"} {MAX_CAPACITY}):</strong> A new queen leaves with ~30% of the colony to start a new nest (swarming)</li>
+                </ul>
+              </div>
+              
+            </div>
+          )}
+        </div>
+        
+        {/* Experiment Panel */}
+        <div className="mt-4 bg-white rounded-xl p-4 border-2 border-blue-200">
+          <button onClick={() => setShowExperiment(!showExperiment)}
+            className="w-full flex justify-between items-center font-bold text-blue-900">
+            <span>🔬 Run Experiments</span>
+            <span>{showExperiment ? '▼' : '▶'}</span>
+          </button>
+          
+          {showExperiment && (
+            <div className="mt-4 space-y-4">
+              {!experimentRunning && !experimentResults && (
+                <>
+                  <p className="text-sm text-blue-700">
+                    Configure and run controlled experiments. Results are collected and can be downloaded as a CSV file.
+                  </p>
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-blue-800">Starting Conditions</h3>
+                      
+                      <div>
+                        <label className="block text-sm text-blue-700 mb-1">Starting Population</label>
+                        <input 
+                          type="number"
+                          min="5"
+                          max="500"
+                          value={experimentConfig.startingPopulation}
+                          onChange={e => setExperimentConfig({...experimentConfig, startingPopulation: Math.max(5, Math.min(500, Number(e.target.value)))})}
+                          className="w-full border border-blue-200 rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm text-blue-700 mb-1">Starting Food: {experimentConfig.startingFood}%</label>
+                        <input type="range" min="0" max="100" value={experimentConfig.startingFood}
+                          onChange={e => setExperimentConfig({...experimentConfig, startingFood: Number(e.target.value)})}
+                          className="w-full accent-blue-500"/>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-blue-800">Environment</h3>
+                      
+                      <div>
+                        <label className="block text-sm text-blue-700 mb-1">Food Availability: {experimentConfig.foodAvailability}%</label>
+                        <div className="flex gap-2">
+                          <input type="range" min="0" max="100" value={experimentConfig.foodAvailability}
+                            onChange={e => setExperimentConfig({...experimentConfig, foodAvailability: Number(e.target.value)})}
+                            className="flex-1 accent-green-500"/>
+                          <input 
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={experimentConfig.foodAvailability}
+                            onChange={e => setExperimentConfig({...experimentConfig, foodAvailability: Math.max(0, Math.min(100, Number(e.target.value)))})}
+                            className="w-16 border border-blue-200 rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm text-blue-700 mb-1">Enemy Pressure: {experimentConfig.enemyPressure}%</label>
+                        <div className="flex gap-2">
+                          <input type="range" min="0" max="100" value={experimentConfig.enemyPressure}
+                            onChange={e => setExperimentConfig({...experimentConfig, enemyPressure: Number(e.target.value)})}
+                            className="flex-1 accent-red-500"/>
+                          <input 
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={experimentConfig.enemyPressure}
+                            onChange={e => setExperimentConfig({...experimentConfig, enemyPressure: Math.max(0, Math.min(100, Number(e.target.value)))})}
+                            className="w-16 border border-blue-200 rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-blue-800">Experiment Settings</h3>
+                      
+                      <div>
+                        <label className="block text-sm text-blue-700 mb-1">Duration (days)</label>
+                        <input 
+                          type="number"
+                          min="7"
+                          max="365"
+                          value={experimentConfig.durationDays}
+                          onChange={e => setExperimentConfig({...experimentConfig, durationDays: Math.max(7, Math.min(365, Number(e.target.value)))})}
+                          className="w-full border border-blue-200 rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm text-blue-700 mb-1">Number of Trials</label>
+                        <input 
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={experimentConfig.numTrials}
+                          onChange={e => setExperimentConfig({...experimentConfig, numTrials: Math.max(1, Math.min(20, Number(e.target.value)))})}
+                          className="w-full border border-blue-200 rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm text-blue-700 mb-1">Record Data Every (hours)</label>
+                        <select 
+                          value={experimentConfig.recordInterval}
+                          onChange={e => setExperimentConfig({...experimentConfig, recordInterval: Number(e.target.value)})}
+                          className="w-full border border-blue-200 rounded px-2 py-1 text-sm"
+                        >
+                          <option value={1}>1 hour</option>
+                          <option value={6}>6 hours</option>
+                          <option value={12}>12 hours</option>
+                          <option value={24}>24 hours (daily)</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-blue-800">Data Collected</h3>
+                      <ul className="text-xs text-blue-600 space-y-1">
+                        <li>• Population over time</li>
+                        <li>• Food storage & nest health</li>
+                        <li>• Eggs & larvae counts</li>
+                        <li>• Job distribution (all 4 types)</li>
+                        <li>• Deaths by cause (starvation, combat, predator, neglect)</li>
+                        <li>• Births & swarm events</li>
+                      </ul>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={runExperiment}
+                    className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition"
+                  >
+                    🧪 Run Experiment
+                  </button>
+                </>
+              )}
+              
+              {experimentRunning && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-4 animate-bounce">🔬</div>
+                  <p className="text-lg font-bold text-blue-800">Running Experiment...</p>
+                  <p className="text-blue-600">
+                    Trial {experimentProgress.trial} of {experimentConfig.numTrials} — Day {experimentProgress.day} of {experimentConfig.durationDays}
+                  </p>
+                  <div className="mt-4 h-2 bg-blue-100 rounded-full overflow-hidden max-w-md mx-auto">
+                    <div 
+                      className="h-full bg-blue-500 transition-all"
+                      style={{ 
+                        width: \`\${((experimentProgress.trial - 1) / experimentConfig.numTrials + 
+                          experimentProgress.day / experimentConfig.durationDays / experimentConfig.numTrials) * 100}%\` 
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {experimentResults && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <p className="font-bold text-green-700">✅ Experiment Complete!</p>
+                      <p className="text-sm text-blue-600">
+                        {experimentResults.length} data points collected across {experimentConfig.numTrials} trials
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={copyCSV}
+                        className={\`py-2 px-4 font-bold rounded-lg transition \${copySuccess ? 'bg-green-500 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}\`}
+                      >
+                        {copySuccess ? '✓ Copied!' : '📋 Copy CSV'}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Quick summary */}
+                  <div className="bg-blue-50 rounded-lg p-3">
+                    <h4 className="font-bold text-blue-800 mb-2">Quick Summary (Final Values)</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                      {(() => {
+                        const finals = experimentResults.filter((_, i, arr) => 
+                          i === arr.length - 1 || arr[i + 1]?.trial !== arr[i].trial
+                        );
+                        const avgPop = Math.round(finals.reduce((s, r) => s + r.population, 0) / finals.length);
+                        const avgFood = Math.round(finals.reduce((s, r) => s + r.food, 0) / finals.length);
+                        const totalDeaths = finals.reduce((s, r) => s + r.deathsStarvation + r.deathsCombat + r.deathsPredator + r.deathsNeglect, 0);
+                        const totalBirths = finals.reduce((s, r) => s + r.births, 0);
+                        return (
+                          <>
+                            <div><span className="text-blue-600">Avg Final Pop:</span> <strong>{avgPop}</strong></div>
+                            <div><span className="text-blue-600">Avg Final Food:</span> <strong>{avgFood}%</strong></div>
+                            <div><span className="text-blue-600">Total Births:</span> <strong>{totalBirths}</strong></div>
+                            <div><span className="text-blue-600">Total Deaths:</span> <strong>{totalDeaths}</strong></div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  
+                  {csvText && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-blue-700">CSV data (select all and copy):</p>
+                      <textarea 
+                        readOnly
+                        value={csvText}
+                        className="w-full h-40 text-xs font-mono border border-blue-200 rounded p-2"
+                        onClick={e => e.target.select()}
+                      />
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={() => { setExperimentResults(null); setCsvText(''); }}
+                    className="w-full py-2 bg-blue-200 hover:bg-blue-300 text-blue-800 font-bold rounded-lg transition"
+                  >
+                    🔄 Run Another Experiment
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}`;
+
+    // Transpile JSX -> JS using the *classic* runtime to avoid react/jsx-runtime module issues.
+    const { code } = Babel.transform(SOURCE, {
+      presets: [[ "react", { runtime: "classic" } ]]
+    });
+
+    // Evaluate transpiled code in a controlled scope, returning the component function.
+    const getComponent = new Function("React", "Recharts", `
+      const { useState, useEffect, useRef } = React;
+      const {
+        LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
+      } = Recharts;
+
+      ${code}
+
+      if (typeof AntColonySimulation !== "function") {
+        throw new Error("AntColonySimulation component was not defined after transpiling.");
+      }
+      return AntColonySimulation;
+    `);
+
+    const AntColonySimulation = getComponent(React, Recharts);
+
+    // Mount
+    const rootEl = document.getElementById("root");
+    const root = ReactDOMClient.createRoot(rootEl);
+    root.render(React.createElement(AntColonySimulation));
+  </script>
+</body>
+</html>
