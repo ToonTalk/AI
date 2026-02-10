@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Double Stitch Knitting Pattern Generator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+            padding: 24px;
+            color: #1e293b;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 24px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .api-key-section {
+            background: #fefce8;
+            border-color: #fde047;
+        }
+        
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+        
+        input[type="text"],
+        input[type="password"],
+        input[type="number"],
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .input-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        
+        .input-row > div {
+            flex: 1;
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        .mb-4 {
+            margin-bottom: 16px;
+        }
+        
+        .color-picker-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        input[type="color"] {
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            padding: 2px;
+        }
+        
+        .color-value {
+            font-size: 0.875rem;
+            color: #64748b;
+            font-family: monospace;
+        }
+        
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+            width: 100%;
+        }
+        
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        
+        .btn-primary:disabled {
+            background: #93c5fd;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: #64748b;
+            width: 100%;
+            margin-top: 8px;
+        }
+        
+        .btn-secondary:hover {
+            color: #374151;
+        }
+        
+        .btn-success {
+            background: #16a34a;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #15803d;
+        }
+        
+        .error-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .loading-box {
+            text-align: center;
+            padding: 32px;
+        }
+        
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #bfdbfe;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: #64748b;
+        }
+        
+        .loading-subtext {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+        
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 16px;
+        }
+        
+        .canvas-container {
+            overflow: auto;
+            max-height: 400px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px;
+            background: #f1f5f9;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 24px;
+            margin-top: 16px;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-swatch {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            border: 1px solid #d1d5db;
+        }
+        
+        .instructions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .instructions-note {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-bottom: 16px;
+        }
+        
+        .instructions-table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        
+        thead {
+            background: #f8fafc;
+            position: sticky;
+            top: 0;
+        }
+        
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 500;
+            color: #374151;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        td {
+            padding: 10px 16px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        tr:nth-child(even) {
+            background: #f8fafc;
+        }
+        
+        .row-num {
+            color: #64748b;
+            width: 60px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .help-text {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        
+        .rotated-canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: auto;
+            padding: 10px;
+        }
+        
+        .rotated-canvas-container canvas {
+            transform: rotate(-90deg);
+            transform-origin: center center;
+            flex-shrink: 0;
+        }
+    
+        /* Prevent CSS-rotation clipping: we rotate pixels in JS for Pattern Grid */
+        #patternCanvas { transform: none !important; }
+        #patternCanvasWrapper { justify-content: flex-start; align-items: flex-start; }
+</style>
+</head>
+<body>
+    <div class="container">
+        <h1>Double Stitch Knitting Pattern Generator</h1>
+        <p class="subtitle">Generate knitting patterns from text descriptions using OpenAI's GPT Image model</p>
+        
+        <div id="apiKeySection" class="card api-key-section">
+            <label for="apiKey">OpenAI API Key</label>
+            <div class="input-row">
+                <div style="flex: 1;">
+                    <input type="password" id="apiKey" placeholder="sk-...">
+                </div>
+                <button class="btn-primary" style="width: auto;" onclick="saveApiKey()">Save</button>
+            </div>
+            <p class="help-text">Your API key will be stored in your browser's local storage</p>
+        </div>
+        
+        <div class="card">
+            <div class="mb-4">
+                <label for="description">Design Description</label>
+                <textarea id="description" placeholder="Describe your pattern, e.g., 'Nordic snowflake pattern' or 'geometric chevron stripes' or 'Celtic knot border with diamond center'"></textarea>
+            </div>
+            
+            <div class="grid-2 mb-4">
+                <div>
+                    <label for="stitchCount">Stitches per Row</label>
+                    <input type="number" id="stitchCount" value="35" min="10" max="100">
+                </div>
+                <div>
+                    <label for="rowsPerUnit">Rows per Design Unit</label>
+                    <input type="number" id="rowsPerUnit" value="40" min="10" max="200">
+                    <div style="margin-top: 8px;">
+                        <label style="display:flex; gap:8px; align-items:flex-start; font-weight: 400; font-size: 0.9rem;">
+                            <input type="checkbox" id="autoOptimizeRowsPerUnit" style="margin-top: 3px;">
+                            <span>Auto-optimize rows/unit so every row starts/ends with BG and the design reaches stitch #2 and #W-1 (within the 1-stitch side borders)</span>
+                                                        <div id="autoRowsPerUnitResult" class="help-text" style="margin-top:6px; color:#0f172a;">Auto rows/unit: —</div>
+                            <div style="margin-top:6px;">
+                                <label style="display:flex; gap:8px; align-items:flex-start; font-weight: 400; font-size: 0.9rem; margin:0;">
+                                    <input type="checkbox" id="fitWidthExactly" style="margin-top: 3px;" checked>
+                                    <span>Allow “fit width exactly” fallback (preserve aspect; may crop top/bottom) to help reach stitch #2 and #W-1</span>
+                                </label>
+                                <div id="fitModeResult" class="help-text" style="margin-top:6px; color:#0f172a;">Fit mode: contain</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid-2 mb-4">
+                <div>
+                    <label for="repetitions">Number of Repetitions</label>
+                    <input type="number" id="repetitions" value="3" min="1" max="20">
+                </div>
+                <div>
+                    <label for="repeatGap">Gap Between Repetitions (rows)</label>
+                    <input type="number" id="repeatGap" value="0" min="0" max="20">
+                </div>
+            </div>
+            
+            <div class="grid-2 mb-4">
+                <div>
+                    <label for="sideBorder">Side Border (stitches)</label>
+                    <input type="number" id="sideBorder" value="1" min="1" max="10">
+                    <p class="help-text">BG stitches at left/right edges of scarf (min 1)</p>
+                </div>
+                <div>
+                    <label for="unitBorder">Unit Top/Bottom Border (rows)</label>
+                    <input type="number" id="unitBorder" value="0" min="0" max="10">
+                    <p class="help-text">BG rows before/after each unit's design</p>
+                </div>
+            </div>
+            
+            <div class="grid-2 mb-4">
+                <div>
+                    <label for="borderStart">Scarf Start Border (rows)</label>
+                    <input type="number" id="borderStart" value="0" min="0" max="50">
+                    <p class="help-text">Extra BG rows at very beginning of scarf</p>
+                </div>
+                <div>
+                    <label for="borderEnd">Scarf End Border (rows)</label>
+                    <input type="number" id="borderEnd" value="0" min="0" max="50">
+                    <p class="help-text">Extra BG rows at very end of scarf</p>
+                </div>
+            </div>
+            
+            <div class="mb-4" style="background: #e0f2fe; padding: 12px; border-radius: 8px; border: 1px solid #7dd3fc;">
+                <p style="margin: 0 0 8px 0; font-size: 0.875rem;">
+                    <strong>Total rows:</strong> <span id="totalRowsDisplay">120</span> 
+                    <span style="color: #64748b;">= <span id="borderStartCalc">0</span> border + (<span id="rowsCalc">40</span> × <span id="repsCalc">3</span>) + (<span id="gapsCalc">0</span> × <span id="gapSizeCalc">0</span>) + <span id="borderEndCalc">0</span> border</span>
+                </p>
+                <p style="margin: 0; font-size: 0.875rem;">
+                    <strong>Design area per unit:</strong> <span id="designAreaDisplay">31 × 36</span> stitches
+                    <span style="color: #64748b;">(after borders)</span>
+                </p>
+            </div>
+            
+            <div class="grid-2 mb-4">
+                <div>
+                    <label>Foreground Color</label>
+                    <div class="color-picker-row">
+                        <input type="color" id="fgColor" value="#1e3a5f">
+                        <span class="color-value" id="fgColorValue">#1e3a5f</span>
+                    </div>
+                </div>
+                <div>
+                    <label>Background Color</label>
+                    <div class="color-picker-row">
+                        <input type="color" id="bgColor" value="#f5f5dc">
+                        <span class="color-value" id="bgColorValue">#f5f5dc</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-4" style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Image Source</label>
+                <div style="display: flex; gap: 16px; margin-bottom: 12px;">
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="radio" name="imageSource" value="generate" checked style="width: 16px; height: 16px;">
+                        <span>Generate with AI</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="radio" name="imageSource" value="upload" style="width: 16px; height: 16px;">
+                        <span>Upload image</span>
+                    </label>
+                </div>
+                <div id="uploadSection" class="hidden">
+                    <input type="file" id="imageUpload" accept="image/*" style="font-size: 0.875rem;">
+                    <p class="help-text">Upload a black and white image. White areas become the foreground pattern.</p>
+                </div>
+                <p class="help-text">💡 Tip: For animation sequences, try "3 small unicorns with generous spacing, all facing right, evenly spaced with wide margins on left and right". If figures get clipped, try fewer figures or add "use only center 80% of canvas".</p>
+            </div>
+            
+            <button class="btn-primary" id="generateBtn" onclick="processPattern()">Generate Pattern</button>
+            <button class="btn-secondary" id="changeKeyBtn" onclick="showApiKeyInput()">Change API Key</button>
+        </div>
+        
+        <div id="errorBox" class="error-box hidden"></div>
+        
+        <div id="loadingBox" class="card loading-box hidden">
+            <div class="spinner"></div>
+            <p class="loading-text">Generating your knitting pattern...</p>
+            <p class="loading-subtext">Using GPT Image model (may take up to 30 seconds)</p>
+        </div>
+        
+        <div id="resultsSection" class="hidden">
+            <div class="card" id="generatedImageCard">
+                <div class="instructions-header">
+                    <h2>Source Image</h2>
+                    <button class="btn-success" onclick="saveGeneratedImage()" style="font-size: 0.875rem; padding: 8px 12px;">Save Image</button>
+                </div>
+                <p class="instructions-note" style="margin-bottom: 12px;"><span id="imageSourceInfo">Model: <span id="modelUsed">gpt-image-1</span> | Size: <span id="imageSizeUsed">1536×1024</span></span></p>
+                <div class="canvas-container" style="max-height: 500px;">
+                    <img id="generatedImage" style="max-width: 100%; max-height: 480px; display: block; margin: 0 auto; border-radius: 4px;">
+                </div>
+                <details style="margin-top: 16px;" id="promptDetails">
+                    <summary style="cursor: pointer; color: #64748b; font-size: 0.875rem;">View prompt used</summary>
+                    <pre id="promptUsed" style="margin-top: 8px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 0.75rem; white-space: pre-wrap; color: #475569; border: 1px solid #e2e8f0;"></pre>
+                </details>
+            </div>
+            
+            <div class="card">
+                <h2>Processed Image</h2>
+                <p class="instructions-note" style="margin-bottom: 12px;">Cropped → Rotated 90° → <span id="processedSize"></span> (display rotated for viewing)</p>
+                <div id="processedCanvasWrapper" class="canvas-container rotated-canvas-container" style="min-height: 100px; background: #1e293b;">
+                    <canvas id="processedCanvas"></canvas>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Pattern Grid</h2>
+                <div id="patternCanvasWrapper" class="canvas-container rotated-canvas-container" style="min-height: 100px;">
+                    <canvas id="patternCanvas"></canvas>
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-swatch" id="fgSwatch"></div>
+                        <span>Foreground (FG)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-swatch" id="bgSwatch"></div>
+                        <span>Background (BG)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="instructions-header">
+                    <h2>Row Instructions</h2>
+                    <button class="btn-success" onclick="downloadInstructions()">Download Instructions</button>
+                </div>
+                <p class="instructions-note">FG = Foreground color stitches, BG = Background color stitches</p>
+                <div class="instructions-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="row-num">Row</th>
+                                <th>Stitches</th>
+                            </tr>
+                        </thead>
+                        <tbody id="instructionsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <canvas id="hiddenCanvas" style="display: none;"></canvas>
+    
+    <script>
+        let apiKey = '';
+        let pattern = null;
+        let instructions = [];
+        let currentDescription = '';
+        let currentImageUrl = '';
+        
+        // Calculate total rows from unit dimensions
+        function calculateTotalRows() {
+            const rowsPerUnit = parseInt(document.getElementById('rowsPerUnit').value) || 40;
+            const repetitions = parseInt(document.getElementById('repetitions').value) || 1;
+            const gapSize = parseInt(document.getElementById('repeatGap').value) || 0;
+            const borderStart = parseInt(document.getElementById('borderStart').value) || 0;
+            const borderEnd = parseInt(document.getElementById('borderEnd').value) || 0;
+            const numGaps = Math.max(0, repetitions - 1);
+            return borderStart + (rowsPerUnit * repetitions) + (gapSize * numGaps) + borderEnd;
+        }
+        
+        function updateTotalRowsDisplay() {
+            const stitchCount = parseInt(document.getElementById('stitchCount').value) || 35;
+            let rowsPerUnit = parseInt(document.getElementById('rowsPerUnit').value) || 40;
+            const autoOptimizeRowsPerUnit = document.getElementById('autoOptimizeRowsPerUnit')?.checked === true;
+            const allowFitWidthFallback = document.getElementById('fitWidthExactly')?.checked !== false;
+            let chosenFitMode = 'contain';
+            const fitModeElInit = document.getElementById('fitModeResult');
+            if (fitModeElInit) fitModeElInit.textContent = `Fit mode: ${chosenFitMode}`;
+
+            const repetitions = parseInt(document.getElementById('repetitions').value) || 1;
+            const gapSize = parseInt(document.getElementById('repeatGap').value) || 0;
+            const borderStart = parseInt(document.getElementById('borderStart').value) || 0;
+            const borderEnd = parseInt(document.getElementById('borderEnd').value) || 0;
+            const sideBorder = Math.max(1, parseInt(document.getElementById('sideBorder').value) || 1);
+            const unitBorder = parseInt(document.getElementById('unitBorder').value) || 0;
+            const numGaps = Math.max(0, repetitions - 1);
+            const total = borderStart + (rowsPerUnit * repetitions) + (gapSize * numGaps) + borderEnd;
+            
+            // Calculate design area
+            const designWidth = stitchCount - (sideBorder * 2);
+            const designHeight = rowsPerUnit - (unitBorder * 2);
+            
+            document.getElementById('totalRowsDisplay').textContent = total;
+            document.getElementById('rowsCalc').textContent = rowsPerUnit;
+            document.getElementById('repsCalc').textContent = repetitions;
+            document.getElementById('gapsCalc').textContent = numGaps;
+            document.getElementById('gapSizeCalc').textContent = gapSize;
+            document.getElementById('borderStartCalc').textContent = borderStart;
+            document.getElementById('borderEndCalc').textContent = borderEnd;
+            document.getElementById('designAreaDisplay').textContent = `${designWidth} × ${designHeight}`;
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const storedKey = localStorage.getItem('openai_api_key');
+            if (storedKey) {
+                apiKey = storedKey;
+                document.getElementById('apiKeySection').classList.add('hidden');
+            }
+            
+            // Color picker listeners
+            document.getElementById('fgColor').addEventListener('input', (e) => {
+                document.getElementById('fgColorValue').textContent = e.target.value;
+                if (pattern) drawPatternGrid();
+            });
+            
+            document.getElementById('bgColor').addEventListener('input', (e) => {
+                document.getElementById('bgColorValue').textContent = e.target.value;
+                if (pattern) drawPatternGrid();
+            });
+            
+            // Total rows calculation listeners
+            document.getElementById('stitchCount').addEventListener('input', updateTotalRowsDisplay);
+            document.getElementById('rowsPerUnit').addEventListener('input', updateTotalRowsDisplay);
+            document.getElementById('repetitions').addEventListener('input', updateTotalRowsDisplay);
+            document.getElementById('repeatGap').addEventListener('input', updateTotalRowsDisplay);
+            document.getElementById('borderStart').addEventListener('input', updateTotalRowsDisplay);
+            document.getElementById('borderEnd').addEventListener('input', updateTotalRowsDisplay);
+            document.getElementById('sideBorder').addEventListener('input', updateTotalRowsDisplay);
+            document.getElementById('unitBorder').addEventListener('input', updateTotalRowsDisplay);
+            updateTotalRowsDisplay();
+            
+            // Image source radio listeners
+            document.querySelectorAll('input[name="imageSource"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const uploadSection = document.getElementById('uploadSection');
+                    const descriptionSection = document.getElementById('description').closest('.mb-4');
+                    if (e.target.value === 'upload') {
+                        uploadSection.classList.remove('hidden');
+                        descriptionSection.style.opacity = '0.5';
+                    } else {
+                        uploadSection.classList.add('hidden');
+                        descriptionSection.style.opacity = '1';
+                    }
+                });
+            });
+        });
+        
+        function saveApiKey() {
+            const keyInput = document.getElementById('apiKey');
+            if (keyInput.value.trim()) {
+                apiKey = keyInput.value.trim();
+                localStorage.setItem('openai_api_key', apiKey);
+                document.getElementById('apiKeySection').classList.add('hidden');
+            }
+        }
+        
+        function showApiKeyInput() {
+            document.getElementById('apiKeySection').classList.remove('hidden');
+            document.getElementById('apiKey').value = apiKey;
+        }
+        
+        function showError(message) {
+            const errorBox = document.getElementById('errorBox');
+            errorBox.textContent = message;
+            errorBox.classList.remove('hidden');
+        }
+        
+        function hideError() {
+            document.getElementById('errorBox').classList.add('hidden');
+        }
+        
+        function generateImagePrompt(userDescription) {
+            const stitchCount = parseInt(document.getElementById('stitchCount').value) || 35;
+            let rowsPerUnit = parseInt(document.getElementById('rowsPerUnit').value) || 40;
+            const autoOptimizeRowsPerUnit = document.getElementById('autoOptimizeRowsPerUnit')?.checked === true;
+            const allowFitWidthFallback = document.getElementById('fitWidthExactly')?.checked !== false;
+            let chosenFitMode = 'contain';
+            const fitModeElInit = document.getElementById('fitModeResult');
+            if (fitModeElInit) fitModeElInit.textContent = `Fit mode: ${chosenFitMode}`;
+
+            
+            // Image is 1536x1024 (landscape). After crop & 90° rotation, horizontal becomes vertical.
+            // For best results, design should span horizontally and be compact vertically.
+            // Use rowsPerUnit (single design unit) for the target ratio
+            const targetRatio = (rowsPerUnit / stitchCount).toFixed(1);
+            
+            return `Create a pixel-art style black and white design of: ${userDescription}
+
+CANVAS USAGE: Use only the CENTER 85% of the canvas width. Leave at least 7-8% BLACK MARGIN on the LEFT edge and 7-8% on the RIGHT edge. No part of any figure should enter these margin zones.
+
+CRITICAL LAYOUT: Create a WIDE HORIZONTAL design. The design (excluding margins) should be approximately ${targetRatio} times WIDER than it is TALL. Keep the vertical height compact.
+
+SPACING: If multiple figures, space them EVENLY with EQUAL gaps between them. The leftmost and rightmost figures must be well inside the margins, not near the edges.
+
+The image will be cropped to the design bounds, rotated 90°, and mapped to a ${stitchCount}×${rowsPerUnit} knitting unit (which may be repeated).
+
+Requirements:
+- BLACK background (#000000), WHITE design (#FFFFFF) only
+- ALL figures must be 100% COMPLETE - no clipping, no cropping, no figures touching any edge
+- Arrange sequences HORIZONTALLY in a row, all facing the SAME DIRECTION (right)
+- Bold, simple pixel-art shapes with clear edges suitable for knitting
+- NO gradients, NO gray tones, NO anti-aliasing`;
+        }
+        
+        async function processImageToPattern(imageUrl) {
+            const stitchCount = parseInt(document.getElementById('stitchCount').value) || 35;
+            let rowsPerUnit = parseInt(document.getElementById('rowsPerUnit').value) || 40;
+            const autoOptimizeRowsPerUnit = document.getElementById('autoOptimizeRowsPerUnit')?.checked === true;
+            const allowFitWidthFallback = document.getElementById('fitWidthExactly')?.checked !== false;
+            let chosenFitMode = 'contain';
+            const fitModeElInit = document.getElementById('fitModeResult');
+            if (fitModeElInit) fitModeElInit.textContent = `Fit mode: ${chosenFitMode}`;
+
+            const repetitions = parseInt(document.getElementById('repetitions').value) || 1;
+            const gapSize = parseInt(document.getElementById('repeatGap').value) || 0;
+            const borderStart = parseInt(document.getElementById('borderStart').value) || 0;
+            const borderEnd = parseInt(document.getElementById('borderEnd').value) || 0;
+            const sideBorder = Math.max(1, parseInt(document.getElementById('sideBorder').value) || 1);
+            const unitBorder = parseInt(document.getElementById('unitBorder').value) || 0;            let totalRows = calculateTotalRows();
+            
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                
+                img.onload = () => {
+                    const canvas = document.getElementById('hiddenCanvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // First, draw the full image to analyze it
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    const data = imageData.data;
+                    
+                    // Find bounding box of non-black content
+                    let minX = img.width, minY = img.height, maxX = 0, maxY = 0;
+                    const threshold = 30; // brightness threshold to detect non-black
+                    
+                    for (let y = 0; y < img.height; y++) {
+                        for (let x = 0; x < img.width; x++) {
+                            const idx = (y * img.width + x) * 4;
+                            const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+                            if (brightness > threshold) {
+                                minX = Math.min(minX, x);
+                                minY = Math.min(minY, y);
+                                maxX = Math.max(maxX, x);
+                                maxY = Math.max(maxY, y);
+                            }
+                        }
+                    }
+                    
+                    // Crop tightly to content (no padding - we'll handle margins in the final grid)
+                    const cropWidth = maxX - minX + 1;
+                    const cropHeight = maxY - minY + 1;
+                    
+                    console.log(`Cropping to content: (${minX},${minY}) to (${maxX},${maxY}) = ${cropWidth}x${cropHeight}`);
+                    
+                    // Get the cropped region
+                    const croppedData = ctx.getImageData(minX, minY, cropWidth, cropHeight);
+                    
+                    // After 90° rotation: width becomes height, height becomes width
+                    const rotatedWidth = cropHeight;
+                    const rotatedHeight = cropWidth;
+                    
+                    // Put cropped data into a temp canvas
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = cropWidth;
+                    tempCanvas.height = cropHeight;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.putImageData(croppedData, 0, 0);
+                    
+                    // Create rotated version
+                    const rotatedCanvas = document.createElement('canvas');
+                    rotatedCanvas.width = rotatedWidth;
+                    rotatedCanvas.height = rotatedHeight;
+                    const rotatedCtx = rotatedCanvas.getContext('2d');
+                    
+                    rotatedCtx.save();
+                    rotatedCtx.translate(rotatedWidth / 2, rotatedHeight / 2);
+                    rotatedCtx.rotate(Math.PI / 2); // 90 degrees clockwise
+                    rotatedCtx.drawImage(tempCanvas, -cropWidth / 2, -cropHeight / 2);
+                    rotatedCtx.restore();
+                    
+                    console.log(`Rotated image: ${rotatedWidth}x${rotatedHeight}`);
+                    // Compute tight content bbox on the rotated canvas (so we don't letterbox black margins)
+                    const rotatedContentBox = computeContentBBoxFromCanvas(rotatedCanvas, 30, 10, 1);
+                    console.log(`Rotated content bounds: x=${rotatedContentBox.x}, y=${rotatedContentBox.y}, w=${rotatedContentBox.w}, h=${rotatedContentBox.h}`);
+
+// --- Optional: auto-optimize rows/unit to satisfy edge-usage constraints ---
+                    // Goal:
+                    // 1) All rows start/end with BG (already enforced by sideBorder in grid conversion),
+                    // 2) At least one FG stitch appears at column 1 (2nd stitch),
+                    // 3) At least one FG stitch appears at column (W-2) (2nd-to-last stitch).
+                    //
+                    // We search nearby rowsPerUnit values because vertical resampling can change which
+                    // horizontal extremities survive binarization.
+                    
+
+function computeContentBBoxFromCanvas(cnv, threshold = 30, alphaThreshold = 10, pad = 1) {
+    const w = cnv.width, h = cnv.height;
+    const c = cnv.getContext('2d', { willReadFrequently: true });
+    const imgData = c.getImageData(0, 0, w, h).data;
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+        const rowOff = y * w * 4;
+        for (let x = 0; x < w; x++) {
+            const idx = rowOff + x * 4;
+            const r = imgData[idx], g = imgData[idx+1], b = imgData[idx+2], a = imgData[idx+3];
+            if (a <= alphaThreshold) continue;
+            const brightness = (r + g + b) / 3;
+            if (brightness > threshold) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    if (maxX < 0 || maxY < 0) {
+        return { x: 0, y: 0, w, h };
+    }
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX = Math.min(w - 1, maxX + pad);
+    maxY = Math.min(h - 1, maxY + pad);
+    return { x: minX, y: minY, w: (maxX - minX + 1), h: (maxY - minY + 1) };
+}
+
+function drawRotatedCanvasIntoUnit(ctx, destX, destY, destW, destH, fitMode = 'contain') {
+    // Preserve aspect ratio of the rotated SOURCE CONTENT (not the full canvas, which can include black margins).
+    // fitMode:
+    //  - 'contain': letterbox inside destW×destH (no cropping)
+    //  - 'coverWidth': fill destW exactly (may crop vertically to fit destH)
+    const box = (typeof rotatedContentBox !== 'undefined' && rotatedContentBox)
+        ? rotatedContentBox
+        : { x: 0, y: 0, w: rotatedWidth, h: rotatedHeight };
+
+    const srcW = box.w, srcH = box.h;
+
+    let scale;
+    if (fitMode === 'coverWidth') {
+        scale = destW / srcW;
+    } else {
+        const scaleW = destW / srcW;
+        const scaleH = destH / srcH;
+        scale = Math.min(scaleW, scaleH);
+    }
+
+    const drawW = Math.max(1, Math.round(srcW * scale));
+    const drawH = Math.max(1, Math.round(srcH * scale));
+
+    const dx = destX + Math.floor((destW - drawW) / 2);
+    const dy = destY + Math.floor((destH - drawH) / 2);
+
+    ctx.drawImage(
+        rotatedCanvas,
+        box.x, box.y, srcW, srcH,
+        dx, dy, drawW, drawH
+    );
+
+    return { dx, dy, drawW, drawH, scale, fitMode, srcX: box.x, srcY: box.y, srcW, srcH };
+}
+
+function buildUnitGridForCandidate(candidateRowsPerUnit, fitMode) {
+                        const candidateAvailableWidth = stitchCount - (sideBorder * 2);
+                        const candidateAvailableHeight = candidateRowsPerUnit - (unitBorder * 2);
+
+                        const unitCanvasCandidate = document.createElement('canvas');
+                        unitCanvasCandidate.width = stitchCount;
+                        unitCanvasCandidate.height = candidateRowsPerUnit;
+                        const unitCtxCandidate = unitCanvasCandidate.getContext('2d');
+                        unitCtxCandidate.imageSmoothingEnabled = false;
+
+                        // Fill background black
+                        unitCtxCandidate.fillStyle = '#000000';
+                        unitCtxCandidate.fillRect(0, 0, stitchCount, candidateRowsPerUnit);
+
+                        // Draw rotated content into the available area WITHOUT distortion (preserve aspect ratio)
+drawRotatedCanvasIntoUnit(
+    unitCtxCandidate,
+    sideBorder, unitBorder,
+    candidateAvailableWidth, candidateAvailableHeight,
+    fitMode
+);
+
+                        // Enforce top/bottom unit border if requested
+                        if (unitBorder > 0) {
+                            const unitData = unitCtxCandidate.getImageData(0, 0, stitchCount, candidateRowsPerUnit);
+                            const unitPixels = unitData.data;
+                            for (let y = 0; y < candidateRowsPerUnit; y++) {
+                                const inUnitBorder = (y < unitBorder) || (y >= candidateRowsPerUnit - unitBorder);
+                                if (!inUnitBorder) continue;
+                                for (let x = 0; x < stitchCount; x++) {
+                                    const idx = (y * stitchCount + x) * 4;
+                                    unitPixels[idx] = 0;
+                                    unitPixels[idx + 1] = 0;
+                                    unitPixels[idx + 2] = 0;
+                                    unitPixels[idx + 3] = 255;
+                                }
+                            }
+                            unitCtxCandidate.putImageData(unitData, 0, 0);
+                        }
+
+                        // Convert to binary grid (with enforced side borders)
+                        const unitData = unitCtxCandidate.getImageData(0, 0, stitchCount, candidateRowsPerUnit);
+                        const px = unitData.data;
+                        const g = [];
+                        for (let row = 0; row < candidateRowsPerUnit; row++) {
+                            const rowData = [];
+                            for (let col = 0; col < stitchCount; col++) {
+                                if (col < sideBorder || col >= stitchCount - sideBorder) {
+                                    rowData.push(0);
+                                } else {
+                                    const idx = (row * stitchCount + col) * 4;
+                                    const brightness = (px[idx] + px[idx + 1] + px[idx + 2]) / 3;
+                                    rowData.push(brightness < 128 ? 1 : 0);
+                                }
+                            }
+                            g.push(rowData);
+                        }
+                        return g;
+                    }
+
+                    function evaluateRowEdgeConstraints(grid, W, sideBorder) {
+                        // "Starts/ends with BG" is enforced by sideBorder logic, but we still verify.
+                        // "Design reaches stitch #2 and #W-1 within the side borders" generalizes to:
+                        // left target = sideBorder (first stitch inside border),
+                        // right target = W - sideBorder - 1 (last stitch inside border).
+                        if (W < 4) return { ok: false, reason: 'too_narrow' };
+                        const leftTarget = Math.min(W - 2, Math.max(1, sideBorder)); // clamp
+                        const rightTarget = Math.max(1, Math.min(W - 2, W - sideBorder - 1));
+
+                        let hasLeftTarget = false;
+                        let hasRightTarget = false;
+
+                        for (let r = 0; r < grid.length; r++) {
+                            if (grid[r][0] !== 0 || grid[r][W - 1] !== 0) {
+                                return { ok: false, reason: 'edge_touch' };
+                            }
+                            if (grid[r][leftTarget] === 1) hasLeftTarget = true;
+                            if (grid[r][rightTarget] === 1) hasRightTarget = true;
+                        }
+
+                        if (!hasLeftTarget) return { ok: false, reason: 'no_left_target' };
+                        if (!hasRightTarget) return { ok: false, reason: 'no_right_target' };
+
+                        return { ok: true, reason: 'ok', leftTarget, rightTarget };
+                    }
+
+                    if (autoOptimizeRowsPerUnit) {
+                        // NOTE: the edge-reaching constraints (#2 and #W-1 inside side borders) are primarily
+                        // horizontal. Changing rowsPerUnit alone may not help unless the fit mode allows the
+                        // content to actually span the available width.
+                        //
+                        // Strategy:
+                        // 1) Prefer aspect-preserving baseline rowsPerUnit (avoid distortion).
+                        // 2) Search rowsPerUnit near baseline using 'contain' fit.
+                        // 3) If no satisfying candidate and user allows fallback, repeat search using 'coverWidth'
+                        //    (fit width exactly, may crop vertically) which increases the chance of reaching both sides.
+
+                        const idealAvailableW = stitchCount - (sideBorder * 2);
+                        const contentAspect = (typeof rotatedContentBox !== 'undefined' && rotatedContentBox) ? (rotatedContentBox.h / rotatedContentBox.w) : (rotatedHeight / rotatedWidth);
+                        const idealAvailableH = Math.ceil(idealAvailableW * contentAspect);
+                        const idealRowsPerUnit = Math.max(10, idealAvailableH + (unitBorder * 2));
+
+                        const baseRowsPerUnit = Math.max(rowsPerUnit, idealRowsPerUnit);
+                        const minRowsPerUnit = 10;
+                        const maxRowsPerUnit = 2000;
+                        const searchRadius = 300;
+
+                        function searchNearestSatisfying(mode) {
+                            for (let delta = 0; delta <= searchRadius; delta++) {
+                                for (const sign of [1, -1]) {
+                                    const candidate = baseRowsPerUnit + sign * delta;
+                                    if (candidate < minRowsPerUnit || candidate > maxRowsPerUnit) continue;
+
+                                    const unitGrid = buildUnitGridForCandidate(candidate, mode);
+                                    const chk = evaluateRowEdgeConstraints(unitGrid, stitchCount, sideBorder);
+                                    if (chk.ok) {
+                                        return { candidate, chk, mode, delta };
+                                    }
+                                }
+                            }
+                            return null;
+                        }
+
+                        let best = searchNearestSatisfying('contain');
+                        if (!best && allowFitWidthFallback) {
+                            best = searchNearestSatisfying('coverWidth');
+                        }
+
+                        if (best) {
+                            if (best.candidate !== rowsPerUnit) {
+                                console.log(`Auto-optimized rowsPerUnit: ${rowsPerUnit} -> ${best.candidate} (mode=${best.mode})`);
+                                rowsPerUnit = best.candidate;
+                                const rowsPerUnitInput = document.getElementById('rowsPerUnit');
+                                if (rowsPerUnitInput) rowsPerUnitInput.value = String(best.candidate);
+                                updateTotalRowsDisplay();
+                                totalRows = calculateTotalRows();
+                            } else {
+                                console.log(`Auto-optimize: current rowsPerUnit already satisfies constraints (mode=${best.mode}).`);
+                            }
+
+                            chosenFitMode = best.mode;
+                            const autoResEl = document.getElementById('autoRowsPerUnitResult');
+                            if (autoResEl) autoResEl.textContent = `Auto rows/unit: ${rowsPerUnit} ✓ (mode: ${chosenFitMode})`;
+
+                            const fitResEl = document.getElementById('fitModeResult');
+                            if (fitResEl) fitResEl.textContent = `Fit mode: ${chosenFitMode}`;
+                        } else {
+                            console.warn('Auto-optimize rows/unit: no satisfying candidate found within search window.');
+                            // Even if constraints can't be satisfied, prefer the aspect-preserving base value to avoid distortion.
+                            if (rowsPerUnit !== baseRowsPerUnit) {
+                                console.warn(`Falling back to aspect-preserving rowsPerUnit=${baseRowsPerUnit} to avoid distortion.`);
+                                rowsPerUnit = baseRowsPerUnit;
+                                const rowsPerUnitInput = document.getElementById('rowsPerUnit');
+                                if (rowsPerUnitInput) rowsPerUnitInput.value = String(baseRowsPerUnit);
+                                updateTotalRowsDisplay();
+                                totalRows = calculateTotalRows();
+                            }
+
+                            // If allowed, use coverWidth anyway to maximize horizontal reach.
+                            chosenFitMode = allowFitWidthFallback ? 'coverWidth' : 'contain';
+
+                            const autoResEl = document.getElementById('autoRowsPerUnitResult');
+                            if (autoResEl) autoResEl.textContent = `Auto rows/unit: (no exact solution; using ${rowsPerUnit})`;
+
+                            const fitResEl = document.getElementById('fitModeResult');
+                            if (fitResEl) fitResEl.textContent = `Fit mode: ${chosenFitMode}`;
+                        }
+                    }// Calculate available space after borders
+                    // sideBorder: stitches reserved on each side (left/right of each row) - min 1 to prevent color change
+                    // unitBorder: rows reserved on each end (top/bottom of each unit)
+                    const availableWidth = stitchCount - (sideBorder * 2);
+                    const availableHeight = rowsPerUnit - (unitBorder * 2);
+                    
+                    console.log(`Settings: sideBorder=${sideBorder}, unitBorder=${unitBorder}`);
+                    console.log(`Available space: ${availableWidth}x${availableHeight}`);
+                    console.log(`borderStart=${borderStart}, borderEnd=${borderEnd}, totalRows=${totalRows}`);
+                    
+                    // Create a unit canvas at target resolution
+                    const unitCanvas = document.createElement('canvas');
+                    unitCanvas.width = stitchCount;
+                    unitCanvas.height = rowsPerUnit;
+                    const unitCtx = unitCanvas.getContext('2d');
+                    
+                    // Disable image smoothing for crisp pixel edges
+                    unitCtx.imageSmoothingEnabled = false;
+                    
+                    // Fill unit with black (background)
+                    unitCtx.fillStyle = '#000000';
+                    unitCtx.fillRect(0, 0, stitchCount, rowsPerUnit);
+                    
+                    // Draw the rotated canvas into the available area WITHOUT distortion (preserve aspect ratio)
+const drawInfo = drawRotatedCanvasIntoUnit(
+    unitCtx,
+    sideBorder, unitBorder,
+    availableWidth, availableHeight,
+    chosenFitMode
+);
+
+console.log(
+    `Drew rotatedCanvas (${rotatedWidth}x${rotatedHeight}) into unit with aspect-preserving fit at ` +
+    `(${drawInfo.dx}, ${drawInfo.dy}) size ${drawInfo.drawW}x${drawInfo.drawH} (scale=${drawInfo.scale.toFixed(4)})`
+);
+                    
+                    // Only enforce borders if unitBorder > 0 (otherwise we want content to touch edges)
+                    if (unitBorder > 0) {
+                        const unitData = unitCtx.getImageData(0, 0, stitchCount, rowsPerUnit);
+                        const unitPixels = unitData.data;
+                        
+                        for (let y = 0; y < rowsPerUnit; y++) {
+                            for (let x = 0; x < stitchCount; x++) {
+                                const inUnitBorder = (y < unitBorder) || (y >= rowsPerUnit - unitBorder);
+                                
+                                if (inUnitBorder) {
+                                    const idx = (y * stitchCount + x) * 4;
+                                    unitPixels[idx] = 0;
+                                    unitPixels[idx + 1] = 0;
+                                    unitPixels[idx + 2] = 0;
+                                    unitPixels[idx + 3] = 255;
+                                }
+                            }
+                        }
+                        unitCtx.putImageData(unitData, 0, 0);
+                    }
+                    
+                    // Create final composited image
+                    const finalCanvas = document.createElement('canvas');
+                    finalCanvas.width = stitchCount;
+                    finalCanvas.height = totalRows;
+                    const finalCtx = finalCanvas.getContext('2d');
+                    finalCtx.imageSmoothingEnabled = false;
+                    
+                    // Fill with black background
+                    finalCtx.fillStyle = '#000000';
+                    finalCtx.fillRect(0, 0, stitchCount, totalRows);
+                    
+                    // Build info string
+                    let repeatInfo = ` | design: ${availableWidth}×${availableHeight}`;
+                    if (repetitions > 1) {
+                        repeatInfo += ` | ${repetitions} reps`;
+                    }
+                    if (gapSize > 0 && repetitions > 1) {
+                        repeatInfo += ` (${gapSize} gaps)`;
+                    }
+                    
+                    // Draw each repetition using the unit canvas
+                    for (let i = 0; i < repetitions; i++) {
+                        const destY = borderStart + i * (rowsPerUnit + gapSize);
+                        console.log(`Drawing unit ${i+1} at y=${destY}`);
+                        finalCtx.drawImage(unitCanvas, 0, destY);
+                    }
+                    
+                    console.log(`Final canvas: ${stitchCount}×${totalRows}, borderStart=${borderStart} rows at top`);
+                    
+                    // Display the processed image
+                    const processedCanvas = document.getElementById('processedCanvas');
+                    const processedCtx = processedCanvas.getContext('2d');
+                    const displayMaxVisualWidth = 600;
+                    const displayMaxVisualHeight = 200;
+                    const srcAspect = finalCanvas.width / finalCanvas.height;
+                    let displayWidth, displayHeight;
+                    if (srcAspect > displayMaxVisualHeight / displayMaxVisualWidth) {
+                        displayWidth = displayMaxVisualHeight;
+                        displayHeight = displayMaxVisualHeight / srcAspect;
+                    } else {
+                        displayHeight = displayMaxVisualWidth;
+                        displayWidth = displayMaxVisualWidth * srcAspect;
+                    }
+                    processedCanvas.width = Math.round(displayWidth);
+                    processedCanvas.height = Math.round(displayHeight);
+                    processedCtx.fillStyle = '#000000';
+                    processedCtx.fillRect(0, 0, processedCanvas.width, processedCanvas.height);
+                    processedCtx.drawImage(finalCanvas, 0, 0, processedCanvas.width, processedCanvas.height);
+                    document.getElementById('processedCanvasWrapper').style.height = (processedCanvas.width + 20) + 'px';
+                    document.getElementById('processedSize').textContent = `${stitchCount}×${totalRows}${repeatInfo}`;
+                    
+                    // Get pixel data from final canvas
+                    const finalData = finalCtx.getImageData(0, 0, stitchCount, totalRows);
+                    const pixels = finalData.data;
+                    
+                    // Convert to binary grid with enforced borders
+                    const grid = [];
+                    console.log(`Converting to grid: ${stitchCount}x${totalRows}, sideBorder=${sideBorder}`);
+                    
+                    for (let row = 0; row < totalRows; row++) {
+                        const rowData = [];
+                        for (let col = 0; col < stitchCount; col++) {
+                            // Enforce side border (no color change at start/end of row)
+                            if (col < sideBorder || col >= stitchCount - sideBorder) {
+                                rowData.push(0); // Background (border)
+                            } else {
+                                const idx = (row * stitchCount + col) * 4;
+                                const r = pixels[idx];
+                                const g = pixels[idx + 1];
+                                const b = pixels[idx + 2];
+                                const brightness = (r + g + b) / 3;
+                                // White/bright pixels (>128) = foreground (1), dark pixels = background (0)
+                                rowData.push(brightness < 128 ? 1 : 0);
+                            }
+                        }
+                        grid.push(rowData);
+                    }
+                    
+                    // Verify first and last columns are all 0
+                    let edgeCheck = true;
+                    for (let row = 0; row < totalRows; row++) {
+                        if (grid[row][0] !== 0 || grid[row][stitchCount-1] !== 0) {
+                            console.error(`Edge violation at row ${row}: first=${grid[row][0]}, last=${grid[row][stitchCount-1]}`);
+                            edgeCheck = false;
+                        }
+                    }
+                    if (edgeCheck) {
+                        console.log('Edge check passed: all rows start and end with background');
+                    }
+                    
+                    resolve(grid);
+                };
+                
+                img.onerror = () => reject(new Error('Failed to load image'));
+                img.src = imageUrl;
+            });
+        }
+        
+        function generateInstructions(grid) {
+            const instrs = [];
+            
+            for (let row = 0; row < grid.length; row++) {
+                const rowData = grid[row];
+                const segments = [];
+                let currentType = rowData[0];
+                let count = 1;
+                
+                for (let col = 1; col < rowData.length; col++) {
+                    if (rowData[col] === currentType) {
+                        count++;
+                    } else {
+                        segments.push({ type: currentType, count });
+                        currentType = rowData[col];
+                        count = 1;
+                    }
+                }
+                segments.push({ type: currentType, count });
+                
+                const segmentStrs = segments.map(s => 
+                    `${s.count} ${s.type === 1 ? 'FG' : 'BG'}`
+                );
+                
+                instrs.push({
+                    rowNum: row + 1,
+                    segments: segmentStrs.join(', ')
+                });
+            }
+            
+            return instrs;
+        }
+        
+        function drawPatternGrid() {
+            const displayCanvas = document.getElementById('patternCanvas');
+            const displayCtx = displayCanvas.getContext('2d');
+
+            const fgColor = document.getElementById('fgColor').value;
+            const bgColor = document.getElementById('bgColor').value;
+
+            const stitchCount = pattern[0].length;
+            const rowCount = pattern.length;
+
+            // Fixed 6x6 cell size with 1px border
+            const cellSize = 6;
+            const borderWidth = 1;
+            const cellWithBorder = cellSize + borderWidth;
+
+            // 1) Draw the true (unrotated) grid to an offscreen canvas
+            const gridCanvas = document.createElement('canvas');
+            gridCanvas.width = stitchCount * cellWithBorder + borderWidth;
+            gridCanvas.height = rowCount * cellWithBorder + borderWidth;
+            const gridCtx = gridCanvas.getContext('2d');
+
+            // Fill background with gray (grid-line color)
+            gridCtx.fillStyle = '#888888';
+            gridCtx.fillRect(0, 0, gridCanvas.width, gridCanvas.height);
+
+            for (let row = 0; row < rowCount; row++) {
+                for (let col = 0; col < stitchCount; col++) {
+                    gridCtx.fillStyle = pattern[row][col] === 1 ? fgColor : bgColor;
+                    gridCtx.fillRect(
+                        borderWidth + col * cellWithBorder,
+                        borderWidth + row * cellWithBorder,
+                        cellSize,
+                        cellSize
+                    );
+                }
+            }
+
+            // 2) Rotate pixels into the visible canvas so scrolling/overflow is correct
+            // We mimic the old CSS rotate(-90deg) by rotating the bitmap -90°.
+            displayCanvas.width = gridCanvas.height;
+            displayCanvas.height = gridCanvas.width;
+
+            displayCtx.setTransform(1, 0, 0, 1, 0, 0);
+            displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
+            displayCtx.imageSmoothingEnabled = false;
+
+            displayCtx.translate(0, gridCanvas.width);
+            displayCtx.rotate(-Math.PI / 2);
+            displayCtx.drawImage(gridCanvas, 0, 0);
+
+            // Update legend swatches
+            document.getElementById('fgSwatch').style.backgroundColor = fgColor;
+            document.getElementById('bgSwatch').style.backgroundColor = bgColor;
+        }
+
+        function renderInstructions() {
+            const tbody = document.getElementById('instructionsBody');
+            tbody.innerHTML = '';
+            
+            instructions.forEach(instr => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="row-num">${instr.rowNum}</td>
+                    <td>${instr.segments}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        async function generatePattern() {
+            if (!apiKey) {
+                showApiKeyInput();
+                return;
+            }
+            
+            const description = document.getElementById('description').value.trim();
+            if (!description) {
+                showError('Please enter a design description');
+                return;
+            }
+            
+            currentDescription = description;
+            
+            let modelUsed = 'gpt-image-1';
+            let sizeUsed = '1536×1024';
+            
+            const prompt = generateImagePrompt(description);
+            
+            // Try gpt-image-1 first (newer, better), fall back to dall-e-3
+            let response = await fetch('https://api.openai.com/v1/images/generations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-image-1',
+                    prompt: prompt,
+                    n: 1,
+                    size: '1536x1024',  // Landscape orientation for horizontal sequences
+                    quality: 'medium'
+                })
+            });
+            
+            let data;
+            if (!response.ok) {
+                const errorData = await response.json();
+                // If gpt-image-1 fails (not available), try dall-e-3
+                if (errorData.error?.code === 'model_not_found' || 
+                    errorData.error?.message?.includes('model') ||
+                    errorData.error?.message?.includes('does not exist') ||
+                    errorData.error?.type === 'invalid_request_error') {
+                    console.log('gpt-image-1 not available, falling back to dall-e-3');
+                    modelUsed = 'dall-e-3 (fallback)';
+                    sizeUsed = '1024×1024';
+                    
+                    response = await fetch('https://api.openai.com/v1/images/generations', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: 'dall-e-3',
+                            prompt: prompt,
+                            n: 1,
+                            size: '1024x1024',
+                            response_format: 'b64_json'
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const fallbackError = await response.json();
+                        throw new Error(fallbackError.error?.message || 'Failed to generate image');
+                    }
+                    data = await response.json();
+                } else {
+                    throw new Error(errorData.error?.message || 'Failed to generate image');
+                }
+            } else {
+                data = await response.json();
+            }
+            
+            // Handle both base64 (gpt-image-1 default) and b64_json (dall-e-3) formats
+            const imageBase64 = data.data[0].b64_json || data.data[0].b64;
+            currentImageUrl = `data:image/png;base64,${imageBase64}`;
+            
+            // Display the generated image, prompt, and model info
+            document.getElementById('generatedImage').src = currentImageUrl;
+            document.getElementById('promptUsed').textContent = prompt;
+            document.getElementById('imageSourceInfo').innerHTML = `Model: <span id="modelUsed">${modelUsed}</span> | Size: <span id="imageSizeUsed">${sizeUsed}</span>`;
+            document.getElementById('promptDetails').classList.remove('hidden');
+            
+            return currentImageUrl;
+        }
+        
+        async function processPattern() {
+            const imageSource = document.querySelector('input[name="imageSource"]:checked').value;
+            
+            hideError();
+            document.getElementById('loadingBox').classList.remove('hidden');
+            document.getElementById('resultsSection').classList.add('hidden');
+            document.getElementById('generateBtn').disabled = true;
+            
+            try {
+                if (imageSource === 'upload') {
+                    // Use uploaded image
+                    const fileInput = document.getElementById('imageUpload');
+                    if (!fileInput.files || !fileInput.files[0]) {
+                        throw new Error('Please select an image file');
+                    }
+                    
+                    const file = fileInput.files[0];
+                    currentImageUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.onerror = () => reject(new Error('Failed to read file'));
+                        reader.readAsDataURL(file);
+                    });
+                    
+                    currentDescription = file.name;
+                    document.getElementById('generatedImage').src = currentImageUrl;
+                    document.getElementById('imageSourceInfo').innerHTML = `Uploaded: ${file.name}`;
+                    document.getElementById('promptDetails').classList.add('hidden');
+                    
+                } else {
+                    // Generate with AI
+                    await generatePattern();
+                }
+                
+                pattern = await processImageToPattern(currentImageUrl);
+                instructions = generateInstructions(pattern);
+                
+                drawPatternGrid();
+                renderInstructions();
+                
+                document.getElementById('resultsSection').classList.remove('hidden');
+                
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                document.getElementById('loadingBox').classList.add('hidden');
+                document.getElementById('generateBtn').disabled = false;
+            }
+        }
+        
+        function saveGeneratedImage() {
+            if (!currentImageUrl) {
+                showError('No image to save');
+                return;
+            }
+            
+            const a = document.createElement('a');
+            a.href = currentImageUrl;
+            a.download = `knitting-design-${Date.now()}.png`;
+            a.click();
+        }
+        
+        function downloadInstructions() {
+            const stitchCount = document.getElementById('stitchCount').value;
+            const rowsPerUnit = document.getElementById('rowsPerUnit').value;
+            const repetitions = document.getElementById('repetitions').value;
+            const gapSize = document.getElementById('repeatGap').value;
+            const borderStart = document.getElementById('borderStart').value;
+            const borderEnd = document.getElementById('borderEnd').value;
+            const sideBorder = document.getElementById('sideBorder').value;
+            const unitBorder = document.getElementById('unitBorder').value;
+            const totalRows = calculateTotalRows();
+            
+            let text = `Double Stitch Knitting Pattern\n`;
+            text += `${'='.repeat(50)}\n\n`;
+            text += `Design: ${currentDescription}\n`;
+            text += `Stitches per row: ${stitchCount}\n`;
+            text += `Rows per unit: ${rowsPerUnit}\n`;
+            text += `Repetitions: ${repetitions}\n`;
+            text += `Gap between reps: ${gapSize} rows\n`;
+            text += `Border at start: ${borderStart} rows\n`;
+            text += `Border at end: ${borderEnd} rows\n`;
+            text += `Total rows: ${totalRows}\n`;
+            text += `\nFG = Foreground color, BG = Background color\n`;
+            text += `Side border: ${sideBorder} stitches each edge (no color change at row start/end)\n`;
+            text += `Unit border: ${unitBorder} rows at top/bottom of each unit\n\n`;
+            text += `Instructions:\n`;
+            text += `${'='.repeat(50)}\n\n`;
+            
+            instructions.forEach(instr => {
+                text += `Row ${instr.rowNum.toString().padStart(3, '0')}: ${instr.segments}\n`;
+            });
+            
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'knitting-pattern.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
