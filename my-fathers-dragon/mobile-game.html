@@ -4,6 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>My Father's Dragon - Adventure Game</title>
+
+    <!-- PWA / Add-to-Home-Screen support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Dragon Adventure">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="apple-touch-icon" href="scene_intro.png">
+    <script>
+        // Inline web app manifest (no separate file needed)
+        const manifest = {
+            name: "My Father's Dragon - Adventure Game",
+            short_name: "Dragon Adventure",
+            start_url: ".",
+            display: "fullscreen",
+            orientation: "any",
+            background_color: "#1a1a2e",
+            theme_color: "#1a1a2e",
+            icons: [{ src: "scene_intro.png", sizes: "512x512", type: "image/png" }]
+        };
+        const blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+        const link = document.createElement("link");
+        link.rel = "manifest";
+        link.href = URL.createObjectURL(blob);
+        document.head.appendChild(link);
+    </script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,6 +38,24 @@
         body { background: #1a1a2e; color: #eee; font-family: Georgia, serif; overflow: hidden; height: 100vh; height: 100dvh; }
         #root { width: 100%; height: 100%; }
         button { touch-action: manipulation; }
+
+        /* Fullscreen toggle button */
+        .fullscreen-btn {
+            position: fixed; top: 12px; left: 12px; z-index: 9999;
+            width: 40px; height: 40px;
+            background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 8px; color: #fff; font-size: 18px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+            transition: opacity 0.3s;
+            opacity: 0.6;
+            padding: 0;
+        }
+        .fullscreen-btn:hover, .fullscreen-btn:active { opacity: 1; }
+        /* Hide when already in standalone/PWA mode */
+        @media (display-mode: standalone), (display-mode: fullscreen) {
+            .fullscreen-btn { display: none; }
+        }
 
         /* Mobile-specific styles */
         @media (max-width: 768px) {
@@ -532,7 +576,55 @@ function App() {
     );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+function FullscreenButton() {
+    const [isFS, setIsFS] = useState(!!document.fullscreenElement);
+    const [supported, setSupported] = useState(false);
+    const [isStandalone, setIsStandalone] = useState(false);
+
+    useEffect(() => {
+        const standalone = window.matchMedia('(display-mode: standalone)').matches
+            || window.matchMedia('(display-mode: fullscreen)').matches
+            || window.navigator.standalone === true;
+        setIsStandalone(standalone);
+
+        setSupported(!!document.documentElement.requestFullscreen
+            || !!document.documentElement.webkitRequestFullscreen);
+
+        const onChange = () => setIsFS(!!(document.fullscreenElement || document.webkitFullscreenElement));
+        document.addEventListener('fullscreenchange', onChange);
+        document.addEventListener('webkitfullscreenchange', onChange);
+        return () => {
+            document.removeEventListener('fullscreenchange', onChange);
+            document.removeEventListener('webkitfullscreenchange', onChange);
+        };
+    }, []);
+
+    if (isStandalone || !supported) return null;
+
+    const toggle = () => {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        } else {
+            const el = document.documentElement;
+            (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+        }
+    };
+
+    return (
+        <button className="fullscreen-btn" onClick={toggle}
+            aria-label={isFS ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFS ? 'Exit fullscreen' : 'Fullscreen'}>
+            {isFS ? '⤡' : '⛶'}
+        </button>
+    );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+    <>
+        <FullscreenButton />
+        <App />
+    </>
+);
     </script>
 </body>
 </html>
