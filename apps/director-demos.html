@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIT AI Lab · Director Animation System · 1980</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #020802;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100dvh;
+      overflow: hidden;
+      padding: 8px 8px 4px;
+      font-family: 'Courier New', Courier, monospace;
+      color: #33ff33;
+    }
+
+    h1 {
+      margin-bottom: 1px;
+      font-size: 12px;
+      letter-spacing: 3px;
+      color: #44ff44;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    #subtitle {
+      font-size: 9px;
+      color: #1a8c1a;
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+      flex-shrink: 0;
+    }
+
+    /* ── top row: sidebar + canvas ── */
+    #main-layout {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 1200px;
+      flex-shrink: 0;
+    }
+
+    /* ── left sidebar: demo selector ── */
+    #sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      width: 172px;
+      flex-shrink: 0;
+    }
+
+    #sidebar-title {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #1a8c1a;
+      margin-bottom: 3px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid #0a3a0a;
+    }
+
+    .demo-btn {
+      background: #060f06;
+      color: #1a8c1a;
+      border: 1px solid #0a3a0a;
+      padding: 4px 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      cursor: pointer;
+      text-align: left;
+      border-radius: 2px;
+      transition: all 0.1s;
+      line-height: 1.35;
+    }
+
+    .demo-btn:hover { background: #0a1a0a; border-color: #1a6c1a; color: #33ff33; }
+    .demo-btn.active {
+      background: #0a2a0a;
+      border-color: #33ff33;
+      color: #44ff44;
+    }
+
+    .demo-btn .demo-name { display: block; font-weight: bold; }
+    .demo-btn .demo-src  { display: block; font-size: 8px; color: #0d5a0d; margin-top: 1px; }
+    .demo-btn.active .demo-src { color: #1a8c1a; }
+
+    /* ── canvas area ── */
+    #canvas-wrap {
+      position: relative;
+      border: 1px solid #0a3a0a;
+      box-shadow: 0 0 32px rgba(30,200,30,0.08), inset 0 0 60px rgba(0,0,0,0.6);
+      flex-shrink: 0;
+      /* centre within remaining horizontal space */
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    canvas {
+      display: block;
+      background: #030d03;
+    }
+
+    #canvas-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 2px,
+        rgba(0,0,0,0.07) 2px,
+        rgba(0,0,0,0.07) 4px
+      );
+      pointer-events: none;
+    }
+
+    /* ── controls strip ── */
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+      padding: 5px 12px;
+      background: #060f06;
+      border: 1px solid #0a3a0a;
+      border-radius: 2px;
+      width: 100%;
+      max-width: 1200px;
+      flex-shrink: 0;
+    }
+
+    button.ctrl {
+      background: #0a1a0a;
+      color: #33ff33;
+      border: 1px solid #2a8c2a;
+      padding: 3px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 2px;
+      letter-spacing: 1px;
+    }
+
+    button.ctrl:hover  { background: #102010; border-color: #44ff44; }
+    button.ctrl:active { background: #33ff33; color: #030d03; }
+
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: #1a8c1a;
+      letter-spacing: 1px;
+    }
+
+    input[type=range] {
+      width: 80px;
+      accent-color: #33ff33;
+      cursor: pointer;
+    }
+
+    #speed-val      { color: #33ff33; min-width: 36px; font-size: 10px; }
+    #frame-counter  { color: #33ff33; font-size: 10px; min-width: 80px; }
+    #actor-count    { color: #1a8c1a; font-size: 10px; min-width: 70px; }
+    #status         { color: #1a8c1a; font-size: 10px; min-width: 60px; }
+
+    /* ── bottom panel: Lisp code ── */
+    #code-panel {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      flex-direction: column;
+      margin-top: 6px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    #code-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 10px;
+      background: #060f06;
+      border: 1px solid #0a3a0a;
+      border-bottom: none;
+      flex-shrink: 0;
+    }
+
+    #code-panel-title {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #1a8c1a;
+    }
+
+    #code-panel-filename {
+      font-size: 9px;
+      color: #0d5a0d;
+    }
+
+    #code-display {
+      background: #030d03;
+      border: 1px solid #0a3a0a;
+      padding: 10px 14px;
+      overflow-x: auto;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+      font-size: 11px;
+      line-height: 1.65;
+      color: #1a8c1a;
+      white-space: pre;
+      tab-size: 2;
+    }
+
+    /* Lisp syntax highlighting */
+    .lc-comment  { color: #0d5a0d; font-style: italic; }
+    .lc-keyword  { color: #44ff44; }
+    .lc-string   { color: #ffaa00; }
+    .lc-number   { color: #ff8844; }
+    .lc-paren    { color: #1a6c1a; }
+    .lc-symbol   { color: #33ff33; }
+    .lc-special  { color: #ff44ff; }
+
+    #info { display: none; }
+  </style>
+</head>
+<body>
+
+<h1>MIT AI Lab &middot; Director Animation System &middot; 1980</h1>
+<p id="subtitle">Actor-Based Turtle Graphics &nbsp;&bull;&nbsp; Ken Kahn &nbsp;&bull;&nbsp; JavaScript Translation</p>
+
+<div id="main-layout">
+
+  <!-- LEFT: demo selector -->
+  <div id="sidebar">
+    <div id="sidebar-title">SELECT DEMO</div>
+  </div>
+
+  <!-- RIGHT: canvas -->
+  <div id="canvas-wrap">
+    <canvas id="canvas" width="1" height="1"></canvas>
+  </div>
+
+</div>
+
+<div id="controls">
+  <button class="ctrl" id="btn-play">&#9654; PLAY</button>
+  <button class="ctrl" id="btn-pause">&#8214; PAUSE</button>
+  <button class="ctrl" id="btn-reset">&#8635; RESET</button>
+  <div class="ctrl-group">
+    SPEED:
+    <input type="range" id="speed" min="0.25" max="8" step="0.25" value="2">
+    <span id="speed-val">2.00x</span>
+  </div>
+  <span id="frame-counter">FRAME: 0</span>
+  <span id="actor-count">ACTORS: 0</span>
+  <span id="status">STOPPED</span>
+</div>
+
+<!-- BOTTOM: original Lisp code -->
+<div id="code-panel">
+  <div id="code-panel-header">
+    <span id="code-panel-title">ORIGINAL DIRECTOR SOURCE</span>
+    <span id="code-panel-filename"></span>
+  </div>
+  <div id="code-display"></div>
+</div>
+
+<p id="info">
+  Translated from MacLisp/Logo source &nbsp;&bull;&nbsp;
+  Original: Ken Kahn, MIT AI Lab, circa 1980 &nbsp;&bull;&nbsp;
+  Source: anima.llisp · poly.lisp · object.lisp · perfor.lisp · screen.lisp · movie.lisp
+</p>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════
+// ORIGINAL LISP SOURCE CODE (displayed in the right panel)
+// ═══════════════════════════════════════════════════════════════
+
+const LISP_SOURCES = {
+
+  flower_seed: {
+    filename: 'anima.llisp  (lines 7–44)',
+    code: `; ── FLOWER actor definition ────────────────────────────────
+(DEFPROP FLOWER (((0 1))) CENTER)
+(DEFPROP FLOWER ((10))    SIZE)
+(DEFPROP FLOWER ((FLOWERS/.HOW/.TO/.DRAW?/.HANDLER)) HANDLERS)
+(DEFPROP FLOWER ((OBJ)) KIND/.OF)
+
+; ── DRAW/.FLOWER ─────────────────────────────────────────────
+(DEFPROP DRAW/.FLOWER
+  (LAMBDA (:FRAME/.SIZE)
+    (PROG (:SIZE :START/.STATE)
+      (LOCAL START/.STATE SIZE)
+      (MAKE 'START/.STATE (HERE))
+      (MAKE 'SIZE (/ :FRAME/.SIZE 3))
+      (PENDOWN)
+      (FORWARD :SIZE)
+      (LEFT 150)
+      (PETAL (* :SIZE 0.67))    ; left side petal
+      (LEFT 120)
+      (PETAL (/ :SIZE 2))       ; small petal
+      (LEFT 90)
+      (FORWARD (* :SIZE 2.5))   ; up the stem
+      (RIGHT 22)
+      (PETALS :SIZE)            ; 4-pair flower head
+      (PENUP)
+      (SETTURTLE :START/.STATE) ; restore position
+    (END)))
+  EXPR)
+
+; ── PETAL ─────────────────────────────────────────────────────
+(DEFPROP PETAL
+  (LAMBDA (:SIZE)
+    (PROG NIL
+      (MY/.ARC :SIZE 90)
+      (MY/.ARC :SIZE 90)
+      (RIGHT 180)
+    (END)))
+  EXPR)
+
+; ── MY/.ARC ───────────────────────────────────────────────────
+; Move to arc center, draw arc, return to circumference
+(DEFPROP MY/.ARC
+  (LAMBDA (:RADIUS :DEGREES)
+    (PROG NIL
+      (PENUP) (BACK :RADIUS)      ; move to center
+      (ARC :RADIUS :DEGREES)      ; draw arc
+      (RIGHT :DEGREES)            ; update heading
+      (FORWARD :RADIUS)           ; back to edge
+      (PENDOWN) (RIGHT 90)
+    (END)))
+  EXPR)
+
+; ── PETALS (4 pairs, 45° apart) ───────────────────────────────
+(DEFPROP PETALS
+  (LAMBDA (:SIZE)
+    (PROG NIL
+      (PETAL :SIZE) (PETAL :SIZE) (RIGHT 45)
+      (PETAL :SIZE) (PETAL :SIZE) (RIGHT 45)
+      (PETAL :SIZE) (PETAL :SIZE) (RIGHT 45)
+      (PETAL :SIZE) (PETAL :SIZE) (LEFT 135)
+    (END)))
+  EXPR)
+
+; ── DO/.SEED/.THING — the main animation sequence ─────────────
+(DEFPROP DO/.SEED/.THING
+  (LAMBDA (:SEED)
+    (PROG (:FLOWER/.NAME)
+      (LOCAL 'FLOWER/.NAME)
+      (MAKE 'FLOWER/.NAME (FLOWER [MAKE]))       ; create flower
+      (TELL :FLOWER/.NAME [RIGHT 90])
+      (TELL :FLOWER/.NAME
+        (LIST 'FORWARD (- (* 500 (RANDOM)) 250))); random X pos
+      (TELL :FLOWER/.NAME [LEFT 90])
+      (TELL :FLOWER/.NAME [DO (SHOW) IN 10 FRAMES])
+      (TELL SEED [MAKE])                         ; chain next seed
+      (TELL SEED [DO (START) AT THAT TIME])
+      (REPEAT/.IT 15
+        [TELL :FLOWER/.NAME
+          '(DO (GROW 10) AFTER 2 MORE FRAMES)])  ; grow 15 times
+      (TELL :FLOWER/.NAME [DO (HIDE) AFTER 60 MORE FRAMES])
+      (TELL :FLOWER/.NAME [DO (UN/.MAKE) AT THAT TIME])
+    (END)))
+  EXPR)`,
+  },
+
+  square: {
+    filename: 'anima.llisp  (line 367)',
+    code: `; ── SQ actor definition ─────────────────────────────────────
+(DEFPROP SQ ((10)) GRAIN)
+(DEFPROP SQ ((90)) SYM/.ANGLE)
+(DEFPROP SQ ((SQS/.HOW/.TO/.DRAW?/.HANDLER)) HANDLERS)
+(DEFPROP SQ ((OBJ)) KIND/.OF)
+
+; ── DRAW/.SQ ──────────────────────────────────────────────────
+; Draws a square centred on the turtle's current position.
+; Starts by backing up SIZE/2 and stepping left to find
+; the top-left corner, then draws 4 sides of length SIZE.
+(DEFPROP DRAW/.SQ
+  (LAMBDA (:SIZE)
+    (PROG NIL
+      ; move to corner (centre offset)
+      (PENUP)
+      (BACK  (/ :SIZE 2))
+      (LEFT  90)
+      (FORWARD (/ :SIZE 2))
+      (RIGHT 90)
+      (PENDOWN)
+      ; draw 4 sides
+      (FORWARD :SIZE) (RIGHT 90)
+      (FORWARD :SIZE) (RIGHT 90)
+      (FORWARD :SIZE) (RIGHT 90)
+      (FORWARD :SIZE) (RIGHT 90)
+    (END)))
+  EXPR)
+
+; ── SQ handler ───────────────────────────────────────────────
+(DEFPROP SQS/.HOW/.TO/.DRAW?/.HANDLER
+  (LAMBDA (:M)
+    (PROG NIL
+      (COND ((MATCH :M '(HANDLE ?ACTOR (HOW/.TO/.DRAW?)))
+             (OUTPUT '(DRAW/.SQ TELL :?ACTOR '(SIZE?)))))
+      (OUTPUT :CANT/.HANDLE)
+    (END)))
+  EXPR)`,
+  },
+
+  poly: {
+    filename: 'poly.lisp  (lines 27–58)',
+    code: `; ── POLY actor definition ────────────────────────────────────
+; A regular polygon. ANGLE controls the exterior turn.
+;   ANGLE=90  → square
+;   ANGLE=72  → pentagon
+;   ANGLE=60  → hexagon
+;   ANGLE=51.4→ heptagon  etc.
+; Loop: FORWARD SIZE, RIGHT ANGLE, until heading returns to 0.
+
+(DEFPROP POLY ((60))    ANGLE)         ; default hexagon
+(DEFPROP POLY ((OBJECT)) KIND/.OF)
+(DEFPROP POLY (ANGLE DRAWING-ARGS) DRAWING-ARGS)
+(DEFPROP POLY (DRAW-POLY) DRAW-PROCEDURE)
+
+; The DRAW-POLY procedure (reconstructed from parameters):
+; Draws (360/ANGLE) sides of length SIZE each,
+; turning RIGHT ANGLE between each side.
+;
+; (TO DRAW-POLY :SIZE :ANGLE
+;   REPEAT (/ 360 :ANGLE) [FORWARD :SIZE  RIGHT :ANGLE])
+
+; ── Setting angle triggers HOW-TO-DRAW recalc ─────────────────
+(DEFPROP OBJS/.POLY-ANGLE-HANDLER
+  (LAMBDA (:M)
+    (PROG NIL
+      (COND ((MATCH :M '(HANDLE ?ACTOR (SET YOUR ANGLE TO ?N)))
+             (OUTPUT
+               (AND (REPLACE '(ANGLE :?N) :?ACTOR)
+                    (TELL :?ACTOR '(REAPPEAR))))))
+      (OUTPUT :CANT/.HANDLE)
+    (END)))
+  EXPR)`,
+  },
+
+  color_poly: {
+    filename: 'poly.lisp  (lines 59–105)',
+    code: `; ── COLOR-POLY actor definition ─────────────────────────────
+; Like POLY but each side is drawn in a different colour
+; from the COLORS list.
+
+(DEFPROP COLOR-POLY ((60))    ANGLE)
+(DEFPROP COLOR-POLY ((OBJECT)) KIND/.OF)
+(DEFPROP COLOR-POLY (DRAW-COLOR-POLY) DRAW-PROCEDURE)
+(DEFPROP COLOR-POLY (ANGLE) DRAWING-ARGS)
+(DEFPROP COLOR-POLY (COLORS) NON-SHAPE-DRAWING-ARGS)
+
+; The DRAW-COLOR-POLY procedure (reconstructed):
+; For each side i of (360/ANGLE) sides:
+;   PENCOLOR (nth color COLORS)
+;   FORWARD SIZE
+;   RIGHT ANGLE
+;
+; (TO DRAW-COLOR-POLY :SIZE :ANGLE :COLORS
+;   LOCAL I
+;   MAKE 'I 0
+;   REPEAT (/ 360 :ANGLE)
+;     [PENCOLOR (ITEM :I :COLORS)
+;      FORWARD :SIZE
+;      RIGHT :ANGLE
+;      MAKE 'I (+ :I 1)])
+
+; ── SET YOUR COLORS TO ? ──────────────────────────────────────
+; Changing colors triggers a REAPPEAR (redraw)
+(DEFPROP OBJS/.COLOR-POLY-COLORS-HANDLER
+  (LAMBDA (:M)
+    (PROG NIL
+      (COND ((MATCH :M '(HANDLE ?ACTOR (SET YOUR COLORS TO ?C)))
+             (OUTPUT
+               (AND (REPLACE '(COLORS :?C) :?ACTOR)
+                    (TELL :?ACTOR '(REAPPEAR))))))
+      (OUTPUT :CANT/.HANDLE)
+    (END)))
+  EXPR)`,
+  },
+
+  flower_poly: {
+    filename: 'poly.lisp  (lines 106–164)',
+    code: `; ── FLOWER actor (poly.lisp version) ────────────────────────
+; More configurable than the anima.llisp FLOWER.
+; Supports petal count, per-petal colours, and shade patterns.
+
+(DEFPROP FLOWER ((3))    NUMBER-OF-PETALS)
+(DEFPROP FLOWER ((WHITE)) PETAL-COLORS)   ; default white
+(DEFPROP FLOWER (NIL)    SHADE-PATTERN)
+(DEFPROP FLOWER ((OBJECT)) KIND/.OF)
+(DEFPROP FLOWER (DRAW-FLOWER) DRAW-PROCEDURE)
+(DEFPROP FLOWER (SIZE NUMBER-OF-PETALS PETAL-COLORS SHADE-PATTERN)
+         DRAWING-ARGS)
+
+; ── ERASE BY CLEARING AREA ───────────────────────────────────
+; Unlike other shapes that erase by XOR-redrawing,
+; FLOWER erases by blanking a bounding-box rectangle.
+; This avoids leaving artefacts from the curved petals.
+(DEFPROP FLOWERS/.ERASE-HANDLER
+  (LAMBDA (:M)
+    (PROG NIL
+      (COND ((MATCH :M '(HANDLE ?ACTOR (ERASE BY CLEARING AREA)))
+             (OUTPUT (CLEAR-AREA-AROUND :?ACTOR))))
+      (OUTPUT :CANT/.HANDLE)
+    (END)))
+  EXPR)
+
+; ── SET methods ───────────────────────────────────────────────
+; Any setter triggers a REAPPEAR.
+; (SET YOUR NUMBER-OF-PETALS TO ?)
+; (SET YOUR PETAL-COLORS TO ?)
+; (SET YOUR SHADE-PATTERN TO ?)
+
+; PETAL-COLORS default palette from poly.lisp:
+;   GREEN  RED  PURPLE  MAGENTA  PINK  ORANGE`,
+  },
+
+  rocket: {
+    filename: 'poly.lisp  (lines 4–26)',
+    code: `; ── ROCKET actor definition ──────────────────────────────────
+; A rocket-shaped sprite.  The actual DRAW-ROCKET procedure
+; was stored in the compiled runtime — reconstructed here
+; from the parameter declarations.
+
+(DEFPROP ROCKET ((OBJECT)) KIND/.OF)
+(DEFPROP ROCKET (DRAW-ROCKET) DRAW-PROCEDURE)
+(DEFPROP ROCKET (SIZE) DRAWING-ARGS)
+(DEFPROP ROCKET (1) ARG-WHICH-IS-SIZE-IF-ANY)
+(DEFPROP ROCKET (STATE VISIBILITY HOW-TO-DRAW COLORS CENTER-OFFSET)
+         VARIABLES-TO-COPY-UPON-CREATION)
+
+; DRAW-ROCKET (reconstructed from context):
+; Draws a rocket shape centred on turtle position:
+;   - nose: triangle pointing up (3 FORWARD + RIGHT turns)
+;   - body: rectangle
+;   - fins: two side triangles at base
+;
+; (TO DRAW-ROCKET :SIZE
+;   PENDOWN
+;   ; nose cone
+;   FORWARD (* :SIZE 0.6)
+;   RIGHT 120  FORWARD (* :SIZE 0.5)
+;   RIGHT 120  FORWARD (* :SIZE 0.5)
+;   RIGHT 120
+;   ; body
+;   RIGHT 30   FORWARD (* :SIZE 0.8)
+;   RIGHT 90   FORWARD (* :SIZE 0.3)
+;   RIGHT 90   FORWARD (* :SIZE 0.8)
+;   RIGHT 90   FORWARD (* :SIZE 0.3)
+;   ; fins
+;   RIGHT 90   FORWARD (* :SIZE 0.2)
+;   RIGHT 135  FORWARD (* :SIZE 0.28)
+;   RIGHT 135  FORWARD (* :SIZE 0.2)
+;   PENUP)`,
+  },
+
+  rotating_obj: {
+    filename: 'anima.llisp  (lines 202–212, 396–430)',
+    code: `; ── OBJ actor definition ────────────────────────────────────
+(DEFPROP OBJ ((30))    ROTATION/.SPEED)
+(DEFPROP OBJ ((30))    GRAIN)
+(DEFPROP OBJ ((360))   SYM/.ANGLE)
+(DEFPROP OBJ ((100))   SPEED)
+(DEFPROP OBJ (((0 0 0))) OBJ/.STATE)   ; (x y heading)
+(DEFPROP OBJ ((100))   SIZE)
+(DEFPROP OBJ ((ACTOR)) KIND/.OF)
+
+; ── TURN/.OBJ ─────────────────────────────────────────────────
+; Smooth rotation: hides old appearance, rotates heading,
+; reappears at new angle.
+(DEFPROP TURN/.OBJ
+  (LAMBDA (:OBJ :COMMAND :ANGLE)
+    (PROG (:SPEED :HEADIN :STATE)
+      (MAKE 'STATE (TELL :OBJ [STATE?]))
+      (PENUP) (SETTURTLE :STATE)
+      (COND ((MEMBER :COMMAND [RT RIGHT])
+             (MAKE 'HEADIN (+ (LAST :STATE) :ANGLE)))
+            (T
+             (MAKE 'HEADIN (- (LAST :STATE) :ANGLE))))
+      (RT/.OBJ (LAST :STATE) :ANGLE :SPEED :OBJ :COMMAND)
+      (TELL :OBJ (LIST 'REPLACE 'OBJ/.STATE (HERE)))
+    (END)))
+  EXPR)
+
+; ── GROW (hide, resize, reappear) ────────────────────────────
+(DEFPROP GROW
+  (LAMBDA (:N :OBJ)
+    (PROG NIL
+      (HIDE/.OLD/.OBJ :OBJ)           ; erase current look
+      (TELL :OBJ
+        (SENTENCE [REMEMBER SIZE]
+          (+ (TELL :OBJ [SIZE?]) :N))) ; increment SIZE
+      (TELL :OBJ [REAPPEAR])          ; redraw at new size
+    (END)))
+  EXPR)
+
+; ── MOVE/.OBJ ────────────────────────────────────────────────
+(DEFPROP MOVE/.OBJ
+  (LAMBDA (:OBJ :COMMAND :AMT)
+    (PROG (:SPEED :SNAP)
+      (PENUP)
+      (SETTURTLE (TELL :OBJ [STATE?]))
+      ...
+      (FD/.OBJ :COMMAND :AMT :SPEED :SNAP :OBJ)
+      (REPLACE (LIST 'OBJ/.STATE (HERE)) :OBJ)
+    (END)))
+  EXPR)`,
+  },
+
+  revolve: {
+    filename: 'object.lisp  (lines 29–38)',
+    code: `; ── REVOLVE-OBJECT ───────────────────────────────────────────
+; Moves an object in a circle: saves state, turns to HEADING,
+; moves DISTANCE out, rotates AMOUNT, backs in, restores heading.
+; Used for orbital/planetary-style animation.
+
+(DEFINE-FORM
+  (REVOLVE-OBJECT AMOUNT HEADING DISTANCE)
+  (LET
+    ((:MESSAGE
+      (CONS 'RUN
+        (CONS 'LET
+          (CONS '((BEGIN-STATE (HERE)))
+            (CONS '(THINGUP)            ; pen up
+              (CONS (LIST 'SETHEADING HEADING)
+                (CONS (LIST 'FORWARD DISTANCE)
+                  (CONS (LIST 'RIGHT AMOUNT)
+                    (CONS (LIST 'BACK DISTANCE)
+                      (CONS (LIST 'SETHEADING
+                                  (LIST 'PLUS AMOUNT
+                                    '(THIRD BEGIN-STATE)))
+                        '((LET ((END-STATE (HERE)))
+                            (SETTURTLE BEGIN-STATE) ; restore
+                            (THINGDOWN)             ; pen down
+                            (SETTURTLE END-STATE)   ; go to end
+                          )))))))))))))
+    (COMPILED-ASK '|OBJECT(RUN ...revolve sequence...)|
+                  'OBJECT)))
+
+; ── GRADUALLY-CHANGE-VALUE ────────────────────────────────────
+; Smooth property animation: increments value by SPEED/FPS
+; each frame until GOAL-VALUE is reached, then fires FOLLOW-UP.
+
+(DEFINE-FORM
+  (GRADUALLY-CHANGE-VALUE PLANNER VARIABLE GOAL-VALUE
+                          FOLLOW-UP THE-MESSAGE)
+  (LET ((SPEED (/ (RECALL YOUR ,VARIABLE SPEED)
+                  :FRAMES-PER-SECOND))
+        (DISTANCE-TO-GO (- GOAL-VALUE (RECALL YOUR ,VARIABLE))))
+    (COND
+      ; close enough — snap to goal, fire follow-up
+      ((NOT (< (ABS SPEED) (ABS DISTANCE-TO-GO)))
+       (SET YOUR ,VARIABLE TO ,GOAL-VALUE)
+       (ASK1 (ACTOR-OF PLANNER) FOLLOW-UP NIL))
+      ; still moving — step and requeue
+      (T
+       (INCREMENT YOUR ,VARIABLE BY ,SPEED)
+       (PLAN NEXT GRADUALLY SET YOUR ,VARIABLE
+             TO ,GOAL-VALUE THEN ,FOLLOW-UP)))))`,
+  },
+
+};
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO REGISTRY
+// Each entry describes one runnable animation.
+// ═══════════════════════════════════════════════════════════════
+
+const DEMOS = [
+  {
+    id: 'flower_seed',
+    name: 'Flower / Seed',
+    desc: 'Seed chain · growing flowers',
+    srcKey: 'flower_seed',
+    factory: setupFlowerSeed,
+  },
+  {
+    id: 'square',
+    name: 'Square (SQ)',
+    desc: 'Centred square · DRAW/.SQ',
+    srcKey: 'square',
+    factory: setupSquare,
+  },
+  {
+    id: 'poly',
+    name: 'Polygon (POLY)',
+    desc: 'Regular polygon · variable angle',
+    srcKey: 'poly',
+    factory: setupPoly,
+  },
+  {
+    id: 'color_poly',
+    name: 'Color-Poly',
+    desc: 'Multi-colour polygon',
+    srcKey: 'color_poly',
+    factory: setupColorPoly,
+  },
+  {
+    id: 'flower_poly',
+    name: 'Flower (poly.lisp)',
+    desc: 'Configurable petal count & colours',
+    srcKey: 'flower_poly',
+    factory: setupFlowerPoly,
+  },
+  {
+    id: 'rocket',
+    name: 'Rocket',
+    desc: 'Rocket sprite · orbiting demo',
+    srcKey: 'rocket',
+    factory: setupRocket,
+  },
+  {
+    id: 'rotating_obj',
+    name: 'Rotating OBJ',
+    desc: 'OBJ actor · spin + grow sequence',
+    srcKey: 'rotating_obj',
+    factory: setupRotatingObj,
+  },
+  {
+    id: 'revolve',
+    name: 'Revolve / Orbit',
+    desc: 'REVOLVE-OBJECT · orbital motion',
+    srcKey: 'revolve',
+    factory: setupRevolve,
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// TURTLE  (Logo turtle → HTML5 Canvas)
+// ═══════════════════════════════════════════════════════════════
+
+class Turtle {
+  constructor(ctx, cw, ch) {
+    this.ctx = ctx;
+    this.cw = cw; this.ch = ch;
+    this.x = 0; this.y = 0;   // Logo coords (centre=0,0)
+    this.heading = 0;           // Logo: 0=north, clockwise
+    this.penDown = false;
+    this.color = '#33ff33';
+    this.lineWidth = 1.5;
+  }
+
+  toCanvas(lx, ly) { return [this.cw/2 + lx, this.ch/2 - ly]; }
+  headingRad()      { return this.heading * Math.PI / 180; }
+
+  forward(n) {
+    const hr = this.headingRad();
+    const nx = this.x + n * Math.sin(hr);
+    const ny = this.y + n * Math.cos(hr);
+    if (this.penDown) {
+      const [x1,y1] = this.toCanvas(this.x, this.y);
+      const [x2,y2] = this.toCanvas(nx, ny);
+      this.ctx.beginPath();
+      this.ctx.moveTo(x1,y1); this.ctx.lineTo(x2,y2);
+      this.ctx.strokeStyle = this.color;
+      this.ctx.lineWidth = this.lineWidth;
+      this.ctx.stroke();
+    }
+    this.x = nx; this.y = ny;
+  }
+
+  back(n)      { this.forward(-n); }
+  right(deg)   { this.heading = ((this.heading + deg) % 360 + 360) % 360; }
+  left(deg)    { this.right(-deg); }
+  penup()      { this.penDown = false; }
+  pendown()    { this.penDown = true; }
+  setColor(c)  { this.color = c; }
+  setLineWidth(w) { this.lineWidth = w; }
+  getState()   { return { x:this.x, y:this.y, heading:this.heading }; }
+  setState(s)  { this.x=s.x; this.y=s.y; this.heading=s.heading; }
+
+  // MY/.ARC: PENUP; BACK r; draw arc; RIGHT deg; FORWARD r; PENDOWN; RIGHT 90
+  myArc(radius, degrees) {
+    const wasPenDown = this.penDown;
+    this.penDown = false;
+    this.back(radius);          // move to arc centre
+    const cx = this.x, cy = this.y;
+    const startA = (this.heading + 90) * Math.PI / 180;
+    const endA   = startA + degrees * Math.PI / 180;
+    if (wasPenDown) {
+      const [ccx, ccy] = this.toCanvas(cx, cy);
+      this.ctx.beginPath();
+      this.ctx.arc(ccx, ccy, radius, startA, endA, false);
+      this.ctx.strokeStyle = this.color;
+      this.ctx.lineWidth = this.lineWidth;
+      this.ctx.stroke();
+    }
+    this.right(degrees);
+    const hr = this.headingRad();
+    this.x = cx + radius * Math.sin(hr);
+    this.y = cy + radius * Math.cos(hr);
+    this.penDown = wasPenDown;
+    this.right(90);
+  }
+
+  // Raw canvas arc centred at current turtle position
+  arc(radius, degrees) {
+    const [cx, cy] = this.toCanvas(this.x, this.y);
+    const startA = (this.heading - 90) * Math.PI / 180;
+    const endA   = startA + degrees * Math.PI / 180;
+    if (this.penDown) {
+      this.ctx.beginPath();
+      this.ctx.arc(cx, cy, radius, startA, endA, false);
+      this.ctx.strokeStyle = this.color;
+      this.ctx.lineWidth = this.lineWidth;
+      this.ctx.stroke();
+    }
+    this.right(degrees);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACTOR BASE
+// ═══════════════════════════════════════════════════════════════
+
+class Actor {
+  constructor(scene, scheduler) {
+    this.scene = scene; this.scheduler = scheduler;
+    this.id = ++Actor._nextId; this.alive = true;
+  }
+  receive(msg) {}
+  schedule(fn, frame) { if (this.alive) this.scheduler.schedule(fn, frame); }
+  destroy() { this.alive = false; this.scene.removeActor(this); }
+}
+Actor._nextId = 0;
+
+// ═══════════════════════════════════════════════════════════════
+// OBJ ACTOR  (anima.llisp OBJ defaults)
+// ═══════════════════════════════════════════════════════════════
+
+class ObjActor extends Actor {
+  constructor(scene, scheduler) {
+    super(scene, scheduler);
+    this.x = 0; this.y = 0; this.heading = 0;
+    this.size = 100; this.visible = false;
+    this.color = '#33ff33'; this.speed = 100;
+    this.rotationSpeed = 30;
+  }
+  receive(msg) {
+    switch (msg.type) {
+      case 'SHOW':    this.visible = true;  break;
+      case 'HIDE':    this.visible = false; break;
+      case 'UNMAKE':  this.destroy();       break;
+      case 'GROW':    this.size += msg.n;   break;
+      case 'SET_SIZE':this.size = msg.n;    break;
+      case 'RIGHT': case 'RT':
+        this.heading = ((this.heading + msg.deg) % 360 + 360) % 360; break;
+      case 'LEFT':  case 'LT':
+        this.heading = ((this.heading - msg.deg) % 360 + 360) % 360; break;
+      case 'FORWARD': case 'FD': {
+        const hr = this.heading * Math.PI / 180;
+        this.x += msg.n * Math.sin(hr); this.y += msg.n * Math.cos(hr); break;
+      }
+      case 'BACK': case 'BK': {
+        const hr = this.heading * Math.PI / 180;
+        this.x -= msg.n * Math.sin(hr); this.y -= msg.n * Math.cos(hr); break;
+      }
+      case 'SET_POS': this.x = msg.x; this.y = msg.y; break;
+      case 'SET_HEADING': this.heading = msg.h; break;
+      case 'SET_COLOR': this.color = msg.c; break;
+    }
+  }
+  drawSelf(turtle) {}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FLOWER ACTOR  (anima.llisp DRAW/.FLOWER)
+// ═══════════════════════════════════════════════════════════════
+
+class FlowerActor extends ObjActor {
+  constructor(scene, scheduler, opts = {}) {
+    super(scene, scheduler);
+    this.size = opts.size || 10;
+    this.petalColors = opts.colors || ['#33ff33','#ff4444','#cc44ff','#ff44cc','#ff88bb','#ffaa00'];
+  }
+  drawSelf(turtle) {
+    if (!this.visible) return;
+    this._drawFlower(turtle, this.size);
+  }
+  _drawFlower(turtle, frameSize) {
+    const size  = frameSize / 3;
+    const saved = turtle.getState();
+    turtle.x = this.x; turtle.y = this.y; turtle.heading = this.heading;
+    turtle.pendown();
+    turtle.setColor(this.petalColors[1]);
+    turtle.forward(size);
+    turtle.left(150);
+    turtle.setColor(this.petalColors[0]);
+    this._petal(turtle, size * 0.67);
+    turtle.left(120);
+    turtle.setColor(this.petalColors[2]);
+    this._petal(turtle, size / 2);
+    turtle.left(90);
+    turtle.setColor(this.petalColors[3]);
+    turtle.forward(size * 2.5);
+    turtle.right(22);
+    this._petals(turtle, size);
+    turtle.penup();
+    turtle.setState(saved);
+  }
+  _petal(turtle, size) {
+    turtle.myArc(size, 90);
+    turtle.myArc(size, 90);
+    turtle.right(180);
+  }
+  _petals(turtle, size) {
+    const c = this.petalColors;
+    for (let i = 0; i < 4; i++) {
+      turtle.setColor(c[i % c.length]);
+      this._petal(turtle, size);
+      turtle.setColor(c[(i+2) % c.length]);
+      this._petal(turtle, size);
+      if (i < 3) turtle.right(45);
+    }
+    turtle.left(135);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEED ACTOR  (anima.llisp DO/.SEED/.THING)
+// ═══════════════════════════════════════════════════════════════
+
+class SeedActor extends Actor {
+  constructor(scene, scheduler) { super(scene, scheduler); }
+  receive(msg) { if (msg.type === 'START') this._doSeedThing(); }
+  _doSeedThing() {
+    const cf = this.scheduler.currentFrame;
+    if (this.scene.actors.filter(a => a instanceof FlowerActor).length >= 18) {
+      const ns = new SeedActor(this.scene, this.scheduler);
+      this.scene.addActor(ns);
+      this.schedule(() => { if(ns.alive) ns.receive({type:'START'}); }, cf + 20);
+      this.destroy(); return;
+    }
+    const shift = Math.floor(Math.random() * 6);
+    const cols  = ['#33ff33','#ff4444','#cc44ff','#ff44cc','#ff88bb','#ffaa00'];
+    const rotated = [...cols.slice(shift), ...cols.slice(0, shift)];
+    const flower = new FlowerActor(this.scene, this.scheduler, { size:10, colors:rotated });
+    this.scene.addActor(flower);
+    const spread = canvas.width * 0.7;
+    flower.receive({type:'RIGHT', deg:90});
+    flower.receive({type:'FORWARD', n: Math.random()*spread - spread/2});
+    flower.receive({type:'LEFT', deg:90});
+    const showFrame = cf + 10;
+    this.schedule(() => { if(flower.alive) flower.receive({type:'SHOW'}); }, showFrame);
+    const ns = new SeedActor(this.scene, this.scheduler);
+    this.scene.addActor(ns);
+    this.schedule(() => { if(ns.alive) ns.receive({type:'START'}); }, showFrame);
+    for (let i = 1; i <= 15; i++)
+      this.schedule(() => { if(flower.alive) flower.receive({type:'GROW', n:10}); }, showFrame + 2*i);
+    this.schedule(() => { if(flower.alive) flower.receive({type:'HIDE'}); }, showFrame+60);
+    this.schedule(() => { if(flower.alive) flower.receive({type:'UNMAKE'}); }, showFrame+60);
+    this.destroy();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SQUARE ACTOR  (anima.llisp DRAW/.SQ)
+// ═══════════════════════════════════════════════════════════════
+
+class SquareActor extends ObjActor {
+  constructor(scene, scheduler, opts = {}) {
+    super(scene, scheduler);
+    this.size = opts.size || 80;
+    this.color = opts.color || '#33ff33';
+    this.visible = true;
+  }
+  drawSelf(turtle) {
+    if (!this.visible) return;
+    const saved = turtle.getState();
+    turtle.x = this.x; turtle.y = this.y; turtle.heading = this.heading;
+    turtle.setColor(this.color);
+    // DRAW/.SQ: back SIZE/2, left 90, forward SIZE/2, right 90, then 4 sides
+    turtle.penup();
+    turtle.back(this.size / 2);
+    turtle.left(90);
+    turtle.forward(this.size / 2);
+    turtle.right(90);
+    turtle.pendown();
+    for (let i = 0; i < 4; i++) { turtle.forward(this.size); turtle.right(90); }
+    turtle.penup();
+    turtle.setState(saved);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POLY ACTOR  (poly.lisp DRAW-POLY)
+// Regular polygon: (360/angle) sides, turning RIGHT angle each step.
+// ═══════════════════════════════════════════════════════════════
+
+class PolyActor extends ObjActor {
+  constructor(scene, scheduler, opts = {}) {
+    super(scene, scheduler);
+    this.size   = opts.size  || 80;
+    this.angle  = opts.angle || 60;   // exterior turn; 60=hexagon
+    this.color  = opts.color || '#33ff33';
+    this.visible = true;
+  }
+  drawSelf(turtle) {
+    if (!this.visible) return;
+    const saved = turtle.getState();
+    turtle.x = this.x; turtle.y = this.y; turtle.heading = this.heading;
+    turtle.setColor(this.color);
+    const sides = Math.round(360 / this.angle);
+    turtle.pendown();
+    for (let i = 0; i < sides; i++) { turtle.forward(this.size); turtle.right(this.angle); }
+    turtle.penup();
+    turtle.setState(saved);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COLOR-POLY ACTOR  (poly.lisp DRAW-COLOR-POLY)
+// Each side drawn in a different colour from the colors array.
+// ═══════════════════════════════════════════════════════════════
+
+class ColorPolyActor extends ObjActor {
+  constructor(scene, scheduler, opts = {}) {
+    super(scene, scheduler);
+    this.size   = opts.size  || 80;
+    this.angle  = opts.angle || 60;
+    this.colors = opts.colors || ['#33ff33','#ff4444','#cc44ff','#ff44cc','#ff88bb','#ffaa00'];
+    this.visible = true;
+  }
+  drawSelf(turtle) {
+    if (!this.visible) return;
+    const saved = turtle.getState();
+    turtle.x = this.x; turtle.y = this.y; turtle.heading = this.heading;
+    const sides = Math.round(360 / this.angle);
+    turtle.pendown();
+    for (let i = 0; i < sides; i++) {
+      turtle.setColor(this.colors[i % this.colors.length]);
+      turtle.forward(this.size);
+      turtle.right(this.angle);
+    }
+    turtle.penup();
+    turtle.setState(saved);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FLOWER-POLY ACTOR  (poly.lisp FLOWER / DRAW-FLOWER)
+// Configurable petal count, colors, shading.
+// ═══════════════════════════════════════════════════════════════
+
+class FlowerPolyActor extends ObjActor {
+  constructor(scene, scheduler, opts = {}) {
+    super(scene, scheduler);
+    this.size           = opts.size   || 30;
+    this.numPetals      = opts.petals || 3;
+    this.petalColors    = opts.colors || ['#33ff33','#ff4444','#cc44ff','#ff44cc','#ff88bb','#ffaa00'];
+    this.visible = true;
+  }
+  drawSelf(turtle) {
+    if (!this.visible) return;
+    const saved = turtle.getState();
+    turtle.x = this.x; turtle.y = this.y; turtle.heading = this.heading;
+    const angleStep = 360 / this.numPetals;
+    for (let i = 0; i < this.numPetals; i++) {
+      turtle.setColor(this.petalColors[i % this.petalColors.length]);
+      this._drawOnePetal(turtle, this.size);
+      turtle.right(angleStep);
+    }
+    turtle.setState(saved);
+  }
+  _drawOnePetal(turtle, size) {
+    // Two quarter-circle arcs form a leaf/petal shape
+    turtle.pendown();
+    turtle.myArc(size, 90);
+    turtle.myArc(size, 90);
+    turtle.right(180);
+    turtle.penup();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROCKET ACTOR  (poly.lisp ROCKET / DRAW-ROCKET)
+// Reconstructed from parameter declarations.
+// ═══════════════════════════════════════════════════════════════
+
+class RocketActor extends ObjActor {
+  constructor(scene, scheduler, opts = {}) {
+    super(scene, scheduler);
+    this.size    = opts.size  || 60;
+    this.color   = opts.color || '#33ff33';
+    this.thrustColor = opts.thrustColor || '#ff8800';
+    this.visible = true;
+  }
+  drawSelf(turtle) {
+    if (!this.visible) return;
+    const saved = turtle.getState();
+    const s = this.size;
+    turtle.x = this.x; turtle.y = this.y; turtle.heading = this.heading;
+    turtle.setColor(this.color);
+
+    // nose cone (equilateral-ish triangle at top)
+    turtle.penup(); turtle.forward(s * 0.5); turtle.pendown();
+    turtle.right(120); turtle.forward(s * 0.35);
+    turtle.right(120); turtle.forward(s * 0.35);
+    turtle.right(120); turtle.forward(s * 0.35);
+    turtle.penup(); turtle.back(s * 0.5);
+
+    // body rectangle
+    turtle.penup();
+    turtle.left(90); turtle.forward(s * 0.15); turtle.right(90);
+    turtle.pendown();
+    turtle.forward(s * 0.5);
+    turtle.right(90);  turtle.forward(s * 0.3);
+    turtle.right(90);  turtle.forward(s * 0.5);
+    turtle.right(90);  turtle.forward(s * 0.3);
+    turtle.penup();
+    turtle.right(90);
+    turtle.right(90); turtle.forward(s * 0.15); turtle.left(90);
+
+    // left fin
+    turtle.setColor(this.color);
+    turtle.penup(); turtle.left(90); turtle.forward(s * 0.15); turtle.right(90);
+    turtle.pendown();
+    turtle.right(135); turtle.forward(s * 0.25);
+    turtle.right(135); turtle.forward(s * 0.18);
+    turtle.penup();
+    turtle.left(90); turtle.back(s * 0.15); turtle.right(90);
+
+    // right fin
+    turtle.penup(); turtle.right(90); turtle.forward(s * 0.15); turtle.left(90);
+    turtle.pendown();
+    turtle.left(135); turtle.forward(s * 0.25);
+    turtle.left(135); turtle.forward(s * 0.18);
+    turtle.penup();
+    turtle.right(90); turtle.back(s * 0.15); turtle.left(90);
+
+    // flame/exhaust
+    turtle.setColor(this.thrustColor);
+    turtle.pendown();
+    turtle.back(s * 0.1);
+    turtle.right(30); turtle.forward(s * 0.25);
+    turtle.back(s * 0.25); turtle.left(60); turtle.forward(s * 0.2);
+    turtle.back(s * 0.2); turtle.right(30);
+    turtle.forward(s * 0.1);
+    turtle.penup();
+
+    turtle.setState(saved);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCHEDULER
+// ═══════════════════════════════════════════════════════════════
+
+class Scheduler {
+  constructor() { this.currentFrame = 0; this.events = new Map(); }
+  schedule(fn, frame) {
+    if (!this.events.has(frame)) this.events.set(frame, []);
+    this.events.get(frame).push(fn);
+  }
+  tick() {
+    const cbs = this.events.get(this.currentFrame);
+    if (cbs) { for (const fn of cbs) { try { fn(); } catch(e) { console.error(e); } } this.events.delete(this.currentFrame); }
+    this.currentFrame++;
+  }
+  reset() { this.currentFrame = 0; this.events.clear(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCENE
+// ═══════════════════════════════════════════════════════════════
+
+class Scene {
+  constructor() { this.actors = []; }
+  addActor(a)    { this.actors.push(a); }
+  removeActor(a) { const i = this.actors.indexOf(a); if (i !== -1) this.actors.splice(i,1); }
+  render(turtle) { for (const a of [...this.actors]) if (a.visible && a.drawSelf) a.drawSelf(turtle); }
+  clear()        { this.actors = []; }
+  get actorCount() { return this.actors.length; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO FACTORIES
+// ═══════════════════════════════════════════════════════════════
+
+function setupFlowerSeed() {
+  const seed = new SeedActor(scene, scheduler);
+  scene.addActor(seed);
+  scheduler.schedule(() => { if(seed.alive) seed.receive({type:'START'}); }, 0);
+}
+
+function setupSquare() {
+  // Five squares: one central + four rotated, growing outward
+  const colors = ['#33ff33','#ff4444','#cc44ff','#ffaa00','#55aaff'];
+  for (let i = 0; i < 5; i++) {
+    const sq = new SquareActor(scene, scheduler, { size: 10, color: colors[i] });
+    sq.visible = false;
+    // randomise position
+    const sqSpread = canvas.width * 0.65;
+    sq.receive({type:'RIGHT', deg: 90});
+    sq.receive({type:'FORWARD', n: (Math.random() * sqSpread) - sqSpread/2});
+    sq.receive({type:'LEFT', deg: 90});
+    sq.receive({type:'FORWARD', n: (Math.random() * sqSpread) - sqSpread/2});
+    scene.addActor(sq);
+    const showFrame = i * 15;
+    scheduler.schedule(() => sq.receive({type:'SHOW'}), showFrame);
+    for (let g = 1; g <= 20; g++)
+      scheduler.schedule(() => sq.receive({type:'GROW', n: 8}), showFrame + g * 3);
+    scheduler.schedule(() => sq.receive({type:'HIDE'}), showFrame + 80);
+    scheduler.schedule(() => {
+      sq.receive({type:'UNMAKE'});
+      // respawn
+      const ns = new SquareActor(scene, scheduler, {size:10, color: colors[i]});
+      ns.visible = false;
+      const nsSpr = canvas.width * 0.65;
+      ns.receive({type:'RIGHT', deg:90});
+      ns.receive({type:'FORWARD', n:(Math.random()*nsSpr)-nsSpr/2});
+      ns.receive({type:'LEFT', deg:90});
+      ns.receive({type:'FORWARD', n:(Math.random()*nsSpr)-nsSpr/2});
+      scene.addActor(ns);
+      scheduler.schedule(() => ns.receive({type:'SHOW'}), scheduler.currentFrame + 5);
+      for (let g=1; g<=20; g++)
+        scheduler.schedule(() => ns.receive({type:'GROW',n:8}), scheduler.currentFrame+5+g*3);
+      scheduler.schedule(() => ns.receive({type:'HIDE'}), scheduler.currentFrame+85);
+    }, showFrame + 81);
+  }
+}
+
+function setupPoly() {
+  // A sequence of polygons with different angles (hexagon → pentagon → square → triangle)
+  const shapes = [
+    { angle:60,  color:'#33ff33', label:'hexagon' },
+    { angle:72,  color:'#ff4444', label:'pentagon' },
+    { angle:90,  color:'#cc44ff', label:'square' },
+    { angle:120, color:'#ffaa00', label:'triangle' },
+    { angle:45,  color:'#55aaff', label:'octagon' },
+    { angle:51.43, color:'#ff88bb', label:'heptagon' },
+  ];
+  shapes.forEach((s, i) => {
+    const poly = new PolyActor(scene, scheduler, { size: 10, angle: s.angle, color: s.color });
+    poly.visible = false;
+    const offsetAngle = i * 60;
+    poly.receive({type:'RIGHT', deg: offsetAngle});
+    poly.receive({type:'FORWARD', n: 180});
+    poly.receive({type:'LEFT', deg: offsetAngle});
+    scene.addActor(poly);
+    const show = i * 12;
+    scheduler.schedule(() => poly.receive({type:'SHOW'}), show);
+    for (let g=1; g<=15; g++)
+      scheduler.schedule(() => poly.receive({type:'GROW', n:7}), show + g*2);
+    scheduler.schedule(() => {
+      for (let g=1; g<=15; g++)
+        scheduler.schedule(() => poly.receive({type:'GROW', n:-7}), scheduler.currentFrame + g*2);
+      scheduler.schedule(() => poly.receive({type:'HIDE'}), scheduler.currentFrame+32);
+    }, show + 60);
+  });
+}
+
+function setupColorPoly() {
+  const colorSets = [
+    ['#33ff33','#ff4444','#cc44ff','#ff44cc','#ff88bb','#ffaa00'],
+    ['#55aaff','#ffaa00','#ff4444','#33ff33'],
+    ['#ff44cc','#44ffff','#ffff44','#ff4444','#44ff44','#4444ff','#ff44ff','#44ffff'],
+  ];
+  colorSets.forEach((colors, i) => {
+    const sides = colors.length;
+    const angle = 360 / sides;
+    const poly = new ColorPolyActor(scene, scheduler, { size:10, angle, colors });
+    poly.visible = false;
+    const spreadAngle = i * 120;
+    poly.receive({type:'RIGHT', deg: spreadAngle});
+    poly.receive({type:'FORWARD', n: canvas.width * 0.23});
+    poly.receive({type:'LEFT', deg: spreadAngle});
+    scene.addActor(poly);
+    const show = i * 8;
+    scheduler.schedule(() => poly.receive({type:'SHOW'}), show);
+    for (let g=1; g<=20; g++)
+      scheduler.schedule(() => poly.receive({type:'GROW', n:8}), show + g*3);
+    scheduler.schedule(() => {
+      for (let g=1; g<=20; g++)
+        scheduler.schedule(() => poly.receive({type:'GROW',n:-8}), scheduler.currentFrame + g*2);
+      scheduler.schedule(() => { poly.receive({type:'HIDE'}); poly.size=10; }, scheduler.currentFrame+42);
+      scheduler.schedule(() => {
+        poly.receive({type:'SHOW'});
+        for (let g=1; g<=20; g++)
+          scheduler.schedule(() => poly.receive({type:'GROW',n:8}), scheduler.currentFrame+g*3);
+      }, scheduler.currentFrame+50);
+    }, show + 80);
+  });
+}
+
+function setupFlowerPoly() {
+  // Three flowers with different petal counts, appearing in sequence
+  const configs = [
+    { petals:3, colors:['#33ff33','#ff4444','#cc44ff'],             x:-canvas.width*0.29, y:canvas.width*0.07  },
+    { petals:5, colors:['#ffaa00','#ff44cc','#55aaff','#ffff44','#ff4444'], x:0,    y:canvas.width*0.07  },
+    { petals:8, colors:['#33ff33','#ff4444','#cc44ff','#ff44cc','#ff88bb','#ffaa00','#55aaff','#ffff44'], x:canvas.width*0.29, y:canvas.width*0.07 },
+  ];
+  configs.forEach((cfg, i) => {
+    const f = new FlowerPolyActor(scene, scheduler, { size:10, petals:cfg.petals, colors:cfg.colors });
+    f.x = cfg.x; f.y = cfg.y;
+    f.visible = false;
+    scene.addActor(f);
+    const show = i * 10;
+    scheduler.schedule(() => f.receive({type:'SHOW'}), show);
+    for (let g=1; g<=20; g++)
+      scheduler.schedule(() => f.receive({type:'GROW', n:8}), show + g*3);
+    // rotate slowly
+    let rot = 0;
+    const rotInterval = 4;
+    for (let r=0; r < 90; r++)
+      scheduler.schedule(() => f.receive({type:'RIGHT', deg:4}), show + 5 + r * rotInterval);
+  });
+}
+
+function setupRocket() {
+  // Two rockets orbiting a central point
+  const s = canvas.width;
+  const rockets = [
+    { color:'#33ff33', thrustColor:'#ff8800', radius:s*0.26, speed:3, startAngle:0   },
+    { color:'#ff4444', thrustColor:'#ffff00', radius:s*0.17, speed:-4, startAngle:180 },
+  ];
+  rockets.forEach((cfg, i) => {
+    const r = new RocketActor(scene, scheduler, { size:50, color:cfg.color, thrustColor:cfg.thrustColor });
+    r.visible = true;
+    r.x = cfg.radius;
+    r.y = 0;
+    r.heading = 90; // facing east to travel in circle
+    scene.addActor(r);
+    // orbit: each frame, rotate position around origin by cfg.speed degrees
+    let angle = cfg.startAngle;
+    const orbit = () => {
+      if (!r.alive) return;
+      angle = (angle + cfg.speed + 360) % 360;
+      const rad = angle * Math.PI / 180;
+      r.x = cfg.radius * Math.cos(rad);
+      r.y = cfg.radius * Math.sin(rad);
+      r.heading = angle + 90;
+      scheduler.schedule(orbit, scheduler.currentFrame + 1);
+    };
+    scheduler.schedule(orbit, 0);
+  });
+}
+
+function setupRevolve() {
+  // REVOLVE-OBJECT demo: a square orbiting around a central poly
+  // Central polygon
+  const centre = new PolyActor(scene, scheduler, { size: canvas.width*0.085, angle: 60, color:'#33ff33' });
+  centre.visible = true;
+  scene.addActor(centre);
+
+  // Three orbiting color polys at different radii & speeds
+  const cs = canvas.width;
+  const orbiters = [
+    { angle:90, color:'#ff4444', radius:cs*0.23, speed:2.5, size:cs*0.04  },
+    { angle:72, color:'#cc44ff', radius:cs*0.32, speed:-1.8, size:cs*0.035 },
+    { angle:60, color:'#ffaa00', radius:cs*0.40, speed:1.2, size:cs*0.03  },
+  ];
+  orbiters.forEach((cfg, i) => {
+    const obj = new PolyActor(scene, scheduler, { size:cfg.size, angle:cfg.angle, color:cfg.color });
+    obj.visible = true;
+    scene.addActor(obj);
+    let ang = i * 120;
+    const step = () => {
+      if (!obj.alive) return;
+      ang = (ang + cfg.speed + 360) % 360;
+      const rad = ang * Math.PI / 180;
+      obj.x = cfg.radius * Math.cos(rad);
+      obj.y = cfg.radius * Math.sin(rad);
+      obj.heading = ang;
+      scheduler.schedule(step, scheduler.currentFrame + 1);
+    };
+    scheduler.schedule(step, 0);
+  });
+}
+
+function setupRotatingObj() {
+  // OBJ-like actors: appear, grow, rotate, shrink, disappear — like the original OBJ demo
+  const palette = ['#33ff33','#ff4444','#cc44ff','#ffaa00','#55aaff'];
+  function spawnObj(colorIdx, delay) {
+    const angle = (colorIdx / 5) * 360;
+    const dist  = canvas.width * (0.2 + Math.random() * 0.15);
+    const rad   = angle * Math.PI / 180;
+    const sx = dist * Math.cos(rad);
+    const sy = dist * Math.sin(rad);
+
+    const obj = new PolyActor(scene, scheduler, {
+      size: 10,
+      angle: 45 + colorIdx * 15,   // star-like varying angles
+      color: palette[colorIdx % palette.length]
+    });
+    obj.x = sx; obj.y = sy;
+    obj.visible = false;
+    scene.addActor(obj);
+
+    scheduler.schedule(() => obj.receive({type:'SHOW'}), delay);
+    // grow phase
+    for (let g=1; g<=15; g++)
+      scheduler.schedule(() => obj.receive({type:'GROW',n:12}), delay + g*2);
+    // rotate while visible
+    for (let r=0; r<30; r++)
+      scheduler.schedule(() => obj.receive({type:'RIGHT', deg:12}), delay + r*2);
+    // shrink phase
+    const shrinkStart = delay + 50;
+    for (let g=1; g<=15; g++)
+      scheduler.schedule(() => obj.receive({type:'GROW',n:-12}), shrinkStart + g*2);
+    scheduler.schedule(() => {
+      obj.receive({type:'HIDE'});
+      obj.receive({type:'UNMAKE'});
+      spawnObj(colorIdx, scheduler.currentFrame + 5);
+    }, shrinkStart + 35);
+  }
+  for (let i=0; i<5; i++) spawnObj(i, i * 8);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANIMATION LOOP
+// ═══════════════════════════════════════════════════════════════
+
+let scene, scheduler, turtle, ctx, canvas;
+let running = false;
+let speedMultiplier = 2.0;
+let lastTimestamp   = null;
+const msPerFrame    = 200;   // 5 FPS at 1×  (original :FPS 5.0)
+let rafId           = null;
+let currentDemoId   = null;
+
+function initSystem() {
+  canvas = document.getElementById('canvas');
+
+  // Size the canvas to fill available space without the page scrolling.
+  // Measure actual rendered heights of fixed elements, then subtract from viewport.
+  const fixedEls = ['h1', '#subtitle', '#controls'];
+  const fixedH = fixedEls.reduce((sum, sel) => {
+    const el = document.querySelector(sel);
+    return sum + (el ? el.getBoundingClientRect().height : 0);
+  }, 0);
+  // vertical overhead: body pad(12) + 4 row-gaps(24) + code header(22) + min code content(120)
+  const vOverhead = fixedH + 12 + 24 + 22 + 120;
+  // horizontal overhead: sidebar+gap(192) + body h-pad(16)
+  const hOverhead = 192 + 16;
+
+  const maxH = Math.floor(window.innerHeight - vOverhead);
+  const maxW = Math.floor(window.innerWidth  - hOverhead);
+  // Canvas is square; pick the smaller dimension so it fits both axes
+  const size = Math.max(280, Math.min(maxH, maxW));
+
+  canvas.width  = size;
+  canvas.height = size;
+
+  ctx       = canvas.getContext('2d');
+  scene     = new Scene();
+  scheduler = new Scheduler();
+  turtle    = new Turtle(ctx, canvas.width, canvas.height);
+  ctx.fillStyle = '#030d03';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function animationStep(timestamp) {
+  if (!running) return;
+  if (lastTimestamp === null) lastTimestamp = timestamp;
+  const elapsed = timestamp - lastTimestamp;
+  const frameInterval = msPerFrame / speedMultiplier;
+  if (elapsed >= frameInterval) {
+    lastTimestamp = timestamp - (elapsed % frameInterval);
+    // phosphor decay
+    ctx.fillStyle = 'rgba(3, 13, 3, 0.35)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    scheduler.tick();
+    scene.render(turtle);
+    document.getElementById('frame-counter').textContent = 'FRAME: ' + scheduler.currentFrame;
+    document.getElementById('actor-count').textContent   = 'ACTORS: ' + scene.actorCount;
+  }
+  rafId = requestAnimationFrame(animationStep);
+}
+
+function startAnimation() {
+  if (running) return;
+  running = true;
+  lastTimestamp = null;
+  document.getElementById('status').textContent = 'RUNNING';
+  rafId = requestAnimationFrame(animationStep);
+}
+
+function pauseAnimation() {
+  running = false;
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  document.getElementById('status').textContent = 'PAUSED';
+}
+
+function resetAnimation() {
+  pauseAnimation();
+  scene.clear();
+  scheduler.reset();
+  ctx.fillStyle = '#030d03';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('frame-counter').textContent = 'FRAME: 0';
+  document.getElementById('actor-count').textContent   = 'ACTORS: 0';
+  loadDemo(currentDemoId);
+  startAnimation();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO LOADING
+// ═══════════════════════════════════════════════════════════════
+
+function loadDemo(id) {
+  pauseAnimation();
+  scene.clear();
+  scheduler.reset();
+  ctx.fillStyle = '#030d03';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  currentDemoId = id;
+
+  const demo = DEMOS.find(d => d.id === id);
+  if (!demo) return;
+
+  demo.factory();
+  showLispCode(demo.srcKey);
+
+  // update sidebar highlight
+  document.querySelectorAll('.demo-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.id === id);
+  });
+
+  startAnimation();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LISP CODE DISPLAY (with basic syntax highlighting)
+// ═══════════════════════════════════════════════════════════════
+
+function showLispCode(srcKey) {
+  const src = LISP_SOURCES[srcKey];
+  if (!src) return;
+  document.getElementById('code-panel-filename').textContent = src.filename;
+  document.getElementById('code-display').innerHTML = highlightLisp(src.code);
+}
+
+function highlightLisp(code) {
+  // Very lightweight Lisp syntax colouring
+  const keywords = /\b(DEFPROP|LAMBDA|PROG|COND|IF|ELSE|AND|OR|NOT|LET|QUOTE|DEFINE-FORM|MAKE|LOCAL|OUTPUT|STOP|END|GO|T|NIL)\b/g;
+  const specials  = /\b(PENDOWN|PENUP|FORWARD|BACK|RIGHT|LEFT|ARC|SETTURTLE|HERE|FORWARD|BACK|RIGHT|LEFT|TELL|REMEMBER|REPLACE|FORGET|REPEAT|GROW|SHOW|HIDE|UNMAKE|PLAN|SCHEDULE|RUN|MATCH)\b/g;
+  const numbers   = /\b(-?[0-9]+\.?[0-9]*)\b/g;
+  const comments  = /(;[^\n]*)/g;
+
+  let escaped = code
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  return escaped
+    .replace(comments,    '<span class="lc-comment">$1</span>')
+    .replace(keywords,    '<span class="lc-keyword">$1</span>')
+    .replace(specials,    '<span class="lc-special">$1</span>')
+    .replace(numbers,     '<span class="lc-number">$1</span>');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUILD SIDEBAR
+// ═══════════════════════════════════════════════════════════════
+
+function buildSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  DEMOS.forEach(demo => {
+    const btn = document.createElement('button');
+    btn.className = 'demo-btn';
+    btn.dataset.id = demo.id;
+    btn.innerHTML =
+      `<span class="demo-name">${demo.name}</span>` +
+      `<span class="demo-src">${demo.desc}</span>`;
+    btn.addEventListener('click', () => loadDemo(demo.id));
+    sidebar.appendChild(btn);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+  initSystem();
+  buildSidebar();
+
+  document.getElementById('btn-play').addEventListener('click', startAnimation);
+  document.getElementById('btn-pause').addEventListener('click', pauseAnimation);
+  document.getElementById('btn-reset').addEventListener('click', resetAnimation);
+
+  const speedSlider = document.getElementById('speed');
+  speedMultiplier   = parseFloat(speedSlider.value);
+  document.getElementById('speed-val').textContent = speedMultiplier.toFixed(2) + 'x';
+  speedSlider.addEventListener('input', () => {
+    speedMultiplier = parseFloat(speedSlider.value);
+    document.getElementById('speed-val').textContent = speedMultiplier.toFixed(2) + 'x';
+  });
+
+  // Load first demo
+  loadDemo(DEMOS[0].id);
+});
+</script>
+</body>
+</html>
