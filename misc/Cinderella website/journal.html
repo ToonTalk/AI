@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Journal — Cinderella</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Journal-page extras ── */
+    .journal-paper {
+      background:
+        linear-gradient(rgba(200,168,76,0.06) 1px, transparent 1px);
+      background-size: 100% 2.8rem;
+      position: relative;
+    }
+    .journal-paper::before {
+      content: '';
+      position: absolute;
+      left: 3rem;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(200,80,80,0.2);
+    }
+
+    .journal-header-area {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+    .journal-book-icon {
+      font-size: 4rem;
+      flex-shrink: 0;
+    }
+
+    .entry-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+      flex-wrap: wrap;
+    }
+    .entry-tag {
+      display: inline-block;
+      padding: 0.2rem 0.9rem;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      font-weight: 400;
+    }
+    .tag-dark     { background: rgba(100,80,200,0.25); border: 1px solid rgba(100,80,200,0.4); color: #c0b0ff; }
+    .tag-hopeful  { background: rgba(80,200,120,0.15); border: 1px solid rgba(80,200,120,0.3); color: #90e0a0; }
+    .tag-magical  { background: rgba(200,168,76,0.2);  border: 1px solid rgba(200,168,76,0.4); color: #f0d070; }
+    .tag-joyful   { background: rgba(200,80,160,0.2);  border: 1px solid rgba(200,80,160,0.4); color: #f090d0; }
+    .tag-future   { background: rgba(80,180,240,0.2);  border: 1px solid rgba(80,180,240,0.4); color: #90d0f0; }
+
+    /* Mood indicator */
+    .mood-row {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--silver);
+      opacity: 0.7;
+    }
+    .mood-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* Sketch thumbnail inside entries */
+    .entry-sketch {
+      float: right;
+      margin: 0 0 1rem 2rem;
+      width: 160px;
+      border-radius: 8px;
+      border: 1px solid var(--glass-border);
+      overflow: hidden;
+    }
+    .entry-sketch svg { display: block; width: 100%; }
+
+    /* Quote callout */
+    .entry-callout {
+      background: rgba(201,168,76,0.08);
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 10px;
+      padding: 1rem 1.5rem;
+      margin: 1.2rem 0;
+      font-style: italic;
+      color: var(--gold-light);
+      font-family: 'Playfair Display', serif;
+    }
+
+    /* Footnote / Stepmother warning */
+    .scribble {
+      font-family: 'Dancing Script', cursive;
+      font-size: 0.95rem;
+      color: var(--rose);
+      opacity: 0.75;
+      margin-top: 0.5rem;
+    }
+
+    /* Sidebar quote panel */
+    .sidebar-layout {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 2.5rem;
+      align-items: start;
+    }
+    .sidebar-panel {
+      position: sticky;
+      top: 90px;
+    }
+    .sidebar-quote {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 1.8rem;
+      margin-bottom: 1.5rem;
+    }
+    .sidebar-quote p {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 0.95rem;
+      color: var(--gold-light);
+      margin-bottom: 0.6rem;
+    }
+    .sidebar-quote cite {
+      font-size: 0.78rem;
+      opacity: 0.6;
+      font-style: normal;
+    }
+
+    .mood-chart {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 1.5rem;
+    }
+    .mood-chart h4 {
+      font-family: 'Playfair Display', serif;
+      color: var(--gold-light);
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+    }
+    .mood-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 0.7rem;
+      font-size: 0.8rem;
+    }
+    .mood-bar-label { width: 60px; opacity: 0.75; flex-shrink: 0; }
+    .mood-bar-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .mood-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(to right, var(--gold), var(--gold-light));
+    }
+
+    @media (max-width: 800px) {
+      .sidebar-layout { grid-template-columns: 1fr; }
+      .sidebar-panel { position: static; }
+      .entry-sketch { float: none; width: 100%; margin: 0 0 1rem 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ Navigation ═══ -->
+<nav>
+  <a href="index.html" class="nav-logo">✨ Cinderella</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="the-ball.html">The Ball</a></li>
+    <li><a href="gallery.html">Gallery</a></li>
+    <li><a href="journal.html" class="active">My Journal</a></li>
+  </ul>
+</nav>
+
+<!-- ═══ Hero ═══ -->
+<div class="hero" style="padding-bottom:2rem;">
+  <span class="hero-eyebrow">Private Thoughts, Shared Carefully</span>
+  <h1>My Journal</h1>
+  <p class="hero-sub">Entries written in the cinders, by candlelight, and — finally — in proper ink at a proper desk.</p>
+</div>
+
+<div class="page">
+  <div class="sidebar-layout">
+
+    <!-- ── Main journal entries ── -->
+    <div>
+
+      <!-- Entry 1 -->
+      <div class="journal-entry glass-card journal-paper">
+        <div class="entry-meta">
+          <div class="journal-date">Three winters ago</div>
+          <span class="entry-tag tag-dark">Difficult Days</span>
+        </div>
+        <div class="mood-row">
+          <span class="mood-dot" style="background:#6060c0;"></span>
+          Mood: Quiet resignation
+        </div>
+        <h3>On Sweeping Floors</h3>
+
+        <!-- Real image: hearth scene -->
+        <div class="entry-sketch">
+          <img src="img_carriage.png" alt="Moonlit garden scene" style="width:100%;border-radius:8px;display:block;" />
+        </div>
+
+        <p>I swept the great hall three times today. The third time, it was because Anastasia had scattered flour across the floor deliberately, to watch me do it again.</p>
+        <p>I used to cry. Now I simply sweep. The broom has become a kind of companion — it does not judge, it does not sneer, it simply works alongside me in silence.</p>
+        <div class="entry-callout">
+          "I told myself: a kind heart is not diminished by unkind work. I am not the cinders. I am the girl who sweeps them."
+        </div>
+        <p>There was one small comfort. A field mouse has taken to living in the gap beneath the kitchen board. He looked at me today with round, intelligent eyes. I gave him a piece of bread and he seemed grateful. Small kindnesses sustain us both.</p>
+        <div class="scribble">* I have named him Jacques. He is a better companion than anyone else in this house.</div>
+      </div>
+
+      <!-- Entry 2 -->
+      <div class="journal-entry glass-card journal-paper">
+        <div class="entry-meta">
+          <div class="journal-date">Six weeks ago</div>
+          <span class="entry-tag tag-hopeful">A Flicker of Hope</span>
+        </div>
+        <div class="mood-row">
+          <span class="mood-dot" style="background:#40c080;"></span>
+          Mood: Cautiously hopeful
+        </div>
+        <h3>The Invitation Arrives</h3>
+
+        <p>A royal herald arrived this morning bearing a sealed letter. The wax stamp showed the palace crest — a crown above two clasped hands.</p>
+        <p>The letter invited every eligible young woman in the kingdom to attend a Royal Ball at the palace. My stepmother read it aloud and smiled — but only at my stepsisters. She looked through me as though I were made of glass.</p>
+        <div class="entry-callout">
+          "Every young woman in the kingdom. She cannot truly exclude me. The letter says so in ink and royal seal."
+        </div>
+        <p>I asked — very politely — whether I might attend. She said yes, conditionally: I must finish mending the ball gowns, press the petticoats, polish the shoes, starch the gloves, rearrange the linen cupboard, and scrub the kitchen from top to bottom before the carriage leaves at seven.</p>
+        <p>There were fourteen tasks. By six o'clock I had completed twelve. They are clever that way.</p>
+        <div class="scribble">* I wept a little. Then I stopped. Tears accomplish the same as sweeping — they clear things, and then you begin again.</div>
+      </div>
+
+      <!-- Entry 3 -->
+      <div class="journal-entry glass-card journal-paper">
+        <div class="entry-meta">
+          <div class="journal-date">The night of the ball — just after midnight</div>
+          <span class="entry-tag tag-magical">Magic</span>
+          <span class="entry-tag tag-joyful">Joy</span>
+        </div>
+        <div class="mood-row">
+          <span class="mood-dot" style="background:#c9a84c;"></span>
+          Mood: Overwhelmed — beautifully so
+        </div>
+        <h3>What Actually Happened</h3>
+
+        <!-- Real image: wand / magic -->
+        <div class="entry-sketch">
+          <img src="img_fairy_godmother.png" alt="The Fairy Godmother with her wand" style="width:100%;border-radius:8px;display:block;" />
+        </div>
+
+        <p>I hardly know how to write this. I am sitting at the kitchen table — the same one I scrub each morning — but I am wearing a gown made of starlight and my slippers are made of glass, and both of these things are true.</p>
+        <p>She appeared from nowhere. Small, stout, white-haired, spectacled, and wholly certain of herself. She called me "my dear" immediately, which made me trust her at once.</p>
+        <p>The pumpkin. The mice. The lizards. I watched all of it happen and still do not entirely believe it. She waved her wand as if transformation were the most ordinary thing in the world, and perhaps for her it is.</p>
+        <div class="entry-callout">
+          "She looked at me in my gown and said simply: 'Yes. That is exactly right.' I had never felt so seen."
+        </div>
+        <p>At the ball: the prince. I had expected arrogance. I found instead a young man who stood apart from the crowds and looked relieved when I gave him a genuine smile rather than a curtsey.</p>
+        <p>We danced. We talked. He asked me questions and then — novelty of novelties — listened to the answers. When the clock began to strike twelve I felt genuine grief, which surprised me.</p>
+        <p>I lost one slipper on the steps. I could not go back. But I find I am not sorry — not entirely. It is the one thread connecting that night to this morning. He has it. He will look for me. I am not sure what I feel about that yet.</p>
+        <div class="scribble">* I am writing this at 1am. The gown is gone. I am in my work dress again. But my hair still smells of the palace — of candle-wax and roses.</div>
+      </div>
+
+      <!-- Entry 4 -->
+      <div class="journal-entry glass-card journal-paper">
+        <div class="entry-meta">
+          <div class="journal-date">Two days after the ball</div>
+          <span class="entry-tag tag-future">Looking Forward</span>
+        </div>
+        <div class="mood-row">
+          <span class="mood-dot" style="background:#60b0e0;"></span>
+          Mood: Calm and strangely ready
+        </div>
+        <h3>The Herald at Our Door</h3>
+
+        <p>He came this morning. A royal herald bearing a velvet cushion, and on it — my slipper. The other one. The one that was left.</p>
+        <p>Anastasia tried it first. She crammed her toes in with an expression of deep concentration and produced nothing except a muffled yelp. Drizella succeeded only in dropping it. My stepmother caught it before it hit the floor — she is quick when she wants to be.</p>
+        <p>Then the herald looked at me. My stepmother's expression suggested she would prefer he did not. She began to say something about the kitchen needing attending to.</p>
+        <div class="entry-callout">
+          "The herald had kind eyes. He looked from my stepmother to me and said, simply: 'Every young woman.'"
+        </div>
+        <p>I sat down. I put on the slipper. It fitted — of course it did — as though it had been made for exactly this moment, which I suppose it had.</p>
+        <p>From my pocket, I brought out the other one. I had kept it. I thought perhaps I should mention that.</p>
+        <p>The herald smiled. My stepmother did not.</p>
+        <p>I leave for the palace tomorrow. I have packed very little — there is very little here that is mine. I brought Jacques, the mouse. I could not leave him behind. I think he will adapt to palace life more readily than one might expect.</p>
+        <div class="scribble">* I am not angry with my stepmother and stepsisters. I am not yet certain what I am. But I am going, and they are not, and that is enough for now.</div>
+      </div>
+
+    </div><!-- /main entries -->
+
+    <!-- ── Sidebar ── -->
+    <div class="sidebar-panel">
+
+      <div class="sidebar-quote">
+        <p>"A kind heart in a cruel house is not weakness — it is the only kind of armour that cannot be taken from you."</p>
+        <cite>— Ella, age fifteen, first journal</cite>
+      </div>
+
+      <div class="sidebar-quote">
+        <p>"Do not wish for the clock to stop. Wish instead for courage enough to run."</p>
+        <cite>— Written the morning after the ball</cite>
+      </div>
+
+      <div class="sidebar-quote">
+        <p>"He listened. That was the most magical thing of the whole evening — more magical than the carriage or the gown or the glass shoes."</p>
+        <cite>— Journal, 1am, night of the ball</cite>
+      </div>
+
+      <!-- Mood chart -->
+      <div class="mood-chart">
+        <h4>Mood Through the Years</h4>
+        <div class="mood-bar-row">
+          <span class="mood-bar-label">Hope</span>
+          <div class="mood-bar-track"><div class="mood-bar-fill" style="width:85%;"></div></div>
+          <span style="font-size:0.75rem;opacity:0.6;">85%</span>
+        </div>
+        <div class="mood-bar-row">
+          <span class="mood-bar-label">Sorrow</span>
+          <div class="mood-bar-track"><div class="mood-bar-fill" style="width:60%;background:linear-gradient(to right,#6060c0,#8080e0);"></div></div>
+          <span style="font-size:0.75rem;opacity:0.6;">60%</span>
+        </div>
+        <div class="mood-bar-row">
+          <span class="mood-bar-label">Resolve</span>
+          <div class="mood-bar-track"><div class="mood-bar-fill" style="width:92%;"></div></div>
+          <span style="font-size:0.75rem;opacity:0.6;">92%</span>
+        </div>
+        <div class="mood-bar-row">
+          <span class="mood-bar-label">Joy</span>
+          <div class="mood-bar-track"><div class="mood-bar-fill" style="width:78%;background:linear-gradient(to right,#c08040,#f0b060);"></div></div>
+          <span style="font-size:0.75rem;opacity:0.6;">78%</span>
+        </div>
+        <div class="mood-bar-row">
+          <span class="mood-bar-label">Anger</span>
+          <div class="mood-bar-track"><div class="mood-bar-fill" style="width:18%;background:linear-gradient(to right,#c03030,#e06060);"></div></div>
+          <span style="font-size:0.75rem;opacity:0.6;">18%</span>
+        </div>
+        <p style="font-size:0.75rem;opacity:0.5;margin-top:0.8rem;font-style:italic;">Measured across all journal entries, in Ella's own assessment.</p>
+      </div>
+
+      <!-- Little SVG: quill & ink -->
+      <div style="margin-top:1.5rem;">
+        <div class="scene-image">
+        <img src="img_glass_slipper.png" alt="The Glass Slipper" style="width:100%;border-radius:12px;display:block;" />
+      </div>
+      </div>
+
+    </div><!-- /sidebar -->
+  </div><!-- /sidebar-layout -->
+
+  <div class="ornament">· · · ✦ · · ·</div>
+
+  <!-- Closing note -->
+  <div class="glass-card" style="text-align:center; max-width:620px; margin:0 auto;">
+    <span style="font-size:2rem; display:block; margin-bottom:1rem;">📖</span>
+    <h2 class="section-title" style="text-align:center;">A Note to Readers</h2>
+    <div class="section-divider" style="margin:0.4rem auto 1.5rem;"></div>
+    <p style="font-family:'Playfair Display',serif; font-style:italic; color:var(--gold-light); font-size:1.1rem; margin-bottom:1rem;">
+      "I kept these journals secret for years, hidden beneath a loose hearthstone.<br>Now that I have a proper desk, I see no reason to keep hiding."
+    </p>
+    <p style="opacity:0.75; font-size:0.9rem;">If my story has taught me anything, it is this: be kind, be patient, and never underestimate a fairy godmother, a field mouse, or a well-fitted shoe.</p>
+    <div style="margin-top:2rem;">
+      <a href="the-ball.html" class="btn">Read the Full Story</a>
+      &nbsp;&nbsp;
+      <a href="gallery.html" class="btn">Visit the Gallery</a>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<!-- ═══ Footer ═══ -->
+<footer>
+  &copy; Ever After · Made with moonlight &amp; a little magic · All spells expire at midnight
+</footer>
+
+</body>
+</html>
