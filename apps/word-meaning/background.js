@@ -121,9 +121,10 @@ async function getOrCreateSession() {
 
   const availability = await LanguageModel.availability();
   console.log('[AI] Availability:', availability);
-  if (availability !== 'available') {
-    throw new Error(`AI availability is "${availability}".`);
+  if (availability === 'unavailable' || availability === 'no') {
+    throw new Error(`AI is not available on this device/browser ("${availability}").`);
   }
+  // "available" → ready; "downloadable" → create() will trigger the download
 
   console.log('Creating new AI session...');
   session = await LanguageModel.create({
