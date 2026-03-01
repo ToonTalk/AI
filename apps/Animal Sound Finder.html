@@ -1,0 +1,527 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+/**
+ * Kid-friendly AI-powered web game (ages ~5–7): "Animal Sound Finder"
+ *
+ * How it plays:
+ * - The game says: "Tap the animal that goes MOO!"
+ * - Kids tap one of 3 big animal cards.
+ * - Correct = confetti + +1 star. Wrong = gentle try-again.
+ * - No reading required: everything is spoken.
+ *
+ * AI usage:
+ * - If you paste an API key + toggle Use AI, the LLM generates rounds (still structured JSON).
+ * - If AI is off or fails, it falls back to a built-in offline generator.
+ *
+ * IMPORTANT SECURITY NOTE:
+ * - Don’t deploy API keys in a browser app. This is BYOK for local experiments.
+ */
+
+const DEFAULT_MODEL = "gpt-5";
+
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function safeJsonParse(text) {
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false, value: null };
+  }
+}
+
+function speak(text, rate = 1.0) {
+  if (!("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = rate;
+    window.speechSynthesis.speak(u);
+  } catch {
+    // ignore
+  }
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function () {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick(rng, arr) {
+  return arr[Math.floor(rng() * arr.length)];
+}
+
+// -----------------------------
+// Offline round generator
+// -----------------------------
+
+const ANIMALS = [
+  { id: "cow", emoji: "🐮", label: "Cow", sound: "moo" },
+  { id: "cat", emoji: "🐱", label: "Cat", sound: "meow" },
+  { id: "dog", emoji: "🐶", label: "Dog", sound: "woof" },
+  { id: "sheep", emoji: "🐑", label: "Sheep", sound: "baa" },
+  { id: "duck", emoji: "🦆", label: "Duck", sound: "quack" },
+  { id: "lion", emoji: "🦁", label: "Lion", sound: "roar" },
+  { id: "frog", emoji: "🐸", label: "Frog", sound: "ribbit" },
+  { id: "horse", emoji: "🐴", label: "Horse", sound: "neigh" },
+  { id: "pig", emoji: "🐷", label: "Pig", sound: "oink" },
+  { id: "owl", emoji: "🦉", label: "Owl", sound: "hoot" },
+];
+
+function offlineRound(seed) {
+  const rng = mulberry32(seed);
+  const pool = [...ANIMALS];
+
+  // Pick 3 unique animals
+  const choices = [];
+  while (choices.length < 3 && pool.length) {
+    const idx = Math.floor(rng() * pool.length);
+    choices.push(pool.splice(idx, 1)[0]);
+  }
+  const correct = pick(rng, choices);
+
+  return {
+    mode: "offline",
+    prompt: `Tap the animal that goes ${correct.sound.toUpperCase()}!`,
+    sound: correct.sound,
+    choices: choices.map((c) => ({ id: c.id, emoji: c.emoji, label: c.label, sound: c.sound })),
+    correctId: correct.id,
+  };
+}
+
+// -----------------------------
+// OpenAI Responses API helper
+// -----------------------------
+
+async function openAIResponses({ apiKey, payload, signal }) {
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    const parsed = safeJsonParse(text);
+    const msg = (parsed.ok && parsed.value?.error?.message) || `HTTP ${res.status}: ${res.statusText}`;
+    throw new Error(msg);
+  }
+  const parsed = safeJsonParse(text);
+  if (!parsed.ok) throw new Error("Could not parse JSON response.");
+  return parsed.value;
+}
+
+function extractOutputText(resp) {
+  if (!resp) return "";
+  if (typeof resp.output_text === "string" && resp.output_text.trim()) return resp.output_text;
+
+  const out = [];
+  if (Array.isArray(resp.output)) {
+    for (const o of resp.output) {
+      const content = Array.isArray(o?.content) ? o.content : [];
+      for (const c of content) {
+        if (c?.type === "output_text" && typeof c.text === "string") out.push(c.text);
+      }
+    }
+  }
+
+  // FIX: was an unterminated string constant due to a broken quote/newline.
+  return out.join("\n");
+}
+
+function aiPayload({ model }) {
+  // Keep the schema simple, kid-safe, and strictly JSON.
+  const spec = `Create one round for a kids' game (ages 5–7) called Animal Sound Finder.
+
+Return JSON with exactly these keys:
+{
+  "mode": "ai",
+  "prompt": string,
+  "sound": string,
+  "choices": [
+    {"id": string, "emoji": string, "label": string, "sound": string},
+    {"id": string, "emoji": string, "label": string, "sound": string},
+    {"id": string, "emoji": string, "label": string, "sound": string}
+  ],
+  "correctId": string
+}
+
+Rules:
+- The prompt MUST be exactly: "Tap the animal that goes SOUND!" where SOUND is the correct animal sound in uppercase.
+- Use ONLY these animals and sounds (pick 3 unique):
+  cow moo 🐮, cat meow 🐱, dog woof 🐶, sheep baa 🐑, duck quack 🦆,
+  lion roar 🦁, frog ribbit 🐸, horse neigh 🐴, pig oink 🐷, owl hoot 🦉.
+- choices must be exactly 3 items.
+- correctId must match one of the choice ids.
+- Keep everything safe and simple.
+- Output ONLY JSON. No markdown. No extra text.`;
+
+  return {
+    model,
+    instructions:
+      "You generate one round for a very simple kids game. Output ONLY strict JSON. " +
+      "No markdown, no backticks, no extra text.",
+    input: [{ role: "user", content: [{ type: "text", text: spec }] }],
+  };
+}
+
+function validateRound(r) {
+  if (!r || typeof r !== "object") return { ok: false, error: "Round is not an object." };
+  const required = ["prompt", "sound", "choices", "correctId"];
+  for (const k of required) {
+    if (!(k in r)) return { ok: false, error: `Missing field: ${k}` };
+  }
+  if (!Array.isArray(r.choices) || r.choices.length !== 3) {
+    return { ok: false, error: "choices must be an array of length 3." };
+  }
+  const ids = new Set();
+  for (const c of r.choices) {
+    if (!c || typeof c !== "object") return { ok: false, error: "Each choice must be an object." };
+    if (!c.id || !c.emoji || !c.label || !c.sound) return { ok: false, error: "Each choice needs id/emoji/label/sound." };
+    if (ids.has(c.id)) return { ok: false, error: "Choice ids must be unique." };
+    ids.add(c.id);
+  }
+  if (!ids.has(r.correctId)) return { ok: false, error: "correctId must match a choice id." };
+  return { ok: true };
+}
+
+// Minimal self-tests (no framework)
+function runSelfTests() {
+  try {
+    console.assert(safeJsonParse('{"a":1}').ok, "safeJsonParse valid JSON");
+    console.assert(!safeJsonParse("{a:1}").ok, "safeJsonParse invalid JSON");
+
+    const r = offlineRound(123);
+    const v = validateRound({ ...r, mode: "ai" });
+    console.assert(v.ok, `offlineRound schema valid: ${v.error || ""}`);
+
+    const p = aiPayload({ model: DEFAULT_MODEL });
+    const s = JSON.stringify(p);
+    console.assert(s.includes("Output ONLY JSON"), "aiPayload contains key instructions");
+
+    console.assert(extractOutputText({ output_text: "{}" }) === "{}", "extractOutputText output_text");
+    console.assert(
+      extractOutputText({ output: [{ content: [{ type: "output_text", text: "{}" }] }] }) === "{}",
+      "extractOutputText output blocks"
+    );
+
+    // NEW: join behavior should include newlines between blocks
+    console.assert(
+      extractOutputText({ output: [{ content: [{ type: "output_text", text: "A" }] }, { content: [{ type: "output_text", text: "B" }] }] }) ===
+        "A\nB",
+      "extractOutputText should join blocks with newline"
+    );
+  } catch (e) {
+    console.warn("Self-tests failed:", e);
+  }
+}
+
+// -----------------------------
+// UI helpers
+// -----------------------------
+
+function Confetti({ show }) {
+  // Tiny, no-deps confetti using simple CSS animation.
+  if (!show) return null;
+  const pieces = new Array(18).fill(0);
+
+  // Use Tailwind utility classes for colors (still simple, kid-friendly).
+  const colorClasses = ["bg-rose-400", "bg-amber-300", "bg-emerald-400", "bg-sky-400", "bg-fuchsia-400"];
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {pieces.map((_, i) => (
+        <div
+          key={i}
+          className={`absolute top-0 h-3 w-3 rounded-sm opacity-90 ${colorClasses[i % colorClasses.length]}`}
+          style={{
+            left: `${(i * 100) / pieces.length}%`,
+            transform: `translateY(-10px) rotate(${i * 19}deg)`,
+            animation: `fall ${900 + (i % 6) * 120}ms ease-out forwards`,
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes fall {
+          0% { transform: translateY(-20px) rotate(0deg); opacity: 0.95; }
+          100% { transform: translateY(320px) rotate(260deg); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default function AnimalSoundFinder() {
+  const [apiKey, setApiKey] = useState("");
+  const [persistKey, setPersistKey] = useState(false);
+  const [useAI, setUseAI] = useState(true);
+  const [model, setModel] = useState(DEFAULT_MODEL);
+
+  const [round, setRound] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const [stars, setStars] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [message, setMessage] = useState("Let's play! 👋");
+  const [confetti, setConfetti] = useState(false);
+
+  const abortRef = useRef(null);
+  const didTestsRef = useRef(false);
+
+  // Load stored key (optional)
+  useEffect(() => {
+    const raw = localStorage.getItem("animalsound_byok");
+    if (raw) {
+      setApiKey(raw);
+      setPersistKey(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!didTestsRef.current) {
+      didTestsRef.current = true;
+      runSelfTests();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (persistKey) {
+      if (apiKey) localStorage.setItem("animalsound_byok", apiKey);
+    } else {
+      localStorage.removeItem("animalsound_byok");
+    }
+  }, [persistKey, apiKey]);
+
+  const canUseAI = useMemo(() => useAI && apiKey.trim().length > 0, [useAI, apiKey]);
+
+  async function newRound() {
+    setErr("");
+    setLoading(true);
+    setMessage("Listen… 👂");
+    setConfetti(false);
+
+    if (abortRef.current) abortRef.current.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    try {
+      let r;
+      if (canUseAI) {
+        const resp = await openAIResponses({ apiKey: apiKey.trim(), payload: aiPayload({ model }), signal: ac.signal });
+        const text = extractOutputText(resp);
+        const parsed = safeJsonParse(text);
+        if (!parsed.ok) throw new Error("AI did not return valid JSON.");
+        r = parsed.value;
+        const v = validateRound(r);
+        if (!v.ok) throw new Error(`AI round invalid: ${v.error}`);
+      } else {
+        const seed = (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
+        r = offlineRound(seed);
+      }
+
+      setRound(r);
+      // Speak the prompt and then the sound itself (kid-friendly)
+      speak(r.prompt, 1.02);
+      setTimeout(() => speak(r.sound.toUpperCase() + "!", 0.98), 650);
+      setMessage("Tap one! 👇");
+    } catch (e) {
+      setErr(String(e?.message || e));
+      // Fall back to offline
+      const seed = (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
+      const r = offlineRound(seed);
+      setRound(r);
+      speak(r.prompt, 1.02);
+      setTimeout(() => speak(r.sound.toUpperCase() + "!", 0.98), 650);
+      setMessage("Tap one! 👇");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    newRound();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onPick(id) {
+    if (!round || loading) return;
+    const ok = id === round.correctId;
+
+    if (ok) {
+      setStars((s) => s + 1);
+      setStreak((s) => s + 1);
+      setMessage("Yay! ⭐ Great job!");
+      speak("Yay! Great job!", 1.05);
+      setConfetti(true);
+      setTimeout(() => setConfetti(false), 700);
+      setTimeout(() => newRound(), 850);
+    } else {
+      setStreak(0);
+      setMessage("Oops—try again! 😊");
+      speak("Oops—try again!", 1.0);
+    }
+  }
+
+  function reset() {
+    setStars(0);
+    setStreak(0);
+    setMessage("Let's play! 👋");
+    newRound();
+  }
+
+  const starRow = new Array(10).fill(0);
+  const starCount = clamp(stars, 0, 10);
+
+  return (
+    <div className="min-h-screen bg-neutral-950 text-neutral-100">
+      <div className="mx-auto max-w-3xl p-4 md:p-8">
+        <div className="relative overflow-hidden rounded-3xl border border-neutral-800 bg-neutral-900/40 p-5 shadow">
+          <Confetti show={confetti} />
+
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-2xl font-extrabold">Animal Sound Finder</div>
+              <div className="text-sm text-neutral-300">Listen and tap the right animal.</div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="rounded-full border border-neutral-700 px-3 py-1">Stars: {stars}</span>
+              <span className="rounded-full border border-neutral-700 px-3 py-1">Streak: {streak}</span>
+              <span className="rounded-full border border-neutral-700 px-3 py-1">{canUseAI ? "AI" : "Offline"}</span>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-neutral-400">What to do</div>
+                <div className="mt-1 text-xl font-semibold">{round ? round.prompt : "Loading…"}</div>
+              </div>
+              <button
+                className="rounded-2xl border border-neutral-700 bg-neutral-950/50 px-4 py-3 text-base font-semibold hover:bg-neutral-900/50 disabled:opacity-60"
+                onClick={() =>
+                  round &&
+                  (speak(round.prompt, 1.02),
+                  setTimeout(() => speak(round.sound.toUpperCase() + "!", 0.98), 650))
+                }
+                disabled={!round || loading}
+              >
+                🔊 Hear it
+              </button>
+            </div>
+            <div className="mt-3 text-lg text-neutral-200">{message}</div>
+
+            <div className="mt-3 flex items-center gap-1 text-xl" aria-label="star progress">
+              {starRow.map((_, i) => (
+                <span key={i} className={i < starCount ? "opacity-100" : "opacity-25"}>
+                  ⭐
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {(round?.choices || []).map((c) => (
+              <button
+                key={c.id}
+                onClick={() => onPick(c.id)}
+                disabled={loading}
+                className="rounded-3xl border border-neutral-700 bg-neutral-950/45 p-6 text-center hover:bg-neutral-900/50 disabled:opacity-60"
+                style={{ minHeight: 140 }}
+              >
+                <div className="text-6xl" aria-hidden>
+                  {c.emoji}
+                </div>
+                <div className="mt-3 text-xl font-bold">{c.label}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              className="rounded-2xl border border-neutral-700 bg-neutral-950/40 px-4 py-3 text-base font-semibold hover:bg-neutral-900"
+              onClick={newRound}
+              disabled={loading}
+            >
+              {loading ? "Loading…" : "New one"}
+            </button>
+            <button
+              className="rounded-2xl border border-neutral-700 bg-neutral-950/40 px-4 py-3 text-base font-semibold hover:bg-neutral-900"
+              onClick={reset}
+            >
+              Reset
+            </button>
+          </div>
+
+          {err ? (
+            <div className="mt-4 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-3 text-sm text-amber-200">
+              <div className="font-semibold">AI error (fell back to offline)</div>
+              <div className="mt-1 whitespace-pre-wrap">{err}</div>
+            </div>
+          ) : null}
+
+          <div className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-950/30 p-4">
+            <div className="text-sm font-semibold">Grown-up settings (optional)</div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <label className="flex items-center gap-2 text-sm text-neutral-300">
+                <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
+                Use AI
+              </label>
+              <button
+                className="rounded-lg border border-neutral-800 bg-neutral-950/40 px-2 py-1 text-xs hover:bg-neutral-900"
+                onClick={() => {
+                  setApiKey("");
+                  localStorage.removeItem("animalsound_byok");
+                  setPersistKey(false);
+                }}
+              >
+                Clear key
+              </button>
+            </div>
+
+            <div className="mt-3">
+              <label className="text-xs text-neutral-400">API key (BYOK)</label>
+              <input
+                type="password"
+                className="mt-1 w-full rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-sm outline-none focus:border-neutral-600"
+                placeholder="Paste your OpenAI API key (local only)"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                autoComplete="off"
+              />
+              <label className="mt-2 flex items-center gap-2 text-xs text-neutral-300">
+                <input type="checkbox" checked={persistKey} onChange={(e) => setPersistKey(e.target.checked)} />
+                Remember on this device
+              </label>
+              <div className="mt-2 text-xs text-neutral-400">
+                Don’t paste keys into a site you don’t trust. For anything public, use a backend proxy.
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <label className="text-xs text-neutral-400">Model</label>
+              <input
+                className="mt-1 w-full rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-sm outline-none focus:border-neutral-600"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={DEFAULT_MODEL}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 text-xs text-neutral-500">If you want it even simpler: we can switch to 2 choices instead of 3.</div>
+      </div>
+    </div>
+  );
+}
