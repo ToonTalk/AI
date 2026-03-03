@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Silly Sticker Finder (AI Clues)</title>
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#121a33; --text:#e8ecff; --muted:#a9b1d6;
+      --outline:rgba(255,255,255,.14);
+      --good:#7CFFB2; --warn:#ffd37c; --bad:#ff7c93;
+      --r:16px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
+    body{
+      margin:0; color:var(--text);
+      background: radial-gradient(900px 600px at 20% 10%, #1a2a6a 0%, var(--bg) 55%, #050816 100%);
+      padding:16px;
+    }
+    .wrap{max-width:980px; margin:0 auto; display:grid; grid-template-columns: 320px 1fr; gap:14px;}
+    @media (max-width: 860px){ .wrap{grid-template-columns:1fr;} }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid var(--outline);
+      border-radius: var(--r);
+      padding:14px;
+    }
+    h1{margin:0 0 6px 0; font-size:18px;}
+    .sub{color:var(--muted); font-size:13px; line-height:1.35; margin-bottom:10px;}
+    label{display:block; font-size:12px; color:var(--muted); margin:10px 0 6px;}
+    input{
+      width:100%; padding:10px 12px; border-radius: 12px;
+      border:1px solid var(--outline); background: rgba(0,0,0,.22); color:var(--text);
+      outline:none; font-size:13px;
+    }
+    .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+    button{
+      border:1px solid var(--outline);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      border-radius: 12px;
+      padding:10px 12px;
+      cursor:pointer;
+      font-weight:700;
+    }
+    button.primary{background: rgba(124,255,178,.12); border-color: rgba(124,255,178,.28);}
+    button.warn{background: rgba(255,211,124,.12); border-color: rgba(255,211,124,.26);}
+    button.bad{background: rgba(255,124,147,.12); border-color: rgba(255,124,147,.26);}
+    button:disabled{opacity:.5; cursor:not-allowed}
+    .pill{
+      display:inline-flex; gap:8px; align-items:center;
+      padding:6px 10px; border-radius:999px;
+      border:1px solid var(--outline); background: rgba(0,0,0,.14);
+      font-size:12px; color:var(--muted);
+    }
+    .board{
+      display:grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap:8px;
+      margin-top:10px;
+    }
+    .cell{
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      display:flex; align-items:center; justify-content:center;
+      font-size:20px;
+      user-select:none;
+      cursor:pointer;
+      transition: transform .05s ease;
+    }
+    .cell:active{transform: translateY(1px);}
+    .cell.revealed{background: rgba(255,255,255,.06);}
+    .msg{
+      margin-top:10px;
+      padding:10px 12px;
+      border-radius: 12px;
+      border:1px solid var(--outline);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      min-height: 42px;
+      line-height: 1.35;
+    }
+    .tiny{font-size:12px; color: var(--muted); line-height:1.35;}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Silly Sticker Finder</h1>
+      <div class="sub">
+        Click squares to find hidden ⭐ stickers.<br/>
+        Before each click, you can ask the AI for a clue using a 3-word “spell”.
+      </div>
+
+      <label>OpenAI API key (password field)</label>
+      <div class="row">
+        <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off"/>
+        <button id="saveKey">Save</button>
+      </div>
+      <div class="tiny">Local prototype only. Don’t publish with a key in the page.</div>
+
+      <label>3-word spell (anything silly)</label>
+      <input id="spell" type="text" placeholder="bouncy banana wizard" maxlength="40"/>
+
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="askClue">Ask AI for clue</button>
+        <button class="warn" id="newGame">New Game</button>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <span class="pill">Stickers left: <b id="left">3</b></span>
+        <span class="pill">Moves: <b id="moves">0</b></span>
+      </div>
+
+      <label>AI clue (must be one simple rule)</label>
+      <div class="msg" id="clue">No clue yet.</div>
+
+      <label>Debug (optional)</label>
+      <div class="msg tiny mono" id="debug">—</div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="pill">Click a square</div>
+        <div class="pill">Hotter/colder feedback after each move</div>
+      </div>
+      <div class="board" id="board"></div>
+      <div class="msg" id="feedback">Find all 3 stickers ⭐</div>
+    </div>
+  </div>
+
+<script>
+/* ===== Silly Sticker Finder =====
+   - Very small game.
+   - AI is essential: it generates a RULE-like clue that should influence the next move.
+   - Even if AI fails, the game still works.
+*/
+
+const LS_KEY = "ssf_openai_key_v1";
+
+const ui = {
+  apiKey: document.getElementById("apiKey"),
+  saveKey: document.getElementById("saveKey"),
+  spell: document.getElementById("spell"),
+  askClue: document.getElementById("askClue"),
+  newGame: document.getElementById("newGame"),
+  left: document.getElementById("left"),
+  moves: document.getElementById("moves"),
+  clue: document.getElementById("clue"),
+  debug: document.getElementById("debug"),
+  board: document.getElementById("board"),
+  feedback: document.getElementById("feedback"),
+};
+
+const SIZE = 8;
+const STICKERS = 3;
+
+let revealed = [];
+let stickers = new Set();      // positions like "x,y"
+let stickersLeft = STICKERS;
+let moves = 0;
+let lastDist = null;           // distance to nearest sticker from last click
+let lastClick = null;          // {x,y}
+
+function posKey(x,y){ return `${x},${y}`; }
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+function loadKey(){
+  const k = localStorage.getItem(LS_KEY);
+  if(k) ui.apiKey.value = k;
+}
+function saveKey(){
+  const k = ui.apiKey.value.trim();
+  if(k) localStorage.setItem(LS_KEY, k);
+}
+
+function newGame(){
+  revealed = Array.from({length: SIZE}, ()=>Array.from({length: SIZE}, ()=>false));
+  stickers = new Set();
+  stickersLeft = STICKERS;
+  moves = 0;
+  lastDist = null;
+  lastClick = null;
+  ui.clue.textContent = "No clue yet.";
+  ui.debug.textContent = "—";
+  ui.feedback.textContent = "Find all 3 stickers ⭐";
+
+  // place stickers randomly, avoid duplicates
+  while(stickers.size < STICKERS){
+    const x = randInt(0,SIZE-1);
+    const y = randInt(0,SIZE-1);
+    stickers.add(posKey(x,y));
+  }
+  render();
+}
+
+function nearestStickerDistance(x,y){
+  let best = Infinity;
+  for(const key of stickers){
+    const [sx,sy] = key.split(",").map(Number);
+    const d = Math.abs(sx-x) + Math.abs(sy-y); // Manhattan distance
+    if(d < best) best = d;
+  }
+  return best;
+}
+
+function clickCell(x,y){
+  if(revealed[y][x]) return;
+
+  revealed[y][x] = true;
+  moves++;
+
+  const key = posKey(x,y);
+  if(stickers.has(key)){
+    stickers.delete(key);
+    stickersLeft--;
+    ui.feedback.textContent = `⭐ You found a sticker! ${stickersLeft} left.`;
+    lastDist = null; // reset hotter/colder baseline after a hit
+  }else{
+    const d = nearestStickerDistance(x,y);
+    if(lastDist === null){
+      ui.feedback.textContent = `No sticker. (Warm-up) Nearest is ${d} steps away.`;
+    }else{
+      if(d < lastDist) ui.feedback.textContent = `No sticker. 🔥 HOTTER! (${d} steps away)`;
+      else if(d > lastDist) ui.feedback.textContent = `No sticker. 🧊 COLDER! (${d} steps away)`;
+      else ui.feedback.textContent = `No sticker. 😐 SAME warmth. (${d} steps away)`;
+    }
+    lastDist = d;
+  }
+
+  lastClick = {x,y};
+
+  if(stickersLeft === 0){
+    ui.feedback.textContent = `YOU WIN! 🎉 You found all stickers in ${moves} moves.`;
+  }
+  render();
+}
+
+function render(){
+  ui.left.textContent = String(stickersLeft);
+  ui.moves.textContent = String(moves);
+
+  ui.board.innerHTML = "";
+  for(let y=0;y<SIZE;y++){
+    for(let x=0;x<SIZE;x++){
+      const d = document.createElement("div");
+      d.className = "cell" + (revealed[y][x] ? " revealed" : "");
+      d.textContent = revealed[y][x] ? (stickers.has(posKey(x,y)) ? "⭐" : "·") : "";
+      d.title = `(${x},${y})`;
+      d.onclick = ()=> clickCell(x,y);
+      ui.board.appendChild(d);
+    }
+  }
+}
+
+/* ===== AI clue =====
+   We ask AI to output a single-sentence rule that mentions one of:
+   - row / column / edge / corner / near / far / top / bottom / left / right
+   AND it must be consistent with the actual sticker locations (we verify).
+*/
+
+function spellToThreeWords(s){
+  const words = (s||"").trim().split(/\s+/).filter(Boolean);
+  return words.slice(0,3).join(" ");
+}
+
+function validateClueAgainstWorld(clueText){
+  // Basic, kid-friendly verification:
+  // We'll only accept a small set of clue types that we can check.
+  // If we can't parse, we reject and give a fallback generic hint.
+
+  const t = clueText.toLowerCase();
+
+  // Helper checks
+  const stickerCoords = [...stickers].map(k=>k.split(",").map(Number));
+  const any = (pred)=> stickerCoords.some(([x,y])=>pred(x,y));
+
+  // edges/corners
+  const isEdge = (x,y)=> x===0 || y===0 || x===SIZE-1 || y===SIZE-1;
+  const isCorner = (x,y)=> (x===0||x===SIZE-1) && (y===0||y===SIZE-1);
+
+  // top/bottom/left/right halves
+  const topHalf = (x,y)=> y <= 3;
+  const bottomHalf = (x,y)=> y >= 4;
+  const leftHalf = (x,y)=> x <= 3;
+  const rightHalf = (x,y)=> x >= 4;
+
+  // If clue says "avoid corners" -> accept if at least one sticker is NOT in a corner
+  if(t.includes("avoid") && t.includes("corner")){
+    return any((x,y)=> !isCorner(x,y));
+  }
+  // If clue says "try an edge" -> accept if at least one sticker is on an edge
+  if((t.includes("edge") && (t.includes("try") || t.includes("on the")))){
+    return any((x,y)=> isEdge(x,y));
+  }
+  // top/bottom/left/right
+  if(t.includes("top")){
+    return any((x,y)=> topHalf(x,y));
+  }
+  if(t.includes("bottom")){
+    return any((x,y)=> bottomHalf(x,y));
+  }
+  if(t.includes("left")){
+    return any((x,y)=> leftHalf(x,y));
+  }
+  if(t.includes("right")){
+    return any((x,y)=> rightHalf(x,y));
+  }
+  // same row / column (only meaningful after at least one click)
+  if(lastClick && (t.includes("same row") || (t.includes("same") && t.includes("row")))){
+    return any((x,y)=> y === lastClick.y);
+  }
+  if(lastClick && (t.includes("same column") || (t.includes("same") && t.includes("column")))){
+    return any((x,y)=> x === lastClick.x);
+  }
+
+  // "near your last click" (radius 2)
+  if(lastClick && (t.includes("near") || t.includes("next to"))){
+    return any((x,y)=> (Math.abs(x-lastClick.x)+Math.abs(y-lastClick.y)) <= 2);
+  }
+
+  // If we can't parse it, reject
+  return false;
+}
+
+function fallbackClue(){
+  // Always true statements
+  const options = [
+    "Try somewhere you haven’t clicked yet. (Yes, that’s the rule 😄)",
+    "If you keep getting colder, turn around and try the opposite direction.",
+    "Edges are often good places to check next.",
+  ];
+  return options[randInt(0, options.length-1)];
+}
+
+async function askAIForClue(){
+  const apiKey = ui.apiKey.value.trim();
+  if(!apiKey){
+    ui.clue.textContent = "No API key. (Still playable without AI!)";
+    ui.debug.textContent = "Enter key to enable AI clues.";
+    return;
+  }
+
+  const spell = spellToThreeWords(ui.spell.value);
+  if(!spell){
+    ui.clue.textContent = "Type a 3-word spell first (like “bouncy banana wizard”).";
+    return;
+  }
+
+  // Provide the real sticker locations *to the AI* so it can generate a truthful clue.
+  // But we still verify it matches one of the clue types we can check.
+  const remaining = [...stickers].map(k=>{
+    const [x,y]=k.split(",").map(Number);
+    return {x,y};
+  });
+
+  ui.askClue.disabled = true;
+  ui.clue.textContent = "AI is thinking…";
+  ui.debug.textContent = "—";
+
+  const system = `
+You generate ONE kid-friendly clue for a grid treasure hunt.
+You MUST output a single short sentence (max 14 words).
+It must be TRUE given the remaining sticker coordinates.
+It must be one of these clue styles:
+1) "Try the TOP half." (or bottom/left/right)
+2) "Try an EDGE square." or "Avoid corners."
+3) "Try the SAME ROW as your last click." (only if last click exists)
+4) "Try the SAME COLUMN as your last click." (only if last click exists)
+5) "Try near your last click." (only if last click exists)
+Include a silly twist using the spell words, but keep it a real clue.
+No punctuation spam. No extra text.
+`.trim();
+
+  const user = {
+    spell,
+    gridSize: SIZE,
+    remainingStickers: remaining,
+    lastClick: lastClick ? {x:lastClick.x, y:lastClick.y} : null
+  };
+
+  try{
+    const res = await fetch("https://api.openai.com/v1/responses",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":`Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model:"gpt-5",
+        input:[
+          {role:"system", content: system},
+          {role:"user", content: JSON.stringify(user)}
+        ],
+        max_output_tokens: 80
+      })
+    });
+
+    if(!res.ok){
+      const t = await res.text();
+      ui.debug.textContent = `HTTP ${res.status}\n${t.slice(0,600)}`;
+      ui.clue.textContent = fallbackClue();
+      return;
+    }
+    const data = await res.json();
+    const clue = (data.output_text || "").trim().replace(/\s+/g," ");
+    ui.debug.textContent = clue || JSON.stringify(data,null,2).slice(0,700);
+
+    if(clue && validateClueAgainstWorld(clue)){
+      ui.clue.textContent = clue;
+    }else{
+      ui.clue.textContent = fallbackClue();
+      ui.debug.textContent += "\n\n(Rejected AI clue: not in a supported/checkable style.)";
+    }
+  }catch(err){
+    ui.debug.textContent = String(err);
+    ui.clue.textContent = fallbackClue();
+  }finally{
+    ui.askClue.disabled = false;
+  }
+}
+
+/* wiring */
+ui.saveKey.onclick = saveKey;
+ui.newGame.onclick = newGame;
+ui.askClue.onclick = askAIForClue;
+
+loadKey();
+newGame();
+</script>
+</body>
+</html>

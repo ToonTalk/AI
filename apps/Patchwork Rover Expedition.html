@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Patchwork Rover (AI Rule-Tile Explorer)</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#121a33;
+      --panel2:#0f1730;
+      --text:#e8ecff;
+      --muted:#a9b1d6;
+      --good:#7CFFB2;
+      --warn:#ffd37c;
+      --bad:#ff7c93;
+      --outline:rgba(255,255,255,.12);
+      --shadow: 0 18px 45px rgba(0,0,0,.35);
+      --radius: 18px;
+      --radius2: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background: radial-gradient(1200px 800px at 20% 10%, #1a2a6a 0%, var(--bg) 50%, #050816 100%);
+      color:var(--text);
+    }
+    header{
+      padding:18px 18px 0 18px;
+      max-width: 1180px;
+      margin:0 auto;
+      display:flex;
+      gap:12px;
+      align-items:flex-end;
+      justify-content:space-between;
+    }
+    h1{margin:0;font-size:20px;letter-spacing:.2px}
+    .sub{color:var(--muted);font-size:13px;margin-top:6px}
+    .wrap{
+      max-width:1180px;
+      margin:0 auto;
+      padding:18px;
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:16px;
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid var(--outline);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .card h2{
+      margin:0;
+      padding:14px 14px 0 14px;
+      font-size:14px;
+      letter-spacing:.25px;
+      color:#f1f4ff;
+    }
+    .card .body{padding:14px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--outline);
+      background: rgba(0,0,0,.15);
+      font-size:12px;
+      color: var(--muted);
+    }
+    .btn{
+      border:1px solid var(--outline);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border-radius: 12px;
+      padding:10px 12px;
+      cursor:pointer;
+      font-weight:650;
+      letter-spacing:.2px;
+      transition: transform .06s ease, background .15s ease;
+      user-select:none;
+    }
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{background: rgba(124,255,178,.12); border-color: rgba(124,255,178,.28)}
+    .btn.warn{background: rgba(255,211,124,.12); border-color: rgba(255,211,124,.26)}
+    .btn.bad{background: rgba(255,124,147,.12); border-color: rgba(255,124,147,.26)}
+    .btn:disabled{opacity:.45; cursor:not-allowed}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input[type="password"], input[type="text"]{
+      width:100%;
+      padding:10px 12px;
+      border-radius: 12px;
+      border:1px solid var(--outline);
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      outline:none;
+      font-size:13px;
+    }
+    .split{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+
+    /* Maker */
+    .makerGrid{
+      width: 210px; height: 210px;
+      border-radius: 18px;
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--outline);
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      overflow:hidden;
+    }
+    .cell{
+      border:1px solid rgba(255,255,255,.08);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      font-size:18px;
+      user-select:none;
+      position:relative;
+    }
+    .cell small{
+      position:absolute;
+      bottom:6px;
+      right:6px;
+      font-size:10px;
+      opacity:.7;
+    }
+    .palette{
+      display:flex; gap:8px; flex-wrap:wrap;
+      margin-top:10px;
+    }
+    .swatch{
+      width:34px;height:34px;
+      border-radius: 12px;
+      border:1px solid var(--outline);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:16px;
+      background: rgba(255,255,255,.04);
+      user-select:none;
+    }
+    .swatch.active{outline: 2px solid rgba(124,255,178,.8)}
+    .tiny{
+      font-family:var(--mono);
+      font-size:11px;
+      color: var(--muted);
+      line-height:1.35;
+      background: rgba(0,0,0,.18);
+      border:1px solid var(--outline);
+      padding:10px;
+      border-radius: 12px;
+      max-height: 180px;
+      overflow:auto;
+      white-space: pre-wrap;
+    }
+
+    /* Map */
+    #mapWrap{padding:14px}
+    canvas{
+      width:100%;
+      height:auto;
+      border-radius: var(--radius);
+      border:1px solid var(--outline);
+      background: rgba(0,0,0,.20);
+      display:block;
+    }
+
+    /* Inventory */
+    .inv{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap:10px;
+      margin-top:12px;
+    }
+    .tileCard{
+      border:1px solid var(--outline);
+      background: rgba(0,0,0,.18);
+      border-radius: 14px;
+      padding:10px;
+      cursor:pointer;
+      transition: transform .06s ease, background .15s ease;
+      min-height: 96px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .tileCard:hover{background: rgba(255,255,255,.06)}
+    .tileCard:active{transform: translateY(1px)}
+    .tileTop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .tileName{font-weight:800}
+    .tileRule{color:var(--muted); font-size:12px; line-height:1.25}
+    .tag{
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--outline);
+      background: rgba(255,255,255,.05);
+      color: var(--muted);
+    }
+
+    .footerNote{
+      margin-top:10px;
+      color: var(--muted);
+      font-size:12px;
+      line-height:1.35;
+    }
+
+    @media (max-width: 980px){
+      .wrap{grid-template-columns: 1fr}
+      header{align-items:flex-start;flex-direction:column}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Patchwork Rover</h1>
+      <div class="sub">Make tiny 3×3 “patches” → AI turns them into rule-tiles → build a world → explore and collect Star Bits.</div>
+    </div>
+    <div class="row">
+      <span class="pill" id="statusPill">Status: ready</span>
+      <span class="pill">Goal: <b id="goalBits">20</b> Star Bits</span>
+      <span class="pill">Collected: <b id="bits">0</b></span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- LEFT: Maker + Inventory -->
+    <section class="card">
+      <h2>1) Make a Patch Tile</h2>
+      <div class="body">
+        <div class="split">
+          <div>
+            <label>OpenAI API key (stored locally in your browser)</label>
+            <div class="row" style="gap:8px">
+              <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+              <button class="btn" id="saveKeyBtn">Save</button>
+            </div>
+            <div class="footerNote">
+              If you share this file with others, don’t include your key. For a public game, use a server proxy.
+            </div>
+
+            <hr style="border:0;border-top:1px solid var(--outline);margin:14px 0">
+
+            <label>Pick a stamp</label>
+            <div class="palette" id="stampPalette"></div>
+
+            <label style="margin-top:10px">Paint the 3×3 patch (click squares)</label>
+            <div class="makerGrid" id="makerGrid"></div>
+
+            <div class="row" style="margin-top:10px">
+              <button class="btn" id="clearPatchBtn">Clear</button>
+              <button class="btn warn" id="randomPatchBtn">Random</button>
+              <button class="btn primary" id="askAiBtn">Ask AI → Make Tile</button>
+            </div>
+
+            <div class="footerNote" id="aiHint">
+              Tip: simple patterns are best (a face, a plant, a swirl, a volcano).
+            </div>
+          </div>
+
+          <div>
+            <label>AI output (debug)</label>
+            <div class="tiny" id="debugBox">Waiting for your first tile…</div>
+          </div>
+        </div>
+
+        <hr style="border:0;border-top:1px solid var(--outline);margin:14px 0">
+
+        <h2 style="padding:0;margin:0 0 6px 0">2) Tile Inventory (click one to place)</h2>
+        <div class="inv" id="inventory"></div>
+
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="setGroundBtn">Place: Ground</button>
+          <button class="btn" id="eraseBtn">Erase</button>
+          <button class="btn bad" id="resetBtn">Reset World</button>
+        </div>
+
+        <div class="footerNote">
+          Controls: click map to place. Arrow keys / WASD to drive the rover. Explore the fog and collect Star Bits ✨.
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Map -->
+    <section class="card">
+      <h2>World Map</h2>
+      <div id="mapWrap">
+        <canvas id="map" width="960" height="640"></canvas>
+        <div class="row" style="margin-top:12px">
+          <span class="pill">Selected tool: <b id="toolLabel">Ground</b></span>
+          <span class="pill">Selected tile: <b id="tileLabel">—</b></span>
+          <span class="pill">Rover: <b id="roverPos">(0,0)</b></span>
+        </div>
+        <div class="footerNote" id="eventLine">Make your first tile, place it, then drive onto it.</div>
+      </div>
+    </section>
+  </div>
+
+<script>
+/* =========================
+   Patchwork Rover
+   - AI is structurally essential: it generates NEW RULE-TILES inside a constrained sandbox.
+   - All rules are validated. If AI fails, you still get a fallback tile.
+========================= */
+
+const UI = {
+  statusPill: document.getElementById('statusPill'),
+  bits: document.getElementById('bits'),
+  goalBits: document.getElementById('goalBits'),
+  apiKey: document.getElementById('apiKey'),
+  saveKeyBtn: document.getElementById('saveKeyBtn'),
+  stampPalette: document.getElementById('stampPalette'),
+  makerGrid: document.getElementById('makerGrid'),
+  clearPatchBtn: document.getElementById('clearPatchBtn'),
+  randomPatchBtn: document.getElementById('randomPatchBtn'),
+  askAiBtn: document.getElementById('askAiBtn'),
+  debugBox: document.getElementById('debugBox'),
+  inventory: document.getElementById('inventory'),
+  setGroundBtn: document.getElementById('setGroundBtn'),
+  eraseBtn: document.getElementById('eraseBtn'),
+  resetBtn: document.getElementById('resetBtn'),
+  map: document.getElementById('map'),
+  toolLabel: document.getElementById('toolLabel'),
+  tileLabel: document.getElementById('tileLabel'),
+  roverPos: document.getElementById('roverPos'),
+  eventLine: document.getElementById('eventLine'),
+};
+
+const LS_KEY = "patchwork_rover_openai_key_v1";
+const LS_STATE = "patchwork_rover_state_v1";
+
+const STAMPS = [
+  { id:"dot", char:"●", hint:"dot" },
+  { id:"star", char:"✦", hint:"star" },
+  { id:"leaf", char:"❖", hint:"leaf" },
+  { id:"wave", char:"≈", hint:"wave" },
+  { id:"spiral", char:"@",
+    hint:"spiral" },
+  { id:"tri", char:"▲", hint:"mountain" },
+  { id:"heart", char:"♥", hint:"heart" },
+  { id:"moon", char:"☾", hint:"moon" },
+  { id:"spark", char:"✧", hint:"spark" },
+];
+
+let activeStamp = STAMPS[0].id;
+let patch = Array.from({length:9}, () => null); // each cell: {stampId}
+let selectedTool = "ground"; // ground | erase | tile
+let selectedTileId = null;
+
+const RULE_LIBRARY = {
+  // Each tile defines ONE rule. Keep effects simple and readable for kids.
+  triggers: ["onStep"],
+  effects: [
+    "gainBits",      // +n star bits
+    "bounce",        // move extra steps in same direction
+    "teleport",      // jump to random revealed cell nearby
+    "revealPulse",   // reveal fog in radius
+    "magnetBits",    // pull nearby hidden bits into revealed spots
+    "sprout",        // turn adjacent ground into this tile (gentle spread)
+  ],
+  maxParams: {
+    gainBits: { amount:[1,3] },
+    bounce: { steps:[1,2] },
+    teleport: { radius:[2,4] },
+    revealPulse: { radius:[1,3] },
+    magnetBits: { radius:[2,4] },
+    sprout: { radius:[1,2] }
+  }
+};
+
+const GAME = {
+  cols: 18,
+  rows: 12,
+  cell: 48,
+  bitsGoal: 20,
+  bitsCollected: 0,
+  rover: {x: 9, y: 6, dx:0, dy:0},
+  revealed: null,
+  grid: null,   // tile placement: "ground" or tileId
+  bitsHidden: null, // boolean per cell
+  tiles: {},    // id -> tile object
+  inventoryOrder: [],
+  lastEvent: "Welcome! Make a tile, place it, then explore.",
+  cooldown: 0,
+};
+
+function setStatus(text, kind="ready"){
+  UI.statusPill.textContent = `Status: ${text}`;
+  const colorMap = {
+    ready: "rgba(255,255,255,.12)",
+    good: "rgba(124,255,178,.28)",
+    warn: "rgba(255,211,124,.28)",
+    bad:  "rgba(255,124,147,.28)",
+  };
+  UI.statusPill.style.borderColor = colorMap[kind] || colorMap.ready;
+}
+
+function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function choice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function keyPreview(k){ return k ? (k.slice(0,3) + "…" + k.slice(-4)) : "—"; }
+
+/* ---------- Persistence ---------- */
+function saveKey(){
+  const k = UI.apiKey.value.trim();
+  if(!k) return;
+  localStorage.setItem(LS_KEY, k);
+  setStatus(`key saved (${keyPreview(k)})`, "good");
+}
+function loadKey(){
+  const k = localStorage.getItem(LS_KEY);
+  if(k) UI.apiKey.value = k;
+}
+function saveState(){
+  const data = {
+    bitsCollected: GAME.bitsCollected,
+    grid: GAME.grid,
+    revealed: GAME.revealed,
+    bitsHidden: GAME.bitsHidden,
+    rover: GAME.rover,
+    tiles: GAME.tiles,
+    inventoryOrder: GAME.inventoryOrder,
+    selectedTool, selectedTileId
+  };
+  localStorage.setItem(LS_STATE, JSON.stringify(data));
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_STATE);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    Object.assign(GAME, {
+      bitsCollected: data.bitsCollected ?? 0,
+      grid: data.grid ?? null,
+      revealed: data.revealed ?? null,
+      bitsHidden: data.bitsHidden ?? null,
+      rover: data.rover ?? GAME.rover,
+      tiles: data.tiles ?? {},
+      inventoryOrder: data.inventoryOrder ?? []
+    });
+    selectedTool = data.selectedTool ?? "ground";
+    selectedTileId = data.selectedTileId ?? null;
+    return true;
+  }catch{ return false; }
+}
+
+/* ---------- Maker UI ---------- */
+function renderStampPalette(){
+  UI.stampPalette.innerHTML = "";
+  STAMPS.forEach(s=>{
+    const d = document.createElement('div');
+    d.className = "swatch" + (s.id === activeStamp ? " active" : "");
+    d.title = s.hint;
+    d.textContent = s.char;
+    d.onclick = ()=>{
+      activeStamp = s.id;
+      renderStampPalette();
+    };
+    UI.stampPalette.appendChild(d);
+  });
+}
+function renderPatch(){
+  UI.makerGrid.innerHTML = "";
+  for(let i=0;i<9;i++){
+    const c = document.createElement('div');
+    c.className="cell";
+    const val = patch[i];
+    c.textContent = val ? STAMPS.find(s=>s.id===val.stampId)?.char || "?" : "";
+    c.onclick = ()=>{
+      patch[i] = { stampId: activeStamp };
+      renderPatch();
+    };
+    UI.makerGrid.appendChild(c);
+  }
+}
+function clearPatch(){
+  patch = Array.from({length:9}, () => null);
+  renderPatch();
+}
+function randomPatch(){
+  patch = patch.map(()=> (Math.random()<0.62 ? {stampId: choice(STAMPS).id} : null));
+  // Ensure at least 3 marks
+  if(patch.filter(Boolean).length < 3){
+    for(let k=0;k<3;k++) patch[randInt(0,8)] = {stampId: choice(STAMPS).id};
+  }
+  renderPatch();
+}
+function patchToCompact(){
+  // Represent as 3 lines of stamp hints, '.' for empty
+  let out = [];
+  for(let r=0;r<3;r++){
+    let line = "";
+    for(let c=0;c<3;c++){
+      const v = patch[r*3+c];
+      line += v ? STAMPS.find(s=>s.id===v.stampId)?.hint?.[0]?.toUpperCase() || "X" : ".";
+    }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+/* ---------- Game Init ---------- */
+function newWorld(){
+  GAME.grid = Array.from({length: GAME.rows}, ()=> Array.from({length: GAME.cols}, ()=> "ground"));
+  GAME.revealed = Array.from({length: GAME.rows}, ()=> Array.from({length: GAME.cols}, ()=> false));
+  GAME.bitsHidden = Array.from({length: GAME.rows}, ()=> Array.from({length: GAME.cols}, ()=> false));
+  GAME.bitsCollected = 0;
+  GAME.rover = {x: Math.floor(GAME.cols/2), y: Math.floor(GAME.rows/2), dx:0, dy:0};
+
+  // reveal starting area
+  revealRadius(GAME.rover.x, GAME.rover.y, 2);
+
+  // sprinkle hidden bits
+  let total = 42;
+  while(total>0){
+    const x = randInt(0, GAME.cols-1);
+    const y = randInt(0, GAME.rows-1);
+    if((Math.abs(x-GAME.rover.x)+Math.abs(y-GAME.rover.y)) < 3) continue;
+    if(GAME.bitsHidden[y][x]) continue;
+    GAME.bitsHidden[y][x] = true;
+    total--;
+  }
+
+  // starter tiles (non-AI) so it’s playable instantly
+  GAME.tiles = {};
+  GAME.inventoryOrder = [];
+  addTile({
+    id: "moss",
+    name: "Mossy Ground",
+    emoji: "🌿",
+    rule: { trigger:"onStep", effect:"revealPulse", params:{ radius:2 } },
+    flavor: "Soft and green. It helps you see nearby.",
+    soundWord: "shush"
+  }, true);
+
+  addTile({
+    id: "sparkle",
+    name: "Sparkle Pebbles",
+    emoji: "✨",
+    rule: { trigger:"onStep", effect:"gainBits", params:{ amount:1 } },
+    flavor: "Tiny glitter stones. Sometimes you find Star Bits!",
+    soundWord: "ting"
+  }, true);
+
+  selectedTool = "ground";
+  selectedTileId = null;
+  GAME.lastEvent = "New world! Place a tile and explore.";
+  syncUI();
+  draw();
+  saveState();
+}
+
+function addTile(tile, silent=false){
+  // ensure unique id
+  if(!tile.id){
+    tile.id = "t_" + Math.random().toString(16).slice(2,9);
+  }
+  if(GAME.tiles[tile.id]){
+    tile.id = tile.id + "_" + Math.random().toString(16).slice(2,5);
+  }
+  GAME.tiles[tile.id] = tile;
+  if(!GAME.inventoryOrder.includes(tile.id)) GAME.inventoryOrder.unshift(tile.id);
+  if(!silent){
+    GAME.lastEvent = `New tile unlocked: ${tile.emoji} ${tile.name}`;
+  }
+  renderInventory();
+  saveState();
+}
+
+/* ---------- Rule Validation ---------- */
+function validateTile(raw){
+  // expected shape:
+  // { id?, name, emoji, flavor, soundWord, rule:{trigger:"onStep", effect, params} }
+  const t = {};
+
+  t.name = String(raw?.name || "").trim().slice(0, 28);
+  t.emoji = String(raw?.emoji || "").trim().slice(0, 4);
+  t.flavor = String(raw?.flavor || "").trim().slice(0, 120);
+  t.soundWord = String(raw?.soundWord || "").trim().slice(0, 18);
+  t.rule = raw?.rule || {};
+
+  if(!t.name) t.name = "Mystery Patch";
+  if(!t.emoji) t.emoji = "🧩";
+  if(!t.flavor) t.flavor = "A patch from your imagination.";
+  if(!t.soundWord) t.soundWord = "boop";
+
+  const trig = String(t.rule.trigger || "onStep");
+  const eff  = String(t.rule.effect || "revealPulse");
+  if(!RULE_LIBRARY.triggers.includes(trig)) t.rule.trigger = "onStep";
+  else t.rule.trigger = trig;
+
+  if(!RULE_LIBRARY.effects.includes(eff)) t.rule.effect = "revealPulse";
+  else t.rule.effect = eff;
+
+  t.rule.params = t.rule.params && typeof t.rule.params === "object" ? t.rule.params : {};
+  // clamp params by effect
+  const schema = RULE_LIBRARY.maxParams[t.rule.effect] || {};
+  for(const [k, range] of Object.entries(schema)){
+    const v = Number(t.rule.params[k]);
+    t.rule.params[k] = clamp(Number.isFinite(v) ? v : range[0], range[0], range[1]);
+  }
+
+  // final id
+  t.id = raw?.id ? String(raw.id).slice(0, 18) : null;
+  return t;
+}
+
+/* ---------- OpenAI Call (Responses API) ---------- */
+async function makeTileWithAI(){
+  const apiKey = UI.apiKey.value.trim();
+  if(!apiKey){
+    setStatus("enter API key", "warn");
+    return addTile(fallbackTile(), false);
+  }
+
+  const patchText = patchToCompact();
+  const existingNames = Object.values(GAME.tiles).map(t=>t.name).slice(0,12);
+
+  const system = `
+You are designing ONE kid-friendly tile for a game.
+The player paints a 3x3 patch using symbols. You turn it into a NEW "rule-tile".
+Output MUST be valid JSON only (no markdown).
+Constraints:
+- Must be fun and understandable for a kid.
+- Exactly one rule. Trigger always "onStep".
+- effect must be ONE of: gainBits, bounce, teleport, revealPulse, magnetBits, sprout
+- params must match effect:
+  gainBits: {amount:1..3}
+  bounce: {steps:1..2}
+  teleport: {radius:2..4}
+  revealPulse: {radius:1..3}
+  magnetBits: {radius:2..4}
+  sprout: {radius:1..2}
+- Keep name <= 28 chars, flavor <= 120 chars, soundWord <= 18 chars.
+- Avoid scary themes. Avoid violence. Keep it playful.
+- Do NOT copy names from this list: ${JSON.stringify(existingNames)}
+JSON shape:
+{
+  "name": "...",
+  "emoji": "…",
+  "flavor": "...",
+  "soundWord": "...",
+  "rule": { "trigger":"onStep", "effect":"...", "params": { ... } }
+}
+`.trim();
+
+  const user = `
+Here is the player's 3x3 patch ('.' means empty):
+${patchText}
+
+Interpret the vibe of the pattern and invent a tile that matches it.
+`.trim();
+
+  setStatus("asking AI…", "warn");
+  UI.askAiBtn.disabled = true;
+
+  try{
+    const res = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type":"application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-5",
+        input: [
+          { role:"system", content: system },
+          { role:"user", content: user },
+        ],
+        // keep it snappy; we also validate output strictly
+        max_output_tokens: 220
+      })
+    });
+
+    if(!res.ok){
+      const t = await res.text();
+      UI.debugBox.textContent = `HTTP ${res.status}\n${t.slice(0,600)}`;
+      setStatus("AI error → using fallback tile", "bad");
+      addTile(fallbackTile(), false);
+      return;
+    }
+
+    const data = await res.json();
+    // Responses API: collect text from output_text if present, else try to find output content
+    const outText = (data.output_text ?? "").trim();
+    UI.debugBox.textContent = outText || JSON.stringify(data, null, 2).slice(0,1200);
+
+    let raw;
+    try{
+      raw = JSON.parse(outText);
+    }catch{
+      // Sometimes models can return whitespace or extra; try to extract first JSON block
+      const m = outText.match(/\{[\s\S]*\}/);
+      raw = m ? JSON.parse(m[0]) : null;
+    }
+
+    if(!raw){
+      setStatus("couldn’t parse AI JSON → fallback", "bad");
+      addTile(fallbackTile(), false);
+      return;
+    }
+
+    const tile = validateTile(raw);
+    // give unique id based on name-ish
+    tile.id = ("t_" + tile.name.toLowerCase().replace(/[^a-z0-9]+/g,"_").slice(0,12) + "_" + Math.random().toString(16).slice(2,5));
+    addTile(tile, false);
+    setStatus("tile created!", "good");
+  }catch(err){
+    UI.debugBox.textContent = String(err);
+    setStatus("AI call failed → fallback", "bad");
+    addTile(fallbackTile(), false);
+  }finally{
+    UI.askAiBtn.disabled = false;
+  }
+}
+
+function fallbackTile(){
+  // A fun, safe tile if AI isn’t available
+  const options = [
+    { name:"Bouncy Puddle", emoji:"🫧", rule:{trigger:"onStep", effect:"bounce", params:{steps:1}}, flavor:"Splash! You bounce forward a bit.", soundWord:"boing" },
+    { name:"Peek-a-Bush", emoji:"🌳", rule:{trigger:"onStep", effect:"revealPulse", params:{radius:2}}, flavor:"It whispers secrets about nearby fog.", soundWord:"psst" },
+    { name:"Star Sniffer", emoji:"🐽", rule:{trigger:"onStep", effect:"magnetBits", params:{radius:3}}, flavor:"It snuffles Star Bits closer.", soundWord:"snorf" },
+    { name:"Sprout Patch", emoji:"🌱", rule:{trigger:"onStep", effect:"sprout", params:{radius:1}}, flavor:"It gently spreads itself to neighbors.", soundWord:"plip" },
+  ];
+  const t = validateTile(choice(options));
+  t.id = "fb_" + Math.random().toString(16).slice(2,8);
+  return t;
+}
+
+/* ---------- Inventory UI ---------- */
+function renderInventory(){
+  UI.inventory.innerHTML = "";
+
+  // show newest first
+  const ids = [...GAME.inventoryOrder].slice(0,12);
+
+  ids.forEach(id=>{
+    const tile = GAME.tiles[id];
+    if(!tile) return;
+    const d = document.createElement('div');
+    d.className = "tileCard";
+    const ruleText = ruleToText(tile.rule);
+    d.innerHTML = `
+      <div class="tileTop">
+        <div class="tileName">${tile.emoji} ${escapeHtml(tile.name)}</div>
+        <span class="tag">${escapeHtml(tile.rule.effect)}</span>
+      </div>
+      <div class="tileRule">${escapeHtml(ruleText)}</div>
+      <div class="tileRule" style="opacity:.9">${escapeHtml(tile.flavor)}</div>
+    `;
+    d.onclick = ()=>{
+      selectedTool = "tile";
+      selectedTileId = id;
+      syncUI();
+      draw();
+      saveState();
+    };
+    UI.inventory.appendChild(d);
+  });
+
+  if(ids.length === 0){
+    const p = document.createElement('div');
+    p.className = "footerNote";
+    p.textContent = "No tiles yet. Make one!";
+    UI.inventory.appendChild(p);
+  }
+}
+
+function ruleToText(rule){
+  if(!rule) return "No rule.";
+  const e = rule.effect;
+  const p = rule.params || {};
+  switch(e){
+    case "gainBits": return `Step here → maybe find +${p.amount} Star Bit(s).`;
+    case "bounce": return `Step here → bounce ${p.steps} extra step(s).`;
+    case "teleport": return `Step here → pop to a nearby spot (radius ${p.radius}).`;
+    case "revealPulse": return `Step here → reveal fog (radius ${p.radius}).`;
+    case "magnetBits": return `Step here → pull Star Bits closer (radius ${p.radius}).`;
+    case "sprout": return `Step here → gently spread (radius ${p.radius}).`;
+    default: return "A mysterious effect.";
+  }
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+/* ---------- Map + Drawing ---------- */
+const ctx = UI.map.getContext("2d");
+
+function draw(){
+  const w = UI.map.width, h = UI.map.height;
+  ctx.clearRect(0,0,w,h);
+
+  const cell = GAME.cell;
+  const ox = Math.floor((w - GAME.cols*cell)/2);
+  const oy = Math.floor((h - GAME.rows*cell)/2);
+
+  // background grid
+  for(let y=0;y<GAME.rows;y++){
+    for(let x=0;x<GAME.cols;x++){
+      const rx = ox + x*cell, ry = oy + y*cell;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(255,255,255,.05)";
+      ctx.fillRect(rx, ry, cell, cell);
+
+      const rev = GAME.revealed[y][x];
+      if(!rev){
+        ctx.fillStyle = "rgba(0,0,0,.52)";
+        ctx.fillRect(rx, ry, cell, cell);
+      }else{
+        // draw tile
+        const v = GAME.grid[y][x];
+        if(v !== "ground"){
+          const tile = GAME.tiles[v];
+          // tile base
+          ctx.fillStyle = "rgba(124,255,178,.08)";
+          ctx.fillRect(rx+2, ry+2, cell-4, cell-4);
+          // emoji
+          ctx.font = "24px " + getComputedStyle(document.body).fontFamily;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "rgba(255,255,255,.92)";
+          ctx.fillText(tile?.emoji || "🧩", rx+cell/2, ry+cell/2);
+        }
+
+        // draw hidden bit if revealed & bit exists
+        if(GAME.bitsHidden[y][x]){
+          ctx.font = "18px " + getComputedStyle(document.body).fontFamily;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "rgba(255,255,255,.95)";
+          ctx.fillText("✦", rx+cell/2, ry+cell/2 + 16);
+        }
+      }
+
+      // border
+      ctx.strokeStyle = "rgba(255,255,255,.08)";
+      ctx.strokeRect(rx, ry, cell, cell);
+    }
+  }
+
+  // rover
+  const {x:rx0,y:ry0} = GAME.rover;
+  const rx = ox + rx0*cell, ry = oy + ry0*cell;
+  ctx.fillStyle = "rgba(255,211,124,.20)";
+  ctx.fillRect(rx+4, ry+4, cell-8, cell-8);
+  ctx.font = "24px " + getComputedStyle(document.body).fontFamily;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(255,255,255,.95)";
+  ctx.fillText("🛸", rx+cell/2, ry+cell/2);
+
+  // highlight placement
+  if(selectedTool === "tile" && selectedTileId){
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "rgba(124,255,178,.7)";
+  }else if(selectedTool === "erase"){
+    ctx.strokeStyle = "rgba(255,124,147,.7)";
+  }else{
+    ctx.strokeStyle = "rgba(255,255,255,.25)";
+  }
+}
+
+function screenToCell(mx,my){
+  const w = UI.map.width, h = UI.map.height;
+  const cell = GAME.cell;
+  const ox = Math.floor((w - GAME.cols*cell)/2);
+  const oy = Math.floor((h - GAME.rows*cell)/2);
+  const x = Math.floor((mx - ox)/cell);
+  const y = Math.floor((my - oy)/cell);
+  if(x<0||y<0||x>=GAME.cols||y>=GAME.rows) return null;
+  return {x,y};
+}
+
+/* ---------- Fog + Bits ---------- */
+function revealRadius(cx,cy,r){
+  for(let y=cy-r;y<=cy+r;y++){
+    for(let x=cx-r;x<=cx+r;x++){
+      if(x<0||y<0||x>=GAME.cols||y>=GAME.rows) continue;
+      if(Math.abs(x-cx)+Math.abs(y-cy) <= r){
+        GAME.revealed[y][x] = true;
+      }
+    }
+  }
+}
+function collectIfBit(x,y){
+  if(GAME.revealed[y][x] && GAME.bitsHidden[y][x]){
+    GAME.bitsHidden[y][x] = false;
+    GAME.bitsCollected += 1;
+    GAME.lastEvent = "You found a Star Bit! ✨";
+    if(GAME.bitsCollected >= GAME.bitsGoal){
+      GAME.lastEvent = "YOU WIN! You collected enough Star Bits! 🎉 Make more tiles and keep exploring if you want.";
+    }
+  }
+}
+
+/* ---------- Movement + Tile Effects ---------- */
+function tryMove(dx,dy){
+  if(GAME.cooldown>0) return;
+  if(GAME.bitsCollected >= GAME.bitsGoal){
+    GAME.lastEvent = "You already won! (You can still explore.)";
+  }
+
+  const nx = clamp(GAME.rover.x + dx, 0, GAME.cols-1);
+  const ny = clamp(GAME.rover.y + dy, 0, GAME.rows-1);
+
+  // move
+  GAME.rover.dx = dx; GAME.rover.dy = dy;
+  GAME.rover.x = nx; GAME.rover.y = ny;
+
+  // reveal + collect
+  revealRadius(nx, ny, 1);
+  collectIfBit(nx, ny);
+
+  // apply tile rule if present
+  const cellVal = GAME.grid[ny][nx];
+  if(cellVal !== "ground"){
+    const tile = GAME.tiles[cellVal];
+    if(tile?.rule?.trigger === "onStep"){
+      applyRule(tile);
+    }
+  }
+
+  GAME.cooldown = 2; // tiny debounce
+  syncUI();
+  draw();
+  saveState();
+}
+
+function applyRule(tile){
+  const {effect, params} = tile.rule;
+  const x = GAME.rover.x, y = GAME.rover.y;
+
+  // little “sound” feedback via text
+  const blip = tile.soundWord ? ` (${tile.soundWord}!)` : "";
+
+  switch(effect){
+    case "gainBits":{
+      // chance-based so it’s exciting but not guaranteed
+      const amount = params.amount || 1;
+      const got = (Math.random() < 0.55) ? amount : 0;
+      if(got>0){
+        GAME.bitsCollected += got;
+        GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} You found +${got} Star Bit(s)!`;
+      }else{
+        GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} You search… not this time.`;
+      }
+      break;
+    }
+    case "bounce":{
+      const steps = params.steps || 1;
+      GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} BOUNCE ${steps}!`;
+      for(let i=0;i<steps;i++){
+        const nx = clamp(GAME.rover.x + GAME.rover.dx, 0, GAME.cols-1);
+        const ny = clamp(GAME.rover.y + GAME.rover.dy, 0, GAME.rows-1);
+        if(nx===GAME.rover.x && ny===GAME.rover.y) break;
+        GAME.rover.x = nx; GAME.rover.y = ny;
+        revealRadius(nx, ny, 1);
+        collectIfBit(nx, ny);
+      }
+      break;
+    }
+    case "teleport":{
+      const r = params.radius || 3;
+      // pick a revealed target if possible; else reveal-pulse first
+      const spots = [];
+      for(let yy=y-r;yy<=y+r;yy++){
+        for(let xx=x-r;xx<=x+r;xx++){
+          if(xx<0||yy<0||xx>=GAME.cols||yy>=GAME.rows) continue;
+          if(Math.abs(xx-x)+Math.abs(yy-y) <= r){
+            if(GAME.revealed[yy][xx]) spots.push({x:xx,y:yy});
+          }
+        }
+      }
+      if(spots.length===0){
+        revealRadius(x,y,2);
+        GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} It fizzles but reveals fog!`;
+      }else{
+        const t = choice(spots);
+        GAME.rover.x = t.x; GAME.rover.y = t.y;
+        revealRadius(t.x, t.y, 1);
+        collectIfBit(t.x, t.y);
+        GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} POP! Teleport!`;
+      }
+      break;
+    }
+    case "revealPulse":{
+      const r = params.radius || 2;
+      revealRadius(x,y,r);
+      GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} Fog peels back (radius ${r}).`;
+      break;
+    }
+    case "magnetBits":{
+      const r = params.radius || 3;
+      // pull: if there are hidden bits in radius, reveal them by revealing cells around them
+      let pulled = 0;
+      for(let yy=y-r;yy<=y+r;yy++){
+        for(let xx=x-r;xx<=x+r;xx++){
+          if(xx<0||yy<0||xx>=GAME.cols||yy>=GAME.rows) continue;
+          if(Math.abs(xx-x)+Math.abs(yy-y) <= r){
+            if(GAME.bitsHidden[yy][xx]){
+              GAME.revealed[yy][xx] = true;
+              pulled++;
+            }
+          }
+        }
+      }
+      if(pulled>0){
+        GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} Sniffed out ${pulled} nearby Star Bit spot(s)!`;
+      }else{
+        GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} It sniffs… nothing nearby.`;
+      }
+      break;
+    }
+    case "sprout":{
+      const r = params.radius || 1;
+      let grown = 0;
+      for(let yy=y-r;yy<=y+r;yy++){
+        for(let xx=x-r;xx<=x+r;xx++){
+          if(xx<0||yy<0||xx>=GAME.cols||yy>=GAME.rows) continue;
+          if(Math.abs(xx-x)+Math.abs(yy-y) <= r){
+            if(GAME.grid[yy][xx] === "ground" && Math.random()<0.45){
+              GAME.grid[yy][xx] = tile.id;
+              grown++;
+            }
+          }
+        }
+      }
+      GAME.lastEvent = `${tile.emoji} ${tile.name}${blip} It sprouted ${grown} new patch(es)!`;
+      break;
+    }
+  }
+
+  if(GAME.bitsCollected >= GAME.bitsGoal){
+    GAME.lastEvent = "YOU WIN! You collected enough Star Bits! 🎉";
+  }
+}
+
+/* ---------- UI Sync ---------- */
+function syncUI(){
+  UI.bits.textContent = String(GAME.bitsCollected);
+  UI.goalBits.textContent = String(GAME.bitsGoal);
+  UI.eventLine.textContent = GAME.lastEvent;
+
+  UI.toolLabel.textContent =
+    selectedTool === "tile" ? "Tile" :
+    selectedTool === "erase" ? "Erase" :
+    "Ground";
+
+  const tile = selectedTileId ? GAME.tiles[selectedTileId] : null;
+  UI.tileLabel.textContent = tile ? `${tile.emoji} ${tile.name}` : "—";
+  UI.roverPos.textContent = `(${GAME.rover.x},${GAME.rover.y})`;
+
+  renderStampPalette();
+  renderPatch();
+  renderInventory();
+}
+
+function tick(){
+  if(GAME.cooldown>0) GAME.cooldown--;
+  requestAnimationFrame(tick);
+}
+
+/* ---------- Events ---------- */
+UI.saveKeyBtn.onclick = ()=>{ saveKey(); };
+UI.clearPatchBtn.onclick = ()=>{ clearPatch(); };
+UI.randomPatchBtn.onclick = ()=>{ randomPatch(); };
+UI.askAiBtn.onclick = ()=>{ makeTileWithAI(); };
+
+UI.setGroundBtn.onclick = ()=>{
+  selectedTool = "ground"; selectedTileId = null;
+  syncUI(); draw(); saveState();
+};
+UI.eraseBtn.onclick = ()=>{
+  selectedTool = "erase"; selectedTileId = null;
+  syncUI(); draw(); saveState();
+};
+UI.resetBtn.onclick = ()=>{
+  localStorage.removeItem(LS_STATE);
+  newWorld();
+  setStatus("world reset", "warn");
+};
+
+UI.map.addEventListener("click", (e)=>{
+  const rect = UI.map.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (UI.map.width / rect.width);
+  const my = (e.clientY - rect.top) * (UI.map.height / rect.height);
+  const cell = screenToCell(mx,my);
+  if(!cell) return;
+
+  const {x,y} = cell;
+
+  if(selectedTool === "erase"){
+    GAME.grid[y][x] = "ground";
+    GAME.lastEvent = "Erased.";
+  }else if(selectedTool === "ground"){
+    GAME.grid[y][x] = "ground";
+    GAME.lastEvent = "Placed ground.";
+  }else if(selectedTool === "tile" && selectedTileId){
+    GAME.grid[y][x] = selectedTileId;
+    GAME.lastEvent = "Placed a tile.";
+  }
+
+  // placing reveals a little (feels good)
+  revealRadius(x,y,1);
+  syncUI(); draw(); saveState();
+});
+
+window.addEventListener("keydown", (e)=>{
+  const k = e.key.toLowerCase();
+  if(["arrowup","w"].includes(k)) tryMove(0,-1);
+  else if(["arrowdown","s"].includes(k)) tryMove(0,1);
+  else if(["arrowleft","a"].includes(k)) tryMove(-1,0);
+  else if(["arrowright","d"].includes(k)) tryMove(1,0);
+});
+
+/* ---------- Start ---------- */
+loadKey();
+
+if(loadState() && GAME.grid && GAME.revealed && GAME.bitsHidden){
+  setStatus("loaded saved world", "good");
+  // ensure defaults if older state
+  GAME.bitsGoal = 20;
+  if(!GAME.tiles || Object.keys(GAME.tiles).length === 0) newWorld();
+  syncUI(); draw();
+}else{
+  newWorld();
+  setStatus("ready", "ready");
+}
+tick();
+</script>
+</body>
+</html>
