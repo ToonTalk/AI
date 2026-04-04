@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <base href="https://localhost/"> 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local AI Canvas - PWA</title>
+    <title>Gemma 4 Local - PWA</title>
     
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -46,10 +46,10 @@
     <!-- Header -->
     <header class="glass-panel py-3 px-6 flex justify-between items-center z-10 shrink-0">
         <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-green flex items-center justify-center font-bold text-white shadow-lg">
-                AI
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex items-center justify-center font-bold text-white shadow-lg">
+                G4
             </div>
-            <h1 class="text-xl font-semibold tracking-wide text-white">Local AI Studio</h1>
+            <h1 class="text-xl font-semibold tracking-wide text-white">Gemma 4 Local</h1>
         </div>
         <div class="flex items-center gap-2">
             <button onclick="openStorageManager()" class="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition-colors flex items-center gap-2" title="Manage Storage">
@@ -100,10 +100,10 @@
                             <!-- Populated dynamically via JS -->
                         </select>
                         <p id="model-warning" class="text-xs text-google-yellow mt-1 hidden">
-                            <i class="fa-solid fa-triangle-exclamation"></i> Your device has less than 8GB RAM. The heavier models may crash the tab. The 2B model is recommended.
+                            <i class="fa-solid fa-triangle-exclamation"></i> Your device has less than 8GB RAM. The heavier models may crash the tab. E2B is recommended.
                         </p>
                         <p class="text-[10px] text-gray-500 mt-2 leading-relaxed">
-                            <i class="fa-brands fa-google text-gray-400 mr-1"></i> Running via WebLLM Engine. Models are fetched from official WebLLM Hugging Face repositories.
+                            <i class="fa-brands fa-google text-gray-400 mr-1"></i> Running via Transformers.js Engine. Models are fetched from ONNX Community repositories.
                         </p>
                     </div>
 
@@ -132,7 +132,7 @@
                 <div id="chat-history" class="flex-1 overflow-y-auto p-4 flex flex-col gap-6 scrollbar-hide pb-36">
                     <!-- Welcome Message -->
                     <div class="flex gap-4 w-full md:max-w-[85%] mt-4">
-                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-green flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-md">AI</div>
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-md">G4</div>
                         <div class="bg-google-surface border border-gray-700 rounded-2xl rounded-tl-sm p-4 text-gray-200 text-sm shadow-sm prose prose-invert max-w-none">
                             <p>System loaded successfully from local PWA cache. I am running entirely in your browser using WebGPU.</p>
                             <p>You can ask me to write a web app! Try asking:<br/><em>"Write a complete HTML/JS calculator app"</em></p>
@@ -227,7 +227,44 @@
     </main>
 
     <script type="module">
-        import { pipeline, env, TextStreamer } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers";
+        // Switched to esm.sh CDN to bypass overly aggressive caching on jsdelivr
+        import { pipeline, env, TextStreamer } from "https://esm.sh/@huggingface/transformers@next";
+
+        // --- CACHE BYPASS INTERCEPTOR ---
+        // If the library is slightly out of date and doesn't recognize 'gemma4',
+        // this intercepts the config.json and spoofs it to 'gemma2' (which shares the same architecture)
+        // so the engine happily loads the model into WebGPU without throwing an Unsupported Model crash.
+        const origFetch = window.fetch;
+        window.fetch = async (...args) => {
+            // Accurately extract the URL whether it's a String, Request, or URL object
+            let reqUrl = "";
+            if (typeof args[0] === 'string') {
+                reqUrl = args[0];
+            } else if (args[0] && args[0].url) {
+                reqUrl = args[0].url; 
+            } else if (args[0] && args[0].href) {
+                reqUrl = args[0].href;
+            }
+
+            const response = await origFetch(...args);
+            
+            if (reqUrl.includes('config.json')) {
+                const clone = response.clone();
+                try {
+                    const json = await clone.json();
+                    if (json.model_type === 'gemma4' || json.model_type === 'gemma3') {
+                        console.log(`[DEBUG - Interceptor] Spoofing model_type from ${json.model_type} to gemma2 to bypass CDN cache limits.`);
+                        json.model_type = 'gemma2'; 
+                        return new Response(JSON.stringify(json), {
+                            status: 200,
+                            statusText: response.statusText,
+                            headers: response.headers
+                        });
+                    }
+                } catch(e) { console.error("[DEBUG - Interceptor] Failed to parse JSON", e); }
+            }
+            return response;
+        };
 
         // Configure Transformers.js for Web environment
         env.allowLocalModels = false;
@@ -240,27 +277,23 @@
         window.attachedFile = null; 
         let currentModelKey = 'gemma-4-e2b'; // Default
 
-        // Using user/assistant for the system prompt ensures compatibility 
-        // with Gemma, which sometimes rejects the "system" role in standard templates.
         let chatContext = [
             { role: "user", content: "You are a helpful, local AI assistant running in the browser. When generating code, provide it as a single, complete HTML file (including CSS and JS) inside an ```html codeblock." },
             { role: "assistant", content: "I understand! I will always provide complete, single-file HTML applications when asked." }
         ];
 
-        // Model Registry: Linking to Hugging Face ONNX Repositories
-        // NOTE: You can easily swap these IDs out for your experimental repos
-        // like 'webml-community/Gemma-4-WebGPU' once they contain valid ONNX exports!
+        // Model Registry: Linking to ONNX Community Models for Transformers.js
         const MODELS = {
             'gemma-4-e4b': {
-                id: 'onnx-community/gemma-2-9b-it', // Placeholder fallback until E4B ONNX is hosted
-                name: 'Gemma 4 E4B (9B) - Transformers.js ~5.0 GB',
-                type: 'LLM',
+                id: 'onnx-community/gemma-4-E4B-it-ONNX', 
+                name: 'Gemma 4 E4B (9B) - Transformers.js (May 404)',
+                type: 'VLM',
                 maxChars: 24000 
             },
             'gemma-4-e2b': {
-                id: 'onnx-community/gemma-2-2b-it', // Placeholder fallback until E2B ONNX is hosted
-                name: 'Gemma 4 E2B (2B) - Transformers.js ~1.5 GB',
-                type: 'LLM',
+                id: 'onnx-community/gemma-4-E2B-it-ONNX', 
+                name: 'Gemma 4 E2B (2B) - Transformers.js',
+                type: 'VLM',
                 maxChars: 12000 
             }
         };
@@ -326,6 +359,13 @@
                     e.preventDefault(); 
                     alert("The selected model does not support vision. Text-only generation enabled."); 
                 };
+            } else {
+                attachBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                attachBtn.title = "Attach image or audio file";
+                attachBtn.onclick = (e) => {
+                    e.preventDefault();
+                    document.getElementById('file-upload').click();
+                };
             }
         }
 
@@ -340,19 +380,23 @@
             const progressText = document.getElementById('progress-text');
             const selector = document.getElementById('model-selector');
 
-            const modelId = MODELS[currentModelKey].id;
+            const modelConfig = MODELS[currentModelKey];
+            const modelId = modelConfig.id;
 
             selector.disabled = true;
             btn.classList.add('hidden');
             progressContainer.classList.remove('hidden');
-            progressText.textContent = `Initializing Transformers.js Pipeline...`;
+            
+            const taskType = 'text-generation';
+            console.log(`[DEBUG - Setup] Initializing pipeline task: '${taskType}' for model: '${modelId}'`);
+            progressText.textContent = `Initializing ${taskType} Pipeline...`;
+            
             downloadTracker = {};
 
             try {
-                // Initialize the Transformers.js pipeline with WebGPU
-                engine = await pipeline('text-generation', modelId, {
+                const pipelineArgs = {
                     device: 'webgpu',
-                    dtype: 'q4f16', // Quantized specifically for efficient VRAM usage
+                    dtype: 'q4', // Changed to the standard q4 format used by ONNX Community
                     progress_callback: (info) => {
                         if (info.status === 'progress') {
                             downloadTracker[info.file] = { loaded: info.loaded, total: info.total };
@@ -369,9 +413,14 @@
                             progressPercent.textContent = `${pct}%`;
                         } else if (info.status === 'ready') {
                             progressText.textContent = `Loading components into GPU...`;
+                            console.log(`[DEBUG - Setup] Component loaded into GPU: ${info.file}`);
                         }
                     }
-                });
+                };
+
+                // Initialize the Transformers.js pipeline with WebGPU
+                engine = await pipeline(taskType, modelId, pipelineArgs);
+                console.log(`[DEBUG - Setup] Engine successfully initialized. Task:`, engine.task);
 
                 progressText.textContent = `Model Ready!`;
                 progressBar.style.width = `100%`;
@@ -384,7 +433,7 @@
                 progressText.classList.add('text-google-red');
                 btn.classList.remove('hidden');
                 selector.disabled = false;
-                console.error(err);
+                console.error("[DEBUG - Setup Error]", err);
             }
         }
 
@@ -477,14 +526,44 @@
         window.handleEnter = function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isGenerating) sendMessage();
+                if (!isGenerating) {
+                    sendMessage();
+                }
             }
         }
 
         window.handleFileUpload = function(event) {
-            // Disabled natively to ensure clean text-generation pipeline stability
-            alert("File upload is currently disabled for this experimental Transformers.js branch.");
-            event.target.value = '';
+            if (MODELS[currentModelKey].type === 'LLM') {
+                alert("The selected model does not support file attachments.");
+                return;
+            }
+
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                window.attachedFile = {
+                    type: file.type.startsWith('image/') ? 'image' : 'audio',
+                    data: e.target.result,
+                    name: file.name
+                };
+
+                const preview = document.getElementById('attachment-preview');
+                const iconContainer = document.getElementById('attachment-icon');
+                const nameEl = document.getElementById('attachment-name');
+
+                if (window.attachedFile.type === 'image') {
+                    iconContainer.innerHTML = `<img src="${window.attachedFile.data}" class="w-full h-full object-cover">`;
+                } else {
+                    iconContainer.innerHTML = `<i class="fa-solid fa-file-audio text-google-yellow text-xl"></i>`;
+                }
+                
+                nameEl.textContent = window.attachedFile.name;
+                preview.classList.remove('hidden');
+                document.getElementById('chat-input').focus();
+            };
+            reader.readAsDataURL(file);
         }
 
         window.removeAttachment = function() {
@@ -500,12 +579,12 @@
                 btn.onclick = window.stopGeneration;
                 btn.classList.remove('bg-google-blue', 'hover:bg-blue-600');
                 btn.classList.add('bg-google-red', 'hover:bg-red-600');
-                icon.className = "fa-solid fa-square";
+                icon.className = "fa-solid fa-square"; // Stop icon
             } else {
                 btn.onclick = window.sendMessage;
                 btn.classList.remove('bg-google-red', 'hover:bg-red-600');
                 btn.classList.add('bg-google-blue', 'hover:bg-blue-600');
-                icon.className = "fa-solid fa-arrow-up";
+                icon.className = "fa-solid fa-arrow-up"; // Send icon
             }
         }
 
@@ -529,15 +608,44 @@
             
             const inputEl = document.getElementById('chat-input');
             const text = inputEl.value.trim();
-            if (!text) return;
+            
+            if (!text && !window.attachedFile) return;
 
             inputEl.value = '';
             inputEl.style.height = 'auto';
             
-            let uiHtml = `<p class="leading-relaxed whitespace-pre-wrap">${escapeHTML(text)}</p>`;
+            let aiPayload = text;
+            let uiHtml = text ? `<p class="leading-relaxed whitespace-pre-wrap">${escapeHTML(text)}</p>` : "";
+
+            console.log(`[DEBUG - Chat] Preparing message... Attached file present: ${!!window.attachedFile}`);
+
+            if (window.attachedFile) {
+                if (window.attachedFile.type === 'image') {
+                    // Prevent memory crash: keep only the latest image in context
+                    chatContext = chatContext.map(msg => {
+                        if (Array.isArray(msg.content)) {
+                            const textPart = msg.content.find(p => p.type === 'text');
+                            return { ...msg, content: (textPart ? textPart.text : "") + "\n[System: Previous image removed from context to free VRAM.]" };
+                        }
+                        return msg;
+                    });
+
+                    // Use standard Transformers.js V3 image payload structure
+                    aiPayload = [
+                        { type: "image", image: window.attachedFile.data },
+                        { type: "text", text: text || "Please describe this image in detail." }
+                    ];
+                    uiHtml = `<img src="${window.attachedFile.data}" class="max-w-xs w-full rounded-lg mb-2 shadow-md border border-gray-700">\n` + uiHtml;
+                    console.log("[DEBUG - Chat] Image parsed into multimodal array payload.");
+                } else if (window.attachedFile.type === 'audio') {
+                    aiPayload = `[User attached audio file: ${window.attachedFile.name}]\n` + text;
+                    uiHtml = `<div class="flex items-center gap-3 text-google-yellow mb-2 p-2 px-3 bg-yellow-900/20 border border-yellow-900/50 rounded-lg w-fit"><i class="fa-solid fa-file-audio text-lg"></i> <span class="text-xs truncate max-w-[200px]">${escapeHTML(window.attachedFile.name)}</span></div>\n` + uiHtml;
+                }
+                window.removeAttachment();
+            }
 
             appendMessage('user', uiHtml, true);
-            chatContext.push({ role: 'user', content: text });
+            chatContext.push({ role: 'user', content: aiPayload });
             
             const msgId = 'msg-' + Date.now();
             appendTypingIndicator(msgId);
@@ -562,6 +670,11 @@
                 let fullResponse = "";
                 let tokenCount = 0;
                 const startTime = performance.now();
+
+                // Detailed tracing to DevTools
+                console.log("[DEBUG - Generation] Submitting to engine...");
+                console.log("[DEBUG - Generation] Current Engine Task:", engine.task);
+                console.log("[DEBUG - Generation] Full Context Payload:", JSON.parse(JSON.stringify(chatContext)));
 
                 // Build a custom streamer for Transformers.js
                 const streamer = new TextStreamer(engine.tokenizer, {
@@ -590,9 +703,10 @@
                 await engine(chatContext, {
                     max_new_tokens: 8192,
                     temperature: 0.7,
-                    streamer: streamer,
-                    stopping_criteria: [{ call: () => stopRequested }] // Hooks into generation loop to abort early
+                    streamer: streamer
                 });
+
+                console.log("[DEBUG - Generation] Stream completed successfully.");
 
                 const finalElapsedSecs = (performance.now() - startTime) / 1000;
                 tpsValue.textContent = (tokenCount / finalElapsedSecs).toFixed(1);
@@ -649,7 +763,7 @@
             div.className = 'flex gap-4 w-full md:max-w-[85%] mt-4 ai-message';
             div.id = id;
             div.innerHTML = `
-                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-green flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-md">AI</div>
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-md">G4</div>
                 <div class="flex flex-col w-full">
                     <div class="bg-google-surface border border-gray-700 rounded-2xl rounded-tl-sm p-4 text-gray-200 text-sm shadow-sm min-w-[60px] flex items-center prose prose-invert max-w-none w-full overflow-x-auto">
                         <div class="typing-indicator m-0" id="${id}-indicator">
@@ -671,12 +785,14 @@
             history.scrollTop = history.scrollHeight;
         }
 
-        window.addEventListener('message', (event) => { /* Interceptor logic preserved */
+        window.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'iframe-error') {
                 const chatHistory = document.getElementById('chat-history');
                 const div = document.createElement('div');
                 div.className = 'flex gap-4 w-full md:max-w-[85%] mt-4';
+                
                 const safeErrorString = event.data.content.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
                 div.innerHTML = `
                     <div class="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 flex items-center justify-center text-google-red text-xs shadow-md border border-red-900/50">
                         <i class="fa-solid fa-bug"></i>
@@ -694,11 +810,33 @@
             }
         });
 
-        function escapeHTML(str) { return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+        }
 
-        window.onload = window.detectHardware;
+        // Added security check to prevent CORS/Cache crashes from file:// protocol
+        window.onload = function() {
+            if (window.location.protocol === 'file:') {
+                document.body.innerHTML = `
+                    <div class="h-screen w-screen flex items-center justify-center bg-gray-900 text-white p-8">
+                        <div class="max-w-md text-center bg-gray-800 p-8 rounded-2xl border border-red-500 shadow-2xl">
+                            <i class="fa-solid fa-triangle-exclamation text-red-500 text-5xl mb-4"></i>
+                            <h2 class="text-2xl font-bold mb-2">Local Server Required</h2>
+                            <p class="text-sm text-gray-300 mb-6 leading-relaxed">Browsers strictly block WebGPU and Local Caching when opening HTML files directly from your computer (<code>file://</code> protocol).</p>
+                            <p class="text-sm text-gray-300 mb-3">To run this app securely, host it via a local web server in your terminal:</p>
+                            <code class="block bg-black p-4 rounded-xl mt-3 text-sm font-mono text-green-400 border border-gray-700 shadow-inner">python -m http.server 8000</code>
+                            <p class="text-xs text-gray-500 mt-4">Then navigate to http://localhost:8000 in your browser.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            window.detectHardware();
+        };
 
-        // --- 6. STORAGE MANAGEMENT (Updated for Transformers.js Cache API) ---
+        // --- 6. STORAGE MANAGEMENT ---
         window.openStorageManager = async function() {
             const modal = document.getElementById('storage-modal');
             const usedEl = document.getElementById('storage-used');

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmolVLM Vision Chat (Transformers.js)</title>
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body { background:#0f172a; color:#e2e8f0; }
+    .panel { background: rgba(30,41,59,0.82); border:1px solid rgba(255,255,255,0.08); backdrop-filter: blur(10px); }
+    .scrollbar-hide::-webkit-scrollbar { display:none; }
+    .scrollbar-hide { -ms-overflow-style:none; scrollbar-width:none; }
+    .prose pre { background:#020617; border:1px solid #334155; border-radius:0.75rem; }
+    .prose code { background: rgba(255,255,255,0.07); padding:0.15rem 0.35rem; border-radius:0.35rem; }
+    .typing-dot {
+      width: 7px; height: 7px; border-radius: 999px; background:#94a3b8;
+      display:inline-block; animation: bounce 1.2s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.30s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.8); opacity:0.4; }
+      40% { transform: scale(1.2); opacity:1; }
+    }
+  </style>
+</head>
+<body class="h-screen overflow-hidden font-sans">
+  <div class="h-full flex flex-col">
+    <header class="panel shrink-0 px-5 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-white shadow">
+          SV
+        </div>
+        <div>
+          <div class="text-lg font-semibold text-white">SmolVLM Vision Chat</div>
+          <div class="text-xs text-slate-400">Transformers.js · image + text in your browser</div>
+        </div>
+      </div>
+      <div id="hardware-badge" class="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+        Checking WebGPU...
+      </div>
+    </header>
+
+    <main class="flex-1 min-h-0 flex">
+      <section class="flex-1 min-w-0 flex flex-col">
+        <!-- Setup screen -->
+        <div id="setup-screen" class="flex-1 flex items-center justify-center p-4">
+          <div class="panel rounded-2xl w-full max-w-2xl p-6 md:p-8 shadow-2xl">
+            <h1 class="text-2xl font-bold text-white mb-2">Initialize local vision model</h1>
+            <p class="text-sm text-slate-400 mb-6">
+              Uses <a href="https://huggingface.co/HuggingFaceTB/SmolVLM-256M-Instruct" target="_blank" class="text-cyan-400 hover:underline">SmolVLM-256M-Instruct</a> via Transformers.js with WebGPU.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+              <div class="bg-slate-900/70 rounded-xl border border-slate-700 p-4">
+                <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Backend</div>
+                <div id="backend-detected" class="text-white font-mono">Detecting…</div>
+              </div>
+              <div class="bg-slate-900/70 rounded-xl border border-slate-700 p-4">
+                <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">WebGPU</div>
+                <div id="gpu-detected" class="text-white font-mono">Detecting…</div>
+              </div>
+            </div>
+
+            <div class="bg-slate-900/70 rounded-xl border border-slate-700 p-4 mb-5">
+              <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Model</div>
+              <div class="text-white font-medium break-all">HuggingFaceTB/SmolVLM-256M-Instruct</div>
+              <div class="text-xs text-slate-400 mt-2">
+                256M params · smallest VLM · image + text chat in browser (~600 MB download)
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 mb-4">
+              <button id="download-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400 text-white font-medium rounded-xl px-4 py-3 transition">
+                Download and Initialize
+              </button>
+            </div>
+
+            <div id="progress-wrap" class="hidden mt-4">
+              <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <div id="progress-text">Starting...</div>
+                <div id="progress-percent"></div>
+              </div>
+              <div class="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
+                <div id="progress-bar" class="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-300" style="width:0%"></div>
+              </div>
+            </div>
+
+            <div id="setup-error" class="hidden mt-4 text-sm text-red-300 bg-red-950/40 border border-red-900 rounded-xl p-3"></div>
+          </div>
+        </div>
+
+        <!-- Chat screen -->
+        <div id="chat-screen" class="hidden flex-1 min-h-0 flex flex-col">
+          <div id="messages" class="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-4 md:p-6 flex flex-col gap-5">
+            <div class="flex gap-3 max-w-4xl">
+              <div class="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-white shrink-0">SV</div>
+              <div class="panel rounded-2xl rounded-tl-sm p-4 prose prose-invert max-w-none">
+                <p>I'm ready. You can send plain text, or attach one image and ask about it.</p>
+                <p class="text-xs text-slate-500">Note: SmolVLM-256M is very small. Descriptions will be brief and may not always be accurate, but the vision encoder genuinely processes your image.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="shrink-0 p-4 md:p-5 border-t border-slate-800 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent">
+            <div class="max-w-4xl mx-auto">
+              <div id="attachment-preview" class="hidden mb-3 items-center gap-3 w-fit max-w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2">
+                <div id="attachment-icon" class="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden shrink-0"></div>
+                <div class="min-w-0">
+                  <div id="attachment-name" class="text-sm text-slate-200 truncate max-w-[280px]"></div>
+                  <div id="attachment-type" class="text-xs text-slate-400"></div>
+                </div>
+                <button id="remove-attachment-btn" class="ml-1 text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+              </div>
+
+              <div class="relative">
+                <input id="file-upload" type="file" class="hidden" accept="image/*" />
+                <button id="attach-btn" class="absolute left-3 bottom-3 w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition" title="Attach image">
+                  📎
+                </button>
+                <textarea id="chat-input" rows="1" class="w-full resize-none rounded-2xl border border-slate-700 bg-slate-800 text-white pl-16 pr-16 py-4 outline-none focus:border-emerald-500 max-h-40 overflow-y-auto" placeholder="Ask about text or an attached image..."></textarea>
+                <button id="send-btn" class="absolute right-3 bottom-3 w-10 h-10 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition disabled:bg-slate-700 disabled:text-slate-400">
+                  ↑
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    // Use Transformers.js v3 from CDN
+    import {
+      AutoProcessor,
+      AutoModelForVision2Seq,
+      RawImage,
+      TextStreamer,
+    } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers/dist/transformers.min.js";
+
+    const MODEL_ID = "HuggingFaceTB/SmolVLM-256M-Instruct";
+    const MAX_NEW_TOKENS = 512;
+
+    let processor = null;
+    let model = null;
+    let isGenerating = false;
+    let stopRequested = false;
+    let attachedImage = null; // { name, previewUrl, rawImage }
+
+    const els = {
+      setupScreen: document.getElementById("setup-screen"),
+      chatScreen: document.getElementById("chat-screen"),
+      backendDetected: document.getElementById("backend-detected"),
+      gpuDetected: document.getElementById("gpu-detected"),
+      hardwareBadge: document.getElementById("hardware-badge"),
+      downloadBtn: document.getElementById("download-btn"),
+      progressWrap: document.getElementById("progress-wrap"),
+      progressText: document.getElementById("progress-text"),
+      progressPercent: document.getElementById("progress-percent"),
+      progressBar: document.getElementById("progress-bar"),
+      setupError: document.getElementById("setup-error"),
+      messages: document.getElementById("messages"),
+      fileUpload: document.getElementById("file-upload"),
+      attachBtn: document.getElementById("attach-btn"),
+      sendBtn: document.getElementById("send-btn"),
+      chatInput: document.getElementById("chat-input"),
+      attachmentPreview: document.getElementById("attachment-preview"),
+      attachmentIcon: document.getElementById("attachment-icon"),
+      attachmentName: document.getElementById("attachment-name"),
+      attachmentType: document.getElementById("attachment-type"),
+      removeAttachmentBtn: document.getElementById("remove-attachment-btn"),
+    };
+
+    // ── Utility ──
+    function escapeHTML(str) {
+      return String(str).replace(/[&<>'"]/g, s => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"
+      }[s]));
+    }
+
+    function autoResize(textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
+    }
+
+    function scrollToBottom() {
+      els.messages.scrollTop = els.messages.scrollHeight;
+    }
+
+    function setSendState(generating) {
+      if (generating) {
+        els.sendBtn.textContent = "■";
+        els.sendBtn.classList.remove("bg-emerald-600", "hover:bg-emerald-500");
+        els.sendBtn.classList.add("bg-rose-600", "hover:bg-rose-500");
+      } else {
+        els.sendBtn.textContent = "↑";
+        els.sendBtn.classList.add("bg-emerald-600", "hover:bg-emerald-500");
+        els.sendBtn.classList.remove("bg-rose-600", "hover:bg-rose-500");
+      }
+    }
+
+    // ── Chat bubbles ──
+    function addBubble(role, html) {
+      const wrapper = document.createElement("div");
+      wrapper.className = role === "user" ? "flex justify-end" : "flex gap-3 max-w-4xl";
+      if (role === "user") {
+        wrapper.innerHTML = `<div class="max-w-4xl panel rounded-2xl rounded-tr-sm p-4 text-sm">${html}</div>`;
+      } else {
+        wrapper.innerHTML = `
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-white shrink-0">SV</div>
+          <div class="panel rounded-2xl rounded-tl-sm p-4 prose prose-invert max-w-none text-sm">${html}</div>
+        `;
+      }
+      els.messages.appendChild(wrapper);
+      scrollToBottom();
+      return wrapper;
+    }
+
+    function addStreamingBubble() {
+      const wrapper = document.createElement("div");
+      wrapper.className = "flex gap-3 max-w-4xl";
+      wrapper.innerHTML = `
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-white shrink-0">SV</div>
+        <div class="panel rounded-2xl rounded-tl-sm p-4 prose prose-invert max-w-none text-sm w-full">
+          <div class="flex items-center gap-1.5" id="typing">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+          <div class="hidden" id="content"></div>
+        </div>
+      `;
+      els.messages.appendChild(wrapper);
+      scrollToBottom();
+      return {
+        typing: wrapper.querySelector("#typing"),
+        content: wrapper.querySelector("#content"),
+      };
+    }
+
+    function renderUserMessage(text, image) {
+      let html = "";
+      if (image?.previewUrl) {
+        html += `<img src="${image.previewUrl}" class="max-w-xs rounded-xl border border-slate-700 mb-3" alt="">`;
+      }
+      if (text) html += `<div class="whitespace-pre-wrap">${escapeHTML(text)}</div>`;
+      if (!html) html = "<div class='text-slate-400 italic'>[empty]</div>";
+      return html;
+    }
+
+    // ── Hardware detection ──
+    async function detectHardware() {
+      const hasWebGPU = !!navigator.gpu;
+      let gpuName = "Not supported";
+      let backendLabel = "WASM (CPU)";
+
+      if (hasWebGPU) {
+        try {
+          const adapter = await navigator.gpu.requestAdapter();
+          if (adapter) {
+            const info = await adapter.requestAdapterInfo?.() || adapter.info;
+            gpuName = info?.device || info?.description || "Available";
+            backendLabel = "WebGPU";
+          }
+        } catch {
+          gpuName = "Available (no details)";
+          backendLabel = "WebGPU";
+        }
+      }
+
+      els.gpuDetected.innerHTML = hasWebGPU
+        ? `<span class="text-emerald-400">${escapeHTML(gpuName)}</span>`
+        : '<span class="text-amber-400">Not available — will use WASM (slower)</span>';
+      els.backendDetected.textContent = backendLabel;
+      els.hardwareBadge.textContent = hasWebGPU ? "WebGPU available" : "WASM fallback";
+    }
+
+    // ── Model init ──
+    async function initializeModel() {
+      els.setupError.classList.add("hidden");
+      els.progressWrap.classList.remove("hidden");
+      els.downloadBtn.disabled = true;
+      els.progressText.textContent = "Loading processor...";
+
+      const hasWebGPU = !!navigator.gpu;
+      const device = hasWebGPU ? "webgpu" : "wasm";
+      // Per-component dtype (matches official HF demo)
+      const dtype = hasWebGPU
+        ? { embed_tokens: "fp16", vision_encoder: "q4", decoder_model_merged: "q4" }
+        : "q4";
+
+      try {
+        // Load processor
+        processor = await AutoProcessor.from_pretrained(MODEL_ID);
+        els.progressText.textContent = "Loading model (this may take a minute)...";
+
+        // Load model with progress callback
+        model = await AutoModelForVision2Seq.from_pretrained(MODEL_ID, {
+          device: device,
+          dtype: dtype,
+          progress_callback: (progress) => {
+            if (progress.status === "download" || progress.status === "progress") {
+              const file = progress.file || "";
+              const shortFile = file.split("/").pop() || file;
+              const pct = progress.progress;
+              if (pct !== undefined && pct !== null) {
+                const rounded = Math.round(pct);
+                els.progressPercent.textContent = `${rounded}%`;
+                els.progressBar.style.width = `${rounded}%`;
+                els.progressText.textContent = `Downloading ${shortFile}...`;
+              }
+            } else if (progress.status === "done") {
+              els.progressText.textContent = `Loaded ${(progress.file || "").split("/").pop() || "component"}`;
+            } else if (progress.status === "initiate") {
+              els.progressText.textContent = `Initiating ${(progress.file || "").split("/").pop() || ""}...`;
+            } else if (progress.status === "ready") {
+              els.progressText.textContent = "Model ready!";
+              els.progressPercent.textContent = "100%";
+              els.progressBar.style.width = "100%";
+            }
+          },
+        });
+
+        els.progressText.textContent = `Model ready (${device})`;
+        els.progressPercent.textContent = "100%";
+        els.progressBar.style.width = "100%";
+
+        setTimeout(() => {
+          els.setupScreen.classList.add("hidden");
+          els.chatScreen.classList.remove("hidden");
+          els.chatInput.focus();
+        }, 400);
+      } catch (err) {
+        console.error(err);
+        els.setupError.classList.remove("hidden");
+        els.setupError.textContent = err?.message || String(err);
+        els.downloadBtn.disabled = false;
+      }
+    }
+
+    // ── Image handling ──
+    function removeAttachment() {
+      attachedImage = null;
+      els.fileUpload.value = "";
+      els.attachmentPreview.classList.add("hidden");
+      els.attachmentIcon.innerHTML = "";
+      els.attachmentName.textContent = "";
+      els.attachmentType.textContent = "";
+    }
+
+    function showAttachment(img) {
+      els.attachmentName.textContent = img.name;
+      els.attachmentType.textContent = "Image";
+      els.attachmentIcon.innerHTML = `<img src="${img.previewUrl}" class="w-full h-full object-cover" alt="">`;
+      els.attachmentPreview.classList.remove("hidden");
+      els.attachmentPreview.classList.add("flex");
+    }
+
+    async function onFileChange(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        alert("Only image files are supported.");
+        removeAttachment();
+        return;
+      }
+
+      // Load image via FileReader → Image → Canvas → RawImage (works from file:// too)
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          // Draw to canvas and extract raw pixel data
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0);
+          const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const rawImage = new RawImage(frame.data, frame.width, frame.height, 4);
+          console.log("RawImage created:", rawImage.width, "x", rawImage.height, "channels:", rawImage.channels);
+
+          const previewUrl = canvas.toDataURL();
+          attachedImage = { name: file.name, previewUrl, rawImage };
+          showAttachment(attachedImage);
+        };
+        img.onerror = () => alert("Failed to load image.");
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ── Chat ──
+    async function onSend() {
+      if (!model || !processor) return;
+      if (isGenerating) {
+        stopRequested = true;
+        return;
+      }
+
+      const text = els.chatInput.value.trim();
+      const image = attachedImage;
+      if (!text && !image) return;
+
+      addBubble("user", renderUserMessage(text, image));
+      els.chatInput.value = "";
+      autoResize(els.chatInput);
+      removeAttachment();
+
+      const streamBubble = addStreamingBubble();
+      isGenerating = true;
+      stopRequested = false;
+      setSendState(true);
+
+      try {
+        // Build the chat messages for the processor
+        const userContent = [];
+        if (image) {
+          userContent.push({ type: "image" });
+        }
+        userContent.push({ type: "text", text: text || "Describe this image." });
+
+        const messages = [
+          { role: "user", content: userContent }
+        ];
+
+        // Apply chat template (returns text string)
+        const prompt = processor.apply_chat_template(messages, {
+          add_generation_prompt: true,
+        });
+        console.log("Prompt:", prompt);
+
+        // Process inputs: processor(text, images, options) — text first (matches official demo)
+        let inputs;
+        if (image) {
+          console.log("RawImage size:", image.rawImage.width, "x", image.rawImage.height);
+          inputs = await processor(prompt, [image.rawImage], {
+            do_image_splitting: false,
+          });
+        } else {
+          inputs = await processor(prompt);
+        }
+
+        // Stream tokens
+        let reply = "";
+        const streamer = new TextStreamer(processor.tokenizer, {
+          skip_prompt: true,
+          skip_special_tokens: true,
+          callback_function: (token) => {
+            if (stopRequested) return;
+            reply += token;
+            streamBubble.typing.classList.add("hidden");
+            streamBubble.content.classList.remove("hidden");
+            streamBubble.content.innerHTML = marked.parse(reply);
+            scrollToBottom();
+          },
+        });
+
+        const generatedIds = await model.generate({
+          ...inputs,
+          max_new_tokens: MAX_NEW_TOKENS,
+          do_sample: false,
+          streamer,
+        });
+
+        // Fallback: if streamer didn't capture text, decode from output ids
+        if (!reply.trim() && generatedIds) {
+          const outputIds = generatedIds.slice(null, [inputs.input_ids.dims.at(-1), null]);
+          const decoded = processor.batch_decode(outputIds, { skip_special_tokens: true });
+          reply = decoded[0]?.trim() || "[No text returned]";
+        }
+        if (!reply.trim()) reply = "[No text returned]";
+        streamBubble.typing.classList.add("hidden");
+        streamBubble.content.classList.remove("hidden");
+        streamBubble.content.innerHTML = marked.parse(reply);
+      } catch (err) {
+        console.error(err);
+        streamBubble.typing.classList.add("hidden");
+        streamBubble.content.classList.remove("hidden");
+        streamBubble.content.innerHTML = `<p class="text-red-300">Error: ${escapeHTML(err?.message || String(err))}</p>`;
+      } finally {
+        isGenerating = false;
+        setSendState(false);
+      }
+    }
+
+    // ── Init ──
+    detectHardware();
+    els.downloadBtn.addEventListener("click", initializeModel);
+    els.attachBtn.addEventListener("click", () => els.fileUpload.click());
+    els.fileUpload.addEventListener("change", onFileChange);
+    els.removeAttachmentBtn.addEventListener("click", removeAttachment);
+    els.sendBtn.addEventListener("click", onSend);
+    els.chatInput.addEventListener("input", () => autoResize(els.chatInput));
+    els.chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        onSend();
+      }
+    });
+  </script>
+</body>
+</html>
