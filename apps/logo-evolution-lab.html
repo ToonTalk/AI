@@ -991,6 +991,8 @@ async function callClaude(system,userText,imgB64s,maxTokens,label) {
   console.log(`API #${n} [Claude / ${label}] model:${model}`);
   console.log('REQUEST',{system_chars:system.length,system_preview:system.slice(0,120)+'…',max_tokens:maxTokens,messages:_sanitize(messages)});
 
+  // Claude API blocks requests from file:// origins (CORS). Must be served from http/https.
+  if(window.location.protocol==='file:'){throw Object.assign(new Error('Claude API cannot be called from a local file:// URL due to CORS. Serve this file from a local web server (e.g. npx serve) or use Gemini/OpenAI instead.'),{httpStatus:0});}
   const fetchP=fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({model,max_tokens:maxTokens,system,messages}),
@@ -1013,7 +1015,7 @@ async function callClaude(system,userText,imgB64s,maxTokens,label) {
   return text;
 }
 
-const FALLBACK_MODELS={'claude-key':[{id:'claude-sonnet-4-6',name:'Claude Sonnet 4.6'},{id:'claude-opus-4-6',name:'Claude Opus 4.6'},{id:'claude-haiku-4-5-20251001',name:'Haiku 4.5'}],gemini:[{id:'gemini-3.1-pro-preview',name:'Gemini 3.1 Pro Preview'},{id:'gemini-3-flash-preview',name:'Gemini 3 Flash Preview (free)'},{id:'gemini-2.5-flash',name:'Gemini 2.5 Flash'},{id:'gemini-2.5-pro',name:'Gemini 2.5 Pro'},{id:'gemini-2.0-flash',name:'Gemini 2.0 Flash'}],openai:[{id:'gpt-5.4',name:'GPT-5.4'},{id:'gpt-5.4-mini',name:'GPT-5.4 Mini'},{id:'gpt-5.4-nano',name:'GPT-5.4 Nano'},{id:'gpt-5.4-pro',name:'GPT-5.4 Pro'},{id:'gpt-4o',name:'GPT-4o'}]};
+const FALLBACK_MODELS={'claude-key':[{id:'claude-sonnet-4-6',name:'Claude Sonnet 4.6'},{id:'claude-opus-4-6',name:'Claude Opus 4.6'},{id:'claude-haiku-4-5-20251001',name:'Haiku 4.5'}],gemini:[{id:'gemini-3.1-pro-preview',name:'Gemini 3.1 Pro Preview'},{id:'gemini-3-flash-preview',name:'Gemini 3 Flash Preview (free)'},{id:'gemini-2.5-pro',name:'Gemini 2.5 Pro'},{id:'gemini-2.5-flash',name:'Gemini 2.5 Flash'}],openai:[{id:'gpt-5.4',name:'GPT-5.4 (flagship)'},{id:'gpt-5.4-mini',name:'GPT-5.4 Mini (fast)'},{id:'gpt-5.4-nano',name:'GPT-5.4 Nano (efficient)'},{id:'o4-mini',name:'o4-mini (reasoning)'},{id:'o3',name:'o3 (reasoning, powerful)'}]};
 
 function updateFallbackModels() {
   const prov=document.getElementById('providerSelect').value;
@@ -1058,11 +1060,8 @@ async function callGemini(system,userText,imgB64s,maxTokens,label) {
       contents:[{role:'user',parts}],
       generationConfig:{
         temperature:0.7,
-        maxOutputTokens:maxTokens,
-        // Gemini 3.x uses thinkingLevel; 2.x uses thinkingBudget
-        ...(model.startsWith('gemini-3')
-          ? {thinkingConfig:{thinkingLevel:'minimal'}}
-          : {})
+        maxOutputTokens:maxTokens
+        // No thinkingConfig — models use default thinking; we filter thought parts from output
       }
     })
   });
@@ -1384,7 +1383,7 @@ async function runStep(baseCode,feedback) {
 
   // 5. Update backup pool
   addBackups(pool,winner);
-  if(winner.isBackup)S.winnersList.push(winner.code);
+  S.winnersList.push(winner.code); // track all winners for lineage
 
   // 6. Update UI
   S.modCode=winner.code;S.feedback=critique.suggestedImprovement;S.selLog=selLog;
@@ -1479,7 +1478,7 @@ async function handleMain() {
 async function doStart() {
   const code=document.getElementById('codeInput').value.trim();
   if(!code){showMsg('Enter a Logo program first.',true);throw new Error('No code');}
-  S.origCode=code;S.historyLog=[];S.backupPool=[];S.winnersList=[];S.claudeFailed=false;
+  S.origCode=code;S.historyLog=[];S.backupPool=[];S.winnersList=[code];S.claudeFailed=false;
   S.iteration=0;S.modCode='';S.started=false;
 
   drawCode('canvasOrig',code,getDrawSpeed);
@@ -1685,10 +1684,9 @@ function downloadHistory() {
     diffHTML.toString(),
     escHtml.toString(),
     parseMarkdown.toString(),
-    'const lazyObs=new IntersectionObserver((entries,obs)=>{entries.forEach(entry=>{if(!entry.isIntersecting)return;const cv=entry.target;const code=cv.getAttribute("data-code");if(code){drawCode(cv,decodeURIComponent(code),0);cv.removeAttribute("data-code");}obs.unobserve(cv);});},{rootMargin:"400px"});',
-    'function observeLazy(){document.querySelectorAll("canvas[data-code]").forEach(c=>lazyObs.observe(c));}'
-  ].join('\n').replace(/`/g, '\\`').replace(/\${/g, '\\${');
-;
+    'const lazyObs=new IntersectionObserver((entries,obs)=>{entries.forEach(entry=>{if(!entry.isIntersecting)return;const cv=entry.target;const code=cv.getAttribute("data-lazy");if(code){drawCode(cv,decodeURIComponent(code),0);cv.removeAttribute("data-lazy");}obs.unobserve(cv);});},{rootMargin:"400px"});',
+    'function observeLazy(){document.querySelectorAll("canvas[data-lazy]").forEach(c=>lazyObs.observe(c));}'
+  ].join('\n');
 
   const html=`<!DOCTYPE html>
 <html lang="en">
@@ -1721,10 +1719,31 @@ canvas:hover{opacity:.9}
 .modal-inner{background:#fff;border-radius:8px;padding:20px;max-width:760px;margin:20px auto}
 .mc{position:fixed;top:12px;right:16px;font-size:2rem;color:#fff;cursor:pointer;z-index:110}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
+/* CSS Tree */
+.css-tree ul{padding-left:0;list-style:none;display:flex;justify-content:center;flex-wrap:nowrap;gap:0}
+.css-tree li{display:flex;flex-direction:column;align-items:center;padding:0 8px;position:relative}
+.css-tree li::before,.css-tree li::after{content:'';position:absolute;top:0;border-top:2px solid #94a3b8}
+.css-tree li::before{right:50%;width:50%;margin-top:-18px}
+.css-tree li::after{left:50%;width:50%;margin-top:-18px}
+.css-tree li:only-child::before,.css-tree li:only-child::after{display:none}
+.css-tree li:first-child::before,.css-tree li:last-child::after{display:none}
+.css-tree ul li{padding-top:20px;position:relative}
+.css-tree ul li::before{height:20px;top:-20px;margin-top:0;border-left:2px solid #94a3b8;width:0;right:50%}
+.css-tree ul li::after{display:none}
+.tree-node{background:#fff;border:2px solid #e2e8f0;border-radius:6px;padding:5px;width:120px;text-align:center;cursor:pointer;transition:border-color .2s}
+.tree-node:hover{border-color:#3b82f6}
+.tree-node.winner-node{border-color:#22c55e;box-shadow:0 0 0 2px #dcfce7}
+.tree-node canvas{display:block;width:100%;background:#fff;border-radius:3px}
+.node-title{font-size:.6rem;color:#64748b;margin-top:3px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node-score{font-size:.65rem;color:#7c3aed;font-weight:700}
+.tree-wrap{overflow-x:auto;padding:16px 0 8px}
 </style>
 </head>
 <body>
 <h1>Logo Evolution History — ${new Date().toLocaleString()}</h1>
+<div style="display:flex;align-items:center;gap:12px;margin:24px 0 8px"><h2 style="font-size:1.1rem;font-weight:700;color:#0f172a">Evolution Tree</h2><button onclick="fitTree()" id="btnFit" style="font-size:.72rem;padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer;background:#f8fafc">Fit to screen</button><button onclick="actualSize()" style="font-size:.72rem;padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer;background:#f8fafc">Actual size</button></div>
+<div class="tree-wrap" id="treeWrap"><div class="css-tree" id="cssTree"><ul id="treeRoot"></ul></div></div>
+<h2 style="font-size:1.1rem;font-weight:700;color:#0f172a;margin:24px 0 8px">History</h2>
 <div id="root"></div>
 <div class="modal" id="modal">
   <span class="mc" onclick="document.getElementById('modal').classList.remove('show')">&times;</span>
@@ -1740,7 +1759,7 @@ canvas:hover{opacity:.9}
   </div>
 </div>
 <script>
-ENGINESRCPLACEHOLDER
+${engineSrc}
 // Safe base64 → UTF-8 decode
 const _b64="${b64data}";
 const _bytes=Uint8Array.from(atob(_b64),c=>c.charCodeAt(0));
@@ -1754,7 +1773,7 @@ document.getElementById('ms').oninput=e=>{const v=parseInt(e.target.value);docum
 function render(){
   const root=document.getElementById('root');
   let html='<div class="card"><div class="card-hd">Original Program</div><div class="grid2">';
-  html+='<div><span class="lbl">Canvas</span><canvas data-code="'+encodeURIComponent(OC)+'" width="200" height="200" onclick="openM(decodeURIComponent(this.getAttribute(\'data-code\')),\'Original\')"></canvas></div>';
+  html+='<div><span class="lbl">Canvas</span><canvas data-code="'+encodeURIComponent(OC)+'" data-lazy="'+encodeURIComponent(OC)+'" data-title="Original" width="200" height="200" style="cursor:pointer;width:100%;display:block;background:#fff"></canvas></div>';
   html+='<div><span class="lbl">Code</span><div class="code">'+escHtml(OC)+'</div></div></div></div>';
   H.forEach((e,i)=>{
     html+='<div class="card"><div class="card-hd">'+escHtml(e.stage)+'</div>';
@@ -1763,8 +1782,9 @@ function render(){
     if(e.variants&&e.variants.length){
       html+='<div class="lbl">Variants</div><div class="vgrid">';
       e.variants.forEach(v=>{
+        if(v.title==='Parent')return; // shown as 'Original Program' above
         html+='<div class="vcard'+(v.isWinner?' win':'')+'"><div style="font-size:.65rem;font-weight:700;display:flex;justify-content:space-between;margin-bottom:4px"><span>'+escHtml(v.title)+'</span>'+(v.isWinner?'<span class="wb">✓</span>':'')+'</div>';
-        html+='<canvas data-code="'+encodeURIComponent(v.code)+'" data-title="'+escHtml(v.title||'')+'" width="130" height="130" style="cursor:pointer;width:100%;display:block;background:#fff"></canvas>';
+        html+='<canvas data-code="'+encodeURIComponent(v.code)+'" data-lazy="'+encodeURIComponent(v.code)+'" data-title="'+escHtml(v.title||'')+'" width="130" height="130" style="cursor:pointer;width:100%;display:block;background:#fff"></canvas>';
         html+='<div class="score">'+(v.score||0).toFixed(1)+'</div></div>';
       });
       html+='</div>';
@@ -1773,14 +1793,99 @@ function render(){
     if(e.feedback)html+='<div class="critic"><strong>Critic:</strong> '+escHtml(e.feedback)+'</div>';
     html+='</div>';
   });
+  // Winner lineage
+  if(RAW.winnersList&&RAW.winnersList.length>=1){
+    html+='<div class="card"><div class="card-hd" style="color:#7c3aed">Winner Lineage</div>';
+    html+='<div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px">';
+    const wl=RAW.winnersList;
+    wl.forEach(function(wcode,wi){
+      var lbl=wi===0?'Original':('Iter '+wi);
+      var enc=encodeURIComponent(wcode);
+      html+='<div style="flex-shrink:0;text-align:center">';
+      html+='<div style="font-size:.6rem;color:#94a3b8;margin-bottom:4px">'+lbl+'</div>';
+      html+='<canvas data-lazy="'+enc+'" data-code="'+enc+'" data-title="'+lbl+'" width="140" height="140" style="cursor:pointer;display:block;background:#fff;border:1px solid #e2e8f0;border-radius:4px"></canvas>';
+      html+='</div>';
+    });
+    html+='</div></div>';
+  }
   root.innerHTML=html;
   observeLazy();
 }
-window.onload=()=>{render();};
+function lazyCanvas(code, w, h) {
+  var enc = encodeURIComponent(code);
+  return '<canvas data-lazy="'+enc+'" data-code="'+enc+'" width="'+w+'" height="'+h+'" style="display:block;width:100%;background:#fff;border-radius:3px"></canvas>';
+}
+document.addEventListener('click', function(ev) {
+  var nd = ev.target.closest('.tree-node[data-enc]');
+  if (!nd) return;
+  MC = decodeURIComponent(nd.getAttribute('data-enc'));
+  var title = nd.getAttribute('data-label') || 'Canvas';
+  document.getElementById('mtitle').textContent = title;
+  document.getElementById('mcode').textContent = MC;
+  document.getElementById('modal').classList.add('show');
+  playM();
+});
+function buildTree() {
+  var nodesMap = {};
+  var root = {code:OC, title:'Original', score:null, isWinner:true, children:[]};
+  nodesMap[OC] = root;
+  H.forEach(function(e, i) {
+    var parent = nodesMap[e.baseCode] || root;
+    var variants = (e.variants && e.variants.length) ? e.variants : [{code:e.code, score:e.score, title:'Iter '+(i+1), isWinner:true}];
+    var nonParentIdx = 0;
+    variants.forEach(function(v, vi) {
+      if (!v.code) return;
+      if (v.code === parent.code) return; // skip duplicate of parent node
+      nonParentIdx++;
+      var lbl = v.isWinner ? ('Iter '+(i+1)+' \u2713') : ('Iter '+(i+1)+' V'+nonParentIdx);
+      var node = {code:v.code, title:lbl, score:v.score, isWinner:v.isWinner, children:[]};
+      parent.children.push(node);
+      if (!nodesMap[v.code]) nodesMap[v.code] = node;
+    });
+  });
+  function renderNode(n) {
+    var enc = encodeURIComponent(n.code);
+    var cls = 'tree-node' + (n.isWinner ? ' winner-node' : '');
+    var scoreHtml = (n.score != null) ? '<div class="node-score">'+parseFloat(n.score).toFixed(1)+'</div>' : '';
+    var childrenHtml = n.children.length ? '<ul>'+n.children.map(renderNode).join('')+'</ul>' : '';
+    return '<li>'
+      + '<div class="'+cls+'" data-enc="'+enc+'" data-label="'+n.title+'">'
+      + lazyCanvas(n.code, 110, 82)
+      + '<div class="node-title">'+n.title+'</div>'
+      + scoreHtml
+      + '</div>'
+      + childrenHtml
+      + '</li>';
+  }
+  document.getElementById('treeRoot').innerHTML = renderNode(root);
+  observeLazy();
+}
+function fitTree(){
+  var tree=document.getElementById('cssTree');
+  var wrap=document.getElementById('treeWrap');
+  if(!tree||!wrap)return;
+  var scale=Math.min(1,Math.max(0.2,(wrap.clientWidth-20)/tree.scrollWidth));
+  tree.style.transformOrigin='top left';
+  tree.style.transform='scale('+scale+')';
+  wrap.style.height=(tree.scrollHeight*scale+20)+'px';
+  wrap.style.overflow='hidden';
+  document.getElementById('btnFit').textContent='Fitting…';
+}
+function actualSize(){
+  var tree=document.getElementById('cssTree');
+  var wrap=document.getElementById('treeWrap');
+  if(!tree||!wrap)return;
+  tree.style.transform='';
+  wrap.style.height='';
+  wrap.style.overflow='';
+  document.getElementById('btnFit').textContent='Fit to screen';
+}
+window.onload=()=>{buildTree();render();};
 <\/script>
 </body>
 </html>`;
 
+  const htmlFinal = html;
   if(isArtifact()){
     const ta=document.getElementById('exportTextarea');
     if(ta)ta.value=htmlFinal;
@@ -1804,6 +1909,8 @@ async function callClaudeWithKey(system,userText,imgB64s,maxTokens,label){
   if(!key)throw new Error('No Claude API key');
   const content=[{type:'text',text:userText}];
   imgB64s.forEach(b64=>content.push({type:'image',source:{type:'base64',media_type:'image/png',data:b64}}));
+  // Claude API blocks requests from file:// origins (CORS). Must be served from http/https.
+  if(window.location.protocol==='file:'){throw Object.assign(new Error('Claude API cannot be called from a local file:// URL due to CORS. Serve this file from a local web server (e.g. npx serve) or use Gemini/OpenAI instead.'),{httpStatus:0});}
   const fetchP=fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},body:JSON.stringify({model,max_tokens:maxTokens,system,messages:[{role:'user',content}]})});
   const timeoutP=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out after 90s')),90000));
   const res=await Promise.race([fetchP,timeoutP]);
@@ -1817,7 +1924,7 @@ async function callGemini(system,userText,imgB64s,maxTokens,label){
   const parts=[{text:system+'\n\n'+userText}];
   imgB64s.forEach(b64=>parts.push({inlineData:{mimeType:'image/png',data:b64}}));
   const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+key;
-  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.7,maxOutputTokens:maxTokens,...(model.startsWith('gemini-3')?{thinkingConfig:{thinkingLevel:'minimal'}}:{})}})});
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.7,maxOutputTokens:maxTokens}})});
   if(!res.ok){const err=await res.text();throw new Error('Gemini '+res.status+': '+err.slice(0,120));}
   const d=await res.json();
   return(d.candidates?.[0]?.content?.parts||[]).filter(p=>!p.thought).map(p=>p.text||'').join('');
@@ -1828,8 +1935,11 @@ async function callOpenAI(system,userText,imgB64s,maxTokens,label){
   if(!key)throw new Error('No OpenAI API key');
   const uc=[{type:'text',text:userText}];
   imgB64s.forEach(b64=>uc.push({type:'image_url',image_url:{url:'data:image/png;base64,'+b64}}));
-  const body={model,messages:[{role:'system',content:system},{role:'user',content:uc}],max_tokens:maxTokens};
-  if(!model.startsWith('o')&&!model.startsWith('gpt-5'))body.temperature=0.7;
+  // gpt-5.x and o-series use max_completion_tokens; gpt-4.x use max_tokens
+  const needsCompletionTokens = model.startsWith('gpt-5') || /^o\d/.test(model);
+  const body={model,messages:[{role:'system',content:system},{role:'user',content:uc}]};
+  if(needsCompletionTokens){body.max_completion_tokens=maxTokens;}
+  else{body.max_tokens=maxTokens;body.temperature=0.7;}
   const res=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)});
   if(!res.ok){const err=await res.text();const e2=new Error('OpenAI '+res.status+': '+err.slice(0,120));e2.httpStatus=res.status;throw e2;}
   return(await res.json()).choices[0].message.content||'';
@@ -1939,5 +2049,5 @@ window.addEventListener('load',()=>{
 });
 </script>
 </body>
-</html  const htmlFinal = html.replace('ENGINESRCPLACEHOLDER', engineSrc);
+</html  const htmlFinal = html.replace('${engineSrc}', engineSrc);
 >
