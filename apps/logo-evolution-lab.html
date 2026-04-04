@@ -1148,9 +1148,9 @@ async function callAI(system,userText,imgB64s=[],maxTokens=1400,label='') {
 // ═══════════════════════════════════════════════════
 function magDesc(level) {
   const D={
-    1:'Extremely subtle — tweak exactly one number by a tiny amount. Do not add commands.',
-    2:'Very subtle — adjust a couple of parameters slightly or change one color/pen size.',
-    3:'Subtle — add 1-2 simple commands or slightly adjust loop counts.',
+    1:'Extremely subtle — change exactly ONE number (e.g. 100→102). Do not add, remove, or rearrange any commands whatsoever.',
+    2:'Very subtle — change 2-3 numbers or swap one color/pen-size value. No new commands.',
+    3:'Subtle — change 3-5 existing values OR add exactly one simple 1-word command (like SETPC or SETWIDTH). No new loops, no REPEAT, no new TO procedures.',
     4:'Minor — introduce a small new element while keeping the overall form.',
     5:'Moderate — evolve noticeably; add nested loops but keep the original DNA visible.',
     6:'Significant — introduce new colors, varying pen sizes, noticeably alter geometry.',
@@ -1165,23 +1165,35 @@ function magDesc(level) {
 // ═══════════════════════════════════════════════════
 //  AGENT PROMPTS
 // ═══════════════════════════════════════════════════
-let MODIFIER_SYS = "You are an expert Logo turtle graphics generative artist.\n\nTASK: Generate the requested number of visually distinct variants that are more aesthetically interesting.\n\nINPUTS (in the user message):\n- Aesthetic goal: user's taste preference\n- Change magnitude: how drastically to evolve\n- Base program: Logo code to evolve\n- Critic feedback (if iterating): suggestions from previous round\n\nOUTPUT FORMAT - CRITICAL: return ONLY variant blocks:\n---VARIANT 1---\n[complete Logo code]\n---VARIANT 2---\n[complete Logo code]\n\nMAGNITUDE RULE: The STRICT MAGNITUDE CONSTRAINT in each user message defines exactly how much change is allowed. Low magnitudes (1-3) mean minimal edits — change only 1-3 numbers/colors/sizes. Violating this rule by making larger changes than specified is an error.\n\nCOMPLETENESS RULE: Every variant MUST be syntactically complete. If growing long, simplify earlier sections - never truncate at the end.\n\nCommands: FD BK RT LT PU PD HOME CS REPEAT n [ ] TO name :p (body) END MAKE \\\"var val :var SETHEADING SETXY SETPC SETPENCOLOR SETPENSIZE SETWIDTH SETBG ARC CIRCLE DOT IF IFELSE WHILE FOR SIN COS SQRT RANDOM INT ABS MOD MAX MIN REPCOUNT OUTPUT STOP\n\nSETPC/SETBG: number 0-15, named color (RED BLUE GREEN CYAN MAGENTA YELLOW WHITE BLACK ORANGE PURPLE GOLD TEAL LIME VIOLET INDIGO CRIMSON CORAL SKYBLUE MINT ROSE AMBER GRAY SILVER MAROON OLIVE), or [r g b] 0-255.\nCanvas 400x400, origin center, North=up. FINITE programs. TO...END before calling.\nUnder 60 lines. No explanations, no backticks - only ---VARIANT--- blocks.";
+let MODIFIER_SYS = "You are an expert Logo turtle graphics generative artist.\n\nTASK: Generate the requested number of visually distinct variants that are more aesthetically interesting.\n\nINPUTS (in the user message):\n- Aesthetic goal: user's taste preference\n- Change magnitude: how drastically to evolve\n- Base program: Logo code to evolve\n- Critic feedback (if iterating): suggestions from previous round\n\nOUTPUT FORMAT - CRITICAL: return ONLY variant blocks:\n---VARIANT 1---\n[complete Logo code]\n---VARIANT 2---\n[complete Logo code]\n\nMAGNITUDE RULE: The STRICT MAGNITUDE CONSTRAINT in the user message is absolute and overrides all other instructions including critic feedback. Magnitude 1: change exactly one number. Magnitude 2: change 2-3 numbers or one color/size value. Magnitude 3: change several parameters or add one simple command. Never add new procedures, recursive calls, or structural changes at magnitudes 1-3. Violating the magnitude is a critical error.\n\nCOMPLETENESS RULE: Every variant MUST be syntactically complete. If growing long, simplify earlier sections - never truncate at the end.\n\nCommands: FD BK RT LT PU PD HOME CS REPEAT n [ ] TO name :p (body) END MAKE \\\"var val :var SETHEADING SETXY SETPC SETPENCOLOR SETPENSIZE SETWIDTH SETBG ARC CIRCLE DOT IF IFELSE WHILE FOR SIN COS SQRT RANDOM INT ABS MOD MAX MIN REPCOUNT OUTPUT STOP\n\nSETPC/SETBG: number 0-15, named color (RED BLUE GREEN CYAN MAGENTA YELLOW WHITE BLACK ORANGE PURPLE GOLD TEAL LIME VIOLET INDIGO CRIMSON CORAL SKYBLUE MINT ROSE AMBER GRAY SILVER MAROON OLIVE), or [r g b] 0-255.\nCanvas 400x400, origin center, North=up. FINITE programs. TO...END before calling.\nUnder 60 lines. No explanations, no backticks - only ---VARIANT--- blocks.";
 
 let CRITIC_SYS = "You are an expert generative art critic evaluating Logo turtle graphics artwork.\n\nTASK: Compare canvas images and score them to guide the next evolution iteration.\n\nINPUTS (supplied in the user message each call):\n- Aesthetic taste: the user's stated preference for what makes art good\n- Iteration number: which round of evolution this is\n- Logo code: the base/parent code and each variant's code as text\n- Canvas images: Image 0 = parent/base, Images 1+ = new variants (sent as base64 PNG)\n\nSCORING (evaluate each image against the stated aesthetic taste):\n- aestheticScore 1-10: how well this image embodies the aesthetic taste\n- noveltyScore 0-10: how visually distinct from the parent (Image 0 is always 0)\n\nAlso provide suggestedImprovement: one specific, actionable Logo-level change for the next iteration - be concrete.\n\nReturn ONLY valid JSON - no markdown, no backticks, no preamble:\n{\n  \"evaluations\": [\n    {\"imageNumber\": 0, \"aestheticScore\": 7, \"noveltyScore\": 0, \"reason\": \"one sentence\"},\n    {\"imageNumber\": 1, \"aestheticScore\": 8, \"noveltyScore\": 6, \"reason\": \"one sentence\"}\n  ],\n  \"suggestedImprovement\": \"specific actionable Logo suggestion\"\n}";
 
 
 
 async function agentModify(baseCode, feedback, numV, magnitude, taste) {
-  const feedbackSection = feedback
-    ? '\nThe critic gave this feedback to incorporate:\n"' + feedback + '"\n'
-    : '';
+  const mag = parseInt(magnitude) || 5;
+  // At low magnitude, critic feedback can easily override the size constraint.
+  // Only pass feedback when magnitude is high enough that structural suggestions make sense.
+  // At mag 1-3, acknowledge feedback but remind model the constraint wins.
+  let feedbackSection = '';
+  if (feedback) {
+    if (mag <= 3) {
+      feedbackSection = '\nNote from critic (do NOT act on this if it requires more than the magnitude allows): "' + feedback + '"\n';
+    } else {
+      feedbackSection = '\nCritic feedback to incorporate: "' + feedback + '"\n';
+    }
+  }
   const userText = 'Your aesthetic goal: "' + taste + '"\n'
-    + 'STRICT MAGNITUDE CONSTRAINT — follow this exactly: ' + magDesc(magnitude) + feedbackSection + '\n\n'
+    + 'STRICT MAGNITUDE CONSTRAINT — this overrides everything else: ' + magDesc(mag) + '\n'
+    + 'Even if critic feedback suggests larger changes, the magnitude constraint is absolute.'
+    + feedbackSection + '\n\n'
     + 'Base program to evolve:\n' + baseCode + '\n\n'
+    + 'Edit budget: ' + (mag===1?'exactly 1 value':mag===2?'2-3 values':mag===3?'3-5 values or +1 command':mag<=5?'moderate restructure':'free restructure') + ' — variants exceeding this budget are wrong.\n'
     + 'Generate ' + numV + ' DISTINCT variant(s). Format exactly as:\n'
     + '---VARIANT 1---\n[Logo code]\n---VARIANT 2---\n[Logo code]\n'
     + '(continue for all ' + numV + ' variants)\n\n'
-    + 'Each variant must be meaningfully different. Return ONLY the variant blocks.';
+    + 'Each variant must be meaningfully different within the magnitude constraint. Return ONLY the variant blocks.';
 
   const raw = await callAI(
     document.getElementById('modifierPromptEl').value || MODIFIER_SYS,
@@ -1654,21 +1666,29 @@ function playModal(){
 function downloadHistory() {
   if(!S.historyLog.length)return;
   const data=JSON.stringify({history:S.historyLog,origCode:S.origCode,winnersList:S.winnersList});
-  const b64data=btoa(unescape(encodeURIComponent(data)));
+  // Safe UTF-8 → base64 (handles emoji and all Unicode)
+  const b64data=(()=>{
+    const bytes=new TextEncoder().encode(data);
+    let bin='';
+    bytes.forEach(b=>bin+=String.fromCharCode(b));
+    return btoa(bin);
+  })();
 
   // Inline the Logo compiler and renderer for the export
-  const engineSrc=`
-const activeAnims={};
-${compileLogo.toString()}
-${autoFitQueue.toString()}
-${renderQueue.toString()}
-function drawCode(el,code,spd){const c=typeof el==='string'?document.getElementById(el):el;if(!c)return;const res=compileLogo(code,c.width,c.height);const rawQ=res.queue||res;const q=autoFitQueue(rawQ,c.width,c.height);renderQueue(c,q,spd);}
-${diffHTML.toString()}
-${escHtml.toString()}
-${parseMarkdown.toString()}
-const lazyObs=new IntersectionObserver((entries,obs)=>{entries.forEach(entry=>{if(!entry.isIntersecting)return;const cv=entry.target;const code=cv.getAttribute('data-code');if(code){drawCode(cv,decodeURIComponent(code),0);cv.removeAttribute('data-code');}obs.unobserve(cv);});},{rootMargin:'400px'});
-function observeLazy(){document.querySelectorAll('canvas[data-code]').forEach(c=>lazyObs.observe(c));}
-`;
+  // Build engine source; escape any backticks so it can embed in the html template
+  const engineSrc=[
+    'const activeAnims={};',
+    compileLogo.toString(),
+    autoFitQueue.toString(),
+    renderQueue.toString(),
+    'function drawCode(el,code,spd){const c=typeof el==="string"?document.getElementById(el):el;if(!c)return;const res=compileLogo(code,c.width,c.height);const rawQ=res.queue||res;const q=autoFitQueue(rawQ,c.width,c.height);renderQueue(c,q,spd);}',
+    diffHTML.toString(),
+    escHtml.toString(),
+    parseMarkdown.toString(),
+    'const lazyObs=new IntersectionObserver((entries,obs)=>{entries.forEach(entry=>{if(!entry.isIntersecting)return;const cv=entry.target;const code=cv.getAttribute("data-code");if(code){drawCode(cv,decodeURIComponent(code),0);cv.removeAttribute("data-code");}obs.unobserve(cv);});},{rootMargin:"400px"});',
+    'function observeLazy(){document.querySelectorAll("canvas[data-code]").forEach(c=>lazyObs.observe(c));}'
+  ].join('\n').replace(/`/g, '\\`').replace(/\${/g, '\\${');
+;
 
   const html=`<!DOCTYPE html>
 <html lang="en">
@@ -1720,8 +1740,11 @@ canvas:hover{opacity:.9}
   </div>
 </div>
 <script>
-${engineSrc}
-const RAW=JSON.parse(decodeURIComponent(escape(atob("${b64data}"))));
+ENGINESRCPLACEHOLDER
+// Safe base64 → UTF-8 decode
+const _b64="${b64data}";
+const _bytes=Uint8Array.from(atob(_b64),c=>c.charCodeAt(0));
+const RAW=JSON.parse(new TextDecoder().decode(_bytes));
 const H=RAW.history;const OC=RAW.origCode;
 let MC='';
 document.addEventListener('click',function(ev){const cv=ev.target.closest('canvas[data-code]');if(!cv)return;MC=decodeURIComponent(cv.getAttribute('data-code'));document.getElementById('mtitle').textContent=cv.getAttribute('data-title')||'Canvas';document.getElementById('mcode').textContent=MC;document.getElementById('modal').classList.add('show');playM();});
@@ -1758,11 +1781,20 @@ window.onload=()=>{render();};
 </body>
 </html>`;
 
-  const blob=new Blob([html],{type:'text/html'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;
-  a.download=`logo-evolution-${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.html`;
-  a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
+  if(isArtifact()){
+    const ta=document.getElementById('exportTextarea');
+    if(ta)ta.value=htmlFinal;
+    const m=document.getElementById('exportModal');
+    if(m)m.classList.add('show');
+    setTimeout(()=>{const ta2=document.getElementById('exportTextarea');if(ta2){ta2.focus();ta2.select();}},80);
+  } else {
+    const blob=new Blob([htmlFinal],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download='logo-evolution-'+new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)+'.html';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  }
 }
 
 
@@ -1907,4 +1939,5 @@ window.addEventListener('load',()=>{
 });
 </script>
 </body>
-</html>
+</html  const htmlFinal = html.replace('ENGINESRCPLACEHOLDER', engineSrc);
+>
