@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <base href="https://localhost/"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local MLC Chat - PWA</title>
+    
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        google: { blue: '#4285F4', red: '#EA4335', yellow: '#FBBC05', green: '#34A853', dark: '#202124', surface: '#28292C' }
+                    }
+                }
+            }
+        }
+        marked.setOptions({ breaks: true, gfm: true });
+    </script>
+    <style>
+        body { background-color: #1a1a1c; color: #e8eaed; }
+        .glass-panel { background: rgba(40, 41, 44, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .prose pre { background-color: #202124; border: 1px solid #3c4043; border-radius: 0.5rem; }
+        .prose code { color: #8ab4f8; background-color: rgba(66, 133, 244, 0.1); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-weight: normal; }
+        .prose pre code { background-color: transparent; padding: 0; color: #e8eaed; }
+        
+        .typing-indicator span {
+            display: inline-block; width: 6px; height: 6px; background-color: #9aa0a6; border-radius: 50%; animation: typing 1.4s infinite ease-in-out; margin: 0 2px;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.5); opacity: 1; } }
+    </style>
+</head>
+<body class="h-screen flex flex-col font-sans overflow-hidden selection:bg-google-blue selection:text-white">
+
+    <!-- Header -->
+    <header class="glass-panel py-3 px-6 flex justify-between items-center z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex items-center justify-center font-bold text-white shadow-lg">
+                G4
+            </div>
+            <h1 class="text-xl font-semibold tracking-wide text-white">Local MLC Chat</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="openStorageManager()" class="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition-colors flex items-center gap-2" title="Manage Storage">
+                <i class="fa-solid fa-hard-drive"></i> <span class="hidden sm:inline">Storage</span>
+            </button>
+            <button id="new-chat-btn" onclick="startNewChat()" class="hidden px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> New Chat
+            </button>
+            <div id="hardware-badge" class="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 flex items-center gap-2">
+                <i class="fa-solid fa-microchip"></i> Analyzing Hardware...
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Left Pane: Setup & Chat -->
+        <div id="left-pane" class="flex-1 relative flex flex-col transition-all duration-300 ease-in-out">
+            
+            <!-- Setup / Download Screen -->
+            <div id="setup-screen" class="absolute inset-0 z-20 flex justify-center items-center p-4 transition-opacity duration-500">
+                <div class="glass-panel w-full max-w-md rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
+                    <div class="text-center">
+                        <h2 class="text-2xl font-bold text-white mb-2">Initialize Local AI</h2>
+                        <p class="text-sm text-gray-400">Download the model weights to run entirely in your browser.</p>
+                    </div>
+
+                    <!-- Hardware Capabilities Box -->
+                    <div class="bg-[#202124] rounded-xl p-4 border border-gray-700/50">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Detected Capabilities</h3>
+                        <div class="flex flex-col gap-2 text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-300"><i class="fa-solid fa-memory w-5 text-google-blue"></i> System RAM</span>
+                                <span id="ram-detected" class="font-mono text-white">Detecting...</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-300"><i class="fa-solid fa-cubes w-5 text-google-green"></i> WebGPU Support</span>
+                                <span id="gpu-detected" class="font-mono text-white">Detecting...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Model Selector -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-300">Select Model</label>
+                        <select id="model-selector" onchange="window.updateModelFeatures()" class="bg-[#202124] border border-gray-600 text-white text-sm rounded-lg focus:ring-google-blue focus:border-google-blue block w-full p-2.5 outline-none transition-colors cursor-pointer">
+                            <!-- Populated dynamically via JS -->
+                        </select>
+                        <p id="model-warning" class="text-xs text-google-yellow mt-1 hidden">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Your device has less than 8GB RAM. The heavier models may crash the tab. Phi-3.5 vision is the safest of the three.
+                        </p>
+                        <p class="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                            <i class="fa-brands fa-google text-gray-400 mr-1"></i> Model weights are loaded in MLC format for WebLLM from Hugging Face model repositories.
+                        </p>
+                    </div>
+
+                    <!-- Action Button & Progress -->
+                    <div class="mt-2 flex flex-col gap-4">
+                        <button id="download-btn" onclick="startDownload()" class="w-full bg-google-blue hover:bg-blue-600 text-white font-medium rounded-lg text-sm px-5 py-3 transition-colors shadow-lg shadow-blue-500/20 flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-down"></i> Download & Cache Model
+                        </button>
+                        
+                        <div id="progress-container" class="hidden flex-col gap-2">
+                            <div class="flex justify-between text-xs text-gray-400">
+                                <span id="progress-text">Downloading weights...</span>
+                                <span id="progress-percent">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                                <div id="progress-bar" class="bg-gradient-to-r from-google-blue to-google-green h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Screen (Hidden Initially) -->
+            <div id="chat-screen" class="absolute inset-0 z-10 flex flex-col opacity-0 pointer-events-none transition-opacity duration-500 w-full mx-auto max-w-5xl">
+                <!-- Messages Area -->
+                <div id="chat-history" class="flex-1 overflow-y-auto p-4 flex flex-col gap-6 scrollbar-hide pb-36">
+                    <!-- Welcome Message -->
+                    <div class="flex gap-4 w-full md:max-w-[85%] mt-4">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-md">AI</div>
+                        <div class="bg-google-surface border border-gray-700 rounded-2xl rounded-tl-sm p-4 text-gray-200 text-sm shadow-sm prose prose-invert max-w-none">
+                            <p>System loaded successfully from local cache. I am running entirely in your browser using WebGPU.</p>
+                            <p>You can ask me to write a web app, explain an image, or help debug code.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Area with Attachments -->
+                <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#1a1a1c] via-[#1a1a1c] to-transparent pt-12">
+                    <div class="max-w-4xl mx-auto relative flex flex-col gap-2">
+                        
+                        <!-- Attachment Preview Container -->
+                        <div id="attachment-preview" class="hidden bg-[#303134] border border-gray-600 rounded-xl p-2 flex items-center gap-3 w-fit max-w-[200px] shadow-lg relative">
+                            <div id="attachment-icon" class="w-10 h-10 rounded bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
+                                <!-- Thumbnail injected here -->
+                            </div>
+                            <div class="flex-1 overflow-hidden">
+                                <p id="attachment-name" class="text-xs text-gray-300 truncate w-full"></p>
+                            </div>
+                            <button onclick="removeAttachment()" class="text-gray-400 hover:text-white px-2 cursor-pointer">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <div class="relative w-full">
+                            <input type="file" id="file-upload" class="hidden" accept="image/*" onchange="handleFileUpload(event)">
+                            <button id="attachment-btn" class="absolute left-2 bottom-2 w-10 h-10 text-gray-400 hover:text-white transition-colors flex items-center justify-center z-10" title="Attach file">
+                                <i class="fa-solid fa-paperclip"></i>
+                            </button>
+
+                            <textarea id="chat-input" rows="1" placeholder="Ask local AI..." class="w-full bg-google-surface border border-gray-600 text-white text-sm rounded-2xl pl-12 pr-14 py-4 focus:ring-1 focus:ring-google-blue focus:border-google-blue block outline-none resize-none shadow-lg custom-scrollbar overflow-hidden" oninput="autoResize(this)" onkeydown="handleEnter(event)"></textarea>
+                            
+                            <button id="send-btn" onclick="sendMessage()" class="absolute right-2 bottom-2 w-10 h-10 bg-google-blue text-white rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i id="send-icon" class="fa-solid fa-arrow-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-center text-[10px] text-gray-500 mt-2">Local execution keeps prompts and model inference on-device.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Pane: Live App Preview Canvas (Hidden Initially) -->
+        <div id="preview-container" class="w-0 overflow-hidden transition-all duration-300 ease-in-out flex flex-col bg-white border-l border-gray-700 shadow-2xl relative z-30">
+            <div class="bg-[#202124] text-gray-300 text-sm px-4 py-3 flex justify-between items-center border-b border-gray-700 shrink-0">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-laptop-code text-google-blue"></i>
+                    <span class="font-medium tracking-wide">Live App Preview</span>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="refreshPreview()" class="text-gray-400 hover:text-white transition-colors" title="Refresh">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    <button onclick="closePreview()" class="text-gray-400 hover:text-white transition-colors" title="Close Preview">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <iframe id="app-preview-frame" class="flex-1 w-full border-none bg-white" sandbox="allow-scripts allow-forms allow-popups"></iframe>
+        </div>
+
+        <!-- Storage Management Modal -->
+        <div id="storage-modal" class="absolute inset-0 z-50 flex justify-center items-center p-4 bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+            <div class="glass-panel w-full max-w-md rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
+                <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+                    <h3 class="text-lg font-bold text-white"><i class="fa-solid fa-hard-drive text-google-blue mr-2"></i>Manage Storage</h3>
+                    <button onclick="closeStorageManager()" class="text-gray-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="text-sm text-gray-300">
+                    <p class="mb-3 leading-relaxed">Local AI models are permanently cached on your device for fast offline loading.</p>
+                    <div class="bg-[#202124] rounded-lg p-3 border border-gray-700 flex justify-between items-center mb-4">
+                        <span class="text-gray-400">Total Space Used:</span>
+                        <span id="storage-used" class="font-mono font-bold text-white">Calculating...</span>
+                    </div>
+                    
+                    <p class="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Specific Cached Models</p>
+                    <div id="cache-list" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1 pb-1 scrollbar-hide">
+                        <!-- Dynamically populated via JS -->
+                    </div>
+                </div>
+                <div class="mt-2 flex flex-col gap-2">
+                    <button onclick="clearAllStorage(event)" class="w-full bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-900/50 hover:text-white font-medium rounded-lg text-sm px-4 py-2.5 transition-colors flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Clear All Storage & Reload
+                    </button>
+                    <button onclick="closeStorageManager()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg text-sm px-4 py-2.5 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import * as webllm from "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm";
+
+        // --- APP STATE & CONFIG ---
+        let engine = null;
+        let isGenerating = false;
+        let stopRequested = false;
+        window.latestExtractedCode = "";
+        window.attachedFile = null; 
+        let currentModelKey = 'phi-3.5-vision'; // Default
+
+        let chatContext = [
+            { role: "system", content: "You are a helpful, local AI assistant running in the browser. When generating code, provide it as a single, complete HTML file (including CSS and JS) inside an ```html codeblock." }
+        ];
+
+        // Model Registry
+        const MODELS = {
+            'llama-3-8b': {
+                id: 'Llama-3-8B-Instruct-q4f32_1-MLC',
+                name: 'Llama-3-8B-Instruct-q4f32_1-MLC — 4.21 GB (Text Only)',
+                type: 'LLM',
+                approxSizeGB: 4.21,
+                maxChars: 24000
+            },
+            'gemma-2-9b': {
+                id: 'gemma-2-9b-it-q4f32_1-MLC',
+                name: 'gemma-2-9b-it-q4f32_1-MLC — 4.86 GB (Text Only)',
+                type: 'LLM',
+                approxSizeGB: 4.86,
+                maxChars: 24000
+            },
+            'phi-3.5-vision': {
+                id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
+                name: 'Phi-3.5-vision-instruct-q4f16_1-MLC — 2.58 GB (Vision)',
+                type: 'VLM',
+                approxSizeGB: 2.58,
+                maxChars: 18000
+            }
+        };
+
+        // --- 1. HARDWARE DETECTION & DYNAMIC UI ---
+        window.detectHardware = function() {
+            const memory = navigator.deviceMemory || 4; 
+            const hasWebGPU = !!navigator.gpu;
+            
+            const ramEl = document.getElementById('ram-detected');
+            const gpuEl = document.getElementById('gpu-detected');
+            const badge = document.getElementById('hardware-badge');
+            const selector = document.getElementById('model-selector');
+
+            ramEl.textContent = `~${memory} GB`;
+            
+            if (hasWebGPU) {
+                gpuEl.innerHTML = `<span class="text-google-green">Supported</span>`;
+                badge.innerHTML = `<i class="fa-solid fa-bolt text-google-yellow"></i> WebGPU Active`;
+            } else {
+                gpuEl.innerHTML = `<span class="text-google-red">Not Supported</span>`;
+                badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-google-red"></i> CPU Mode`;
+                document.getElementById('download-btn').disabled = true;
+                document.getElementById('download-btn').innerHTML = "WebGPU Required";
+                document.getElementById('download-btn').classList.replace('bg-google-blue', 'bg-gray-600');
+            }
+
+            // Populate selector dynamically
+            selector.innerHTML = '';
+            for (const [key, config] of Object.entries(MODELS)) {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = config.name;
+                selector.appendChild(opt);
+            }
+
+            // Enforce safe defaults based on RAM
+            if (memory < 8) {
+                selector.value = 'phi-3.5-vision';
+            } else {
+                selector.value = 'llama-3-8b';
+            }
+
+            window.updateModelFeatures();
+        }
+
+        window.updateModelFeatures = function() {
+            const selector = document.getElementById('model-selector');
+            currentModelKey = selector.value;
+            const config = MODELS[currentModelKey];
+            const memory = navigator.deviceMemory || 4;
+            const warning = document.getElementById('model-warning');
+            
+            // Memory warnings for heavier models
+            if (memory < 8 && config.approxSizeGB > 3.0) {
+                warning.classList.remove('hidden');
+            } else {
+                warning.classList.add('hidden');
+            }
+
+            // Enable/Disable image upload based on model capabilities
+            const attachBtn = document.getElementById('attachment-btn');
+            if (config.type === 'LLM') {
+                attachBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                attachBtn.title = "Image upload disabled: selected model is text-only.";
+                attachBtn.onclick = (e) => { 
+                    e.preventDefault(); 
+                    alert("The selected model is text-only. Switch to Phi-3.5 vision to attach an image."); 
+                };
+            } else {
+                attachBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                attachBtn.title = "Attach image";
+                attachBtn.onclick = () => document.getElementById('file-upload').click();
+            }
+        }
+
+        // --- 2. WEBGPU DOWNLOAD & CACHING ---
+        window.startDownload = async function() {
+            const btn = document.getElementById('download-btn');
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            const progressPercent = document.getElementById('progress-percent');
+            const progressText = document.getElementById('progress-text');
+            const selector = document.getElementById('model-selector');
+
+            const modelId = MODELS[currentModelKey].id;
+
+            selector.disabled = true;
+            btn.classList.add('hidden');
+            progressContainer.classList.remove('hidden');
+            progressText.textContent = `Initializing WebLLM Engine...`;
+
+            try {
+                const initProgressCallback = (report) => {
+                    progressText.textContent = report.text.split('] ')[1] || report.text;
+                    const percent = Math.round(report.progress * 100);
+                    progressBar.style.width = `${percent}%`;
+                    progressPercent.textContent = `${percent}%`;
+                };
+
+                // Extend the prebuilt config with the exact three requested models.
+                const existingModels = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list)
+                    ? webllm.prebuiltAppConfig.model_list.filter(m => ![
+                        'Llama-3-8B-Instruct-q4f32_1-MLC',
+                        'gemma-2-9b-it-q4f32_1-MLC',
+                        'Phi-3.5-vision-instruct-q4f16_1-MLC'
+                    ].includes(m.model_id))
+                    : [];
+
+                const customAppConfig = {
+                    model_list: [
+                        ...existingModels,
+                        {
+                            model_id: 'Llama-3-8B-Instruct-q4f32_1-MLC',
+                            model: 'https://huggingface.co/mlc-ai/Llama-3-8B-Instruct-q4f32_1-MLC',
+                            model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Llama-3-8B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm`,
+                        },
+                        {
+                            model_id: 'gemma-2-9b-it-q4f32_1-MLC',
+                            model: 'https://huggingface.co/mlc-ai/gemma-2-9b-it-q4f32_1-MLC',
+                            model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/gemma-2-9b-it-q4f32_1-ctx4k_cs1k-webgpu.wasm`,
+                        },
+                        {
+                            model_id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
+                            model: 'https://huggingface.co/mlc-ai/Phi-3.5-vision-instruct-q4f16_1-MLC',
+                            model_type: webllm.ModelType.VLM,
+                            model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Phi-3.5-vision-instruct-q4f16_1-ctx4k_cs2k-webgpu.wasm`,
+                        }
+                    ]
+                };
+
+                engine = await webllm.CreateMLCEngine(
+                    modelId,
+                    { initProgressCallback: initProgressCallback, appConfig: customAppConfig }
+                );
+
+                progressText.textContent = `Model Ready!`;
+                progressBar.style.width = `100%`;
+                progressPercent.textContent = `100%`;
+                
+                setTimeout(initializeChat, 800);
+
+            } catch (err) {
+                progressText.textContent = `Error: ${err.message}`;
+                progressText.classList.add('text-google-red');
+                console.error(err);
+            }
+        }
+
+        // --- 3. UI TRANSITIONS & PREVIEW LOGIC ---
+        function initializeChat() {
+            const setupScreen = document.getElementById('setup-screen');
+            const chatScreen = document.getElementById('chat-screen');
+            const newChatBtn = document.getElementById('new-chat-btn');
+
+            setupScreen.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                chatScreen.classList.remove('opacity-0', 'pointer-events-none');
+                document.getElementById('chat-input').focus();
+                if (newChatBtn) newChatBtn.classList.remove('hidden');
+            }, 500);
+        }
+
+        window.startNewChat = function() {
+            if (isGenerating) return;
+            chatContext = [
+                { role: "system", content: "You are a helpful, local AI assistant running in the browser. When generating code, provide it as a single, complete HTML file (including CSS and JS) inside an ```html codeblock." }
+            ];
+            
+            const chatHistory = document.getElementById('chat-history');
+            const welcomeMsg = chatHistory.firstElementChild;
+            chatHistory.innerHTML = '';
+            if (welcomeMsg) chatHistory.appendChild(welcomeMsg);
+            
+            window.closePreview();
+            window.removeAttachment();
+            
+            const inputEl = document.getElementById('chat-input');
+            inputEl.value = '';
+            window.autoResize(inputEl);
+        }
+
+        window.openPreview = function(code) {
+            const previewContainer = document.getElementById('preview-container');
+            const frame = document.getElementById('app-preview-frame');
+            
+            const errorInterceptor = `<script>
+                window.onerror = function(message, source, lineno, colno, error) {
+                    window.parent.postMessage({ type: 'iframe-error', content: message + ' (Line ' + lineno + ')' }, '*');
+                };
+                const origError = console.error;
+                console.error = function(...args) {
+                    window.parent.postMessage({ type: 'iframe-error', content: args.join(' ') }, '*');
+                    origError.apply(console, args);
+                };
+            <\/script>`;
+            
+            let injectedCode = code;
+            if (injectedCode.includes('<head>')) {
+                injectedCode = injectedCode.replace('<head>', '<head>' + errorInterceptor);
+            } else {
+                injectedCode = errorInterceptor + injectedCode;
+            }
+
+            window.latestExtractedCode = code; 
+            frame.srcdoc = injectedCode;
+            previewContainer.style.width = '50%';
+        }
+
+        window.closePreview = function() {
+            document.getElementById('preview-container').style.width = '0px';
+        }
+
+        window.refreshPreview = function() {
+            window.openPreview(window.latestExtractedCode); 
+        }
+
+        function extractHTMLBlocks(text) {
+            const regex = /```[a-zA-Z]*\s*\n([\s\S]*?)```/ig;
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const code = match[1];
+                if (code.toLowerCase().includes('<html') || code.toLowerCase().includes('<!doctype')) {
+                    return code; 
+                }
+            }
+            return null;
+        }
+
+        window.autoResize = function(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = (textarea.scrollHeight < 120 ? textarea.scrollHeight : 120) + 'px';
+        }
+
+        window.handleEnter = function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!isGenerating) {
+                    sendMessage();
+                }
+            }
+        }
+
+        // --- 4. FILE UPLOAD HANDLING ---
+        window.handleFileUpload = function(event) {
+            if (MODELS[currentModelKey].type === 'LLM') {
+                alert("The selected model does not support file attachments.");
+                return;
+            }
+
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                window.attachedFile = {
+                    type: 'image',
+                    data: e.target.result,
+                    name: file.name
+                };
+
+                const preview = document.getElementById('attachment-preview');
+                const iconContainer = document.getElementById('attachment-icon');
+                const nameEl = document.getElementById('attachment-name');
+
+                iconContainer.innerHTML = `<img src="${window.attachedFile.data}" class="w-full h-full object-cover">`;
+                
+                nameEl.textContent = window.attachedFile.name;
+                preview.classList.remove('hidden');
+                document.getElementById('chat-input').focus();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        window.removeAttachment = function() {
+            window.attachedFile = null;
+            document.getElementById('file-upload').value = '';
+            document.getElementById('attachment-preview').classList.add('hidden');
+        }
+
+        function updateSendButtonState(generating) {
+            const btn = document.getElementById('send-btn');
+            const icon = document.getElementById('send-icon') || btn.querySelector('i');
+            if (generating) {
+                btn.onclick = window.stopGeneration;
+                btn.classList.remove('bg-google-blue', 'hover:bg-blue-600');
+                btn.classList.add('bg-google-red', 'hover:bg-red-600');
+                icon.className = "fa-solid fa-square"; // Stop icon
+            } else {
+                btn.onclick = window.sendMessage;
+                btn.classList.remove('bg-google-red', 'hover:bg-red-600');
+                btn.classList.add('bg-google-blue', 'hover:bg-blue-600');
+                icon.className = "fa-solid fa-arrow-up"; // Send icon
+            }
+        }
+
+        window.stopGeneration = function() {
+            stopRequested = true;
+            if (engine && typeof engine.interruptGenerate === 'function') {
+                engine.interruptGenerate();
+            }
+        }
+
+        // Adjusts history context dynamically based on the configured model's threshold
+        function compactifyContext() {
+            const dynamicMaxChars = MODELS[currentModelKey].maxChars;
+            let calculateTotalChars = () => chatContext.reduce((sum, msg) => {
+                return sum + JSON.stringify(msg.content || "").length;
+            }, 0);
+            
+            while (calculateTotalChars() > dynamicMaxChars && chatContext.length > 3) {
+                chatContext.splice(1, 1);
+                if (chatContext.length > 2 && chatContext[1].role === 'assistant') {
+                    chatContext.splice(1, 1);
+                }
+            }
+        }
+
+        // --- 5. CHAT GENERATION & MARKDOWN ---
+        window.sendMessage = async function() {
+            if (!engine || isGenerating) return;
+            
+            const inputEl = document.getElementById('chat-input');
+            const text = inputEl.value.trim();
+            
+            if (!text && !window.attachedFile) return;
+
+            inputEl.value = '';
+            inputEl.style.height = 'auto';
+            
+            let aiPayload = text;
+            let uiHtml = text ? `<p class="leading-relaxed whitespace-pre-wrap">${escapeHTML(text)}</p>` : "";
+
+            if (window.attachedFile) {
+                // Double check rejection logic
+                if (MODELS[currentModelKey].type === 'LLM') {
+                    alert("This text-only model does not support image attachments. Removing image.");
+                    window.removeAttachment();
+                    return;
+                }
+
+                // Prevent stale multimodal image state from accumulating in context.
+                chatContext = chatContext.map(msg => {
+                    if (Array.isArray(msg.content)) {
+                        const textPart = msg.content.find(p => p.type === 'text');
+                        return { ...msg, content: (textPart ? textPart.text : "") + "\n[System: Previous image cleared from memory to free VRAM for new image.]" };
+                    }
+                    return msg;
+                });
+
+                aiPayload = [
+                    { type: "text", text: text || "Please observe this image carefully and describe it in detail." },
+                    { type: "image_url", image_url: { url: window.attachedFile.data } }
+                ];
+                uiHtml = `<img src="${window.attachedFile.data}" class="max-w-xs w-full rounded-lg mb-2 shadow-md border border-gray-700">
+` + uiHtml;
+                window.removeAttachment();
+            }
+
+            appendMessage('user', uiHtml, true);
+            chatContext.push({ role: 'user', content: aiPayload });
+            
+            const msgId = 'msg-' + Date.now();
+            appendTypingIndicator(msgId);
+
+            isGenerating = true;
+            stopRequested = false;
+            updateSendButtonState(true);
+            scrollToBottom();
+
+            try {
+                compactifyContext();
+
+                const indicator = document.getElementById(`${msgId}-indicator`);
+                const contentContainer = document.getElementById(`${msgId}-content`);
+                const tpsContainer = document.getElementById(`${msgId}-tps-container`);
+                const tpsValue = document.getElementById(`${msgId}-tps-value`);
+                
+                indicator.style.display = 'none';
+                contentContainer.classList.remove('hidden');
+                tpsContainer.classList.remove('hidden');
+
+                const chunks = await engine.chat.completions.create({
+                    messages: chatContext,
+                    temperature: 0.7,
+                    max_tokens: 8192, 
+                    stream: true,
+                });
+
+                let fullResponse = "";
+                let tokenCount = 0;
+                const startTime = performance.now();
+
+                for await (const chunk of chunks) {
+                    if (stopRequested) break;
+                    
+                    const delta = chunk.choices[0]?.delta?.content || "";
+                    fullResponse += delta;
+                    tokenCount++;
+                    
+                    if (tokenCount % 3 === 0) {
+                        const elapsedSecs = (performance.now() - startTime) / 1000;
+                        tpsValue.textContent = (tokenCount / elapsedSecs).toFixed(1);
+                    }
+                    
+                    let renderText = fullResponse;
+                    const openBlocks = (renderText.match(/```/g) || []).length;
+                    if (openBlocks % 2 !== 0) renderText += '\n```';
+
+                    contentContainer.innerHTML = marked.parse(renderText);
+                    scrollToBottom();
+                }
+
+                const finalElapsedSecs = (performance.now() - startTime) / 1000;
+                tpsValue.textContent = (tokenCount / finalElapsedSecs).toFixed(1);
+
+                chatContext.push({ role: 'assistant', content: fullResponse });
+
+                const codeBlock = extractHTMLBlocks(fullResponse);
+                if (codeBlock) {
+                    const btnContainer = document.createElement('div');
+                    btnContainer.className = "mt-4 pt-4 border-t border-gray-600";
+                    btnContainer.innerHTML = `
+                        <button class="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-colors">
+                            <i class="fa-solid fa-play"></i> Open App in Preview Canvas
+                        </button>
+                    `;
+                    btnContainer.querySelector('button').addEventListener('click', () => {
+                        window.openPreview(codeBlock);
+                    });
+                    contentContainer.appendChild(btnContainer);
+                    
+                    window.openPreview(codeBlock);
+                }
+
+            } catch (err) {
+                const contentContainer = document.getElementById(`${msgId}-content`);
+                contentContainer.innerHTML = `<p>Error during generation: ${escapeHTML(err.message)}</p>
+                <p class="mt-2 text-xs text-gray-400">Try shortening the context by clicking 'New Chat'.</p>`;
+                contentContainer.classList.add("text-google-red", "font-sans");
+                console.error(err);
+            } finally {
+                isGenerating = false;
+                updateSendButtonState(false);
+            }
+        }
+
+        function appendMessage(role, content, isHtml = false) {
+            const chatHistory = document.getElementById('chat-history');
+            const div = document.createElement('div');
+            
+            if (role === 'user') {
+                div.className = 'flex gap-4 w-full justify-end mt-2';
+                const innerData = isHtml ? content : `<p class="leading-relaxed whitespace-pre-wrap">${escapeHTML(content)}</p>`;
+                div.innerHTML = `
+                    <div class="bg-[#303134] text-white border border-gray-700 rounded-2xl rounded-tr-sm p-4 text-sm shadow-sm md:max-w-[85%]">
+                        ${innerData}
+                    </div>
+                `;
+            }
+            chatHistory.appendChild(div);
+        }
+
+        function appendTypingIndicator(id) {
+            const chatHistory = document.getElementById('chat-history');
+            const div = document.createElement('div');
+            div.className = 'flex gap-4 w-full md:max-w-[85%] mt-4 ai-message';
+            div.id = id;
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-md">AI</div>
+                <div class="flex flex-col w-full">
+                    <div class="bg-google-surface border border-gray-700 rounded-2xl rounded-tl-sm p-4 text-gray-200 text-sm shadow-sm min-w-[60px] flex items-center prose prose-invert max-w-none w-full overflow-x-auto">
+                        <div class="typing-indicator m-0" id="${id}-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="hidden w-full" id="${id}-content"></div>
+                    </div>
+                    <div id="${id}-tps-container" class="hidden text-[10px] text-gray-500 mt-1.5 ml-2 flex items-center gap-1.5 font-mono">
+                        <i class="fa-solid fa-bolt text-google-yellow"></i>
+                        <span><span id="${id}-tps-value">0.0</span> tok/s</span>
+                    </div>
+                </div>
+            `;
+            chatHistory.appendChild(div);
+        }
+
+        function scrollToBottom() {
+            const history = document.getElementById('chat-history');
+            history.scrollTop = history.scrollHeight;
+        }
+
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'iframe-error') {
+                const chatHistory = document.getElementById('chat-history');
+                const div = document.createElement('div');
+                div.className = 'flex gap-4 w-full md:max-w-[85%] mt-4';
+                
+                const safeErrorString = event.data.content.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                div.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 flex items-center justify-center text-google-red text-xs shadow-md border border-red-900/50">
+                        <i class="fa-solid fa-bug"></i>
+                    </div>
+                    <div class="bg-red-900/20 text-red-200 border border-red-900/50 rounded-2xl rounded-tl-sm p-4 text-sm shadow-sm font-mono text-xs overflow-x-auto w-full">
+                        <p class="whitespace-pre-wrap font-bold mb-1">Preview App Error Captured:</p>
+                        <p class="whitespace-pre-wrap mb-3">${escapeHTML(event.data.content)}</p>
+                        <button onclick="document.getElementById('chat-input').value = 'I got this error:\\n${safeErrorString}\\n\\nCan you fix the code?'; document.getElementById('chat-input').focus(); window.autoResize(document.getElementById('chat-input'));" class="bg-red-900/50 hover:bg-red-900/80 text-white font-sans text-xs px-3 py-1.5 rounded transition-colors shadow-sm">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Ask AI to fix this
+                        </button>
+                    </div>
+                `;
+                chatHistory.appendChild(div);
+                scrollToBottom();
+            }
+        });
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+        }
+
+        window.onload = window.detectHardware;
+
+        // --- 6. STORAGE MANAGEMENT ---
+        window.openStorageManager = async function() {
+            const modal = document.getElementById('storage-modal');
+            const usedEl = document.getElementById('storage-used');
+            const cacheListEl = document.getElementById('cache-list');
+            
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            
+            usedEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-google-blue"></i>';
+            cacheListEl.innerHTML = '<div class="text-center text-gray-500 py-4"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Reading cache...</div>';
+            
+            // 1. Calculate Global Storage Estimate
+            if (navigator.storage && navigator.storage.estimate) {
+                try {
+                    const estimate = await navigator.storage.estimate();
+                    const usedGB = (estimate.usage / (1024 * 1024 * 1024)).toFixed(2);
+                    usedEl.textContent = `${usedGB} GB`;
+                } catch(e) {
+                    usedEl.textContent = "Unknown";
+                }
+            } else {
+                usedEl.textContent = "Not supported";
+            }
+
+            // 2. Fetch Individual Caches & Calculate Sizes
+            try {
+                const cacheNames = await caches.keys();
+                cacheListEl.innerHTML = '';
+                
+                if (cacheNames.length === 0) {
+                    cacheListEl.innerHTML = '<p class="text-xs text-gray-500 text-center py-4">No cached models found.</p>';
+                } else {
+                    for (const name of cacheNames) {
+                        // Drill down specifically into the model cache to separate out individual model files
+                        if (name === 'webllm/model') {
+                            let modelMap = {};
+                            try {
+                                const cache = await caches.open(name);
+                                const requests = await cache.keys();
+                                for (const req of requests) {
+                                    const url = req.url;
+                                    let mId = "Unknown Model Files";
+                                    
+                                    // Extract the huggingface model repo identifier from the request URL
+                                    const hfMatch = url.match(/huggingface\.co\/[^\/]+\/([^\/]+)/);
+                                    if (hfMatch) mId = hfMatch[1];
+
+                                    const res = await cache.match(req);
+                                    const size = res && res.headers.has('content-length') ? parseInt(res.headers.get('content-length'), 10) : 0;
+                                    
+                                    if (!modelMap[mId]) modelMap[mId] = 0;
+                                    modelMap[mId] += size;
+                                }
+                            } catch(e) { console.warn(e); }
+
+                            // Render individual models found inside the monolith cache
+                            for (const [mId, sizeBytes] of Object.entries(modelMap)) {
+                                if (sizeBytes === 0) continue;
+                                const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1);
+                                const displaySize = sizeBytes > 1024 * 1024 * 1024 
+                                    ? `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} GB` 
+                                    : `${sizeMB} MB`;
+                                
+                                const div = document.createElement('div');
+                                div.className = "flex justify-between items-center bg-[#1a1a1c] p-3 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors group";
+                                div.innerHTML = `
+                                    <div class="flex items-center gap-3 overflow-hidden mr-2">
+                                        <i class="fa-solid fa-brain text-gray-500 group-hover:text-google-blue transition-colors text-lg shrink-0"></i>
+                                        <div class="flex flex-col overflow-hidden">
+                                            <span class="text-xs text-gray-200 truncate font-medium w-48" title="${mId}">${mId}</span>
+                                            <span class="text-[10px] text-gray-400 font-mono">${displaySize} (Weights)</span>
+                                        </div>
+                                    </div>
+                                    <button onclick="deleteModelCache('${mId}', this)" class="text-gray-500 hover:text-red-400 p-2 rounded-md hover:bg-red-900/30 transition-colors shrink-0" title="Delete this model's weights">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                `;
+                                cacheListEl.appendChild(div);
+                            }
+                        } else {
+                            // Render standard config/wasm architecture caches
+                            let sizeBytes = 0;
+                            try {
+                                const cache = await caches.open(name);
+                                const requests = await cache.keys();
+                                for (const req of requests) {
+                                    const res = await cache.match(req);
+                                    if (res && res.headers.has('content-length')) {
+                                        sizeBytes += parseInt(res.headers.get('content-length'), 10);
+                                    }
+                                }
+                            } catch(e) { console.warn("Could not calculate size for cache:", name) }
+                            
+                            let displayName = name;
+                            let icon = "fa-box";
+                            if (name.startsWith("webllm/wasm/")) {
+                                displayName = name.replace("webllm/wasm/", "[WASM Engine] ");
+                                icon = "fa-gear";
+                            } else if (name.startsWith("webllm/config")) {
+                                displayName = "[Config] System Flags";
+                                icon = "fa-sliders";
+                            }
+
+                            const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1);
+                            
+                            const div = document.createElement('div');
+                            div.className = "flex justify-between items-center bg-[#1a1a1c] p-3 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors group";
+                            div.innerHTML = `
+                                <div class="flex items-center gap-3 overflow-hidden mr-2">
+                                    <i class="fa-solid ${icon} text-gray-500 group-hover:text-google-blue transition-colors text-lg shrink-0"></i>
+                                    <div class="flex flex-col overflow-hidden">
+                                        <span class="text-xs text-gray-200 truncate font-medium w-48" title="${name}">${displayName}</span>
+                                        <span class="text-[10px] text-gray-400 font-mono">${sizeMB} MB</span>
+                                    </div>
+                                </div>
+                                <button onclick="deleteSpecificCache('${name}', this)" class="text-gray-500 hover:text-red-400 p-2 rounded-md hover:bg-red-900/30 transition-colors shrink-0" title="Delete this cache">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            `;
+                            cacheListEl.appendChild(div);
+                        }
+                    }
+                }
+            } catch(e) {
+                cacheListEl.innerHTML = '<p class="text-xs text-red-400 text-center py-4">Failed to load cache list.</p>';
+                console.error(e);
+            }
+        }
+
+        window.closeStorageManager = function() {
+            const modal = document.getElementById('storage-modal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        window.deleteModelCache = async function(modelId, btnElement) {
+            if (!confirm(`Are you sure you want to delete the weights for "${modelId}"?`)) return;
+            
+            const originalHtml = btnElement.innerHTML;
+            btnElement.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
+            btnElement.disabled = true;
+
+            try {
+                const cache = await caches.open('webllm/model');
+                const requests = await cache.keys();
+                // Filter and delete only the network requests matching this model's HuggingFace ID
+                for (const req of requests) {
+                    if (req.url.includes(modelId)) {
+                        await cache.delete(req);
+                    }
+                }
+                window.openStorageManager();
+            } catch (e) {
+                console.error("Error deleting model cache:", e);
+                alert("Error deleting cache: " + e.message);
+                btnElement.innerHTML = originalHtml;
+                btnElement.disabled = false;
+            }
+        }
+
+        window.deleteSpecificCache = async function(cacheName, btnElement) {
+            if (!confirm(`Are you sure you want to delete "${cacheName}"?`)) return;
+            
+            const originalHtml = btnElement.innerHTML;
+            btnElement.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
+            btnElement.disabled = true;
+
+            try {
+                await caches.delete(cacheName);
+                // Refresh modal to update storage numbers and remove the item
+                window.openStorageManager();
+            } catch (e) {
+                console.error("Error deleting specific cache:", e);
+                alert("Error deleting cache: " + e.message);
+                btnElement.innerHTML = originalHtml;
+                btnElement.disabled = false;
+            }
+        }
+
+        window.clearAllStorage = async function(event) {
+            if (!confirm("Are you sure? This will delete ALL downloaded models. The page will reload and you will need to re-download the models to use the AI again.")) return;
+            
+            const btn = event.currentTarget;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Clearing...`;
+            btn.disabled = true;
+
+            try {
+                // Delete all Cache API data (this is where WebLLM stores its shards)
+                const cacheNames = await caches.keys();
+                for (const name of cacheNames) {
+                    await caches.delete(name);
+                }
+                
+                // Clear out IndexedDB as well just in case
+                if (indexedDB.databases) {
+                    const databases = await indexedDB.databases();
+                    for (const db of databases) {
+                        indexedDB.deleteDatabase(db.name);
+                    }
+                }
+
+                // Force reload to reset engine states and VRAM
+                window.location.reload();
+            } catch (e) {
+                console.error("Storage clearing error:", e);
+                alert("Error clearing storage: " + e.message);
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        }
+
+    </script>
+</body>
+</html>

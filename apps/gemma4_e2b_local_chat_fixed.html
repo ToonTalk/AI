@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <base href="https://localhost/">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gemma 4 E2B Local Chat</title>
+
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    body { background:#111827; color:#e5e7eb; }
+    .panel { background: rgba(31,41,55,0.82); border:1px solid rgba(255,255,255,0.08); backdrop-filter: blur(10px); }
+    .scrollbar-hide::-webkit-scrollbar { display:none; }
+    .scrollbar-hide { -ms-overflow-style:none; scrollbar-width:none; }
+    .prose pre { background:#0b1220; border:1px solid #334155; border-radius:0.75rem; }
+    .prose code { background: rgba(255,255,255,0.06); padding:0.15rem 0.35rem; border-radius:0.35rem; }
+    .typing-dot {
+      width: 7px; height: 7px; border-radius: 999px; background:#94a3b8;
+      display:inline-block; animation: bounce 1.2s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.8); opacity:0.4; }
+      40% { transform: scale(1.2); opacity:1; }
+    }
+  </style>
+</head>
+<body class="h-screen overflow-hidden font-sans">
+  <div class="h-full flex flex-col">
+    <header class="panel shrink-0 px-5 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center font-bold text-white shadow">
+          G4
+        </div>
+        <div>
+          <div class="text-lg font-semibold text-white">Gemma 4 E2B Local Chat</div>
+          <div class="text-xs text-slate-400">Transformers.js + ONNX Community + WebGPU</div>
+        </div>
+      </div>
+      <div id="hardware-badge" class="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+        Checking hardware...
+      </div>
+    </header>
+
+    <main class="flex-1 min-h-0 flex">
+      <section class="flex-1 min-w-0 flex flex-col">
+        <div id="setup-screen" class="flex-1 flex items-center justify-center p-4">
+          <div class="panel rounded-2xl w-full max-w-xl p-6 md:p-8 shadow-2xl">
+            <h1 class="text-2xl font-bold text-white mb-2">Initialize Gemma 4</h1>
+            <p class="text-sm text-slate-400 mb-6">
+              This downloads the browser-compatible ONNX weights and runs the model locally with WebGPU.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+              <div class="bg-slate-900/70 rounded-xl border border-slate-700 p-4">
+                <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">System RAM</div>
+                <div id="ram-detected" class="text-white font-mono">Detecting…</div>
+              </div>
+              <div class="bg-slate-900/70 rounded-xl border border-slate-700 p-4">
+                <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">WebGPU</div>
+                <div id="gpu-detected" class="text-white font-mono">Detecting…</div>
+              </div>
+            </div>
+
+            <div class="bg-slate-900/70 rounded-xl border border-slate-700 p-4 mb-5">
+              <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Model</div>
+              <div class="text-white font-medium">onnx-community/gemma-4-E2B-it-ONNX</div>
+              <div class="text-xs text-slate-400 mt-2">
+                Using <code>Gemma4ForConditionalGeneration</code> with <code>dtype: "q4f16"</code>.
+              </div>
+            </div>
+
+            <button id="download-btn" class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400 text-white font-medium rounded-xl px-4 py-3 transition">
+              Download and Initialize
+            </button>
+
+            <div id="progress-wrap" class="hidden mt-4">
+              <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <div id="progress-text">Starting...</div>
+                <div id="progress-percent">0%</div>
+              </div>
+              <div class="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
+                <div id="progress-bar" class="h-2 rounded-full bg-gradient-to-r from-blue-500 to-emerald-400" style="width:0%"></div>
+              </div>
+            </div>
+
+            <div id="setup-error" class="hidden mt-4 text-sm text-red-300 bg-red-950/40 border border-red-900 rounded-xl p-3"></div>
+
+            <div class="mt-5 text-xs text-slate-500 leading-relaxed">
+              Run this through a local web server. Opening the file directly via <code>file://</code> will not work correctly with WebGPU and caching.
+            </div>
+          </div>
+        </div>
+
+        <div id="chat-screen" class="hidden flex-1 min-h-0 flex flex-col">
+          <div id="messages" class="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-4 md:p-6 flex flex-col gap-5">
+            <div class="flex gap-3 max-w-4xl">
+              <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center font-bold text-white shrink-0">G4</div>
+              <div class="panel rounded-2xl rounded-tl-sm p-4 prose prose-invert max-w-none">
+                <p>I’m ready. This should now use the official Gemma 4 browser-loading path instead of the broken text-generation pipeline route.</p>
+                <p>You can try plain text first. After that, try an image or audio file if your browser and GPU can cope.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="shrink-0 p-4 md:p-5 border-t border-slate-800 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent">
+            <div class="max-w-4xl mx-auto">
+              <div id="attachment-preview" class="hidden mb-3 items-center gap-3 w-fit max-w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2">
+                <div id="attachment-icon" class="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden shrink-0"></div>
+                <div class="min-w-0">
+                  <div id="attachment-name" class="text-sm text-slate-200 truncate max-w-[280px]"></div>
+                  <div id="attachment-type" class="text-xs text-slate-400"></div>
+                </div>
+                <button id="remove-attachment-btn" class="ml-1 text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+              </div>
+
+              <div class="relative">
+                <input id="file-upload" type="file" class="hidden" accept="image/*,audio/*" />
+                <button id="attach-btn" class="absolute left-3 bottom-3 w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition" title="Attach image or audio">
+                  📎
+                </button>
+                <textarea id="chat-input" rows="1" class="w-full resize-none rounded-2xl border border-slate-700 bg-slate-800 text-white pl-16 pr-16 py-4 outline-none focus:border-blue-500 max-h-40 overflow-y-auto" placeholder="Message Gemma 4..."></textarea>
+                <button id="send-btn" class="absolute right-3 bottom-3 w-10 h-10 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition disabled:bg-slate-700 disabled:text-slate-400">
+                  ↑
+                </button>
+              </div>
+
+              <div class="mt-2 text-[11px] text-slate-500">
+                Text is the safest path. Multimodal inputs are much heavier.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    import {
+      AutoProcessor,
+      Gemma4ForConditionalGeneration,
+      TextStreamer,
+      env,
+      load_image,
+      read_audio
+    } from "https://esm.sh/@huggingface/transformers@next";
+
+    env.allowLocalModels = false;
+
+    const MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
+
+    let processor = null;
+    let model = null;
+    let isGenerating = false;
+    let stopRequested = false;
+    let attachedFile = null;
+
+    const systemInstruction = "You are a helpful local AI assistant running in the user's browser. Be concise but useful.";
+    let chatHistory = [];
+
+    const els = {
+      setupScreen: document.getElementById("setup-screen"),
+      chatScreen: document.getElementById("chat-screen"),
+      ramDetected: document.getElementById("ram-detected"),
+      gpuDetected: document.getElementById("gpu-detected"),
+      hardwareBadge: document.getElementById("hardware-badge"),
+      downloadBtn: document.getElementById("download-btn"),
+      progressWrap: document.getElementById("progress-wrap"),
+      progressText: document.getElementById("progress-text"),
+      progressPercent: document.getElementById("progress-percent"),
+      progressBar: document.getElementById("progress-bar"),
+      setupError: document.getElementById("setup-error"),
+      messages: document.getElementById("messages"),
+      fileUpload: document.getElementById("file-upload"),
+      attachBtn: document.getElementById("attach-btn"),
+      sendBtn: document.getElementById("send-btn"),
+      chatInput: document.getElementById("chat-input"),
+      attachmentPreview: document.getElementById("attachment-preview"),
+      attachmentIcon: document.getElementById("attachment-icon"),
+      attachmentName: document.getElementById("attachment-name"),
+      attachmentType: document.getElementById("attachment-type"),
+      removeAttachmentBtn: document.getElementById("remove-attachment-btn"),
+    };
+
+    function escapeHTML(str) {
+      return String(str).replace(/[&<>'"]/g, s => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"
+      }[s]));
+    }
+
+    function autoResize(textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
+    }
+
+    function scrollToBottom() {
+      els.messages.scrollTop = els.messages.scrollHeight;
+    }
+
+    function setSendState(generating) {
+      if (generating) {
+        els.sendBtn.textContent = "■";
+        els.sendBtn.classList.remove("bg-blue-600", "hover:bg-blue-500");
+        els.sendBtn.classList.add("bg-rose-600", "hover:bg-rose-500");
+      } else {
+        els.sendBtn.textContent = "↑";
+        els.sendBtn.classList.add("bg-blue-600", "hover:bg-blue-500");
+        els.sendBtn.classList.remove("bg-rose-600", "hover:bg-rose-500");
+      }
+    }
+
+    function addBubble(role, html) {
+      const wrapper = document.createElement("div");
+      wrapper.className = role === "user"
+        ? "flex justify-end"
+        : "flex gap-3 max-w-4xl";
+
+      if (role === "user") {
+        wrapper.innerHTML = `
+          <div class="max-w-4xl panel rounded-2xl rounded-tr-sm p-4 text-sm">${html}</div>
+        `;
+      } else {
+        wrapper.innerHTML = `
+          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center font-bold text-white shrink-0">G4</div>
+          <div class="panel rounded-2xl rounded-tl-sm p-4 prose prose-invert max-w-none text-sm">${html}</div>
+        `;
+      }
+
+      els.messages.appendChild(wrapper);
+      scrollToBottom();
+      return wrapper;
+    }
+
+    function addStreamingBubble() {
+      const wrapper = document.createElement("div");
+      wrapper.className = "flex gap-3 max-w-4xl";
+      wrapper.innerHTML = `
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center font-bold text-white shrink-0">G4</div>
+        <div class="panel rounded-2xl rounded-tl-sm p-4 prose prose-invert max-w-none text-sm w-full">
+          <div class="flex items-center gap-1.5" id="typing">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+          <div class="hidden" id="content"></div>
+        </div>
+      `;
+      els.messages.appendChild(wrapper);
+      scrollToBottom();
+      return {
+        wrapper,
+        typing: wrapper.querySelector("#typing"),
+        content: wrapper.querySelector("#content"),
+      };
+    }
+
+    function renderUserMessage(text, file) {
+      let html = "";
+      if (file) {
+        if (file.kind === "image") {
+          html += `<img src="${file.data}" class="max-w-xs rounded-xl border border-slate-700 mb-3" alt="">`;
+        } else {
+          html += `<div class="mb-3 inline-flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-300">
+            <span>🎵</span>
+            <span class="text-xs">${escapeHTML(file.name)}</span>
+          </div>`;
+        }
+      }
+      if (text) {
+        html += `<div class="whitespace-pre-wrap">${escapeHTML(text)}</div>`;
+      }
+      if (!html) html = "<div class='text-slate-400 italic'>[empty]</div>";
+      return html;
+    }
+
+    function buildMessages(userText, file) {
+      const messages = [];
+
+      messages.push({
+        role: "system",
+        content: [
+          { type: "text", text: systemInstruction }
+        ]
+      });
+
+      for (const msg of chatHistory) messages.push(msg);
+
+      const userContent = [];
+      if (file?.kind === "image") userContent.push({ type: "image" });
+      if (file?.kind === "audio") userContent.push({ type: "audio" });
+      userContent.push({ type: "text", text: userText || (file ? "Please describe this input." : "") });
+
+      messages.push({
+        role: "user",
+        content: userContent
+      });
+
+      return messages;
+    }
+
+    async function buildInputs(messages, file) {
+      const prompt = processor.apply_chat_template(messages, {
+        enable_thinking: false,
+        add_generation_prompt: true,
+      });
+
+      if (file?.kind === "image") {
+        const image = await load_image(file.data);
+        return await processor(prompt, image, {
+          add_special_tokens: false,
+        });
+      }
+
+      if (file?.kind === "audio") {
+        const audio = await read_audio(file.data);
+        return await processor(prompt, null, audio, {
+          add_special_tokens: false,
+        });
+      }
+
+      return await processor(prompt, {
+        add_special_tokens: false,
+      });
+    }
+
+    async function initializeModel() {
+      els.downloadBtn.disabled = true;
+      els.progressWrap.classList.remove("hidden");
+      els.setupError.classList.add("hidden");
+      els.setupError.textContent = "";
+
+      let lastPct = 0;
+
+      const progress_callback = (info) => {
+        try {
+          if (info.status === "progress_total" && typeof info.progress === "number") {
+            lastPct = Math.round(info.progress);
+            els.progressBar.style.width = lastPct + "%";
+            els.progressPercent.textContent = lastPct + "%";
+            els.progressText.textContent = info.file ? `Loading ${info.file}...` : "Loading model...";
+          } else if (info.status === "ready") {
+            els.progressText.textContent = info.file ? `Ready: ${info.file}` : "Component ready";
+          } else if (info.status === "download") {
+            els.progressText.textContent = info.file ? `Downloading ${info.file}...` : "Downloading...";
+          } else if (info.status === "progress" && typeof info.loaded === "number" && typeof info.total === "number" && info.total > 0) {
+            const pct = Math.round((info.loaded / info.total) * 100);
+            els.progressBar.style.width = pct + "%";
+            els.progressPercent.textContent = pct + "%";
+            els.progressText.textContent = info.file ? `Downloading ${info.file}...` : "Downloading...";
+          }
+        } catch (e) {
+          console.warn("Progress callback issue:", e);
+        }
+      };
+
+      try {
+        processor = await AutoProcessor.from_pretrained(MODEL_ID, {
+          progress_callback
+        });
+
+        model = await Gemma4ForConditionalGeneration.from_pretrained(MODEL_ID, {
+          dtype: "q4f16",
+          device: "webgpu",
+          progress_callback
+        });
+
+        els.progressBar.style.width = "100%";
+        els.progressPercent.textContent = "100%";
+        els.progressText.textContent = "Model ready";
+        setTimeout(() => {
+          els.setupScreen.classList.add("hidden");
+          els.chatScreen.classList.remove("hidden");
+          els.chatInput.focus();
+        }, 300);
+      } catch (err) {
+        console.error(err);
+        els.setupError.classList.remove("hidden");
+        els.setupError.textContent = err?.message || String(err);
+        els.downloadBtn.disabled = false;
+      }
+    }
+
+    function detectHardware() {
+      const memory = navigator.deviceMemory || 4;
+      const hasWebGPU = !!navigator.gpu;
+
+      els.ramDetected.textContent = `~${memory} GB`;
+      els.gpuDetected.innerHTML = hasWebGPU
+        ? '<span class="text-emerald-400">Supported</span>'
+        : '<span class="text-red-400">Not supported</span>';
+
+      if (hasWebGPU) {
+        els.hardwareBadge.innerHTML = "WebGPU available";
+      } else {
+        els.hardwareBadge.innerHTML = "WebGPU missing";
+        els.downloadBtn.disabled = true;
+        els.downloadBtn.textContent = "WebGPU Required";
+      }
+    }
+
+    async function onSend() {
+      if (!model) return;
+
+      if (isGenerating) {
+        stopRequested = true;
+        return;
+      }
+
+      const text = els.chatInput.value.trim();
+      const file = attachedFile;
+
+      if (!text && !file) return;
+
+      addBubble("user", renderUserMessage(text, file));
+      els.chatInput.value = "";
+      autoResize(els.chatInput);
+      removeAttachment();
+
+      const streamBubble = addStreamingBubble();
+
+      isGenerating = true;
+      stopRequested = false;
+      setSendState(true);
+
+      try {
+        const messages = buildMessages(text, file);
+        const inputs = await buildInputs(messages, file);
+
+        let fullResponse = "";
+
+        const streamer = new TextStreamer(processor.tokenizer, {
+          skip_prompt: true,
+          skip_special_tokens: false,
+          callback_function: (chunk) => {
+            if (stopRequested) return;
+            fullResponse += chunk;
+            streamBubble.typing.classList.add("hidden");
+            streamBubble.content.classList.remove("hidden");
+            streamBubble.content.innerHTML = marked.parse(fullResponse);
+            scrollToBottom();
+          }
+        });
+
+        const outputs = await model.generate({
+          ...inputs,
+          max_new_tokens: 512,
+          do_sample: false,
+          streamer,
+        });
+
+        if (!fullResponse) {
+          const decoded = processor.batch_decode(
+            outputs.slice(null, [inputs.input_ids.dims.at(-1), null]),
+            { skip_special_tokens: true }
+          );
+          fullResponse = decoded?.[0] || "";
+        }
+
+        if (!fullResponse.trim()) {
+          fullResponse = "[No text returned]";
+        }
+
+        streamBubble.typing.classList.add("hidden");
+        streamBubble.content.classList.remove("hidden");
+        streamBubble.content.innerHTML = marked.parse(fullResponse);
+
+        if (!stopRequested) {
+          chatHistory.push({
+            role: "user",
+            content: file?.kind === "image"
+              ? [{ type: "image" }, { type: "text", text: text || "Please describe this image." }]
+              : file?.kind === "audio"
+              ? [{ type: "audio" }, { type: "text", text: text || "Please transcribe this audio." }]
+              : [{ type: "text", text }]
+          });
+
+          chatHistory.push({
+            role: "assistant",
+            content: [{ type: "text", text: fullResponse }]
+          });
+        }
+      } catch (err) {
+        console.error(err);
+        streamBubble.typing.classList.add("hidden");
+        streamBubble.content.classList.remove("hidden");
+        streamBubble.content.innerHTML = `<p class="text-red-300">Error: ${escapeHTML(err?.message || String(err))}</p>`;
+      } finally {
+        isGenerating = false;
+        setSendState(false);
+      }
+    }
+
+    function removeAttachment() {
+      attachedFile = null;
+      els.fileUpload.value = "";
+      els.attachmentPreview.classList.add("hidden");
+      els.attachmentIcon.innerHTML = "";
+      els.attachmentName.textContent = "";
+      els.attachmentType.textContent = "";
+    }
+
+    function showAttachment(file) {
+      els.attachmentName.textContent = file.name;
+      els.attachmentType.textContent = file.kind === "image" ? "Image" : "Audio";
+      if (file.kind === "image") {
+        els.attachmentIcon.innerHTML = `<img src="${file.data}" class="w-full h-full object-cover" alt="">`;
+      } else {
+        els.attachmentIcon.innerHTML = `<span class="text-2xl">🎵</span>`;
+      }
+      els.attachmentPreview.classList.remove("hidden");
+      els.attachmentPreview.classList.add("flex");
+    }
+
+    async function onFileChange(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const kind = file.type.startsWith("image/")
+        ? "image"
+        : file.type.startsWith("audio/")
+        ? "audio"
+        : null;
+
+      if (!kind) {
+        alert("Only image or audio files are supported.");
+        removeAttachment();
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        attachedFile = {
+          kind,
+          name: file.name,
+          data: reader.result
+        };
+        showAttachment(attachedFile);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    if (window.location.protocol === "file:") {
+      document.body.innerHTML = `
+        <div class="h-screen flex items-center justify-center p-6 bg-slate-950 text-slate-100">
+          <div class="max-w-xl rounded-2xl border border-red-900 bg-slate-900 p-8 shadow-2xl">
+            <div class="text-2xl font-bold mb-3">Run this from a local server</div>
+            <p class="text-slate-300 mb-4">Opening this file directly with <code>file://</code> is the wrong execution mode for WebGPU and browser caching.</p>
+            <pre class="rounded-xl bg-black/60 border border-slate-800 p-4 overflow-x-auto text-emerald-300">python -m http.server 8000</pre>
+            <p class="text-slate-400 mt-4">Then open <code>http://localhost:8000</code>.</p>
+          </div>
+        </div>
+      `;
+    } else {
+      detectHardware();
+
+      els.downloadBtn.addEventListener("click", initializeModel);
+      els.attachBtn.addEventListener("click", () => els.fileUpload.click());
+      els.fileUpload.addEventListener("change", onFileChange);
+      els.removeAttachmentBtn.addEventListener("click", removeAttachment);
+      els.sendBtn.addEventListener("click", onSend);
+
+      els.chatInput.addEventListener("input", () => autoResize(els.chatInput));
+      els.chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          onSend();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
