@@ -236,6 +236,8 @@
         window.latestExtractedCode = "";
         window.attachedFile = null; 
         let currentModelKey = 'phi-3.5-vision'; // Default
+        let activeModelId = null;
+        let isRecovering = false;
 
         let chatContext = [
             { role: "system", content: "You are a helpful, local AI assistant running in the browser. When generating code, provide it as a single, complete HTML file (including CSS and JS) inside an ```html codeblock." }
@@ -338,6 +340,70 @@
             }
         }
 
+        function getCustomAppConfig() {
+            const existingModels = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list)
+                ? webllm.prebuiltAppConfig.model_list.filter(m => ![
+                    'Llama-3-8B-Instruct-q4f32_1-MLC',
+                    'gemma-2-9b-it-q4f32_1-MLC',
+                    'Phi-3.5-vision-instruct-q4f16_1-MLC'
+                ].includes(m.model_id))
+                : [];
+
+            return {
+                model_list: [
+                    ...existingModels,
+                    {
+                        model_id: 'Llama-3-8B-Instruct-q4f32_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/Llama-3-8B-Instruct-q4f32_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Llama-3-8B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm`,
+                    },
+                    {
+                        model_id: 'gemma-2-9b-it-q4f32_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/gemma-2-9b-it-q4f32_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/gemma-2-9b-it-q4f32_1-ctx4k_cs1k-webgpu.wasm`,
+                    },
+                    {
+                        model_id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/Phi-3.5-vision-instruct-q4f16_1-MLC',
+                        model_type: webllm.ModelType.VLM,
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Phi-3.5-vision-instruct-q4f16_1-ctx4k_cs2k-webgpu.wasm`,
+                    }
+                ]
+            };
+        }
+
+        function setHardwareBadgeTemporary(html) {
+            const badge = document.getElementById('hardware-badge');
+            if (badge) badge.innerHTML = html;
+        }
+
+        async function recoverEngineAfterStop() {
+            if (!engine || !activeModelId || isRecovering) return;
+            isRecovering = true;
+            setHardwareBadgeTemporary(`<i class="fa-solid fa-rotate-right fa-spin text-google-yellow"></i> Recovering...`);
+            try {
+                if (typeof engine.setInitProgressCallback === 'function') {
+                    engine.setInitProgressCallback(() => {});
+                }
+                if (typeof engine.reload === 'function') {
+                    await engine.reload(activeModelId);
+                } else {
+                    engine = await webllm.CreateMLCEngine(
+                        activeModelId,
+                        { appConfig: getCustomAppConfig() }
+                    );
+                }
+                setHardwareBadgeTemporary(`<i class="fa-solid fa-bolt text-google-yellow"></i> Ready Again`);
+                setTimeout(() => window.detectHardware(), 1200);
+            } catch (err) {
+                console.error('Recovery after stop failed:', err);
+                setHardwareBadgeTemporary(`<i class="fa-solid fa-triangle-exclamation text-google-red"></i> Reload Needed`);
+                throw err;
+            } finally {
+                isRecovering = false;
+            }
+        }
+
         // --- 2. WEBGPU DOWNLOAD & CACHING ---
         window.startDownload = async function() {
             const btn = document.getElementById('download-btn');
@@ -362,41 +428,13 @@
                     progressPercent.textContent = `${percent}%`;
                 };
 
-                // Extend the prebuilt config with the exact three requested models.
-                const existingModels = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list)
-                    ? webllm.prebuiltAppConfig.model_list.filter(m => ![
-                        'Llama-3-8B-Instruct-q4f32_1-MLC',
-                        'gemma-2-9b-it-q4f32_1-MLC',
-                        'Phi-3.5-vision-instruct-q4f16_1-MLC'
-                    ].includes(m.model_id))
-                    : [];
-
-                const customAppConfig = {
-                    model_list: [
-                        ...existingModels,
-                        {
-                            model_id: 'Llama-3-8B-Instruct-q4f32_1-MLC',
-                            model: 'https://huggingface.co/mlc-ai/Llama-3-8B-Instruct-q4f32_1-MLC',
-                            model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Llama-3-8B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm`,
-                        },
-                        {
-                            model_id: 'gemma-2-9b-it-q4f32_1-MLC',
-                            model: 'https://huggingface.co/mlc-ai/gemma-2-9b-it-q4f32_1-MLC',
-                            model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/gemma-2-9b-it-q4f32_1-ctx4k_cs1k-webgpu.wasm`,
-                        },
-                        {
-                            model_id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
-                            model: 'https://huggingface.co/mlc-ai/Phi-3.5-vision-instruct-q4f16_1-MLC',
-                            model_type: webllm.ModelType.VLM,
-                            model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Phi-3.5-vision-instruct-q4f16_1-ctx4k_cs2k-webgpu.wasm`,
-                        }
-                    ]
-                };
+                const customAppConfig = getCustomAppConfig();
 
                 engine = await webllm.CreateMLCEngine(
                     modelId,
                     { initProgressCallback: initProgressCallback, appConfig: customAppConfig }
                 );
+                activeModelId = modelId;
 
                 progressText.textContent = `Model Ready!`;
                 progressBar.style.width = `100%`;
@@ -426,7 +464,7 @@
         }
 
         window.startNewChat = function() {
-            if (isGenerating) return;
+            if (isGenerating || isRecovering) return;
             chatContext = [
                 { role: "system", content: "You are a helpful, local AI assistant running in the browser. When generating code, provide it as a single, complete HTML file (including CSS and JS) inside an ```html codeblock." }
             ];
@@ -558,10 +596,15 @@
             }
         }
 
-        window.stopGeneration = function() {
+        window.stopGeneration = async function() {
             stopRequested = true;
+            setHardwareBadgeTemporary(`<i class="fa-solid fa-hand text-google-yellow"></i> Stopping...`);
             if (engine && typeof engine.interruptGenerate === 'function') {
-                engine.interruptGenerate();
+                try {
+                    await engine.interruptGenerate();
+                } catch (err) {
+                    console.warn('interruptGenerate failed:', err);
+                }
             }
         }
 
@@ -582,7 +625,7 @@
 
         // --- 5. CHAT GENERATION & MARKDOWN ---
         window.sendMessage = async function() {
-            if (!engine || isGenerating) return;
+            if (!engine || isGenerating || isRecovering) return;
             
             const inputEl = document.getElementById('chat-input');
             const text = inputEl.value.trim();
@@ -676,12 +719,23 @@
                 }
 
                 const finalElapsedSecs = (performance.now() - startTime) / 1000;
-                tpsValue.textContent = (tokenCount / finalElapsedSecs).toFixed(1);
+                tpsValue.textContent = finalElapsedSecs > 0 ? (tokenCount / finalElapsedSecs).toFixed(1) : '0.0';
 
-                chatContext.push({ role: 'assistant', content: fullResponse });
+                if (stopRequested) {
+                    tpsContainer.classList.add('hidden');
+                    contentContainer.insertAdjacentHTML(
+                        'beforeend',
+                        `<div class="mt-3 text-xs text-google-yellow border-t border-gray-700 pt-3"><i class="fa-solid fa-hand mr-1"></i> Generation stopped. Recovering the model so the next prompt works.</div>`
+                    );
+                }
 
-                const codeBlock = extractHTMLBlocks(fullResponse);
-                if (codeBlock) {
+                if (fullResponse.trim()) {
+                    chatContext.push({ role: 'assistant', content: fullResponse });
+                }
+
+                if (!stopRequested) {
+                    const codeBlock = extractHTMLBlocks(fullResponse);
+                    if (codeBlock) {
                     const btnContainer = document.createElement('div');
                     btnContainer.className = "mt-4 pt-4 border-t border-gray-600";
                     btnContainer.innerHTML = `
@@ -695,6 +749,7 @@
                     contentContainer.appendChild(btnContainer);
                     
                     window.openPreview(codeBlock);
+                    }
                 }
 
             } catch (err) {
@@ -704,6 +759,21 @@
                 contentContainer.classList.add("text-google-red", "font-sans");
                 console.error(err);
             } finally {
+                if (stopRequested) {
+                    try {
+                        await recoverEngineAfterStop();
+                    } catch (recoveryErr) {
+                        const contentContainer = document.getElementById(`${msgId}-content`);
+                        if (contentContainer) {
+                            contentContainer.insertAdjacentHTML(
+                                'beforeend',
+                                `<div class="mt-3 text-xs text-google-red border-t border-red-900/50 pt-3">Recovery failed after stop: ${escapeHTML(recoveryErr.message || String(recoveryErr))}. Reload the page if the next prompt does not start.</div>`
+                            );
+                        }
+                    } finally {
+                        stopRequested = false;
+                    }
+                }
                 isGenerating = false;
                 updateSendButtonState(false);
             }
