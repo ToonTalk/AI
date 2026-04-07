@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <base href="https://localhost/"> 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local MLC Chat - PWA (stability patched)</title>
+    <title>Local MLC Chat - PWA</title>
     
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -101,8 +102,6 @@
                         <p id="model-warning" class="text-xs text-google-yellow mt-1 hidden">
                             <i class="fa-solid fa-triangle-exclamation"></i> Your device has less than 8GB RAM. The heavier models may crash the tab. Phi-3.5 vision is the safest of the three.
                         </p>
-                        <p id="model-note" class="text-xs text-gray-400 mt-1 leading-relaxed"></p>
-                        <p id="runtime-note" class="text-[11px] text-gray-500 mt-1 leading-relaxed"></p>
                         <p class="text-[10px] text-gray-500 mt-2 leading-relaxed">
                             <i class="fa-brands fa-google text-gray-400 mr-1"></i> Model weights are loaded in MLC format for WebLLM from Hugging Face model repositories.
                         </p>
@@ -192,7 +191,7 @@
                     </button>
                 </div>
             </div>
-            <iframe id="app-preview-frame" src="about:blank" class="flex-1 w-full border-none bg-white" sandbox="allow-scripts allow-forms allow-popups"></iframe>
+            <iframe id="app-preview-frame" class="flex-1 w-full border-none bg-white" sandbox="allow-scripts allow-forms allow-popups"></iframe>
         </div>
 
         <!-- Storage Management Modal -->
@@ -236,7 +235,7 @@
         let stopRequested = false;
         window.latestExtractedCode = "";
         window.attachedFile = null; 
-        let currentModelKey = 'llama-3-8b'; // Default
+        let currentModelKey = 'phi-3.5-vision'; // Default
         let activeModelId = null;
         let isRecovering = false;
 
@@ -251,112 +250,33 @@
                 name: 'Llama-3-8B-Instruct-q4f32_1-MLC — 4.21 GB (Text Only)',
                 type: 'LLM',
                 approxSizeGB: 4.21,
-                maxChars: 24000,
-                runtimeMB: 6051.27
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 2600,
+                responseMaxTokens: 768,
+                approxCharsPerToken: 3.2
             },
             'gemma-2-9b': {
                 id: 'gemma-2-9b-it-q4f32_1-MLC',
                 name: 'gemma-2-9b-it-q4f32_1-MLC — 4.86 GB (Text Only)',
                 type: 'LLM',
                 approxSizeGB: 4.86,
-                maxChars: 24000,
-                runtimeMB: 8383.33
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 2600,
+                responseMaxTokens: 768,
+                approxCharsPerToken: 3.2
             },
             'phi-3.5-vision': {
                 id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
                 name: 'Phi-3.5-vision-instruct-q4f16_1-MLC — 2.58 GB (Vision)',
                 type: 'VLM',
                 approxSizeGB: 2.58,
-                maxChars: 18000,
-                runtimeMB: 3952.18
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 2200,
+                responseMaxTokens: 640,
+                approxCharsPerToken: 3.2,
+                imageTokenCost: 1100
             }
         };
-
-        const IS_FILE_PROTOCOL = window.location.protocol === 'file:';
-        const DEFAULT_BADGE_HTML = '<i class="fa-solid fa-microchip"></i> Ready';
-
-        function getAppConfig() {
-            return webllm.prebuiltAppConfig;
-        }
-
-        function isLikelyDeviceLostError(err) {
-            const msg = String(err && (err.message || err));
-            return /Device was lost|GPUDeviceLostInfo|external Instance reference no longer exists|Instance dropped in popErrorScope/i.test(msg);
-        }
-
-        function humanRuntimeNeed(config) {
-            return config && config.runtimeMB ? `${(config.runtimeMB / 1024).toFixed(1)} GB GPU RAM` : 'substantial GPU RAM';
-        }
-
-        function buildInitFailureMessage(err, config) {
-            const msg = String(err && (err.message || err));
-            if (isLikelyDeviceLostError(err)) {
-                return `The GPU device was lost while loading ${config.id}. That usually means this model exceeds the GPU memory available to WebGPU on this machine. This model needs about ${humanRuntimeNeed(config)} at runtime, not just the downloaded weight size.`;
-            }
-            return msg;
-        }
-
-        async function disposeEngineSafely() {
-            if (!engine) return;
-            try {
-                if (typeof engine.unload === 'function') {
-                    await engine.unload();
-                }
-            } catch (e) {
-                console.warn('Engine unload failed:', e);
-            } finally {
-                engine = null;
-            }
-        }
-
-        async function initializeEngine(modelId, initProgressCallback) {
-            return await webllm.CreateMLCEngine(modelId, {
-                appConfig: getAppConfig(),
-                initProgressCallback
-            });
-        }
-
-        function setHardwareBadgeTemporary(html) {
-            const badge = document.getElementById('hardware-badge');
-            if (badge) badge.innerHTML = html;
-        }
-
-        function restoreHardwareBadge() {
-            const badge = document.getElementById('hardware-badge');
-            if (!badge) return;
-            if (!navigator.gpu) {
-                badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-google-red"></i> CPU Mode';
-            } else if (isRecovering) {
-                badge.innerHTML = '<i class="fa-solid fa-rotate-right fa-spin text-google-yellow"></i> Recovering...';
-            } else if (engine) {
-                badge.innerHTML = `<i class="fa-solid fa-bolt text-google-yellow"></i> ${activeModelId || MODELS[currentModelKey].id}`;
-            } else {
-                badge.innerHTML = '<i class="fa-solid fa-bolt text-google-yellow"></i> WebGPU Active';
-            }
-        }
-
-        async function recoverEngineAfterStop() {
-            if (!activeModelId) return;
-            isRecovering = true;
-            restoreHardwareBadge();
-            try {
-                await disposeEngineSafely();
-                engine = await initializeEngine(activeModelId, (report) => {
-                    const pct = Math.round((report.progress || 0) * 100);
-                    setHardwareBadgeTemporary(`<i class="fa-solid fa-rotate-right fa-spin text-google-yellow"></i> Recovering ${pct}%`);
-                });
-            } finally {
-                isRecovering = false;
-                restoreHardwareBadge();
-            }
-        }
-
-        function openCodeInBlobWindow(code) {
-            const blob = new Blob([code], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank', 'noopener,noreferrer');
-            setTimeout(() => URL.revokeObjectURL(url), 60000);
-        }
 
         // --- 1. HARDWARE DETECTION & DYNAMIC UI ---
         window.detectHardware = function() {
@@ -373,12 +293,6 @@
             if (hasWebGPU) {
                 gpuEl.innerHTML = `<span class="text-google-green">Supported</span>`;
                 badge.innerHTML = `<i class="fa-solid fa-bolt text-google-yellow"></i> WebGPU Active`;
-                if (IS_FILE_PROTOCOL) {
-                    const previewTitle = document.querySelector('#preview-container .font-medium');
-                    if (previewTitle) previewTitle.textContent = 'Live App Preview (disabled on file://)';
-                    const previewContainer = document.getElementById('preview-container');
-                    if (previewContainer) previewContainer.remove();
-                }
             } else {
                 gpuEl.innerHTML = `<span class="text-google-red">Not Supported</span>`;
                 badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-google-red"></i> CPU Mode`;
@@ -396,9 +310,12 @@
                 selector.appendChild(opt);
             }
 
-            // Enforce safer defaults. Windows + WebGPU is often less forgiving with the larger q4f32 models.
-            const isWindows = /Windows/i.test(navigator.userAgent || '');
-            selector.value = (!isWindows && memory >= 12) ? 'llama-3-8b' : 'phi-3.5-vision';
+            // Enforce safe defaults based on RAM
+            if (memory < 8) {
+                selector.value = 'phi-3.5-vision';
+            } else {
+                selector.value = 'llama-3-8b';
+            }
 
             window.updateModelFeatures();
         }
@@ -409,29 +326,15 @@
             const config = MODELS[currentModelKey];
             const memory = navigator.deviceMemory || 4;
             const warning = document.getElementById('model-warning');
-            const note = document.getElementById('model-note');
-            const runtimeNote = document.getElementById('runtime-note');
-
+            
+            // Memory warnings for heavier models
             if (memory < 8 && config.approxSizeGB > 3.0) {
                 warning.classList.remove('hidden');
             } else {
                 warning.classList.add('hidden');
             }
 
-            if (note) {
-                if (currentModelKey === 'phi-3.5-vision') {
-                    note.innerHTML = '<i class="fa-solid fa-flask text-google-yellow mr-1"></i> Phi-3.5 vision is the safest of these three to load. Best for image prompts; plain text chats may still be unstable or garbled.';
-                } else if (currentModelKey === 'llama-3-8b') {
-                    note.innerHTML = '<i class="fa-solid fa-comments text-google-blue mr-1"></i> Best choice here for normal text chats, if your GPU can hold it.';
-                } else {
-                    note.innerHTML = '<i class="fa-solid fa-code text-google-green mr-1"></i> Strong text-only alternative, but this one is actually the heaviest at runtime.';
-                }
-            }
-
-            if (runtimeNote) {
-                runtimeNote.innerHTML = `<i class="fa-solid fa-memory mr-1"></i> Runtime need: about <b>${(config.runtimeMB / 1024).toFixed(1)} GB GPU RAM</b>. Download size is smaller than the memory needed to run it.`;
-            }
-
+            // Enable/Disable image upload based on model capabilities
             const attachBtn = document.getElementById('attachment-btn');
             if (config.type === 'LLM') {
                 attachBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -447,6 +350,73 @@
             }
         }
 
+        function getCustomAppConfig() {
+            const existingModels = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list)
+                ? webllm.prebuiltAppConfig.model_list.filter(m => ![
+                    'Llama-3-8B-Instruct-q4f32_1-MLC',
+                    'gemma-2-9b-it-q4f32_1-MLC',
+                    'Phi-3.5-vision-instruct-q4f16_1-MLC'
+                ].includes(m.model_id))
+                : [];
+
+            return {
+                model_list: [
+                    ...existingModels,
+                    {
+                        model_id: 'Llama-3-8B-Instruct-q4f32_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/Llama-3-8B-Instruct-q4f32_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Llama-3-8B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm`,
+                        overrides: { context_window_size: 4096 }
+                    },
+                    {
+                        model_id: 'gemma-2-9b-it-q4f32_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/gemma-2-9b-it-q4f32_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/gemma-2-9b-it-q4f32_1-ctx4k_cs1k-webgpu.wasm`,
+                        overrides: { context_window_size: 4096 }
+                    },
+                    {
+                        model_id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/Phi-3.5-vision-instruct-q4f16_1-MLC',
+                        model_type: webllm.ModelType.VLM,
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Phi-3.5-vision-instruct-q4f16_1-ctx4k_cs2k-webgpu.wasm`,
+                        overrides: { context_window_size: 4096 }
+                    }
+                ]
+            };
+        }
+
+        function setHardwareBadgeTemporary(html) {
+            const badge = document.getElementById('hardware-badge');
+            if (badge) badge.innerHTML = html;
+        }
+
+        async function recoverEngineAfterStop() {
+            if (!engine || !activeModelId || isRecovering) return;
+            isRecovering = true;
+            setHardwareBadgeTemporary(`<i class="fa-solid fa-rotate-right fa-spin text-google-yellow"></i> Recovering...`);
+            try {
+                if (typeof engine.setInitProgressCallback === 'function') {
+                    engine.setInitProgressCallback(() => {});
+                }
+                if (typeof engine.reload === 'function') {
+                    await engine.reload(activeModelId);
+                } else {
+                    engine = await webllm.CreateMLCEngine(
+                        activeModelId,
+                        { appConfig: getCustomAppConfig() }
+                    );
+                }
+                setHardwareBadgeTemporary(`<i class="fa-solid fa-bolt text-google-yellow"></i> Ready Again`);
+                setTimeout(() => window.detectHardware(), 1200);
+            } catch (err) {
+                console.error('Recovery after stop failed:', err);
+                setHardwareBadgeTemporary(`<i class="fa-solid fa-triangle-exclamation text-google-red"></i> Reload Needed`);
+                throw err;
+            } finally {
+                isRecovering = false;
+            }
+        }
+
         // --- 2. WEBGPU DOWNLOAD & CACHING ---
         window.startDownload = async function() {
             const btn = document.getElementById('download-btn');
@@ -456,56 +426,39 @@
             const progressText = document.getElementById('progress-text');
             const selector = document.getElementById('model-selector');
 
-            const config = MODELS[currentModelKey];
-            const modelId = config.id;
+            const modelId = MODELS[currentModelKey].id;
 
             selector.disabled = true;
             btn.classList.add('hidden');
             progressContainer.classList.remove('hidden');
-            progressText.classList.remove('text-google-red');
             progressText.textContent = `Initializing WebLLM Engine...`;
 
             try {
-                await disposeEngineSafely();
                 const initProgressCallback = (report) => {
-                    const rawText = report && report.text ? report.text : 'Loading model...';
-                    progressText.textContent = rawText.split('] ')[1] || rawText;
-                    const percent = Math.max(0, Math.min(100, Math.round((report.progress || 0) * 100)));
+                    progressText.textContent = report.text.split('] ')[1] || report.text;
+                    const percent = Math.round(report.progress * 100);
                     progressBar.style.width = `${percent}%`;
                     progressPercent.textContent = `${percent}%`;
                 };
 
-                engine = await initializeEngine(modelId, initProgressCallback);
+                const customAppConfig = getCustomAppConfig();
+
+                engine = await webllm.CreateMLCEngine(
+                    modelId,
+                    { initProgressCallback: initProgressCallback, appConfig: customAppConfig }
+                );
                 activeModelId = modelId;
 
                 progressText.textContent = `Model Ready!`;
                 progressBar.style.width = `100%`;
                 progressPercent.textContent = `100%`;
-                restoreHardwareBadge();
-
-                setTimeout(initializeChat, 500);
+                
+                setTimeout(initializeChat, 800);
 
             } catch (err) {
-                console.error(err);
-                await disposeEngineSafely();
-                activeModelId = null;
-                const friendly = buildInitFailureMessage(err, config);
-                progressText.textContent = `Error: ${friendly}`;
+                progressText.textContent = `Error: ${err.message}`;
                 progressText.classList.add('text-google-red');
-                progressBar.style.width = '0%';
-                progressPercent.textContent = '0%';
-                selector.disabled = false;
-                btn.classList.remove('hidden');
-                restoreHardwareBadge();
-
-                if (isLikelyDeviceLostError(err)) {
-                    const fallback = currentModelKey === 'phi-3.5-vision'
-                        ? 'Try reloading the page, closing other GPU-heavy tabs/apps, or restarting the browser.'
-                        : 'Switch to Phi-3.5 vision. Llama-3-8B and especially gemma-2-9b need much more GPU RAM than their download sizes suggest.';
-                    alert(`${friendly}
-
-${fallback}`);
-                }
+                console.error(err);
             }
         }
 
@@ -543,12 +496,6 @@ ${fallback}`);
         }
 
         window.openPreview = function(code) {
-            window.latestExtractedCode = code;
-            if (IS_FILE_PROTOCOL) {
-                console.warn('Preview iframe disabled on file:// origin; opening generated app in a new tab instead.');
-                openCodeInBlobWindow(code);
-                return;
-            }
             const previewContainer = document.getElementById('preview-container');
             const frame = document.getElementById('app-preview-frame');
             
@@ -570,41 +517,17 @@ ${fallback}`);
                 injectedCode = errorInterceptor + injectedCode;
             }
 
-            try {
-                frame.srcdoc = injectedCode;
-                previewContainer.style.width = '50%';
-            } catch (err) {
-                console.error('Preview load failed:', err);
-                frame.src = 'about:blank';
-            }
+            window.latestExtractedCode = code; 
+            frame.srcdoc = injectedCode;
+            previewContainer.style.width = '50%';
         }
 
         window.closePreview = function() {
-            const previewContainer = document.getElementById('preview-container');
-            if (previewContainer) previewContainer.style.width = '0px';
-            const frame = document.getElementById('app-preview-frame');
-            if (frame) frame.src = 'about:blank';
+            document.getElementById('preview-container').style.width = '0px';
         }
 
         window.refreshPreview = function() {
-            if (!window.latestExtractedCode) return;
             window.openPreview(window.latestExtractedCode); 
-        }
-
-        function looksGarbled(text) {
-            const sample = (text || '').slice(0, 180);
-            if (sample.length < 24) return false;
-            // Allow letters, numbers, punctuation, spaces, newlines, and tabs.
-            const weird = (sample.match(/[^\p{L}\p{N}\p{P}\p{Zs}\n\t]/gu) || []).length;
-            const longNoise = /[=\u0590-\u05FF]{2,}|[A-Za-z]{1,4}[-=][A-Za-z]{1,8}|[A-Z]{4,}[a-z]{0,3}/.test(sample);
-            return weird >= 4 || longNoise;
-        }
-
-        function prependWarningToMessage(container, html) {
-            const box = document.createElement('div');
-            box.className = 'mb-3 bg-yellow-900/20 text-yellow-100 border border-yellow-900/50 rounded-xl p-3 text-xs font-sans';
-            box.innerHTML = html;
-            container.prepend(box);
         }
 
         function extractHTMLBlocks(text) {
@@ -698,19 +621,56 @@ ${fallback}`);
             }
         }
 
-        // Adjusts history context dynamically based on the configured model's threshold
-        function compactifyContext() {
-            const dynamicMaxChars = MODELS[currentModelKey].maxChars;
-            let calculateTotalChars = () => chatContext.reduce((sum, msg) => {
-                return sum + JSON.stringify(msg.content || "").length;
-            }, 0);
-            
-            while (calculateTotalChars() > dynamicMaxChars && chatContext.length > 3) {
-                chatContext.splice(1, 1);
-                if (chatContext.length > 2 && chatContext[1].role === 'assistant') {
-                    chatContext.splice(1, 1);
-                }
+        function estimateTokensForContent(content) {
+            const config = MODELS[currentModelKey] || { approxCharsPerToken: 3.2, imageTokenCost: 1100 };
+            if (Array.isArray(content)) {
+                return content.reduce((sum, part) => {
+                    if (!part) return sum;
+                    if (part.type === 'text') {
+                        return sum + Math.ceil((part.text || '').length / config.approxCharsPerToken);
+                    }
+                    if (part.type === 'image_url') {
+                        return sum + (config.imageTokenCost || 1100);
+                    }
+                    return sum + 32;
+                }, 24);
             }
+            return Math.ceil(String(content || '').length / config.approxCharsPerToken) + 12;
+        }
+
+        function estimateTokensForMessages(messages) {
+            return messages.reduce((sum, msg) => sum + estimateTokensForContent(msg.content) + 12, 0);
+        }
+
+        function trimMessagesToFit(messages, targetPromptTokens) {
+            const trimmed = messages.map(msg => ({ ...msg }));
+            while (estimateTokensForMessages(trimmed) > targetPromptTokens && trimmed.length > 2) {
+                let removeCount = 1;
+                if (
+                    trimmed.length > 2 &&
+                    trimmed[1] &&
+                    trimmed[1].role === 'user' &&
+                    trimmed[2] &&
+                    trimmed[2].role === 'assistant'
+                ) {
+                    removeCount = 2;
+                }
+                trimmed.splice(1, removeCount);
+            }
+            return trimmed;
+        }
+
+        function isContextWindowError(err) {
+            const message = String(err && err.message ? err.message : err).toLowerCase();
+            return message.includes('context window') || message.includes('prompt tokens exceed');
+        }
+
+        function getRequestConfig() {
+            const config = MODELS[currentModelKey];
+            return {
+                promptBudgetTokens: config.promptBudgetTokens,
+                maxTokens: config.responseMaxTokens
+            };
         }
 
         // --- 5. CHAT GENERATION & MARKDOWN ---
@@ -725,7 +685,6 @@ ${fallback}`);
             inputEl.value = '';
             inputEl.style.height = 'auto';
             
-            const hadAttachment = !!window.attachedFile;
             let aiPayload = text;
             let uiHtml = text ? `<p class="leading-relaxed whitespace-pre-wrap">${escapeHTML(text)}</p>` : "";
 
@@ -757,21 +716,11 @@ ${fallback}`);
 
             appendMessage('user', uiHtml, true);
 
-            if (currentModelKey === 'phi-3.5-vision' && !hadAttachment) {
-                const chatHistory = document.getElementById('chat-history');
-                const hint = document.createElement('div');
-                hint.className = 'flex gap-4 w-full md:max-w-[85%] mt-2';
-                hint.innerHTML = `
-                    <div class="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 flex items-center justify-center text-google-yellow text-xs shadow-md border border-yellow-900/50">
-                        <i class="fa-solid fa-flask"></i>
-                    </div>
-                    <div class="bg-yellow-900/20 text-yellow-100 border border-yellow-900/50 rounded-2xl rounded-tl-sm p-4 text-xs shadow-sm">
-                        Phi-3.5 vision is the image model. For plain text prompts, Llama or Gemma is usually more reliable in this app.
-                    </div>
-                `;
-                chatHistory.appendChild(hint);
-            }
-            chatContext.push({ role: 'user', content: aiPayload });
+            const requestConfig = getRequestConfig();
+            chatContext = trimMessagesToFit(
+                [...chatContext, { role: 'user', content: aiPayload }],
+                requestConfig.promptBudgetTokens
+            );
             
             const msgId = 'msg-' + Date.now();
             appendTypingIndicator(msgId);
@@ -782,62 +731,78 @@ ${fallback}`);
             scrollToBottom();
 
             try {
-                compactifyContext();
-
                 const indicator = document.getElementById(`${msgId}-indicator`);
                 const contentContainer = document.getElementById(`${msgId}-content`);
                 const tpsContainer = document.getElementById(`${msgId}-tps-container`);
                 const tpsValue = document.getElementById(`${msgId}-tps-value`);
-                
+
                 indicator.style.display = 'none';
                 contentContainer.classList.remove('hidden');
                 tpsContainer.classList.remove('hidden');
 
-                const chunks = await engine.chat.completions.create({
-                    messages: chatContext,
-                    temperature: currentModelKey === 'phi-3.5-vision' ? 0.2 : 0.7,
-                    top_p: currentModelKey === 'phi-3.5-vision' ? 0.9 : 0.95,
-                    max_tokens: 8192, 
-                    stream: true,
-                });
-
                 let fullResponse = "";
                 let tokenCount = 0;
-                const startTime = performance.now();
+                let completedGeneration = false;
 
-                for await (const chunk of chunks) {
-                    if (stopRequested) break;
-                    
-                    const delta = chunk.choices[0]?.delta?.content || "";
-                    fullResponse += delta;
-                    tokenCount++;
-                    
-                    if (tokenCount % 3 === 0) {
-                        const elapsedSecs = (performance.now() - startTime) / 1000;
-                        tpsValue.textContent = (tokenCount / elapsedSecs).toFixed(1);
+                for (let attempt = 0; attempt < 2 && !completedGeneration; attempt++) {
+                    if (attempt > 0) {
+                        contentContainer.innerHTML = `<p class="text-google-yellow">Context filled up. Dropping older turns and retrying…</p>`;
+                        scrollToBottom();
                     }
-                    
-                    let renderText = fullResponse;
-                    const openBlocks = (renderText.match(/```/g) || []).length;
-                    if (openBlocks % 2 !== 0) renderText += '\n```';
 
-                    contentContainer.innerHTML = marked.parse(renderText);
-                    scrollToBottom();
+                    const startTime = performance.now();
+                    const chunks = await engine.chat.completions.create({
+                        messages: chatContext,
+                        temperature: 0.7,
+                        max_tokens: requestConfig.maxTokens,
+                        stream: true,
+                    });
+
+                    fullResponse = "";
+                    tokenCount = 0;
+
+                    try {
+                        for await (const chunk of chunks) {
+                            if (stopRequested) break;
+
+                            const delta = chunk.choices[0]?.delta?.content || "";
+                            fullResponse += delta;
+                            tokenCount++;
+
+                            if (tokenCount % 3 === 0) {
+                                const elapsedSecs = (performance.now() - startTime) / 1000;
+                                tpsValue.textContent = elapsedSecs > 0 ? (tokenCount / elapsedSecs).toFixed(1) : '0.0';
+                            }
+
+                            let renderText = fullResponse;
+                            const openBlocks = (renderText.match(/```/g) || []).length;
+                            if (openBlocks % 2 !== 0) renderText += '\n```';
+
+                            contentContainer.innerHTML = marked.parse(renderText);
+                            scrollToBottom();
+                        }
+                        completedGeneration = true;
+                        const finalElapsedSecs = (performance.now() - startTime) / 1000;
+                        tpsValue.textContent = finalElapsedSecs > 0 ? (tokenCount / finalElapsedSecs).toFixed(1) : '0.0';
+                    } catch (err) {
+                        if (attempt === 0 && isContextWindowError(err)) {
+                            const tighterBudget = Math.max(900, Math.floor(requestConfig.promptBudgetTokens * 0.6));
+                            chatContext = trimMessagesToFit(chatContext, tighterBudget);
+                            continue;
+                        }
+                        throw err;
+                    }
                 }
 
-                const finalElapsedSecs = (performance.now() - startTime) / 1000;
-                tpsValue.textContent = finalElapsedSecs > 0 ? (tokenCount / finalElapsedSecs).toFixed(1) : '0.0';
-
+                if (!completedGeneration) {
+                    throw new Error('Generation did not complete.');
+                }
                 if (stopRequested) {
                     tpsContainer.classList.add('hidden');
                     contentContainer.insertAdjacentHTML(
                         'beforeend',
                         `<div class="mt-3 text-xs text-google-yellow border-t border-gray-700 pt-3"><i class="fa-solid fa-hand mr-1"></i> Generation stopped. Recovering the model so the next prompt works.</div>`
                     );
-                }
-
-                if (!stopRequested && currentModelKey === 'phi-3.5-vision' && !hadAttachment && looksGarbled(fullResponse)) {
-                    prependWarningToMessage(contentContainer, 'This looks like corrupted Phi-3.5 text output. Use <b>Llama-3-8B</b> or <b>gemma-2-9b</b> for plain text, or clear the Phi model in Storage and re-download it.');
                 }
 
                 if (fullResponse.trim()) {
@@ -851,26 +816,25 @@ ${fallback}`);
                     btnContainer.className = "mt-4 pt-4 border-t border-gray-600";
                     btnContainer.innerHTML = `
                         <button class="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-colors">
-                            <i class="fa-solid fa-play"></i> ${IS_FILE_PROTOCOL ? 'Open App in New Tab' : 'Open App in Preview Canvas'}
+                            <i class="fa-solid fa-play"></i> Open App in Preview Canvas
                         </button>
                     `;
                     btnContainer.querySelector('button').addEventListener('click', () => {
-                        if (!IS_FILE_PROTOCOL) window.openPreview(codeBlock);
+                        window.openPreview(codeBlock);
                     });
                     contentContainer.appendChild(btnContainer);
                     
-                    if (!IS_FILE_PROTOCOL) window.openPreview(codeBlock);
+                    window.openPreview(codeBlock);
                     }
                 }
 
             } catch (err) {
                 const contentContainer = document.getElementById(`${msgId}-content`);
-                const errMsg = String(err && (err.message || err));
-                const extra = isLikelyDeviceLostError(err)
-                    ? 'The model lost its GPU device. Reload or switch to a lighter model.'
-                    : 'Try shortening the context by clicking \"New Chat\".';
-                contentContainer.innerHTML = `<p>Error during generation: ${escapeHTML(errMsg)}</p>
-                <p class="mt-2 text-xs text-gray-400">${escapeHTML(extra)}</p>`;
+                const extraHint = isContextWindowError(err)
+                    ? 'Older turns were trimmed automatically, but the remaining prompt is still too large for this model. Start a new chat or shorten the latest message.'
+                    : 'Try shortening the context by clicking New Chat.';
+                contentContainer.innerHTML = `<p>Error during generation: ${escapeHTML(err.message)}</p>
+                <p class="mt-2 text-xs text-gray-400">${escapeHTML(extraHint)}</p>`;
                 contentContainer.classList.add("text-google-red", "font-sans");
                 console.error(err);
             } finally {
