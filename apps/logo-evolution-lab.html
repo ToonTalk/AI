@@ -279,7 +279,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
     </div>
     <div class="field">
    <label class="lbl">Variants per Round</label>
-      <input type="number" id="numVariants" min="1" max="5" value="2">
+      <input type="number" id="numVariants" min="1" max="99" value="2">
     </div>
     <div class="field">
       <label class="lbl">Auto-Run Rounds</label>
@@ -938,7 +938,12 @@ function autoFitQueue(queue, W, H) {
   const dw=maxX-minX, dh=maxY-minY;
   if (dw===0&&dh===0) return queue;
   const pad=0.06;
-  const scale=Math.min((W*(1-2*pad))/Math.max(dw,1),(H*(1-2*pad))/Math.max(dh,1));
+  // Cap scale so tiny drawings expand fully but large drawings aren't shrunk unnecessarily
+  const scaleFit=Math.min((W*(1-2*pad))/Math.max(dw,1),(H*(1-2*pad))/Math.max(dh,1));
+  // If the drawing already fills >40% of the canvas, don't upscale further than 1.0
+  // to avoid blurry over-zoom; if it fills <40%, scale up to fill 88% of canvas
+  const fillRatio=Math.max(dw/W, dh/H);
+  const scale = fillRatio > 0.4 ? Math.min(scaleFit, 1/fillRatio*(1-2*pad)) : scaleFit;
   if (!isFinite(scale)||scale<=0) return queue;
   const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
   const ox=W/2-cx*scale, oy=H/2-cy*scale;
@@ -1240,16 +1245,16 @@ async function callAI(system,userText,imgB64s=[],maxTokens=1400,label='') {
 // ═══════════════════════════════════════════════════
 function magDesc(level) {
   const D={
-    1:'Extremely subtle — change exactly ONE number (e.g. 100→102). Do not add, remove, or rearrange any commands whatsoever.',
-    2:'Very subtle — change 2-3 numbers or swap one color/pen-size value. No new commands.',
-    3:'Subtle — change 3-5 existing values OR add exactly one simple 1-word command (like SETPC or SETWIDTH). No new loops, no REPEAT, no new TO procedures.',
-    4:'Minor — introduce a small new element while keeping the overall form.',
-    5:'Moderate — evolve noticeably; add nested loops but keep the original DNA visible.',
-    6:'Significant — introduce new colors, varying pen sizes, noticeably alter geometry.',
-    7:'Major — transform the core structure; add spirals or fractal-like branching.',
-    8:'Drastic — radically alter the design with complex nesting and dramatic color shifts.',
-    9:'Extreme — completely reimagine the artwork with wild geometric transformations.',
-    10:'Maximum — abandon the original structure; create breathtakingly complex art.',
+    1:'Extremely subtle — change exactly ONE numeric value. Do not add, remove, or rearrange any commands.',
+    2:'Very subtle — change 2–3 numeric values. No new commands or structural changes.',
+    3:'Subtle — change several values OR add/remove one simple command. No new loops or procedures.',
+    4:'Minor — small structural addition or removal; the variant is clearly derived from the original.',
+    5:'Moderate — noticeable evolution; the original structure is still recognisable.',
+    6:'Significant — meaningful structural change; shares lineage with the original but diverges.',
+    7:'Major — the core structure is transformed; only loose resemblance to the original.',
+    8:'Drastic — radically different; the original is a distant ancestor.',
+    9:'Extreme — almost entirely reimagined; the original is barely traceable.',
+    10:'Maximum — a fresh departure; the original serves only as a starting point.',
   };
   return D[level]||D[5];
 }
@@ -1409,6 +1414,8 @@ function parseCritiqueJSON(raw) {
     let s=raw.indexOf('{'), e=raw.lastIndexOf('}');
     if(s>=0&&e>s){
       let json=raw.substring(s,e+1).replace(/,\s*([\]}])/g,'$1');
+      // Fix Claude sometimes outputting ">8" instead of ":8" after property names
+      json=json.replace(/"\s*>\s*(-?\d)/g,'":$1');
       const d=JSON.parse(json);
       if(d.evaluations&&d.evaluations.length){
         return {evaluations:d.evaluations,suggestedImprovement:d.suggestedImprovement||'Try adjusting the geometry and color palette.'};
@@ -2021,7 +2028,12 @@ function buildDownloadMeta() {
   const magDesc= ['','Extremely subtle','Very subtle','Subtle','Minor','Moderate',
     'Significant','Major','Drastic','Extreme','Maximum'][+mag]||'Moderate';
   const mEl   = document.getElementById('fallbackModel');
-  const mId   = mEl ? mEl.value : 'claude-sonnet-4-6';
+  // When in artifact, primary model is keyless Claude, not the optional fallback
+  const _usingKeyless = isArtifact() ||
+    !document.getElementById('fallbackBody') ||
+    document.getElementById('fallbackBody').style.display !== 'grid' ||
+    !document.getElementById('fallbackKey')?.value.trim();
+  const mId   = _usingKeyless ? 'claude-sonnet-4-6' : (mEl ? mEl.value : 'claude-sonnet-4-6');
   const mName = MODEL_DISPLAY[mId] || mId;
   const selMode = document.getElementById('rouletteToggle')&&document.getElementById('rouletteToggle').checked ? 'Probabilistic' : 'Deterministic';
   const numV  = (document.getElementById('numVariants')||{value:'?'}).value;
@@ -2174,7 +2186,7 @@ function downloadDissolve() {
     '<div class="frame-lbl" id="frameLbl">Original</div>',
     '<div class="controls">',
     '  <span class="lbl">Speed</span>',
-    '  <input type="range" id="spd" min="0.2" max="4" step="0.1" value="1">',
+    '  <input type="range" id="spd" min="0.2" max="10" step="0.1" value="1">',
     '  <span id="spdVal" style="font-size:.72rem;min-width:2.5em">1.0\u00d7</span>',
     '  <button id="btnPlay" onclick="togglePlay()">\u23f8 Pause</button>',
     '  <button onclick="step(-1)">\u25c4 Prev</button>',
@@ -2316,7 +2328,7 @@ canvas:hover{opacity:.9}
 <body>
 <h1>Logo Evolution History — ${new Date().toLocaleString()}</h1>
 <p style="font-size:.75rem;color:#334155;margin:-14px 0 18px;line-height:1.7;word-break:break-word">${escHtml(histMeta.metaString)}</p>
-<div style="display:flex;align-items:center;gap:12px;margin:24px 0 8px"><h2 style="font-size:1.1rem;font-weight:700;color:#0f172a">Evolution Tree</h2><button onclick="fitTree()" id="btnFit" style="font-size:.72rem;padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer;background:#f8fafc">Fit to screen</button><button onclick="actualSize()" style="font-size:.72rem;padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer;background:#f8fafc">Actual size</button></div>
+<div style="display:flex;align-items:center;gap:12px;margin:24px 0 8px"><h2 style="font-size:1.1rem;font-weight:700;color:#0f172a">Evolution Tree</h2><button onclick="toggleFit()" id="btnFit" style="font-size:.72rem;padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer;background:#f8fafc">Fit to screen</button></div>
 <div class="tree-wrap" id="treeWrap"><div class="css-tree" id="cssTree"><ul id="treeRoot"></ul></div></div>
 <h2 style="font-size:1.1rem;font-weight:700;color:#0f172a;margin:24px 0 8px">History</h2>
 <div id="storyDiv" style="display:none;margin-bottom:16px">
@@ -2485,34 +2497,34 @@ function buildTree() {
     /* SVG uses overflow:visible — no explicit dims needed */
   },80);
 }
-function fitTree(){
+var _fitted=false;
+function toggleFit(){
   var tree=document.getElementById('cssTree');
   var wrap=document.getElementById('treeWrap');
+  var btn=document.getElementById('btnFit');
   if(!tree||!wrap)return;
-  var scale=Math.min(1,Math.max(0.15,(wrap.clientWidth-20)/tree.scrollWidth));
-  tree.style.transformOrigin='top left';
-  var rootNode=tree.querySelector('.tree-node');
-  var tx=0;
-  if(rootNode){
-    var ox=0,el=rootNode;
-    while(el&&el!==tree){ox+=el.offsetLeft;el=el.offsetParent;}
-    var rootNatCX=ox+rootNode.offsetWidth/2;
-    tx=Math.max(0,wrap.clientWidth/2-rootNatCX*scale);
+  _fitted=!_fitted;
+  if(_fitted){
+    var scale=Math.min(1,Math.max(0.15,(wrap.clientWidth-20)/tree.scrollWidth));
+    tree.style.transformOrigin='top left';
+    var rootNode=tree.querySelector('.tree-node');
+    var tx=0;
+    if(rootNode){
+      var ox=0,el=rootNode;
+      while(el&&el!==tree){ox+=el.offsetLeft;el=el.offsetParent;}
+      tx=Math.max(0,wrap.clientWidth/2-(ox+rootNode.offsetWidth/2)*scale);
+    }
+    tree.style.transform=tx>0?'translateX('+tx+'px) scale('+scale+')':'scale('+scale+')';
+    wrap.style.height=Math.min(tree.scrollHeight*scale+20,window.innerHeight*0.85)+'px';
+    wrap.style.overflow='auto';
+    wrap.scrollLeft=0;wrap.scrollTop=0;
+    btn.textContent='Actual size';
+  } else {
+    tree.style.transform='';
+    wrap.style.height='';
+    wrap.style.overflow='';
+    btn.textContent='Fit to screen';
   }
-  tree.style.transform=tx>0?'translateX('+tx+'px) scale('+scale+')':'scale('+scale+')';
-  wrap.style.height=Math.min(tree.scrollHeight*scale+20,window.innerHeight*0.85)+'px';
-  wrap.style.overflow='auto';
-  wrap.scrollLeft=0;wrap.scrollTop=0;
-  document.getElementById('btnFit').textContent='Actual size';
-}
-function actualSize(){
-  var tree=document.getElementById('cssTree');
-  var wrap=document.getElementById('treeWrap');
-  if(!tree||!wrap)return;
-  tree.style.transform='';
-  wrap.style.height='';
-  wrap.style.overflow='';
-  document.getElementById('btnFit').textContent='Fit to screen';
 }
 (function(){
   var el,down=false,sx,sy,sl,st;
@@ -2726,10 +2738,19 @@ function closeExportModal(){
   const cc=document.getElementById('copyConfirm');if(cc)cc.style.display='none';
 }
 function copyExportHTML(){
-  const ta=document.getElementById('exportTextarea');if(!ta)return;ta.select();
+  const ta=document.getElementById('exportTextarea');if(!ta)return;
   const cc=document.getElementById('copyConfirm');
-  if(navigator.clipboard)navigator.clipboard.writeText(ta.value).then(()=>{if(cc){cc.style.display='inline';setTimeout(()=>cc.style.display='none',2500);}});
-  else{document.execCommand('copy');if(cc){cc.style.display='inline';setTimeout(()=>cc.style.display='none',2500);}}
+  function onCopied(){if(cc){cc.textContent='✓ Copied!';cc.style.display='inline';setTimeout(()=>cc.style.display='none',2500);}}
+  function onFailed(){if(cc){cc.textContent='Select all + Ctrl-C';cc.style.display='inline';setTimeout(()=>cc.style.display='none',4000);}}
+  ta.select();
+  // Try modern clipboard API first; fall back to execCommand; fall back to instructing user
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(ta.value).then(onCopied).catch(()=>{
+      try{document.execCommand('copy');onCopied();}catch(e){onFailed();}
+    });
+  } else {
+    try{document.execCommand('copy');onCopied();}catch(e){onFailed();}
+  }
 }
 
 function togglePrompts() {
