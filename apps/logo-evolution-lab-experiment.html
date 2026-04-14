@@ -807,7 +807,23 @@ function compileLogo(code, W, H) {
     if (k==='NUM') return [t[1],p+1];
     if (k==='WORD') return [t[1],p+1];
     if (k==='VAR') return [V[t[1]]!==undefined?V[t[1]]:0,p+1];
-    if (k==='[') { const [list,np]=collectList(T,p); return [list,np]; }
+    if (k==='[') {
+      // Evaluate each element in the list as a value (for SETPC [r g b] etc.)
+      let np2=p+1; const items=[];
+      let depth=0;
+      // Check if it's a nested list (contains sub-lists)
+      let hasNested=false;
+      for(let qi=p+1;qi<T.length;qi++){if(T[qi][0]===']'&&depth===0)break;if(T[qi][0]==='['){hasNested=true;break;}if(T[qi][0]==='CMD'){}}
+      if(hasNested){
+        // Return as token array (code list for REPEAT, IF, etc.)
+        const [list,np3]=collectList(T,p); return [list,np3];
+      }
+      // Flat list: evaluate each element as a value
+      while(np2<T.length && T[np2][0]!==']'){
+        const [v,nnp]=getValue(T,np2,V); items.push(v); np2=nnp;
+      }
+      return [items, np2+1];
+    }
     if (k==='(') {
       if (T[p+1] && T[p+1][0]==='CMD' && T[p+1][1]==='LIST') {
         const items=[]; let np2=p+2;
@@ -840,6 +856,38 @@ function compileLogo(code, W, H) {
         return [result,np2];
       }
       if(cmd==='REPCOUNT') return [V['__REPCOUNT']||0,p];
+
+      // Two-argument math functions (prefix and infix both supported)
+      if(cmd==='MOD'||cmd==='REMAINDER'){
+        const [a,np2]=getValue(T,p,V); const [b,np3]=getValue(T,np2,V);
+        const rb=parseFloat(b)||1;
+        return [((parseFloat(a)||0)%rb+Math.abs(rb))%Math.abs(rb), np3];
+      }
+      if(cmd==='MAX'){
+        const [a,np2]=getValue(T,p,V); const [b,np3]=getValue(T,np2,V);
+        return [Math.max(parseFloat(a)||0, parseFloat(b)||0), np3];
+      }
+      if(cmd==='MIN'){
+        const [a,np2]=getValue(T,p,V); const [b,np3]=getValue(T,np2,V);
+        return [Math.min(parseFloat(a)||0, parseFloat(b)||0), np3];
+      }
+      if(cmd==='AND'){
+        const [a,np2]=getValue(T,p,V); const [b,np3]=getValue(T,np2,V);
+        return [(parseFloat(a)&&parseFloat(b))?1:0, np3];
+      }
+      if(cmd==='OR'){
+        const [a,np2]=getValue(T,p,V); const [b,np3]=getValue(T,np2,V);
+        return [(parseFloat(a)||parseFloat(b))?1:0, np3];
+      }
+      if(cmd==='POWER'){
+        const [a,np2]=getValue(T,p,V); const [b,np3]=getValue(T,np2,V);
+        return [Math.pow(parseFloat(a)||0, parseFloat(b)||0), np3];
+      }
+      if(cmd==='ATAN'){
+        // ATAN y x (two-arg arctangent, degrees)
+        const [a,np2]=getValue(T,p,V); const [b,np3]=getValue(T,np2,V);
+        return [Math.atan2(parseFloat(a)||0, parseFloat(b)||0)*180/Math.PI, np3];
+      }
 
       // List/word operations
       if(cmd==='ITEM'){
@@ -924,7 +972,7 @@ function compileLogo(code, W, H) {
     while(np<T.length){
       const op=T[np][0];
       // Handle MOD, REMAINDER, AND, OR as infix CMD operators
-      const isCmdOp = op==='CMD' && ['MOD','REMAINDER','AND','OR'].includes(T[np][1]);
+      const isCmdOp = op==='CMD' && ['MOD','REMAINDER','AND','OR','MAX','MIN','POWER'].includes(T[np][1]);
       if(!['+','-','*','/','<','>','<=','>=','='].includes(op) && !isCmdOp)break;
       const [right,nnp]=getValue(T, isCmdOp?np+1:np+1, V);
       const l=parseFloat(left)||0,r=parseFloat(right)||0;
@@ -939,9 +987,12 @@ function compileLogo(code, W, H) {
       else if(op==='=')left=(String(left)===String(right)?1:0);
       else if(isCmdOp){
         const cn=T[np][1];
-        if(cn==='MOD'||cn==='REMAINDER')left=r!==0?((l%r)+r)%r:0;
+        if(cn==='MOD'||cn==='REMAINDER'){const rb=r||1;left=((l%rb)+Math.abs(rb))%Math.abs(rb);}
+        else if(cn==='MAX')left=Math.max(l,r);
+        else if(cn==='MIN')left=Math.min(l,r);
         else if(cn==='AND')left=(l&&r)?1:0;
         else if(cn==='OR')left=(l||r)?1:0;
+        else if(cn==='POWER')left=Math.pow(l,r);
       }
       np=nnp;
     }
@@ -1346,8 +1397,17 @@ async function callAIExp(system, userText, imgB64s=[], maxTokens=1400, label='',
       errorCategory = _classifyError(e);
       const al = label + (attempt>0?' [attempt '+(attempt+1)+']':'');
       if (errorCategory === 'auth') {
-        logLine('  🔑 AUTH ERROR on '+al+': '+e.message.slice(0,100));
-        logLine('  ⛔ Stopping experiment — fix your API key and restart.');
+        logLine('  🔑 AUTH ERROR (401/403) on '+al+': '+e.message.slice(0,100));
+        // Show a visible alert with options — don't just silently stop
+        const authModel = opts.model || label;
+        const fix = authModel.startsWith('gemini') ? 'Gemini API key (Settings → API Keys section)'
+          : authModel.startsWith('gpt')||/^o\d/.test(authModel) ? 'OpenAI API key'
+          : 'Anthropic API key (or use keyless mode in claude.ai)';
+        showExpMsg('🔑 Authentication failed for <strong>'+escHtml(authModel)+'</strong>. '
+          + 'Check your '+fix+'. '
+          + 'The experiment will stop — use Export JSON to save progress so far, '
+          + 'then fix the key and restart.', true);
+        logLine('  ⛔ Stopping — fix '+fix+' and restart. Partial data saved via Export JSON.');
         EXP.stopRequested = true; break;
       }
       if (errorCategory === 'rate_limit') {
@@ -2387,7 +2447,13 @@ async function startExperiment() {
     EXP.currentPhase='cross_eval';
     updatePhase('Phase 3 of 3: Cross-Model Evaluation');
     logLine('── Cross-model evaluation with '+evalModels.length+' judge model(s)');
+    EXP.experiment.baselineACompleted = true;
+  EXP.experiment.baselineBCompleted = true;
+  EXP.experiment.evolutionCompleted = true;
+  EXP.experiment.baselineCCompleted = true;
+  EXP.experiment.crossEvalStarted = evalModels.length > 0;
     await runCrossModelEval(evalModels,apiKeys,_globalDone,grandTotal);
+    EXP.experiment.crossEvalCompleted = evalModels.length > 0;
   }
 
   finishExperiment('completed');
@@ -2902,28 +2968,43 @@ function _loadJSONFile(file) {
 // ── Score mode helpers ───────────────────────────────
 let _scoreMode = 'total';
 
-function getScore(aes, nov, mode) {
+function getScore(aes, nov, mode, par) {
   mode = mode || _scoreMode;
   if (mode === 'aesthetic') return aes ?? 0;
   if (mode === 'novelty')   return nov ?? 0;
-  return (aes ?? 0) + (nov ?? 0) * 0.5;
+  if (mode === 'parsimony') return par ?? 0;
+  // Use experiment weights if available
+  const _p = window._dashData?.experiment?.parameters;
+  const aW = _p?.aestheticWeight ?? 1.0;
+  const nW = _p?.noveltyWeight ?? 0.5;
+  const pW = _p?.parsimonyWeight ?? 0.0;
+  return (aes ?? 0) * aW + (nov ?? 0) * nW + (par ?? 0) * pW;
 }
 
 function getScoreFromIter(it, mode) {
-  return getScore(it.winnerAestheticScore, it.winnerNoveltyScore, mode);
+  return getScore(it.winnerAestheticScore, it.winnerNoveltyScore, mode, it.winnerParsimonyScore);
 }
 
 function scoreLabel(mode) {
   if (mode === 'aesthetic') return 'Aesthetic';
   if (mode === 'novelty')   return 'Novelty';
-  return 'Total (aes + nov/2)';
+  if (mode === 'parsimony') return 'Parsimony';
+  const _p = window._dashData?.experiment?.parameters;
+  const aW = _p?.aestheticWeight ?? 1.0;
+  const nW = _p?.noveltyWeight ?? 0.5;
+  const pW = _p?.parsimonyWeight ?? 0.0;
+  if (pW > 0) return `Total (aes×${aW} + nov×${nW} + par×${pW})`;
+  if (aW === 1.0 && nW === 0.5) return 'Total (aes + nov/2)';
+  return `Total (aes×${aW} + nov×${nW})`;
 }
 
 function scoreModeToggleHTML() {
+  const _hasPar = (window._dashData?.experiment?.parameters?.parsimonyWeight ?? 0) > 0;
   return `<div class="score-toggle">
     <button onclick="setScoreMode('total')"     class="${_scoreMode==='total'?'active':''}">Total</button>
     <button onclick="setScoreMode('aesthetic')" class="${_scoreMode==='aesthetic'?'active':''}">Aesthetic</button>
     <button onclick="setScoreMode('novelty')"   class="${_scoreMode==='novelty'?'active':''}">Novelty</button>
+    ${_hasPar?`<button onclick="setScoreMode('parsimony')" class="${_scoreMode==='parsimony'?'active':''}">Parsimony</button>`:''}
   </div>`;
 }
 
@@ -3243,10 +3324,10 @@ function renderTrajectoryChart(cm, exp) {
 
   let yMax = 0;
   for (const c of cm) c.condRuns.forEach(r=>r.scoreTrajectory.forEach(s=>yMax=Math.max(yMax,s)));
-  yMax = Math.min(15, Math.ceil(yMax) + 1);
+  yMax = Math.ceil(yMax) + 1;  // no cap — show actual maximum score
 
-  const xScale = i => PAD.l + (i/(maxIter-1))*(W-PAD.l-PAD.r);
-  const yScale = v => PAD.t + (yMax-v)/yMax*(H-PAD.t-PAD.b);
+  const xScale = i => PAD.l + (maxIter<=1 ? 0.5 : i/(maxIter-1))*(W-PAD.l-PAD.r);
+  const yScale = v => PAD.t + (yMax>0?(yMax-v)/yMax:0.5)*(H-PAD.t-PAD.b);
 
   let svgParts = [`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`];
 
@@ -3311,7 +3392,7 @@ function renderTrajectoryChart(cm, exp) {
 
   // Legend
   const legendItems = cm.map(c =>
-    `<div class="legend-item" title="Click to hide/show"><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="${c.color}" stroke-width="2"/></svg>${escHtml(c.seed.label)} / ${escHtml(c.taste.text.slice(0,16))}…</div>`
+    `<div class="legend-item" title="${escHtml(c.seed.label)} / ${escHtml(c.taste.text)} (click to hide/show)"><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="${c.color}" stroke-width="2"/></svg>${escHtml(c.seed.label)} / ${escHtml(c.taste.text.slice(0,16))}…</div>`
   ).join('');
 
   const blNote = cm.some(c=>[...c.basA,...c.basB].some(b=>b.crossModel!=null))
@@ -3335,7 +3416,7 @@ function renderTrajectoryChart(cm, exp) {
     el.style.borderRadius = '4px';
     el.style.border = '1px solid transparent';
     el.style.transition = 'opacity .2s, border-color .2s';
-    el.title = 'Click to hide/show this condition';
+    el.title = (c.seed.label||'') + ' / ' + (c.taste.text||'') + ' — click to hide/show';
     el.onclick = () => {
       const key = 'c'+i;
       if (window._trajHidden.has(key)) {
@@ -3355,9 +3436,21 @@ function renderTrajectoryChart(cm, exp) {
 // ── 7e Run Table ─────────────────────────────────────
 function sparkline(values) {
   if (!values || values.length < 2) return '';
-  const max=Math.max(...values), min=Math.min(...values);
+  const max=Math.max(...values), min=Math.min(...values), final=values[values.length-1];
   const pts=values.map((v,i)=>`${(i/(values.length-1))*60},${20-((v-min)/(max-min||1))*18}`).join(' ');
-  return `<svg viewBox="0 0 60 20" width="60" height="20"><polyline points="${pts}" fill="none" stroke="var(--teal)" stroke-width="1.5"/></svg>`;
+  const tip=`Peak: ${max.toFixed(1)}  Final: ${final.toFixed(1)}  Min: ${min.toFixed(1)}`;
+  // Mark peak with a dot
+  const peakIdx=values.indexOf(max);
+  const px=(peakIdx/(values.length-1))*60;
+  const py=20-18; // always 2 at peak since normalised
+  // Mark final with a dot if significantly below peak
+  const dropped = max - final > 2;
+  const fx=(values.length-1)/(values.length-1)*60;
+  const fy=20-((final-min)/(max-min||1))*18;
+  return `<svg viewBox="0 0 60 20" width="60" height="20" style="cursor:default"><title>${tip}</title>`
+    +`<polyline points="${pts}" fill="none" stroke="var(--teal)" stroke-width="1.5"/>`
+    +(dropped?`<circle cx="${fx}" cy="${fy}" r="2.5" fill="var(--red)" title="Final: ${final.toFixed(1)}"/>`:`<circle cx="${fx}" cy="${fy}" r="2" fill="var(--teal)"/>`) 
+    +`</svg>`;
 }
 
 function renderRunTable(cm, exp, runs) {
@@ -3375,25 +3468,63 @@ function renderRunTable(cm, exp, runs) {
       const lastIt = r.iterations && r.iterations[r.iterations.length-1];
       const xm = evalModel && r.crossModelScores && r.crossModelScores[evalModel]
         ? r.crossModelScores[evalModel] : null;
+      // Final Score always shows evolution critic score (same scale as Trajectories)
       let finalScore;
-      if (xm) {
-        finalScore = _scoreMode==='aesthetic' ? xm.aesthetic : _scoreMode==='novelty' ? xm.novelty : xm.total;
-      } else if (lastIt) {
+      if (lastIt) {
         finalScore = getScoreFromIter(lastIt, _scoreMode);
       } else {
         finalScore = r.status==='error' && r.scoreTrajectory?.length
           ? r.scoreTrajectory[r.scoreTrajectory.length-1] : (r.finalScore||0);
       }
-      const xmLabel = xm ? ' <span style="color:var(--text-muted);font-size:.6rem">(xm)</span>' : '';
-      const scoreDisp = (finalScore??0).toFixed(1) + xmLabel;
+      // Cross-model score shown as secondary label when available
+      const xmScore = xm ? (_scoreMode==='aesthetic'?xm.aesthetic:_scoreMode==='novelty'?xm.novelty:xm.total) : null;
+      const xmLabel = xmScore!=null ? ` <span style="color:var(--lav);font-size:.58rem" title="Cross-model judge score">(xm:${xmScore.toFixed(1)})</span>` : '';
+      const peakScore = r.scoreTrajectory?.length ? Math.max(...r.scoreTrajectory) : finalScore;
+      const declined = peakScore != null && finalScore != null && (peakScore - finalScore) > 1.5;
+      const peakNote = declined ? ` <span style="font-size:.55rem;color:var(--amber);opacity:.8" title="Peak score was ${(peakScore??0).toFixed(1)} — run declined toward end">↓${(peakScore??0).toFixed(1)}</span>` : '';
+      const scoreDisp = (finalScore??0).toFixed(1) + peakNote + xmLabel;
 
-      const _xmAes=xm?.aesthetic??null;
-      const _vsCell=(best,lbl)=>{ if(best!=null&&_xmAes!=null){ const d=_xmAes-best; return `<span class="${d>=0?'vs-pos':'vs-neg'}" title="vs ${lbl}: ${_xmAes.toFixed(1)}−${best.toFixed(1)}">${d>=0?'+':''}${d.toFixed(1)}</span>`; } return '<span style="color:var(--border2);font-size:.6rem">—</span>'; };
-      const _bestA=c.basA.map(b=>b.crossModel).filter(x=>x!=null); const vsA=_vsCell(_bestA.length?Math.max(..._bestA):null,'Baseline A');
-      const _bestB=c.basB.map(b=>b.crossModel).filter(x=>x!=null); const vsB=_vsCell(_bestB.length?Math.max(..._bestB):null,'Baseline B');
-      const _fbSc=(c.feedbackOnlyRuns||[]).filter(r2=>r2.status==='completed').map(r2=>r2.finalScore).filter(x=>x!=null);
-      const _bestC=_fbSc.length?Math.max(..._fbSc):null;
-      const vsC=_bestC!=null?(()=>{const d=finalScore-_bestC;return `<span class="${d>=0?'vs-pos':'vs-neg'}" title="vs Baseline C critic ${_bestC.toFixed(1)}">${d>=0?'+':''}${d.toFixed(1)}<span style='font-size:.5rem;opacity:.6'>c</span></span>`;})():'<span style="color:var(--border2);font-size:.6rem">—</span>';
+      // VS A, B, C — all use the same score source for fair comparison
+      // When xm (cross-model) scores exist on both sides: use xm.aesthetic
+      // When no xm on either side: use stored finalScore (critic total, same run-time scale)
+      const _xmAes = xm?.aesthetic ?? null;
+
+      // VS A and VS B: compare this run's xm.aesthetic against baseline xm.aesthetic
+      const _vsCell = (best, lbl) => {
+        if (best != null && _xmAes != null) {
+          const d = _xmAes - best;
+          return `<span class="${d>=0?'vs-pos':'vs-neg'}" title="xm: this run ${_xmAes.toFixed(1)} vs ${lbl} ${best.toFixed(1)}">${d>=0?'+':''}${d.toFixed(1)}</span>`;
+        }
+        return '<span style="color:var(--border2);font-size:.6rem">—</span>';
+      };
+      const _bestA = c.basA.map(b=>b.crossModel).filter(x=>x!=null);
+      const vsA = _vsCell(_bestA.length ? Math.max(..._bestA) : null, 'Baseline A');
+      const _bestB = c.basB.map(b=>b.crossModel).filter(x=>x!=null);
+      const vsB = _vsCell(_bestB.length ? Math.max(..._bestB) : null, 'Baseline B');
+
+      // VS C: compare this run vs best Baseline C run — use SAME score source on both sides.
+      // Priority: xm.aesthetic (cross-model, absolute) if available for both.
+      // Fallback: stored r.finalScore vs r2.finalScore (both evolution-critic scale).
+      const _fbRuns = (c.feedbackOnlyRuns||[]).filter(r2=>r2.status==='completed');
+      // Try xm-based comparison first (same scale as VS A/B)
+      const _fbXmScores = _fbRuns.map(r2=>r2.crossModelScores?.[evalModel]?.aesthetic).filter(x=>x!=null);
+      const _bestCxm = _fbXmScores.length ? Math.max(..._fbXmScores) : null;
+      // Fallback: use stored finalScore on both sides (critic scale, same source)
+      const _fbCriticScores = _fbRuns.map(r2=>r2.finalScore).filter(x=>x!=null);
+      const _bestCcritic = _fbCriticScores.length ? Math.max(..._fbCriticScores) : null;
+      let vsC;
+      if (_bestCxm != null && _xmAes != null) {
+        // Both have xm scores: compare on xm scale (same as VS A/B)
+        const d = _xmAes - _bestCxm;
+        vsC = `<span class="${d>=0?'vs-pos':'vs-neg'}" title="xm: this run ${_xmAes.toFixed(1)} vs best Baseline C ${_bestCxm.toFixed(1)}">${d>=0?'+':''}${d.toFixed(1)}</span>`;
+      } else if (_bestCcritic != null) {
+        // No xm scores: compare stored critic totals (same run-time formula, same scale)
+        const _thisCritic = r.finalScore ?? finalScore;
+        const d = _thisCritic - _bestCcritic;
+        vsC = `<span class="${d>=0?'vs-pos':'vs-neg'}" title="critic: this run ${_thisCritic.toFixed(1)} vs best Baseline C ${_bestCcritic.toFixed(1)}">${d>=0?'+':''}${d.toFixed(1)}<span style='font-size:.5rem;opacity:.6'>c</span></span>`;
+      } else {
+        vsC = '<span style="color:var(--border2);font-size:.6rem">—</span>';
+      }
 
       // Image metrics — reuse lastIt
       const entropy = lastIt?.imageMetrics?.spatialEntropy?.toFixed(3) ?? '—';
@@ -3461,7 +3592,7 @@ function renderRunTable(cm, exp, runs) {
     <table class="run-table">
       <thead><tr>
         <th>Seed</th><th>Taste</th><th>Rep</th>
-        <th>Final Score</th><th title='vs Baseline A (scratch) cross-model score'>vs A</th><th title='vs Baseline B (single-edit) cross-model score'>vs B</th><th title='vs Baseline C (feedback-only) critic score'>vs C</th>
+        <th title="Score of the last completed iteration (same source as the rightmost point on the Trajectory chart). May be lower than the peak if quality declined toward the end.">Final Score <span style="font-size:.55rem;opacity:.6">(last iter)</span></th><th title='This run xm.aesthetic − best Baseline A xm.aesthetic. Requires cross-model eval on both.'>vs A</th><th title='This run xm.aesthetic − best Baseline B xm.aesthetic. Requires cross-model eval on both.'>vs B</th><th title='This run vs best Baseline C, using xm scale when available (matching VS A/B), else critic scale (c).'>vs C</th>
         <th>Trajectory</th><th title="Spatial entropy of the rendered image — 0=blank canvas, ~3=rich complex drawing. Higher=more visually complex.">Entropy ⓘ</th><th title="Fill ratio: fraction of non-background pixels. Low=sparse drawing, high=dense.">Fill ⓘ</th>
         <th>Status</th><th>Time</th><th>Image</th>
       </tr></thead>
@@ -3506,7 +3637,7 @@ function renderStructuralChart(cm, exp) {
     trajs.forEach(t => t.vals.forEach(v => { if(v!=null) yMax = Math.max(yMax, v); }));
     yMax = Math.ceil(yMax * 1.1) || 1;
 
-    const xScale = i => MPAD.l + (i / (maxIter-1)) * (MINI_W - MPAD.l - MPAD.r);
+    const xScale = i => MPAD.l + (maxIter<=1?0.5:i/(maxIter-1)) * (MINI_W - MPAD.l - MPAD.r);
     const yScale = v => MPAD.t + (yMax - v) / yMax * (MINI_H - MPAD.t - MPAD.b);
 
     const parts = [`<svg viewBox="0 0 ${MINI_W} ${MINI_H}" xmlns="http://www.w3.org/2000/svg">`];
@@ -3604,6 +3735,14 @@ function renderStructuralChart(cm, exp) {
 // ═══════════════════════════════════════════════════
 
 function renderHeatmap(cm, exp, runs, baselines) {
+  // Note: show heatmap if ANY eval model differs from evolution models.
+  // If all are the same, add a warning but still show if data exists.
+  const evolModels = exp.parameters.models || [];
+  const evalMods = exp.parameters.evalModels || [];
+  const allSame = evalMods.length > 0 && evalMods.every(m => evolModels.includes(m));
+  const sameModelNote = allSame
+    ? `<div style="font-size:.67rem;color:var(--amber);margin-bottom:8px">⚑ All eval models are also evolution models — scores reflect a model judging its own outputs, not independent cross-model evaluation. For unbiased comparison, add a model not used for evolution.</div>`
+    : '';
   const programs = [];
 
   for (const r of runs) {
@@ -3712,6 +3851,7 @@ function renderHeatmap(cm, exp, runs, baselines) {
 
   document.getElementById('rHeatmapCard').innerHTML =
     `<div class="dash-hd">Cross-Model Agreement <small>aesthetic score by judge model · teal=high · amber=low</small></div>`
+    + sameModelNote
     + `<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-family:var(--ff-code)">`
     + `<thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`
     + scaleBar + agreementNote + coverageNote;
@@ -3842,7 +3982,7 @@ function renderSweepComparison(cm, exp, runs) {
 
     let yMax = 0;
     for (const c of cm) c.condRuns.forEach(r=>{ if(r.status==='completed') yMax=Math.max(yMax,r.finalScore||0); });
-    yMax = Math.min(15, Math.ceil(yMax)+1) || 14;
+    yMax = Math.ceil(yMax)+1 || 14;
 
     const yScale = v => PAD.t + (yMax-v)/yMax*(H-PAD.t-PAD.b);
     const dimColors = {'deterministic':'var(--teal)','roulette':'var(--lav)','both':'var(--amber)','images':'var(--red)'};
@@ -4210,12 +4350,23 @@ function csvRow(vals) {
 }
 
 function buildRunsCSV({experiment:exp, runs, baselines}) {
-  const evalModel = (exp.parameters.evalModels||[])[0]||'';
+  const evalModels = exp.parameters.evalModels || [];
   const seedMap = Object.fromEntries(exp.parameters.seeds.map(s=>[s.id,s]));
   const tasteMap = Object.fromEntries(exp.parameters.tastes.map(t=>[t.id,t]));
+  // One column per eval model for cross-model scores
+  const xmCols = evalModels.flatMap(m => [
+    'xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_aesthetic',
+    'xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_novelty',
+  ]);
+  const baseXmCols = evalModels.flatMap(m => [
+    'best_baseline_a_xm_'+m.replace(/[^a-z0-9]/gi,'_'),
+    'best_baseline_b_xm_'+m.replace(/[^a-z0-9]/gi,'_'),
+    'score_vs_baseline_a_'+m.replace(/[^a-z0-9]/gi,'_'),
+    'score_vs_baseline_b_'+m.replace(/[^a-z0-9]/gi,'_'),
+  ]);
   const header = ['condition_id','run_type','seed_label','taste','model','repeat_index','iterations_completed',
-    'final_score','final_aesthetic','final_novelty','final_parsimony','cross_model_score','cross_model_judge',
-    'best_baseline_a_xm','best_baseline_b_xm','score_vs_baseline_a','score_vs_baseline_b',
+    'final_score','final_aesthetic','final_novelty','final_parsimony',
+    ...xmCols, ...baseXmCols,
     'final_distinct_commands','final_nesting_depth','final_code_length',
     'final_spatial_entropy','final_fill_ratio','score_drop_warnings','status','elapsed_ms','error'];
   const rows = [csvRow(header)];
@@ -4225,23 +4376,34 @@ function buildRunsCSV({experiment:exp, runs, baselines}) {
     const blCondId = cond.tasteId+'__'+cond.model.replace(/[^a-z0-9]/gi,'_');
     const basA = baselines.filter(b=>b.conditionId===blCondId&&b.type==='from_scratch');
     const basB = baselines.filter(b=>b.conditionId===blCondId&&b.type==='single_edit'&&b.seedLabel===seed.label);
-    const bestBlA = Math.max(0,...basA.map(b=>b.criticScores?.[evalModel]?.aesthetic||0));
-    const bestBlB = Math.max(0,...basB.map(b=>b.criticScores?.[evalModel]?.aesthetic||0));
 
     for (const r of runs.filter(rr=>rr.conditionId===cond.id)) {
       const lastIt = r.iterations && r.iterations[r.iterations.length-1];
       const sm = lastIt?.structuralMetrics || {};
       const im = lastIt?.imageMetrics || {};
-      const xm = evalModel && r.crossModelScores?.[evalModel];
       const elapsed = r.startTime && r.endTime ? new Date(r.endTime)-new Date(r.startTime) : '';
+      // Per-eval-model cross-model scores (honest: blank only when truly missing)
+      const xmScores = evalModels.flatMap(m => {
+        const xm = r.crossModelScores?.[m];
+        return [xm?.aesthetic ?? '', xm?.novelty ?? ''];
+      });
+      // Per-eval-model baseline comparisons
+      const baseXmScores = evalModels.flatMap(m => {
+        const bAscores = basA.map(b=>b.criticScores?.[m]?.aesthetic).filter(v=>v!=null);
+        const bBscores = basB.map(b=>b.criticScores?.[m]?.aesthetic).filter(v=>v!=null);
+        const bestA = bAscores.length ? Math.max(...bAscores) : null;  // null = no scored baselines
+        const bestB = bBscores.length ? Math.max(...bBscores) : null;
+        const xm = r.crossModelScores?.[m];
+        const vsA = xm?.aesthetic!=null && bestA!=null ? (xm.aesthetic-bestA).toFixed(2) : '';
+        const vsB = xm?.aesthetic!=null && bestB!=null ? (xm.aesthetic-bestB).toFixed(2) : '';
+        return [bestA??'', bestB??'', vsA, vsB];
+      });
       rows.push(csvRow([
         cond.id, r.type||'evolution', seed.label, taste.text, cond.model, r.repeatIndex,
         r.iterations?.length||0, r.finalScore||0,
-        lastIt?.winnerAestheticScore||0, lastIt?.winnerNoveltyScore||0,
-        lastIt?.winnerParsimonyScore??'', xm?.aesthetic??'', evalModel,
-        bestBlA||'', bestBlB||'',
-        xm?.aesthetic!=null&&bestBlA ? (xm.aesthetic-bestBlA).toFixed(2) : '',
-        xm?.aesthetic!=null&&bestBlB ? (xm.aesthetic-bestBlB).toFixed(2) : '',
+        lastIt?.winnerAestheticScore??'', lastIt?.winnerNoveltyScore??'',
+        lastIt?.winnerParsimonyScore??'',
+        ...xmScores, ...baseXmScores,
         sm.distinctCommands??'', sm.nestingDepth??'', sm.codeLength??'',
         im.spatialEntropy??'', im.fillRatio??'',
         r.iterations?.filter(it=>it.scoreDropWarning).length||0,
@@ -5402,7 +5564,7 @@ canvas:hover{opacity:.88}
         ${pr('Parsimony weight', p.parsimonyWeight??0.0)}
         ${pr('Modifier temp', p.modifierTemp??1.0)}
         ${pr('Critic temp', p.criticTemp??0.0)}
-        ${pr('Nesting encouraged', p.encourageNesting?'Yes':'No')}
+        ${pr('Encourage nesting & recursion', p.encourageNesting?'Yes (REPEAT nesting hint added to modifier)':'No')}
         ${pr('Base seed', p.baseSeed)}
         ${pr('Created', exp.created?.slice(0,19)?.replace('T',' '))}
       </table>
