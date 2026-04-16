@@ -1,0 +1,2192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Logo Turtle — plain HTML</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #020617;
+    --panel: rgba(15, 23, 42, 0.88);
+    --panel-2: #07111f;
+    --border: #334155;
+    --muted: #94a3b8;
+    --text: #e2e8f0;
+    --accent: #f97316;
+    --accent-2: #fb923c;
+    --good: #10b981;
+    --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  a { color: #fdba74; }
+  .app {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 18px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 470px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.28);
+  }
+  .sidebar {
+    padding: 16px;
+    position: sticky;
+    top: 12px;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: 28px;
+    line-height: 1.15;
+  }
+  .subtle {
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+  }
+  .section:first-of-type {
+    margin-top: 12px;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .row, .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .stack { display: grid; gap: 10px; }
+  .buttons, .mode-buttons, .tab-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  button, select, input[type="range"], textarea {
+    font: inherit;
+  }
+  button, .button {
+    border: 1px solid var(--border);
+    background: #0f172a;
+    color: var(--text);
+    border-radius: 14px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  button:hover { background: #172033; }
+  button.primary {
+    background: var(--accent);
+    border-color: #ea580c;
+    color: white;
+  }
+  button.primary:hover { background: var(--accent-2); }
+  button.active {
+    background: var(--accent);
+    border-color: #ea580c;
+    color: #fff;
+  }
+  button.small {
+    padding: 7px 10px;
+    font-size: 13px;
+    border-radius: 12px;
+  }
+  select {
+    background: #0f172a;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 330px;
+    resize: vertical;
+    background: #020617;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    line-height: 1.45;
+  }
+  input[type="range"] { width: 100%; }
+  .slider-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+  }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .toggle-row label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: #020617;
+  }
+  .switch {
+    accent-color: var(--accent);
+    width: 18px;
+    height: 18px;
+  }
+  .status-box {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(148,163,184,.18);
+    background: #020617;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .status-box.error {
+    border-color: rgba(239,68,68,.45);
+    background: rgba(127, 29, 29, .28);
+    color: #fecaca;
+  }
+  .status-box.ok {
+    border-color: rgba(16,185,129,.45);
+    background: rgba(6, 78, 59, .24);
+    color: #a7f3d0;
+  }
+  .tabs { margin-top: 14px; }
+  .tab-buttons button[data-tab].active {
+    background: #1e293b;
+    border-color: #475569;
+  }
+  .tab-pane { display: none; margin-top: 10px; }
+  .tab-pane.active { display: block; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .preview-card {
+    overflow: hidden;
+  }
+  .preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(148,163,184,.14);
+    font-weight: 600;
+  }
+  .preview-head .pending { color: var(--muted); font-size: 12px; font-weight: 400; }
+  .preview-body {
+    position: relative;
+    background: var(--panel-2);
+    user-select: none;
+  }
+  .preview-surface {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  .drag-note {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 2;
+    background: rgba(2,6,23,.65);
+    border: 1px solid rgba(148,163,184,.2);
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .metric {
+    padding: 12px;
+    border-radius: 14px;
+    background: #020617;
+    border: 1px solid rgba(148,163,184,.14);
+  }
+  .metric .k { color: var(--muted); font-size: 12px; }
+  .metric .v { margin-top: 4px; font-size: 20px; }
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .book-note {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(148,163,184,.14);
+    background: rgba(15,23,42,.7);
+    line-height: 1.5;
+  }
+  .legend { font-size: 13px; color: var(--muted); }
+  .info-panel {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid rgba(148,163,184,.18);
+    border-radius: 14px;
+    background: #020617;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; }
+  }
+  @media (max-width: 800px) {
+    .grid { grid-template-columns: 1fr; }
+    .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="layout">
+    <div class="panel sidebar">
+      <h1>Surface Logo Turtle</h1>
+      <div class="subtle">Single-file HTML version. No React, no build step. Run the same Logo-like program on a plane, sphere, torus, cylinder, or cone.</div>
+
+      <div class="section stack">
+        <div class="row"><strong>Visible views</strong><span class="legend">double-click to focus one</span></div>
+        <div id="modeButtons" class="mode-buttons"></div>
+      </div>
+
+      <div class="section stack">
+        <div class="row"><strong>Surface parameters</strong></div>
+        <div>
+          <div class="slider-label"><span>Torus ratio</span><span id="torusAspectValue">2.9</span></div>
+          <input id="torusAspect" type="range" min="1.2" max="5" step="0.1" />
+        </div>
+        <div>
+          <div class="slider-label"><span>Cylinder ratio</span><span id="cylinderAspectValue">2.2</span></div>
+          <input id="cylinderAspect" type="range" min="0.8" max="5" step="0.1" />
+        </div>
+        <div>
+          <div class="slider-label"><span>Cone angle</span><span id="coneAngleValue">50°</span></div>
+          <input id="coneAngleDeg" type="range" min="20" max="120" step="1" />
+        </div>
+        <div class="row">
+          <span>Cylinder edge behavior</span>
+          <select id="cylinderBoundaryMode">
+            <option value="wrap">wrap</option>
+            <option value="clamp">clamp</option>
+          </select>
+        </div>
+        <div class="row">
+          <span>Cone forward mode</span>
+          <select id="coneForwardMode">
+            <option value="geodesic">geodesic</option>
+            <option value="bearing">bearing</option>
+          </select>
+        </div>
+        <div class="hint">Geodesic follows a straight line on the cone's unwrapped sector. Bearing keeps the same local bearing relative to guide curves.</div>
+        <button id="toggleConeInfo" class="small">Explain cone geodesics</button>
+        <div id="coneInfo" class="info-panel" hidden>
+          In geodesic mode, the cone is treated as if you cut it open into a flat sector, drew a straight line there, and wrapped that line back onto the cone. So one long forward move does not usually stay on a guide circle. Bearing mode does.
+        </div>
+      </div>
+
+      <div class="section stack">
+        <div class="buttons">
+          <button id="runBtn" class="primary">Run</button>
+          <button id="stepBtn">Step</button>
+          <button id="stopBtn">Stop</button>
+          <button id="resetBtn">Reset</button>
+          <button id="drawAllBtn">Draw full result</button>
+          <button id="downloadBtn">Download interactive HTML</button>
+        </div>
+      </div>
+
+      <div class="section stack">
+        <div>
+          <div class="slider-label"><span>Run speed</span><span id="speedValue">10 cmds/frame</span></div>
+          <input id="speed" type="range" min="1" max="100" step="1" />
+          <div class="hint">Higher values run multiple commands per frame.</div>
+        </div>
+        <div>
+          <div class="slider-label"><span>Preview size</span><span id="previewHeightValue">360 px</span></div>
+          <input id="previewHeight" type="range" min="240" max="720" step="20" />
+        </div>
+        <div>
+          <div class="slider-label"><span>Shape transparency</span><span id="surfaceOpacityValue">100%</span></div>
+          <input id="surfaceOpacity" type="range" min="0" max="100" step="1" />
+        </div>
+        <div class="toggle-row"><label><span>Guide curves / grid</span><input id="wireframe" class="switch" type="checkbox" /></label></div>
+        <div class="toggle-row"><label><span>Show axes</span><input id="showAxes" class="switch" type="checkbox" /></label></div>
+        <div class="toggle-row"><label><span>Auto-rotate 3D views</span><input id="autoRotate" class="switch" type="checkbox" /></label></div>
+      </div>
+
+      <div class="section tabs">
+        <div class="tab-buttons">
+          <button data-tab="program" class="active">Program</button>
+          <button data-tab="help">Help</button>
+          <button data-tab="status">Status</button>
+        </div>
+        <div id="tab-program" class="tab-pane active">
+          <textarea id="programText"></textarea>
+          <div id="parseErrorBox" class="status-box error" hidden></div>
+          <div id="downloadStatusBox" class="status-box ok" hidden></div>
+        </div>
+        <div id="tab-help" class="tab-pane">
+          <div id="helpText" class="status-box mono"></div>
+        </div>
+        <div id="tab-status" class="tab-pane stack">
+          <div id="summaryGrid" class="summary-grid"></div>
+          <div class="status-box">
+            <div style="margin-bottom:8px;"><strong>Last commands from primary view</strong></div>
+            <div id="recentCommands" class="mono" style="max-height: 220px; overflow: auto; font-size: 12px; line-height: 1.7;"></div>
+          </div>
+          <div id="selfTestStatus" class="status-box"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div id="previewGrid" class="grid"></div>
+      <div class="book-note">
+        Inspired by <strong>Turtle Geometry</strong> by Harold Abelson and Andrea diSessa. The same procedure can behave very differently on a plane, sphere, torus, cylinder, or cone.
+        <div style="margin-top:10px;"><a href="https://direct.mit.edu/books/oa-monograph/4663/Turtle-GeometryThe-Computer-as-a-Medium-for" target="_blank" rel="noopener noreferrer">Open the free Turtle Geometry book</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const DEFAULT_PROGRAM = `; Surface Logo demo
+; Click shape buttons to toggle views.
+; Double-click a shape button to focus on just that one.
+
+TO POLYFLOWER :SIDES :STEP :TURN
+  REPEAT :SIDES [
+    FD :STEP
+    RT :TURN
+  ]
+END
+
+CS
+PD
+POLYFLOWER 24 12 165
+`;
+
+const HELP_TEXT = `Commands:
+  FD n              forward n units along the current surface
+  FORWARD n         full name for FD
+  BK n              backward n units
+  BACK n            full name for BK
+  RT n              turn right in the local tangent plane
+  RIGHT n           full name for RT
+  LT n              turn left in the local tangent plane
+  LEFT n            full name for LT
+  PU                pen up
+  PENUP             full name for PU
+  PD                pen down
+  PENDOWN           full name for PD
+  HT                hide turtle
+  HIDETURTLE        full name for HT
+  ST                show turtle
+  SHOWTURTLE        full name for ST
+  HOME              go to the default starting point
+  CS                clear drawing
+  CLEARSCREEN       full name for CS
+  SETCOLOR c        set stroke color from a palette index, name, or #hex value
+  SETCOLOR r g b    set stroke color from RGB values
+  SETWIDTH n        set stroke width
+  SETOPACITY n      set stroke opacity from 0 to 100
+  REPEAT n [ ]      repeat a block
+  IF cond [ ]       run a block when a condition is true
+
+Notes:
+  RGB values use mod 256 if outside 0..255.
+  Opacity uses mod 101 if outside 0..100.
+  Comparisons supported in IF: <  >  <=  >=  =  <>  !=
+
+Procedures:
+  TO name :a :b ...
+    commands
+  END
+
+  Procedure parameters are referenced as :NAME.
+
+Numeric expressions:
+  REPCOUNT          current loop index, starting at 1
+  RANDOM n          random integer from 0 to n-1
+  :NAME             procedure parameter reference
+  + - * /           arithmetic operators
+  ( ... )           grouping
+
+Views:
+  Plane             ordinary 2D Logo turtle
+  Sphere            FD follows great-circle motion
+  Torus             FD follows the current tangent direction on the torus surface
+  Cylinder          FD follows the current tangent direction on the cylinder surface
+  Cone              FD can use geodesic or local-bearing motion
+
+Cone modes:
+  Geodesic          straight line on the cone's unwrapped sector
+  Bearing           keeps the same local bearing relative to guide curves
+
+Tips:
+  Click a shape button to toggle it on or off.
+  Recursive procedure calls are capped at 2048 nested calls to avoid runaway programs locking the page.
+  Double-click a shape button to focus on only that shape.
+  Shape toggles do not recompute immediately; cached views are reused.
+
+Examples:
+  REPEAT 12 [ FD 10 * REPCOUNT RT 170 ]
+  REPEAT 16 [ SETCOLOR REPCOUNT FD 8 RT 22 ]
+  REPEAT 10 [ SETCOLOR 255 40 0 SETOPACITY 70 FD 12 RT 144 ]
+  IF 3 > 2 [ FD 20 RT 90 ]
+  TO ARC :SIZE :DEGREES
+    IF :DEGREES < 0 [ REPEAT (0 - :DEGREES) [ FD :SIZE LT 1 ] ]
+    IF :DEGREES >= 0 [ REPEAT :DEGREES [ FD :SIZE RT 1 ] ]
+  END
+  ARC 1 (90 * -1)
+  TO BOX :N REPEAT 4 [ FD :N RT 90 ] END BOX 20`;
+
+const LOGO_COLORS = [
+  '#000000', '#1d2b53', '#7e2553', '#008751',
+  '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8',
+  '#ff004d', '#ffa300', '#ffec27', '#00e436',
+  '#29adff', '#83769c', '#ff77a8', '#ffccaa',
+];
+
+const ALL_SURFACE_MODES = ['plane', 'sphere', 'torus', 'cylinder', 'cone'];
+const PRIMITIVE_NAMES = new Set([
+  'FD', 'FORWARD', 'BK', 'BACK', 'RT', 'RIGHT', 'LT', 'LEFT',
+  'PU', 'PENUP', 'PD', 'PENDOWN', 'HT', 'HIDETURTLE', 'ST', 'SHOWTURTLE', 'HOME', 'CS', 'CLEARSCREEN',
+  'SETCOLOR', 'SETC', 'SETWIDTH', 'SETW', 'SETOPACITY', 'SETO',
+  'REPEAT', 'IF', 'TO', 'END', 'RANDOM', 'REPCOUNT',
+]);
+
+const MODE_META = {
+  plane: { label: 'Plane' },
+  sphere: { label: 'Sphere' },
+  torus: { label: 'Torus' },
+  cylinder: { label: 'Cylinder' },
+  cone: { label: 'Cone' },
+};
+
+const MAX_CALL_DEPTH = 2048;
+const MAX_PEN_WIDTH = 24;
+const DEFAULT_TORUS_MINOR_RADIUS = 0.5;
+const DEFAULT_TORUS_ASPECT = 2.9;
+const DEFAULT_CYLINDER_RADIUS = 1.0;
+const DEFAULT_CYLINDER_ASPECT = 2.2;
+const DEFAULT_CONE_HEIGHT = 2.2;
+const DEFAULT_CONE_ANGLE_DEG = 50;
+const CONE_MIN_H = 0.06;
+const EXPORT_VIEW_SIZE = 520;
+const DEFAULT_PLANE_EXTENT = 160;
+const BOOK_URL = 'https://direct.mit.edu/books/oa-monograph/4663/Turtle-GeometryThe-Computer-as-a-Medium-for';
+
+const DEFAULT_SURFACE_PARAMS = {
+  torusMinorRadius: DEFAULT_TORUS_MINOR_RADIUS,
+  torusAspect: DEFAULT_TORUS_ASPECT,
+  cylinderRadius: DEFAULT_CYLINDER_RADIUS,
+  cylinderAspect: DEFAULT_CYLINDER_ASPECT,
+  coneHeight: DEFAULT_CONE_HEIGHT,
+  coneAngleDeg: DEFAULT_CONE_ANGLE_DEG,
+};
+
+const DEFAULT_VISIBLE_MODES = {
+  plane: false,
+  sphere: true,
+  torus: false,
+  cylinder: false,
+  cone: false,
+};
+
+const DEFAULT_SURFACE_VIEW_ANGLES = {
+  sphere: { yaw: -0.7, pitch: 0.35 },
+  torus: { yaw: -0.7, pitch: 0.35 },
+  cylinder: { yaw: -0.7, pitch: 0.35 },
+  cone: { yaw: -0.7, pitch: 0.35 },
+};
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function wrapAngle(a) {
+  const tau = Math.PI * 2;
+  return ((a % tau) + tau) % tau;
+}
+function wrapIntoRange(v, lo, hi) {
+  const span = hi - lo;
+  return ((((v - lo) % span) + span) % span) + lo;
+}
+function degToRad(d) { return (d * Math.PI) / 180; }
+function normalizeName(name) { return name.toUpperCase(); }
+function normalizeModuloInt(value, modulus) {
+  const rounded = Number.isFinite(value) ? Math.round(value) : 0;
+  return ((rounded % modulus) + modulus) % modulus;
+}
+function normalizeByte(value) { return normalizeModuloInt(value, 256); }
+function normalizeOpacityPercent(value) { return normalizeModuloInt(value, 101); }
+function rgbToCss(rgb) {
+  const [r, g, b] = rgb.map(normalizeByte);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+function canStartExpression(token) {
+  if (!token) return false;
+  const upper = token.toUpperCase();
+  if (token === '(' || token === '-') return true;
+  if (token.startsWith(':')) return true;
+  if (upper === 'REPCOUNT' || upper === 'RANDOM') return true;
+  return Number.isFinite(Number(token));
+}
+function emptyFlags(value = false) {
+  return ALL_SURFACE_MODES.reduce((acc, mode) => {
+    acc[mode] = value;
+    return acc;
+  }, {});
+}
+function rotateAroundAxis(vec, axis, angleRad) {
+  return vec.clone().applyAxisAngle(axis, angleRad);
+}
+function getTorusDims(surfaceParams) {
+  const minorRadius = surfaceParams.torusMinorRadius;
+  const majorRadius = minorRadius * surfaceParams.torusAspect;
+  return { majorRadius, minorRadius };
+}
+function getCylinderDims(surfaceParams) {
+  const radius = surfaceParams.cylinderRadius;
+  const height = radius * surfaceParams.cylinderAspect;
+  return { radius, height };
+}
+function getConeDims(surfaceParams) {
+  return { height: surfaceParams.coneHeight, angleDeg: surfaceParams.coneAngleDeg };
+}
+function torusPoint(majorRadius, minorRadius, u, v) {
+  const ring = majorRadius + minorRadius * Math.cos(v);
+  return new THREE.Vector3(
+    ring * Math.cos(u),
+    minorRadius * Math.sin(v),
+    ring * Math.sin(u)
+  );
+}
+function torusFrame(majorRadius, minorRadius, u, v) {
+  const pos = torusPoint(majorRadius, minorRadius, u, v);
+  const eu = new THREE.Vector3(-Math.sin(u), 0, Math.cos(u)).normalize();
+  const ev = new THREE.Vector3(-Math.sin(v) * Math.cos(u), Math.cos(v), -Math.sin(v) * Math.sin(u)).normalize();
+  const normal = new THREE.Vector3(Math.cos(v) * Math.cos(u), Math.sin(v), Math.cos(v) * Math.sin(u)).normalize();
+  const metricU = majorRadius + minorRadius * Math.cos(v);
+  const metricV = minorRadius;
+  return { pos, eu, ev, normal, metricU, metricV };
+}
+function cylinderPoint(radius, u, y) {
+  return new THREE.Vector3(radius * Math.cos(u), y, radius * Math.sin(u));
+}
+function cylinderFrame(radius, u, y) {
+  const pos = cylinderPoint(radius, u, y);
+  const eu = new THREE.Vector3(-Math.sin(u), 0, Math.cos(u)).normalize();
+  const ey = new THREE.Vector3(0, 1, 0);
+  const normal = new THREE.Vector3(Math.cos(u), 0, Math.sin(u)).normalize();
+  const metricU = radius;
+  const metricY = 1;
+  return { pos, eu, ey, normal, metricU, metricY };
+}
+function conePoint(height, angleDeg, u, h) {
+  const halfAngle = degToRad(angleDeg / 2);
+  const radius = h * Math.tan(halfAngle);
+  const y = height / 2 - h;
+  return new THREE.Vector3(radius * Math.cos(u), y, radius * Math.sin(u));
+}
+function coneFrame(height, angleDeg, u, h) {
+  const halfAngle = degToRad(angleDeg / 2);
+  const pos = conePoint(height, angleDeg, u, h);
+  const eu = new THREE.Vector3(-Math.sin(u), 0, Math.cos(u)).normalize();
+  const eh = new THREE.Vector3(Math.sin(halfAngle) * Math.cos(u), -Math.cos(halfAngle), Math.sin(halfAngle) * Math.sin(u)).normalize();
+  const normal = new THREE.Vector3(Math.cos(halfAngle) * Math.cos(u), Math.sin(halfAngle), Math.cos(halfAngle) * Math.sin(u)).normalize();
+  const metricU = Math.max(CONE_MIN_H * Math.tan(halfAngle), h * Math.tan(halfAngle));
+  const metricH = 1 / Math.cos(halfAngle);
+  return { pos, eu, eh, normal, metricU, metricH };
+}
+function coneToPlane(height, angleDeg, u, h) {
+  const halfAngle = degToRad(angleDeg / 2);
+  const sectorScale = Math.sin(halfAngle);
+  const rho = h / Math.cos(halfAngle);
+  const phi = u * sectorScale;
+  return { x: rho * Math.cos(phi), y: rho * Math.sin(phi), rho, phi, sectorScale, halfAngle };
+}
+function planeToCone(height, angleDeg, x, y) {
+  const halfAngle = degToRad(angleDeg / 2);
+  const sectorScale = Math.sin(halfAngle);
+  const rho = Math.hypot(x, y);
+  const phi = Math.atan2(y, x);
+  const rawH = rho * Math.cos(halfAngle);
+  const h = clamp(rawH, CONE_MIN_H, height);
+  const u = wrapAngle(phi / Math.max(1e-6, sectorScale));
+  return { u, h, rawH, rho, phi, sectorScale, halfAngle };
+}
+function updatePlaneDerived(state) {
+  state.pos.set(state.x, state.y, 0);
+  state.heading.set(Math.cos(state.headingAngle), Math.sin(state.headingAngle), 0).normalize();
+}
+function updateTorusDerived(state) {
+  const frame = torusFrame(state.majorRadius, state.minorRadius, state.u, state.v);
+  state.pos.copy(frame.pos);
+  state.heading.copy(frame.eu.clone().multiplyScalar(Math.cos(state.headingAngle)).add(
+    frame.ev.clone().multiplyScalar(Math.sin(state.headingAngle))
+  )).normalize();
+}
+function updateCylinderDerived(state) {
+  const frame = cylinderFrame(state.radius, state.u, state.y);
+  state.pos.copy(frame.pos);
+  state.heading.copy(frame.eu.clone().multiplyScalar(Math.cos(state.headingAngle)).add(
+    frame.ey.clone().multiplyScalar(Math.sin(state.headingAngle))
+  )).normalize();
+}
+function updateConeDerived(state) {
+  const frame = coneFrame(state.height, state.angleDeg, state.u, state.h);
+  state.pos.copy(frame.pos);
+  state.heading.copy(frame.eu.clone().multiplyScalar(Math.cos(state.headingAngle)).add(
+    frame.eh.clone().multiplyScalar(Math.sin(state.headingAngle))
+  )).normalize();
+}
+
+function makeDefaultState(sphereRadius = 1, surfaceMode = 'sphere', cylinderBoundaryMode = 'wrap', surfaceParams = DEFAULT_SURFACE_PARAMS) {
+  if (surfaceMode === 'plane') {
+    const state = {
+      mode: 'plane', x: 0, y: 0, headingAngle: 0,
+      pos: new THREE.Vector3(), heading: new THREE.Vector3(),
+      penDown: true, turtleVisible: true, color: '#f97316', opacity: 1, width: 2,
+    };
+    updatePlaneDerived(state);
+    return state;
+  }
+  if (surfaceMode === 'sphere') {
+    return {
+      mode: 'sphere', radius: sphereRadius,
+      pos: new THREE.Vector3(0, 1, 0).multiplyScalar(sphereRadius),
+      heading: new THREE.Vector3(1, 0, 0),
+      penDown: true, turtleVisible: true, color: '#f97316', opacity: 1, width: 2,
+    };
+  }
+  if (surfaceMode === 'torus') {
+    const { majorRadius, minorRadius } = getTorusDims(surfaceParams);
+    const state = {
+      mode: 'torus', majorRadius, minorRadius, u: 0, v: 0, headingAngle: 0,
+      pos: new THREE.Vector3(), heading: new THREE.Vector3(),
+      penDown: true, turtleVisible: true, color: '#f97316', opacity: 1, width: 2,
+    };
+    updateTorusDerived(state);
+    return state;
+  }
+  if (surfaceMode === 'cylinder') {
+    const { radius, height } = getCylinderDims(surfaceParams);
+    const state = {
+      mode: 'cylinder', radius, height, u: 0, y: 0, headingAngle: 0, boundaryMode: cylinderBoundaryMode,
+      pos: new THREE.Vector3(), heading: new THREE.Vector3(),
+      penDown: true, turtleVisible: true, color: '#f97316', opacity: 1, width: 2,
+    };
+    updateCylinderDerived(state);
+    return state;
+  }
+  const { height, angleDeg } = getConeDims(surfaceParams);
+  const state = {
+    mode: 'cone', height, angleDeg, u: 0, h: height * 0.55, headingAngle: 0,
+    pos: new THREE.Vector3(), heading: new THREE.Vector3(),
+    penDown: true, turtleVisible: true, color: '#f97316', opacity: 1, width: 2,
+  };
+  updateConeDerived(state);
+  return state;
+}
+
+function makeEmptyView(mode, sphereRadius = 1, cylinderBoundaryMode = 'wrap', surfaceParams = DEFAULT_SURFACE_PARAMS) {
+  const fresh = makeDefaultState(sphereRadius, mode, cylinderBoundaryMode, surfaceParams);
+  return {
+    polylines: [],
+    turtle: { pos: fresh.pos.clone(), heading: fresh.heading.clone(), visible: fresh.turtleVisible },
+    logs: [],
+  };
+}
+function makeEmptyCache(sphereRadius = 1, cylinderBoundaryMode = 'wrap', surfaceParams = DEFAULT_SURFACE_PARAMS) {
+  return ALL_SURFACE_MODES.reduce((acc, mode) => {
+    acc[mode] = makeEmptyView(mode, sphereRadius, cylinderBoundaryMode, surfaceParams);
+    return acc;
+  }, {});
+}
+function resolveColor(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const idx = ((Math.round(value) % LOGO_COLORS.length) + LOGO_COLORS.length) % LOGO_COLORS.length;
+    return LOGO_COLORS[idx];
+  }
+  return String(value);
+}
+function tokenize(input) {
+  const source = input
+    .split('\n')
+    .map((line) => {
+      const commentIndex = line.indexOf(';');
+      return commentIndex >= 0 ? line.slice(0, commentIndex) : line;
+    })
+    .join('\n');
+
+  const tokens = [];
+  let i = 0;
+  while (i < source.length) {
+    const ch = source[i];
+    if (/\s/.test(ch)) { i += 1; continue; }
+    const next = source[i + 1] || '';
+    if ((ch === '<' || ch === '>' || ch === '!') && next === '=') { tokens.push(ch + next); i += 2; continue; }
+    if (ch === '<' && next === '>') { tokens.push('<>'); i += 2; continue; }
+    if ('[]()+-*/<>=!'.includes(ch)) { tokens.push(ch); i += 1; continue; }
+    if (ch === '#') {
+      let j = i + 1;
+      while (j < source.length && /[0-9a-fA-F]/.test(source[j])) j += 1;
+      tokens.push(source.slice(i, j));
+      i = j;
+      continue;
+    }
+    let j = i;
+    while (j < source.length && !/\s/.test(source[j]) && !'[]()+-*/<>=!'.includes(source[j])) j += 1;
+    tokens.push(source.slice(i, j));
+    i = j;
+  }
+  return tokens;
+}
+function parseNumber(token) {
+  const n = Number(token);
+  if (!Number.isFinite(n)) throw new Error(`Expected number, got: ${token}`);
+  return n;
+}
+function collectProcedureSignatures(tokens) {
+  const signatures = {};
+  let i = 0;
+  while (i < tokens.length) {
+    if (tokens[i].toUpperCase() !== 'TO') { i += 1; continue; }
+    i += 1;
+    if (i >= tokens.length) throw new Error('TO must be followed by a procedure name');
+    const procName = normalizeName(tokens[i]);
+    if (PRIMITIVE_NAMES.has(procName)) throw new Error(`Procedure name cannot be a primitive: ${procName}`);
+    if (signatures[procName]) throw new Error(`Duplicate procedure definition: ${procName}`);
+    i += 1;
+    const params = [];
+    while (i < tokens.length && tokens[i].startsWith(':')) {
+      const param = normalizeName(tokens[i].slice(1));
+      if (!param) throw new Error(`Bad parameter name: ${tokens[i]}`);
+      if (params.includes(param)) throw new Error(`Duplicate parameter name: ${param}`);
+      params.push(param);
+      i += 1;
+    }
+    signatures[procName] = params;
+    while (i < tokens.length && tokens[i].toUpperCase() !== 'END') i += 1;
+    if (i >= tokens.length) throw new Error(`TO ${procName} is missing END`);
+    i += 1;
+  }
+  return signatures;
+}
+function parsePrimary(tokens, state) {
+  if (state.i >= tokens.length) throw new Error('Missing expression');
+  const token = tokens[state.i];
+  const upper = token.toUpperCase();
+  if (token === '(') {
+    state.i += 1;
+    const expr = parseExpression(tokens, state);
+    if (tokens[state.i] !== ')') throw new Error('Missing )');
+    state.i += 1;
+    return { kind: 'number_group', expr };
+  }
+  if (token.startsWith(':')) {
+    state.i += 1;
+    const name = normalizeName(token.slice(1));
+    if (!name) throw new Error(`Bad variable reference: ${token}`);
+    return { kind: 'variable', name };
+  }
+  if (upper === 'REPCOUNT') { state.i += 1; return { kind: 'repcount' }; }
+  if (upper === 'RANDOM') { state.i += 1; return { kind: 'random', max: parsePrimary(tokens, state) }; }
+  state.i += 1;
+  return { kind: 'number', value: parseNumber(token) };
+}
+function normalizeExprNode(expr) {
+  return expr.kind === 'number_group' ? expr.expr : expr;
+}
+function parseUnary(tokens, state) {
+  if (state.i < tokens.length && tokens[state.i] === '-') {
+    state.i += 1;
+    return { kind: 'negate', expr: parseUnary(tokens, state) };
+  }
+  return normalizeExprNode(parsePrimary(tokens, state));
+}
+function parseMultiplicative(tokens, state) {
+  let expr = parseUnary(tokens, state);
+  while (state.i < tokens.length && (tokens[state.i] === '*' || tokens[state.i] === '/')) {
+    const op = tokens[state.i];
+    state.i += 1;
+    const right = parseUnary(tokens, state);
+    expr = { kind: 'binary', op, left: expr, right };
+  }
+  return expr;
+}
+function parseAdditive(tokens, state) {
+  let expr = parseMultiplicative(tokens, state);
+  while (state.i < tokens.length && (tokens[state.i] === '+' || tokens[state.i] === '-')) {
+    const op = tokens[state.i];
+    state.i += 1;
+    const right = parseMultiplicative(tokens, state);
+    expr = { kind: 'binary', op, left: expr, right };
+  }
+  return expr;
+}
+function parseExpression(tokens, state) { return parseAdditive(tokens, state); }
+function parseCondition(tokens, state) {
+  const left = parseExpression(tokens, state);
+  const token = tokens[state.i];
+  if (token && ['<', '>', '<=', '>=', '=', '<>', '!='].includes(token)) {
+    state.i += 1;
+    const right = parseExpression(tokens, state);
+    return { kind: 'compare', op: token, left, right };
+  }
+  return { kind: 'truthy', expr: left };
+}
+function lookupVariable(context, name) {
+  for (let i = context.vars.length - 1; i >= 0; i -= 1) {
+    const frame = context.vars[i];
+    if (name in frame) return frame[name];
+  }
+  throw new Error(`Unknown variable: :${name}`);
+}
+function evaluateExpression(expr, context) {
+  switch (expr.kind) {
+    case 'number': return expr.value;
+    case 'repcount':
+      if (!context.repcounts.length) throw new Error('REPCOUNT used outside REPEAT');
+      return context.repcounts[context.repcounts.length - 1];
+    case 'variable': return lookupVariable(context, expr.name);
+    case 'random': {
+      const max = Math.floor(evaluateExpression(expr.max, context));
+      if (!Number.isFinite(max) || max < 0) throw new Error(`RANDOM needs a non-negative input, got: ${max}`);
+      if (max === 0) return 0;
+      return Math.floor(Math.random() * max);
+    }
+    case 'negate': return -evaluateExpression(expr.expr, context);
+    case 'binary': {
+      const left = evaluateExpression(expr.left, context);
+      const right = evaluateExpression(expr.right, context);
+      switch (expr.op) {
+        case '+': return left + right;
+        case '-': return left - right;
+        case '*': return left * right;
+        case '/':
+          if (right === 0) throw new Error('Division by zero');
+          return left / right;
+      }
+    }
+  }
+}
+function evaluateCondition(condition, context) {
+  if (condition.kind === 'truthy') return evaluateExpression(condition.expr, context) !== 0;
+  const left = evaluateExpression(condition.left, context);
+  const right = evaluateExpression(condition.right, context);
+  switch (condition.op) {
+    case '<': return left < right;
+    case '>': return left > right;
+    case '<=': return left <= right;
+    case '>=': return left >= right;
+    case '=': return left === right;
+    case '<>': return left !== right;
+    case '!=': return left !== right;
+  }
+}
+function isColorLiteralToken(token) {
+  const upper = token.toUpperCase();
+  if (upper === 'REPCOUNT' || upper === 'RANDOM') return false;
+  if (token.startsWith(':')) return false;
+  if (token === '(' || token === '+' || token === '-') return false;
+  if (token.startsWith('#')) return true;
+  return /^[A-Za-z][A-Za-z0-9_-]*$/.test(token);
+}
+function parseProgram(tokens) {
+  const signatures = collectProcedureSignatures(tokens);
+  const state = { i: 0 };
+  const procedures = {};
+
+  function parseSingleCommand(stopToken) {
+    if (state.i >= tokens.length) return null;
+    const current = tokens[state.i];
+    const upper = current.toUpperCase();
+
+    if (stopToken === ']' && current === ']') { state.i += 1; return null; }
+    if (stopToken === 'END' && upper === 'END') { state.i += 1; return null; }
+    if (current === ']') throw new Error('Unexpected ]');
+    if (current === '[') throw new Error('Unexpected [');
+    if (upper === 'END') throw new Error('Unexpected END');
+    if (upper === 'TO') throw new Error('Nested TO is not supported');
+
+    if (upper === 'REPEAT') {
+      state.i += 1;
+      const countExpr = parseExpression(tokens, state);
+      if (tokens[state.i] !== '[') throw new Error('REPEAT must be followed by [');
+      state.i += 1;
+      return { type: 'REPEAT', countExpr, body: parseCommands(']') };
+    }
+    if (upper === 'IF') {
+      state.i += 1;
+      const condition = parseCondition(tokens, state);
+      if (tokens[state.i] !== '[') throw new Error('IF must be followed by [');
+      state.i += 1;
+      return { type: 'IF', condition, body: parseCommands(']') };
+    }
+    if (['FD', 'FORWARD', 'BK', 'BACK', 'RT', 'RIGHT', 'LT', 'LEFT', 'SETWIDTH', 'SETW', 'SETOPACITY', 'SETO'].includes(upper)) {
+      state.i += 1;
+      return { type: upper, argExpr: parseExpression(tokens, state) };
+    }
+    if (['SETCOLOR', 'SETC'].includes(upper)) {
+      state.i += 1;
+      if (state.i >= tokens.length) throw new Error(`Missing argument for ${upper}`);
+      if (isColorLiteralToken(tokens[state.i])) {
+        const arg = tokens[state.i];
+        state.i += 1;
+        return { type: upper, arg };
+      }
+      const firstExpr = parseExpression(tokens, state);
+      const savedIndex = state.i;
+      if (canStartExpression(tokens[state.i])) {
+        try {
+          const secondExpr = parseExpression(tokens, state);
+          if (canStartExpression(tokens[state.i])) {
+            const thirdExpr = parseExpression(tokens, state);
+            return { type: 'SETCOLORRGB', rgbExprs: [firstExpr, secondExpr, thirdExpr] };
+          }
+        } catch {}
+        state.i = savedIndex;
+      }
+      return { type: upper, argExpr: firstExpr };
+    }
+    if (['PU', 'PENUP', 'PD', 'PENDOWN', 'HT', 'HIDETURTLE', 'ST', 'SHOWTURTLE', 'HOME', 'CS', 'CLEARSCREEN'].includes(upper)) {
+      state.i += 1;
+      return { type: upper };
+    }
+    const signature = signatures[normalizeName(current)];
+    if (signature) {
+      state.i += 1;
+      const args = [];
+      for (let i = 0; i < signature.length; i += 1) {
+        args.push(i === signature.length - 1 ? parseExpression(tokens, state) : parseMultiplicative(tokens, state));
+      }
+      return { type: 'CALL', name: normalizeName(current), args };
+    }
+    throw new Error(`Unknown token: ${tokens[state.i]}`);
+  }
+
+  function parseCommands(stopToken) {
+    const out = [];
+    while (state.i < tokens.length) {
+      const cmd = parseSingleCommand(stopToken);
+      if (!cmd) break;
+      out.push(cmd);
+    }
+    return out;
+  }
+
+  const main = [];
+  while (state.i < tokens.length) {
+    if (tokens[state.i].toUpperCase() === 'TO') {
+      state.i += 1;
+      if (state.i >= tokens.length) throw new Error('TO must be followed by a procedure name');
+      const name = normalizeName(tokens[state.i]);
+      state.i += 1;
+      const params = [];
+      while (state.i < tokens.length && tokens[state.i].startsWith(':')) {
+        params.push(normalizeName(tokens[state.i].slice(1)));
+        state.i += 1;
+      }
+      procedures[name] = { name, params, body: parseCommands('END') };
+      continue;
+    }
+    const cmd = parseSingleCommand();
+    if (cmd) main.push(cmd);
+  }
+  return { procedures, main };
+}
+function flattenProgram(program) {
+  const out = [];
+  const context = { repcounts: [], vars: [] };
+  function walk(cmds, callDepth = 0) {
+    if (callDepth > MAX_CALL_DEPTH) throw new Error(`Maximum procedure call depth exceeded (${MAX_CALL_DEPTH})`);
+    for (const cmd of cmds) {
+      if (cmd.type === 'REPEAT') {
+        const countValue = evaluateExpression(cmd.countExpr, context);
+        if (!Number.isFinite(countValue) || countValue < 0) throw new Error(`REPEAT count must be non-negative, got: ${countValue}`);
+        const count = Math.floor(countValue);
+        for (let k = 1; k <= count; k += 1) {
+          context.repcounts.push(k);
+          walk(cmd.body, callDepth);
+          context.repcounts.pop();
+        }
+        continue;
+      }
+      if (cmd.type === 'IF') {
+        if (evaluateCondition(cmd.condition, context)) walk(cmd.body, callDepth);
+        continue;
+      }
+      if (cmd.type === 'CALL') {
+        const proc = program.procedures[cmd.name];
+        if (!proc) throw new Error(`Unknown procedure: ${cmd.name}`);
+        const frame = {};
+        for (let i = 0; i < proc.params.length; i += 1) frame[proc.params[i]] = evaluateExpression(cmd.args[i], context);
+        context.vars.push(frame);
+        walk(proc.body, callDepth + 1);
+        context.vars.pop();
+        continue;
+      }
+      if (cmd.type === 'SETCOLORRGB') {
+        out.push({ type: 'SETCOLORRGB', arg: cmd.rgbExprs.map((expr) => evaluateExpression(expr, context)) });
+        continue;
+      }
+      if ('argExpr' in cmd && cmd.argExpr) out.push({ type: cmd.type, arg: evaluateExpression(cmd.argExpr, context) });
+      else if ('arg' in cmd) out.push({ type: cmd.type, arg: cmd.arg });
+      else out.push({ type: cmd.type });
+    }
+  }
+  walk(program.main);
+  return out;
+}
+function runParserSelfTests() {
+  const cases = [
+    { name: 'repeat with bracket parses', program: 'REPEAT 3 [ FD 10 RT 20 ]', check: (flat) => flat.length === 6 && flat[0].type === 'FD' && flat[1].type === 'RT' },
+    { name: 'repcount expands', program: 'REPEAT 3 [ FD REPCOUNT ]', check: (flat) => flat.map((c) => c.arg).join(',') === '1,2,3' },
+    { name: 'arithmetic precedence works', program: 'REPEAT 1 [ FD REPCOUNT + 2 * 3 ]', check: (flat) => flat.length === 1 && flat[0].arg === 7 },
+    { name: 'setcolor numeric expression works', program: 'REPEAT 3 [ SETCOLOR REPCOUNT ]', check: (flat) => flat.map((c) => c.arg).join(',') === '1,2,3' },
+    { name: 'setcolor rgb parses', program: 'SETCOLOR 255 0 128', check: (flat) => flat.length === 1 && flat[0].type === 'SETCOLORRGB' && JSON.stringify(flat[0].arg) === '[255,0,128]' },
+    { name: 'setopacity parses', program: 'SETOPACITY 250', check: (flat) => flat.length === 1 && flat[0].type === 'SETOPACITY' && flat[0].arg === 250 },
+    { name: 'ht st parse', program: 'HT ST', check: (flat) => flat.length === 2 && flat[0].type === 'HT' && flat[1].type === 'ST' },
+    { name: 'if comparison works', program: 'IF 3 > 2 [ FD 10 ] IF 1 > 2 [ FD 99 ]', check: (flat) => flat.length === 1 && flat[0].type === 'FD' && flat[0].arg === 10 },
+    { name: 'if truthy works', program: 'IF (2 - 1) [ FD 7 ]', check: (flat) => flat.length === 1 && flat[0].type === 'FD' && flat[0].arg === 7 },
+    { name: 'procedure parameters work', program: 'TO SPIKE :LEN :TURN FD :LEN RT :TURN END REPEAT 3 [ SPIKE REPCOUNT * 10 30 ]', check: (flat) => flat.map((c) => `${c.type}:${c.arg ?? ''}`).join(',') === 'FD:10,RT:30,FD:20,RT:30,FD:30,RT:30' },
+    { name: 'procedure arg negative expression works', program: 'TO T :A :B FD :A RT :B END T 1 (90 * -1)', check: (flat) => flat.length === 2 && flat[0].arg === 1 && flat[1].arg === -90 },
+  ];
+  for (const testCase of cases) {
+    const flat = flattenProgram(parseProgram(tokenize(testCase.program)));
+    if (!testCase.check(flat)) throw new Error(`Self-test failed: ${testCase.name}`);
+  }
+  if (rgbToCss([300, 511, 256]) !== 'rgb(44, 255, 0)') throw new Error('Self-test failed: RGB normalization');
+  if (normalizeOpacityPercent(250) !== 48) throw new Error('Self-test failed: opacity normalization');
+}
+function torusResidual(point, majorRadius, minorRadius) {
+  const rho = Math.hypot(point.x, point.z);
+  return Math.abs((rho - majorRadius) ** 2 + point.y ** 2 - minorRadius ** 2);
+}
+function cylinderResidual(point, radius) { return Math.abs(Math.hypot(point.x, point.z) - radius); }
+function coneResidual(point, height, angleDeg) {
+  const halfAngle = degToRad(angleDeg / 2);
+  const h = height / 2 - point.y;
+  const expectedRadius = h * Math.tan(halfAngle);
+  const radius = Math.hypot(point.x, point.z);
+  return Math.abs(radius - expectedRadius);
+}
+function planeForward(state, distance) {
+  state.x += Math.cos(state.headingAngle) * distance;
+  state.y += Math.sin(state.headingAngle) * distance;
+  updatePlaneDerived(state);
+  return [state.pos.clone()];
+}
+function sphereForward(state, degrees, segments = null) {
+  const angle = degToRad(degrees);
+  const steps = segments || Math.max(8, Math.ceil(Math.abs(angle) / degToRad(4)));
+  const delta = angle / steps;
+  const pts = [];
+  let pos = state.pos.clone();
+  let heading = state.heading.clone();
+  for (let s = 0; s < steps; s += 1) {
+    const axis = pos.clone().cross(heading).normalize();
+    pos = rotateAroundAxis(pos, axis, delta).setLength(state.radius);
+    const turnedHeading = rotateAroundAxis(heading, axis, delta);
+    heading = turnedHeading.sub(pos.clone().multiplyScalar(turnedHeading.dot(pos) / pos.lengthSq())).normalize();
+    pts.push(pos.clone());
+  }
+  state.pos.copy(pos);
+  state.heading.copy(heading);
+  return pts;
+}
+function torusForward(state, degrees, segments = null) {
+  const arc = degToRad(degrees);
+  const steps = segments || Math.max(8, Math.ceil(Math.abs(arc) / degToRad(4)));
+  const delta = arc / steps;
+  const pts = [];
+  for (let s = 0; s < steps; s += 1) {
+    const frame = torusFrame(state.majorRadius, state.minorRadius, state.u, state.v);
+    const du = (Math.cos(state.headingAngle) * delta) / Math.max(0.2, frame.metricU);
+    const dv = (Math.sin(state.headingAngle) * delta) / frame.metricV;
+    state.u = wrapAngle(state.u + du);
+    state.v = wrapAngle(state.v + dv);
+    updateTorusDerived(state);
+    pts.push(state.pos.clone());
+  }
+  return pts;
+}
+function cylinderForward(state, degrees, segments = null) {
+  const arc = degToRad(degrees);
+  const steps = segments || Math.max(8, Math.ceil(Math.abs(arc) / degToRad(4)));
+  const delta = arc / steps;
+  const pts = [];
+  const top = state.height / 2;
+  const bottom = -top;
+  for (let s = 0; s < steps; s += 1) {
+    const frame = cylinderFrame(state.radius, state.u, state.y);
+    const du = (Math.cos(state.headingAngle) * delta) / Math.max(0.2, frame.metricU);
+    const dy = Math.sin(state.headingAngle) * delta;
+    const nextY = state.y + dy;
+    const crossesTop = nextY > top;
+    const crossesBottom = nextY < bottom;
+    if (state.boundaryMode === 'wrap' && (crossesTop || crossesBottom)) {
+      const boundaryY = crossesTop ? top : bottom;
+      const oppositeY = crossesTop ? bottom : top;
+      const t = dy === 0 ? 1 : (boundaryY - state.y) / dy;
+      const boundaryU = state.u + du * t;
+      pts.push(cylinderPoint(state.radius, wrapAngle(boundaryU), boundaryY));
+      pts.push(null);
+      pts.push(cylinderPoint(state.radius, wrapAngle(boundaryU), oppositeY));
+      state.u = wrapAngle(state.u + du);
+      state.y = wrapIntoRange(nextY, bottom, top);
+      updateCylinderDerived(state);
+      pts.push(state.pos.clone());
+      continue;
+    }
+    if (state.boundaryMode === 'clamp' && (crossesTop || crossesBottom)) {
+      const boundaryY = crossesTop ? top : bottom;
+      const t = dy === 0 ? 1 : (boundaryY - state.y) / dy;
+      state.u = wrapAngle(state.u + du * t);
+      state.y = boundaryY;
+      updateCylinderDerived(state);
+      pts.push(state.pos.clone());
+      continue;
+    }
+    state.u = wrapAngle(state.u + du);
+    state.y = nextY;
+    updateCylinderDerived(state);
+    pts.push(state.pos.clone());
+  }
+  return pts;
+}
+function coneForward(state, degrees, segments = null, coneForwardMode = 'geodesic') {
+  const arc = degToRad(degrees);
+  const steps = segments || Math.max(8, Math.ceil(Math.abs(arc) / degToRad(4)));
+  const delta = arc / steps;
+  const pts = [];
+  if (coneForwardMode === 'bearing') {
+    for (let s = 0; s < steps; s += 1) {
+      const frame = coneFrame(state.height, state.angleDeg, state.u, state.h);
+      const du = (Math.cos(state.headingAngle) * delta) / Math.max(0.2, frame.metricU);
+      const dh = (Math.sin(state.headingAngle) * delta) / frame.metricH;
+      state.u = wrapAngle(state.u + du);
+      state.h = clamp(state.h + dh, CONE_MIN_H, state.height);
+      updateConeDerived(state);
+      pts.push(state.pos.clone());
+    }
+    return pts;
+  }
+  for (let s = 0; s < steps; s += 1) {
+    const plane = coneToPlane(state.height, state.angleDeg, state.u, state.h);
+    const radialLen = Math.max(plane.rho, 1e-6);
+    const eRho = new THREE.Vector2(plane.x / radialLen, plane.y / radialLen);
+    const ePhi = new THREE.Vector2(-eRho.y, eRho.x);
+    const heading2D = ePhi.clone().multiplyScalar(Math.cos(state.headingAngle)).add(eRho.clone().multiplyScalar(Math.sin(state.headingAngle)));
+    const nextX = plane.x + heading2D.x * delta;
+    const nextY = plane.y + heading2D.y * delta;
+    const mapped = planeToCone(state.height, state.angleDeg, nextX, nextY);
+    state.u = mapped.u;
+    state.h = mapped.h;
+    updateConeDerived(state);
+    pts.push(state.pos.clone());
+    const nextRadialLen = Math.max(mapped.rho, 1e-6);
+    const nextERho = new THREE.Vector2(nextX / nextRadialLen, nextY / nextRadialLen);
+    const nextEPhi = new THREE.Vector2(-nextERho.y, nextERho.x);
+    state.headingAngle = Math.atan2(heading2D.dot(nextERho), heading2D.dot(nextEPhi));
+    updateConeDerived(state);
+  }
+  return pts;
+}
+function planeTurn(state, degrees) { state.headingAngle += degToRad(-degrees); updatePlaneDerived(state); }
+function sphereTurn(state, degrees) {
+  const angle = degToRad(-degrees);
+  const normal = state.pos.clone().normalize();
+  const turned = rotateAroundAxis(state.heading, normal, angle);
+  const tangent = turned.sub(normal.clone().multiplyScalar(turned.dot(normal))).normalize();
+  state.heading.copy(tangent);
+}
+function torusTurn(state, degrees) { state.headingAngle += degToRad(-degrees); updateTorusDerived(state); }
+function cylinderTurn(state, degrees) { state.headingAngle += degToRad(-degrees); updateCylinderDerived(state); }
+function coneTurn(state, degrees) { state.headingAngle += degToRad(-degrees); updateConeDerived(state); }
+function surfaceForward(state, degrees, segments = null, coneForwardMode = 'geodesic') {
+  if (state.mode === 'plane') return planeForward(state, degrees);
+  if (state.mode === 'sphere') return sphereForward(state, degrees, segments);
+  if (state.mode === 'torus') return torusForward(state, degrees, segments);
+  if (state.mode === 'cylinder') return cylinderForward(state, degrees, segments);
+  return coneForward(state, degrees, segments, coneForwardMode);
+}
+function surfaceTurn(state, degrees) {
+  if (state.mode === 'plane') planeTurn(state, degrees);
+  else if (state.mode === 'sphere') sphereTurn(state, degrees);
+  else if (state.mode === 'torus') torusTurn(state, degrees);
+  else if (state.mode === 'cylinder') cylinderTurn(state, degrees);
+  else coneTurn(state, degrees);
+}
+function resetState(state, sphereRadius, surfaceMode, cylinderBoundaryMode, surfaceParams) {
+  const reset = makeDefaultState(sphereRadius, surfaceMode, cylinderBoundaryMode, surfaceParams);
+  Object.assign(state, reset);
+  if (state.mode === 'plane') updatePlaneDerived(state);
+  else if (state.mode === 'torus') updateTorusDerived(state);
+  else if (state.mode === 'cylinder') updateCylinderDerived(state);
+  else if (state.mode === 'cone') updateConeDerived(state);
+}
+function runCommands(commands, sphereRadius = 1, surfaceMode = 'sphere', cylinderBoundaryMode = 'wrap', surfaceParams = DEFAULT_SURFACE_PARAMS, coneForwardMode = 'geodesic') {
+  const state = makeDefaultState(sphereRadius, surfaceMode, cylinderBoundaryMode, surfaceParams);
+  const polylines = [];
+  const logs = [];
+  let currentStroke = null;
+  function ensureStroke() {
+    if (!state.penDown) return;
+    if (!currentStroke) {
+      currentStroke = { color: state.color, opacity: state.opacity, width: state.width, points: [state.pos.clone()] };
+      polylines.push(currentStroke);
+    }
+  }
+  function breakStroke() { currentStroke = null; }
+  for (const cmd of commands) {
+    switch (cmd.type) {
+      case 'FD':
+      case 'FORWARD':
+        ensureStroke();
+        if (state.penDown && currentStroke) currentStroke.points.push(...surfaceForward(state, Number(cmd.arg), null, coneForwardMode));
+        logs.push(`FD ${cmd.arg}`);
+        break;
+      case 'BK':
+      case 'BACK':
+        ensureStroke();
+        if (state.penDown && currentStroke) currentStroke.points.push(...surfaceForward(state, -Number(cmd.arg), null, coneForwardMode));
+        logs.push(`BK ${cmd.arg}`);
+        break;
+      case 'RT':
+      case 'RIGHT':
+        surfaceTurn(state, Number(cmd.arg));
+        logs.push(`RT ${cmd.arg}`);
+        break;
+      case 'LT':
+      case 'LEFT':
+        surfaceTurn(state, -Number(cmd.arg));
+        logs.push(`LT ${cmd.arg}`);
+        break;
+      case 'PU':
+      case 'PENUP':
+        state.penDown = false; breakStroke(); logs.push('PU'); break;
+      case 'PD':
+      case 'PENDOWN':
+        state.penDown = true; breakStroke(); ensureStroke(); logs.push('PD'); break;
+      case 'HT':
+      case 'HIDETURTLE':
+        state.turtleVisible = false; logs.push('HT'); break;
+      case 'ST':
+      case 'SHOWTURTLE':
+        state.turtleVisible = true; logs.push('ST'); break;
+      case 'HOME':
+        breakStroke(); resetState(state, sphereRadius, surfaceMode, cylinderBoundaryMode, surfaceParams); if (state.penDown) ensureStroke(); logs.push('HOME'); break;
+      case 'CS':
+      case 'CLEARSCREEN':
+        polylines.length = 0; currentStroke = null; logs.push('CS'); break;
+      case 'SETCOLOR':
+      case 'SETC':
+        state.color = resolveColor(cmd.arg); breakStroke(); logs.push(`SETCOLOR ${cmd.arg}`); break;
+      case 'SETCOLORRGB':
+        state.color = rgbToCss(cmd.arg); breakStroke(); logs.push(`SETCOLORRGB ${cmd.arg.join(' ')}`); break;
+      case 'SETWIDTH':
+      case 'SETW':
+        state.width = clamp(Number(cmd.arg), 1, MAX_PEN_WIDTH); breakStroke(); logs.push(`SETWIDTH ${cmd.arg}`); break;
+      case 'SETOPACITY':
+      case 'SETO':
+        state.opacity = normalizeOpacityPercent(Number(cmd.arg)) / 100; breakStroke(); logs.push(`SETOPACITY ${cmd.arg}`); break;
+      default:
+        throw new Error(`Unhandled command ${cmd.type}`);
+    }
+  }
+  return { polylines, turtle: { pos: state.pos.clone(), heading: state.heading.clone(), visible: state.turtleVisible }, logs };
+}
+function executeOne(state, cmd, output, sphereRadius, surfaceMode, cylinderBoundaryMode, surfaceParams, coneForwardMode) {
+  function ensureStroke() {
+    if (!state.penDown) return;
+    if (!output.currentStroke) {
+      output.currentStroke = { color: state.color, opacity: state.opacity, width: state.width, points: [state.pos.clone()] };
+      output.polylines.push(output.currentStroke);
+    }
+  }
+  function breakStroke() { output.currentStroke = null; }
+  switch (cmd.type) {
+    case 'FD':
+    case 'FORWARD':
+      ensureStroke(); if (state.penDown && output.currentStroke) output.currentStroke.points.push(...surfaceForward(state, Number(cmd.arg), null, coneForwardMode)); output.logs.push(`FD ${cmd.arg}`); break;
+    case 'BK':
+    case 'BACK':
+      ensureStroke(); if (state.penDown && output.currentStroke) output.currentStroke.points.push(...surfaceForward(state, -Number(cmd.arg), null, coneForwardMode)); output.logs.push(`BK ${cmd.arg}`); break;
+    case 'RT':
+    case 'RIGHT':
+      surfaceTurn(state, Number(cmd.arg)); output.logs.push(`RT ${cmd.arg}`); break;
+    case 'LT':
+    case 'LEFT':
+      surfaceTurn(state, -Number(cmd.arg)); output.logs.push(`LT ${cmd.arg}`); break;
+    case 'PU':
+    case 'PENUP':
+      state.penDown = false; breakStroke(); output.logs.push('PU'); break;
+    case 'PD':
+    case 'PENDOWN':
+      state.penDown = true; breakStroke(); ensureStroke(); output.logs.push('PD'); break;
+    case 'HT':
+    case 'HIDETURTLE':
+      state.turtleVisible = false; output.logs.push('HT'); break;
+    case 'ST':
+    case 'SHOWTURTLE':
+      state.turtleVisible = true; output.logs.push('ST'); break;
+    case 'HOME':
+      breakStroke(); resetState(state, sphereRadius, surfaceMode, cylinderBoundaryMode, surfaceParams); if (state.penDown) ensureStroke(); output.logs.push('HOME'); break;
+    case 'CS':
+    case 'CLEARSCREEN':
+      output.polylines.length = 0; output.currentStroke = null; output.logs.push('CS'); break;
+    case 'SETCOLOR':
+    case 'SETC':
+      state.color = resolveColor(cmd.arg); breakStroke(); output.logs.push(`SETCOLOR ${cmd.arg}`); break;
+    case 'SETCOLORRGB':
+      state.color = rgbToCss(cmd.arg); breakStroke(); output.logs.push(`SETCOLORRGB ${cmd.arg.join(' ')}`); break;
+    case 'SETWIDTH':
+    case 'SETW':
+      state.width = clamp(Number(cmd.arg), 1, MAX_PEN_WIDTH); breakStroke(); output.logs.push(`SETWIDTH ${cmd.arg}`); break;
+    case 'SETOPACITY':
+    case 'SETO':
+      state.opacity = normalizeOpacityPercent(Number(cmd.arg)) / 100; breakStroke(); output.logs.push(`SETOPACITY ${cmd.arg}`); break;
+    default:
+      throw new Error(`Unhandled command ${cmd.type}`);
+  }
+}
+function runGeometrySelfTests() {
+  const sphere = makeDefaultState(1, 'sphere', 'wrap', DEFAULT_SURFACE_PARAMS);
+  sphereForward(sphere, 90);
+  if (Math.abs(sphere.pos.length() - 1) > 1e-6) throw new Error('Geometry self-test failed: sphere turtle left the sphere');
+
+  const torus = makeDefaultState(1, 'torus', 'wrap', DEFAULT_SURFACE_PARAMS);
+  if (torusResidual(torus.pos, torus.majorRadius, torus.minorRadius) > 1e-6) throw new Error('Geometry self-test failed: torus turtle starts off the torus');
+  torusForward(torus, 180); torusTurn(torus, 90); torusForward(torus, 60);
+  if (torusResidual(torus.pos, torus.majorRadius, torus.minorRadius) > 1e-5) throw new Error('Geometry self-test failed: torus turtle left the torus');
+
+  const cylinderWrap = makeDefaultState(1, 'cylinder', 'wrap', DEFAULT_SURFACE_PARAMS);
+  cylinderWrap.headingAngle = Math.PI / 2; updateCylinderDerived(cylinderWrap);
+  const wrapTrail = cylinderForward(cylinderWrap, 1000);
+  if (!wrapTrail.some((p) => p === null)) throw new Error('Geometry self-test failed: wrap cylinder did not split the trail at the seam');
+
+  const cylinderClamp = makeDefaultState(1, 'cylinder', 'clamp', DEFAULT_SURFACE_PARAMS);
+  cylinderClamp.headingAngle = Math.PI / 2; updateCylinderDerived(cylinderClamp);
+  cylinderForward(cylinderClamp, 1000);
+  if (Math.abs(cylinderClamp.y - cylinderClamp.height / 2) > 1e-6) throw new Error('Geometry self-test failed: clamp cylinder did not stop at the top edge');
+
+  const cone = makeDefaultState(1, 'cone', 'wrap', DEFAULT_SURFACE_PARAMS);
+  coneForward(cone, 150); coneTurn(cone, 110); coneForward(cone, 80);
+  if (coneResidual(cone.pos, cone.height, cone.angleDeg) > 1e-5) throw new Error('Geometry self-test failed: cone turtle left the cone');
+
+  const coneBearing = makeDefaultState(1, 'cone', 'wrap', DEFAULT_SURFACE_PARAMS);
+  const startH = coneBearing.h;
+  coneForward(coneBearing, 180, null, 'bearing');
+  if (Math.abs(coneBearing.h - startH) > 1e-3) throw new Error('Geometry self-test failed: bearing cone did not stay near a guide circle');
+
+  const plane = makeDefaultState(1, 'plane', 'wrap', DEFAULT_SURFACE_PARAMS);
+  planeForward(plane, 10);
+  if (Math.abs(plane.x - 10) > 1e-6) throw new Error('Geometry self-test failed: plane forward is wrong');
+}
+function rotatePointForView(point, yaw, pitch) {
+  return point.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
+}
+function getSurfaceBoundingRadius(surfaceMode, surfaceParams) {
+  if (surfaceMode === 'plane') return DEFAULT_PLANE_EXTENT;
+  if (surfaceMode === 'sphere') return 1;
+  if (surfaceMode === 'torus') {
+    const { majorRadius, minorRadius } = getTorusDims(surfaceParams);
+    return majorRadius + minorRadius;
+  }
+  if (surfaceMode === 'cylinder') {
+    const { radius, height } = getCylinderDims(surfaceParams);
+    return Math.sqrt(radius * radius + (height / 2) * (height / 2));
+  }
+  const { height, angleDeg } = getConeDims(surfaceParams);
+  const baseRadius = height * Math.tan(degToRad(angleDeg / 2));
+  return Math.sqrt(baseRadius * baseRadius + (height / 2) * (height / 2));
+}
+function getSurfaceScale(size, surfaceMode, surfaceParams) { return (size * 0.4) / getSurfaceBoundingRadius(surfaceMode, surfaceParams); }
+function projectPoint(point, yaw, pitch, size, scale) {
+  const rotated = rotatePointForView(point, yaw, pitch);
+  const cx = size / 2;
+  const cy = size / 2;
+  return { x: cx + rotated.x * scale, y: cy - rotated.y * scale, z: rotated.z };
+}
+function torusNormalFromPoint(point, majorRadius) {
+  const u = Math.atan2(point.z, point.x);
+  const center = new THREE.Vector3(majorRadius * Math.cos(u), 0, majorRadius * Math.sin(u));
+  return point.clone().sub(center).normalize();
+}
+function cylinderNormalFromPoint(point) { return new THREE.Vector3(point.x, 0, point.z).normalize(); }
+function coneNormalFromPoint(point, angleDeg) {
+  const halfAngle = degToRad(angleDeg / 2);
+  const u = Math.atan2(point.z, point.x);
+  return new THREE.Vector3(Math.cos(halfAngle) * Math.cos(u), Math.sin(halfAngle), Math.cos(halfAngle) * Math.sin(u)).normalize();
+}
+function liftedSurfacePoint(point, surfaceMode, surfaceParams) {
+  if (surfaceMode === 'plane') return point.clone();
+  if (surfaceMode === 'sphere') return point.clone().multiplyScalar(1.008);
+  if (surfaceMode === 'torus') return point.clone().add(torusNormalFromPoint(point, getTorusDims(surfaceParams).majorRadius).multiplyScalar(0.03));
+  if (surfaceMode === 'cylinder') return point.clone().add(cylinderNormalFromPoint(point).multiplyScalar(0.03));
+  return point.clone().add(coneNormalFromPoint(point, surfaceParams.coneAngleDeg).multiplyScalar(0.03));
+}
+function surfaceNormalAtPoint(point, surfaceMode, surfaceParams) {
+  if (surfaceMode === 'plane') return new THREE.Vector3(0, 0, 1);
+  if (surfaceMode === 'sphere') return point.clone().normalize();
+  if (surfaceMode === 'torus') return torusNormalFromPoint(point, getTorusDims(surfaceParams).majorRadius);
+  if (surfaceMode === 'cylinder') return cylinderNormalFromPoint(point);
+  return coneNormalFromPoint(point, surfaceParams.coneAngleDeg);
+}
+function buildPolylineSegments(points, yaw, pitch, size, scale, surfaceMode, surfaceParams) {
+  const segments = [];
+  let prevRaw = null;
+  let prevLifted = null;
+  for (const raw of points) {
+    if (!raw) { prevRaw = null; prevLifted = null; continue; }
+    const lifted = liftedSurfacePoint(raw, surfaceMode, surfaceParams);
+    if (prevRaw && prevLifted) {
+      const a = projectPoint(prevLifted, yaw, pitch, size, scale);
+      const b = projectPoint(lifted, yaw, pitch, size, scale);
+      const normalA = rotatePointForView(surfaceNormalAtPoint(prevRaw, surfaceMode, surfaceParams), yaw, pitch);
+      const normalB = rotatePointForView(surfaceNormalAtPoint(raw, surfaceMode, surfaceParams), yaw, pitch);
+      segments.push({ a, b, front: surfaceMode === 'plane' ? true : (normalA.z + normalB.z) / 2 >= 0, depth: (a.z + b.z) / 2 });
+    }
+    prevRaw = raw;
+    prevLifted = lifted;
+  }
+  return segments;
+}
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+function svgLine(x1, y1, x2, y2, stroke, strokeWidth, opacity = 1, extra = '') {
+  return `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${escapeHtml(stroke)}" stroke-width="${strokeWidth}" opacity="${opacity}" ${extra}/>`;
+}
+function svgCircle(cx, cy, r, fill, stroke = 'none', strokeWidth = 0, opacity = 1) {
+  return `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}" fill="${escapeHtml(fill)}" stroke="${escapeHtml(stroke)}" stroke-width="${strokeWidth}" opacity="${opacity}" />`;
+}
+function svgPolygon(points, fill, stroke, strokeWidth, opacity = 1) {
+  const pts = points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  return `<polygon points="${pts}" fill="${escapeHtml(fill)}" stroke="${escapeHtml(stroke)}" stroke-width="${strokeWidth}" opacity="${opacity}" />`;
+}
+function renderSurfaceGuidesMarkup(yaw, pitch, size, scale, showAxes, wireframe, surfaceMode, surfaceParams, surfaceOpacity) {
+  const parts = [];
+  const guideOpacityScale = clamp(surfaceOpacity, 0, 100) / 100;
+  if (surfaceMode === 'sphere') {
+    const center = size / 2;
+    parts.push(svgCircle(center, center, scale, 'url(#surfaceFill)', '#27445f', 2, guideOpacityScale));
+    if (wireframe) {
+      const circles = [
+        Array.from({ length: 73 }, (_, i) => { const t = (i / 72) * Math.PI * 2; return new THREE.Vector3(Math.cos(t), 0, Math.sin(t)); }),
+        Array.from({ length: 73 }, (_, i) => { const t = (i / 72) * Math.PI * 2; return new THREE.Vector3(Math.cos(t), Math.sin(t), 0); }),
+        Array.from({ length: 73 }, (_, i) => { const t = (i / 72) * Math.PI * 2; return new THREE.Vector3(0, Math.cos(t), Math.sin(t)); }),
+      ];
+      circles.forEach((points) => {
+        buildPolylineSegments(points, yaw, pitch, size, scale, surfaceMode, surfaceParams).forEach((seg) => {
+          parts.push(svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.front ? '#31506e' : '#1b2b3c', 1, (seg.front ? 0.9 : 0.35) * guideOpacityScale));
+        });
+      });
+    }
+  } else if (surfaceMode === 'torus' && wireframe) {
+    const { majorRadius, minorRadius } = getTorusDims(surfaceParams);
+    for (let ui = 0; ui < 22; ui += 1) {
+      const u = (ui / 22) * Math.PI * 2;
+      const curve = Array.from({ length: 97 }, (_, i) => torusPoint(majorRadius, minorRadius, u, (i / 96) * Math.PI * 2));
+      buildPolylineSegments(curve, yaw, pitch, size, scale, surfaceMode, surfaceParams).forEach((seg) => parts.push(svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.front ? '#31506e' : '#1b2b3c', 1, (seg.front ? 0.9 : 0.28) * guideOpacityScale)));
+    }
+    for (let vi = 0; vi < 18; vi += 1) {
+      const v = (vi / 18) * Math.PI * 2;
+      const curve = Array.from({ length: 97 }, (_, i) => torusPoint(majorRadius, minorRadius, (i / 96) * Math.PI * 2, v));
+      buildPolylineSegments(curve, yaw, pitch, size, scale, surfaceMode, surfaceParams).forEach((seg) => parts.push(svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.front ? '#3f607f' : '#1a2a3a', 1, (seg.front ? 0.45 : 0.16) * guideOpacityScale)));
+    }
+  } else if (surfaceMode === 'cylinder' && wireframe) {
+    const { radius, height } = getCylinderDims(surfaceParams);
+    const halfHeight = height / 2;
+    for (let ui = 0; ui < 28; ui += 1) {
+      const u = (ui / 28) * Math.PI * 2;
+      const curve = Array.from({ length: 65 }, (_, i) => cylinderPoint(radius, u, -halfHeight + (i / 64) * height));
+      buildPolylineSegments(curve, yaw, pitch, size, scale, surfaceMode, surfaceParams).forEach((seg) => parts.push(svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.front ? '#31506e' : '#1b2b3c', 1, (seg.front ? 0.9 : 0.25) * guideOpacityScale)));
+    }
+    for (let yi = 0; yi <= 18; yi += 1) {
+      const y = -halfHeight + (yi / 18) * height;
+      const curve = Array.from({ length: 97 }, (_, i) => cylinderPoint(radius, (i / 96) * Math.PI * 2, y));
+      buildPolylineSegments(curve, yaw, pitch, size, scale, surfaceMode, surfaceParams).forEach((seg) => parts.push(svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.front ? '#3f607f' : '#1a2a3a', 1, (seg.front ? 0.4 : 0.14) * guideOpacityScale)));
+    }
+  } else if (surfaceMode === 'cone' && wireframe) {
+    const { height, angleDeg } = getConeDims(surfaceParams);
+    for (let ui = 0; ui < 24; ui += 1) {
+      const u = (ui / 24) * Math.PI * 2;
+      const curve = Array.from({ length: 65 }, (_, i) => conePoint(height, angleDeg, u, CONE_MIN_H + (i / 64) * (height - CONE_MIN_H)));
+      buildPolylineSegments(curve, yaw, pitch, size, scale, surfaceMode, surfaceParams).forEach((seg) => parts.push(svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.front ? '#31506e' : '#1b2b3c', 1, (seg.front ? 0.9 : 0.24) * guideOpacityScale)));
+    }
+    for (let hi = 1; hi <= 16; hi += 1) {
+      const h = CONE_MIN_H + (hi / 16) * (height - CONE_MIN_H);
+      const curve = Array.from({ length: 97 }, (_, i) => conePoint(height, angleDeg, (i / 96) * Math.PI * 2, h));
+      buildPolylineSegments(curve, yaw, pitch, size, scale, surfaceMode, surfaceParams).forEach((seg) => parts.push(svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.front ? '#3f607f' : '#1a2a3a', 1, (seg.front ? 0.4 : 0.14) * guideOpacityScale)));
+    }
+  }
+  if (showAxes) {
+    const axes = [
+      { color: '#ef4444', points: [new THREE.Vector3(-2.6, 0, 0), new THREE.Vector3(2.6, 0, 0)] },
+      { color: '#22c55e', points: [new THREE.Vector3(0, -2.6, 0), new THREE.Vector3(0, 2.6, 0)] },
+      { color: '#60a5fa', points: [new THREE.Vector3(0, 0, -2.6), new THREE.Vector3(0, 0, 2.6)] },
+    ];
+    axes.forEach((axis) => {
+      const a = projectPoint(axis.points[0], yaw, pitch, size, scale);
+      const b = projectPoint(axis.points[1], yaw, pitch, size, scale);
+      parts.push(svgLine(a.x, a.y, b.x, b.y, axis.color, 2, 0.9));
+    });
+  }
+  return parts.join('');
+}
+function renderSurfaceSvgMarkup(mode, view, wireframe, showAxes, surfaceParams, viewAngles, surfaceOpacity, size = EXPORT_VIEW_SIZE) {
+  const { yaw, pitch } = viewAngles;
+  const surfaceOpacityClamped = clamp(surfaceOpacity, 0, 100) / 100;
+  const hiddenTrailOpacityScale = 0.15 + 0.85 * (1 - surfaceOpacityClamped);
+  const showHiddenTrailsSolid = surfaceOpacityClamped <= 0.15;
+  const scale = getSurfaceScale(size, mode, surfaceParams);
+  const strokeSegments = view.polylines.map((stroke, idx) => ({
+    idx,
+    color: stroke.color,
+    opacity: stroke.opacity,
+    width: stroke.width,
+    segments: buildPolylineSegments(stroke.points, yaw, pitch, size, scale, mode, surfaceParams),
+  }));
+  const back = [];
+  const front = [];
+  strokeSegments.forEach((stroke) => {
+    stroke.segments.forEach((seg, i) => {
+      const item = { key: `${stroke.idx}-${i}`, color: stroke.color, opacity: stroke.opacity, width: stroke.width, a: seg.a, b: seg.b, depth: seg.depth };
+      (seg.front ? front : back).push(item);
+    });
+  });
+  back.sort((a, b) => a.depth - b.depth);
+  front.sort((a, b) => a.depth - b.depth);
+
+  let turtleMarkup = '';
+  if (view.turtle.visible) {
+    const basePoint = liftedSurfacePoint(view.turtle.pos, mode, surfaceParams);
+    const pos = projectPoint(basePoint, yaw, pitch, size, scale);
+    const heading = view.turtle.heading.clone().normalize();
+    const normal = surfaceNormalAtPoint(view.turtle.pos, mode, surfaceParams);
+    const headTip = projectPoint(basePoint.clone().add(heading.clone().multiplyScalar(0.16)), yaw, pitch, size, scale);
+    const leftWingDir = heading.clone().applyAxisAngle(normal, degToRad(140));
+    const rightWingDir = heading.clone().applyAxisAngle(normal, degToRad(-140));
+    const left = projectPoint(basePoint.clone().add(leftWingDir.multiplyScalar(0.09)), yaw, pitch, size, scale);
+    const right = projectPoint(basePoint.clone().add(rightWingDir.multiplyScalar(0.09)), yaw, pitch, size, scale);
+    turtleMarkup = `<g opacity="${pos.z >= 0 ? 1 : 0.35}">${svgPolygon([headTip, left, right], '#22c55e', '#14532d', 1.5)}${svgCircle(pos.x, pos.y, 4, '#86efac')}</g>`;
+  }
+  return `
+    <svg viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;background:#07111f">
+      <defs>
+        <radialGradient id="surfaceFill" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stop-color="#1a4066" />
+          <stop offset="65%" stop-color="#0f2b46" />
+          <stop offset="100%" stop-color="#09192b" />
+        </radialGradient>
+      </defs>
+      ${renderSurfaceGuidesMarkup(yaw, pitch, size, scale, showAxes, wireframe, mode, surfaceParams, surfaceOpacity)}
+      ${back.map((seg) => svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.color, Math.max(1, seg.width - 0.25), Math.max(0.12, seg.opacity * hiddenTrailOpacityScale), showHiddenTrailsSolid ? 'stroke-linecap="round"' : 'stroke-dasharray="3 5" stroke-linecap="round"')).join('')}
+      ${front.map((seg) => svgLine(seg.a.x, seg.a.y, seg.b.x, seg.b.y, seg.color, seg.width, seg.opacity, 'stroke-linecap="round"')).join('')}
+      ${turtleMarkup}
+    </svg>
+  `.trim();
+}
+function getPlaneBounds(view) {
+  const points = [];
+  for (const stroke of view.polylines) for (const pt of stroke.points) if (pt) points.push(pt);
+  points.push(view.turtle.pos);
+  if (!points.length) return { minX: -DEFAULT_PLANE_EXTENT, maxX: DEFAULT_PLANE_EXTENT, minY: -DEFAULT_PLANE_EXTENT, maxY: DEFAULT_PLANE_EXTENT };
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }
+  const padX = Math.max(20, (maxX - minX) * 0.1);
+  const padY = Math.max(20, (maxY - minY) * 0.1);
+  return { minX: minX - padX, maxX: maxX + padX, minY: minY - padY, maxY: maxY + padY };
+}
+function renderPlaneSvgMarkup(view, wireframe, showAxes, size = EXPORT_VIEW_SIZE) {
+  const bounds = getPlaneBounds(view);
+  const width = Math.max(1, bounds.maxX - bounds.minX);
+  const height = Math.max(1, bounds.maxY - bounds.minY);
+  const scale = Math.min((size * 0.88) / width, (size * 0.88) / height);
+  const project = (p) => ({ x: size / 2 + (p.x - (bounds.minX + width / 2)) * scale, y: size / 2 - (p.y - (bounds.minY + height / 2)) * scale });
+  const parts = [`<rect x="0" y="0" width="${size}" height="${size}" fill="#07111f" />`];
+  if (wireframe) {
+    const step = Math.max(10, Math.pow(10, Math.floor(Math.log10(Math.max(width, height) / 6))));
+    for (let x = Math.floor(bounds.minX / step) * step; x <= bounds.maxX; x += step) {
+      const a = project(new THREE.Vector3(x, bounds.minY, 0));
+      const b = project(new THREE.Vector3(x, bounds.maxY, 0));
+      parts.push(svgLine(a.x, a.y, b.x, b.y, '#223243', 1, 0.6));
+    }
+    for (let y = Math.floor(bounds.minY / step) * step; y <= bounds.maxY; y += step) {
+      const a = project(new THREE.Vector3(bounds.minX, y, 0));
+      const b = project(new THREE.Vector3(bounds.maxX, y, 0));
+      parts.push(svgLine(a.x, a.y, b.x, b.y, '#223243', 1, 0.6));
+    }
+  }
+  if (showAxes) {
+    const x1 = project(new THREE.Vector3(bounds.minX, 0, 0));
+    const x2 = project(new THREE.Vector3(bounds.maxX, 0, 0));
+    const y1 = project(new THREE.Vector3(0, bounds.minY, 0));
+    const y2 = project(new THREE.Vector3(0, bounds.maxY, 0));
+    parts.push(svgLine(x1.x, x1.y, x2.x, x2.y, '#ef4444', 2, 0.75));
+    parts.push(svgLine(y1.x, y1.y, y2.x, y2.y, '#22c55e', 2, 0.75));
+  }
+  view.polylines.forEach((stroke) => {
+    let prev = null;
+    stroke.points.forEach((pt) => {
+      if (!pt) { prev = null; return; }
+      if (prev) {
+        const a = project(prev); const b = project(pt);
+        parts.push(svgLine(a.x, a.y, b.x, b.y, stroke.color, stroke.width, stroke.opacity, 'stroke-linecap="round"'));
+      }
+      prev = pt;
+    });
+  });
+  if (view.turtle.visible) {
+    const pos = project(view.turtle.pos);
+    const heading = view.turtle.heading.clone().normalize();
+    const tip = { x: pos.x + heading.x * 14, y: pos.y - heading.y * 14 };
+    const left = { x: pos.x + (heading.x * -6 - heading.y * 7), y: pos.y - (heading.y * -6 + heading.x * 7) };
+    const right = { x: pos.x + (heading.x * -6 + heading.y * 7), y: pos.y - (heading.y * -6 - heading.x * 7) };
+    parts.push(svgPolygon([tip, left, right], '#22c55e', '#14532d', 1.5));
+    parts.push(svgCircle(pos.x, pos.y, 4, '#86efac'));
+  }
+  return `<svg viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;background:#07111f">${parts.join('')}</svg>`;
+}
+function sanitizeBootStateForExport() {
+  return {
+    sphereRadius: state.sphereRadius,
+    visibleModes: structuredClone(state.visibleModes),
+    cylinderBoundaryMode: state.cylinderBoundaryMode,
+    torusAspect: state.torusAspect,
+    cylinderAspect: state.cylinderAspect,
+    coneAngleDeg: state.coneAngleDeg,
+    coneForwardMode: state.coneForwardMode,
+    programText: state.programText,
+    speed: state.speed,
+    wireframe: state.wireframe,
+    showAxes: state.showAxes,
+    autoRotate: state.autoRotate,
+    previewHeight: state.previewHeight,
+    surfaceOpacity: state.surfaceOpacity,
+    surfaceViewAngles: structuredClone(state.surfaceViewAngles),
+    activeTab: state.activeTab,
+    autoDrawOnLoad: true,
+  };
+}
+function buildExportHtml() {
+  const source = '<!doctype html>\n' + document.documentElement.outerHTML;
+  const bootStateJson = JSON.stringify(sanitizeBootStateForExport()).replace(/</g, '\\u003c');
+  const bootScript = '<scr' + 'ipt>window.__BOOT_STATE__ = ' + bootStateJson + ';</scr' + 'ipt>';
+  return source.replace('<script type="module">', `${bootScript}\n<script type="module">`);
+}
+function downloadTextFile(filename, text, mime = 'text/plain;charset=utf-8') {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+const state = {
+  sphereRadius: 1,
+  visibleModes: { ...DEFAULT_VISIBLE_MODES },
+  cylinderBoundaryMode: 'wrap',
+  torusAspect: DEFAULT_TORUS_ASPECT,
+  cylinderAspect: DEFAULT_CYLINDER_ASPECT,
+  coneAngleDeg: DEFAULT_CONE_ANGLE_DEG,
+  coneForwardMode: 'geodesic',
+  programText: DEFAULT_PROGRAM,
+  parseError: '',
+  isRunning: false,
+  speed: 10,
+  wireframe: false,
+  showAxes: false,
+  autoRotate: true,
+  previewHeight: 360,
+  surfaceOpacity: 100,
+  selfTestStatus: '',
+  downloadStatus: '',
+  surfaceViewAngles: structuredClone(DEFAULT_SURFACE_VIEW_ANGLES),
+  viewCache: makeEmptyCache(1, 'wrap', DEFAULT_SURFACE_PARAMS),
+  pendingModes: emptyFlags(false),
+  compiledCommands: [],
+  runners: {},
+  buildToken: 0,
+  activeTab: 'program',
+};
+
+
+function applyBootState(boot) {
+  if (!boot || typeof boot !== 'object') return;
+  if (typeof boot.sphereRadius === 'number') state.sphereRadius = boot.sphereRadius;
+  if (boot.visibleModes && typeof boot.visibleModes === 'object') state.visibleModes = { ...state.visibleModes, ...boot.visibleModes };
+  if (typeof boot.cylinderBoundaryMode === 'string') state.cylinderBoundaryMode = boot.cylinderBoundaryMode;
+  if (typeof boot.torusAspect === 'number') state.torusAspect = boot.torusAspect;
+  if (typeof boot.cylinderAspect === 'number') state.cylinderAspect = boot.cylinderAspect;
+  if (typeof boot.coneAngleDeg === 'number') state.coneAngleDeg = boot.coneAngleDeg;
+  if (typeof boot.coneForwardMode === 'string') state.coneForwardMode = boot.coneForwardMode;
+  if (typeof boot.programText === 'string') state.programText = boot.programText;
+  if (typeof boot.speed === 'number') state.speed = boot.speed;
+  if (typeof boot.wireframe === 'boolean') state.wireframe = boot.wireframe;
+  if (typeof boot.showAxes === 'boolean') state.showAxes = boot.showAxes;
+  if (typeof boot.autoRotate === 'boolean') state.autoRotate = boot.autoRotate;
+  if (typeof boot.previewHeight === 'number') state.previewHeight = boot.previewHeight;
+  if (typeof boot.surfaceOpacity === 'number') state.surfaceOpacity = boot.surfaceOpacity;
+  if (boot.surfaceViewAngles && typeof boot.surfaceViewAngles === 'object') {
+    state.surfaceViewAngles = {
+      sphere: { ...state.surfaceViewAngles.sphere, ...(boot.surfaceViewAngles.sphere || {}) },
+      torus: { ...state.surfaceViewAngles.torus, ...(boot.surfaceViewAngles.torus || {}) },
+      cylinder: { ...state.surfaceViewAngles.cylinder, ...(boot.surfaceViewAngles.cylinder || {}) },
+      cone: { ...state.surfaceViewAngles.cone, ...(boot.surfaceViewAngles.cone || {}) },
+    };
+  }
+  if (typeof boot.activeTab === 'string') state.activeTab = boot.activeTab;
+  state.pendingModes = emptyFlags(false);
+  state.compiledCommands = [];
+  state.runners = {};
+  state.buildToken += 1;
+  state.parseError = '';
+  state.downloadStatus = '';
+  state.viewCache = makeEmptyCache(state.sphereRadius, state.cylinderBoundaryMode, getSurfaceParams());
+}
+
+const els = {
+  modeButtons: document.getElementById('modeButtons'),
+  previewGrid: document.getElementById('previewGrid'),
+  programText: document.getElementById('programText'),
+  helpText: document.getElementById('helpText'),
+  parseErrorBox: document.getElementById('parseErrorBox'),
+  downloadStatusBox: document.getElementById('downloadStatusBox'),
+  selfTestStatus: document.getElementById('selfTestStatus'),
+  recentCommands: document.getElementById('recentCommands'),
+  summaryGrid: document.getElementById('summaryGrid'),
+  torusAspect: document.getElementById('torusAspect'),
+  cylinderAspect: document.getElementById('cylinderAspect'),
+  coneAngleDeg: document.getElementById('coneAngleDeg'),
+  speed: document.getElementById('speed'),
+  previewHeight: document.getElementById('previewHeight'),
+  surfaceOpacity: document.getElementById('surfaceOpacity'),
+  wireframe: document.getElementById('wireframe'),
+  showAxes: document.getElementById('showAxes'),
+  autoRotate: document.getElementById('autoRotate'),
+  cylinderBoundaryMode: document.getElementById('cylinderBoundaryMode'),
+  coneForwardMode: document.getElementById('coneForwardMode'),
+  torusAspectValue: document.getElementById('torusAspectValue'),
+  cylinderAspectValue: document.getElementById('cylinderAspectValue'),
+  coneAngleValue: document.getElementById('coneAngleValue'),
+  speedValue: document.getElementById('speedValue'),
+  previewHeightValue: document.getElementById('previewHeightValue'),
+  surfaceOpacityValue: document.getElementById('surfaceOpacityValue'),
+  coneInfo: document.getElementById('coneInfo'),
+};
+
+function getSurfaceParams() {
+  return {
+    torusMinorRadius: DEFAULT_TORUS_MINOR_RADIUS,
+    torusAspect: state.torusAspect,
+    cylinderRadius: DEFAULT_CYLINDER_RADIUS,
+    cylinderAspect: state.cylinderAspect,
+    coneHeight: DEFAULT_CONE_HEIGHT,
+    coneAngleDeg: state.coneAngleDeg,
+  };
+}
+function activeModes() { return ALL_SURFACE_MODES.filter((mode) => state.visibleModes[mode]); }
+function primaryMode() { return activeModes()[0] || 'sphere'; }
+function currentPrimaryView() { return state.viewCache[primaryMode()]; }
+function setParseError(msg) {
+  state.parseError = msg || '';
+  els.parseErrorBox.hidden = !state.parseError;
+  els.parseErrorBox.textContent = state.parseError;
+}
+function setDownloadStatus(msg) {
+  state.downloadStatus = msg || '';
+  els.downloadStatusBox.hidden = !state.downloadStatus;
+  els.downloadStatusBox.textContent = state.downloadStatus;
+}
+function syncControlsFromState() {
+  els.programText.value = state.programText;
+  els.helpText.textContent = HELP_TEXT;
+  els.torusAspect.value = String(state.torusAspect);
+  els.cylinderAspect.value = String(state.cylinderAspect);
+  els.coneAngleDeg.value = String(state.coneAngleDeg);
+  els.speed.value = String(state.speed);
+  els.previewHeight.value = String(state.previewHeight);
+  els.surfaceOpacity.value = String(state.surfaceOpacity);
+  els.wireframe.checked = state.wireframe;
+  els.showAxes.checked = state.showAxes;
+  els.autoRotate.checked = state.autoRotate;
+  els.cylinderBoundaryMode.value = state.cylinderBoundaryMode;
+  els.coneForwardMode.value = state.coneForwardMode;
+  els.torusAspectValue.textContent = state.torusAspect.toFixed(1);
+  els.cylinderAspectValue.textContent = state.cylinderAspect.toFixed(1);
+  els.coneAngleValue.textContent = `${state.coneAngleDeg.toFixed(0)}°`;
+  els.speedValue.textContent = `${state.speed} cmds/frame`;
+  els.previewHeightValue.textContent = `${state.previewHeight} px`;
+  els.surfaceOpacityValue.textContent = `${state.surfaceOpacity}%`;
+  els.coneInfo.hidden = true;
+  setParseError(state.parseError);
+  setDownloadStatus(state.downloadStatus);
+}
+function parseAndFlatten() {
+  try {
+    const parsed = parseProgram(tokenize(state.programText));
+    const flat = flattenProgram(parsed);
+    setParseError('');
+    return flat;
+  } catch (err) {
+    setParseError(err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+function scheduleBuild(commands, modes = [...ALL_SURFACE_MODES]) {
+  const token = ++state.buildToken;
+  modes.forEach((mode) => { state.pendingModes[mode] = true; });
+  renderModeButtons();
+  renderPreviews();
+  const queue = [...modes];
+  function step() {
+    if (state.buildToken !== token) return;
+    const mode = queue.shift();
+    if (!mode) return;
+    setTimeout(() => {
+      if (state.buildToken !== token) return;
+      const nextView = runCommands(commands, state.sphereRadius, mode, state.cylinderBoundaryMode, getSurfaceParams(), state.coneForwardMode);
+      state.viewCache[mode] = nextView;
+      state.pendingModes[mode] = false;
+      renderModeButtons();
+      renderPreviews();
+      renderStatus();
+      if (queue.length) step();
+    }, 0);
+  }
+  if (queue.length) step();
+}
+function renderModeButtons() {
+  els.modeButtons.innerHTML = '';
+  ALL_SURFACE_MODES.forEach((mode) => {
+    const button = document.createElement('button');
+    button.className = state.visibleModes[mode] ? 'active' : '';
+    button.textContent = MODE_META[mode].label;
+    let singleClickTimer = null;
+    button.addEventListener('click', () => {
+      singleClickTimer = setTimeout(() => {
+        const next = { ...state.visibleModes, [mode]: !state.visibleModes[mode] };
+        if (!Object.values(next).some(Boolean)) next[mode] = true;
+        state.visibleModes = next;
+        renderModeButtons();
+        renderPreviews();
+        renderStatus();
+        if (state.compiledCommands.length && !state.isRunning) scheduleBuild(state.compiledCommands, [mode]);
+      }, 180);
+    });
+    button.addEventListener('dblclick', () => {
+      if (singleClickTimer) clearTimeout(singleClickTimer);
+      state.visibleModes = emptyFlags(false);
+      state.visibleModes[mode] = true;
+      renderModeButtons();
+      renderPreviews();
+      renderStatus();
+      if (state.compiledCommands.length && !state.isRunning) scheduleBuild(state.compiledCommands, [mode]);
+    });
+    els.modeButtons.appendChild(button);
+  });
+}
+function renderSummaryMetrics() {
+  const mode = primaryMode();
+  const primaryView = currentPrimaryView();
+  const summary = {
+    primaryView: mode,
+    x: primaryView.turtle.pos.x,
+    y: primaryView.turtle.pos.y,
+    z: primaryView.turtle.pos.z,
+    steps: primaryView.logs.length,
+    strokes: primaryView.polylines.length,
+  };
+  els.summaryGrid.innerHTML = [
+    ['Primary view', summary.primaryView],
+    ['X', summary.x.toFixed(2)],
+    ['Y', summary.y.toFixed(2)],
+    ['Z', summary.z.toFixed(2)],
+    ['Executed commands', String(summary.steps)],
+    ['Strokes', String(summary.strokes)],
+  ].map(([k, v]) => `<div class="metric"><div class="k">${escapeHtml(k)}</div><div class="v ${k === 'Primary view' ? '' : 'mono'}">${escapeHtml(v)}</div></div>`).join('');
+}
+function renderStatus() {
+  renderSummaryMetrics();
+  const primaryView = currentPrimaryView();
+  const last = primaryView.logs.slice(-24);
+  els.recentCommands.innerHTML = last.length ? last.map((line) => `<div>${escapeHtml(line)}</div>`).join('') : '<div class="subtle">No commands yet.</div>';
+  els.selfTestStatus.textContent = state.selfTestStatus;
+}
+function renderPreviews() {
+  const modes = activeModes();
+  els.previewGrid.innerHTML = modes.map((mode) => {
+    const view = state.viewCache[mode];
+    const bodyHeight = Math.max(240, state.previewHeight);
+    const preview = mode === 'plane'
+      ? renderPlaneSvgMarkup(view, state.wireframe, state.showAxes)
+      : renderSurfaceSvgMarkup(mode, view, state.wireframe, state.showAxes, getSurfaceParams(), state.surfaceViewAngles[mode], state.surfaceOpacity);
+    return `
+      <div class="panel preview-card">
+        <div class="preview-head">
+          <span>${escapeHtml(MODE_META[mode].label)}</span>
+          <span class="pending">${state.pendingModes[mode] ? 'Computing…' : ''}</span>
+        </div>
+        <div class="preview-body" style="height:${bodyHeight}px">
+          <div class="preview-surface" data-mode="${mode}">${preview}</div>
+          ${mode === 'plane' ? '' : '<div class="drag-note">drag to rotate</div>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+let dragState = null;
+els.previewGrid.addEventListener('pointerdown', (event) => {
+  const surface = event.target.closest('.preview-surface');
+  if (!surface) return;
+  const mode = surface.dataset.mode;
+  if (!mode || mode === 'plane') return;
+  dragState = { mode, x: event.clientX, y: event.clientY };
+  surface.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+});
+window.addEventListener('pointermove', (event) => {
+  if (!dragState) return;
+  const dx = event.clientX - dragState.x;
+  const dy = event.clientY - dragState.y;
+  dragState.x = event.clientX;
+  dragState.y = event.clientY;
+  const angles = state.surfaceViewAngles[dragState.mode];
+  angles.yaw += dx * 0.01;
+  angles.pitch = clamp(angles.pitch + dy * 0.01, -1.45, 1.45);
+  renderPreviews();
+});
+window.addEventListener('pointerup', () => { dragState = null; });
+window.addEventListener('pointercancel', () => { dragState = null; });
+
+function compileAndDrawAll() {
+  const flat = parseAndFlatten();
+  if (!flat) return;
+  state.buildToken += 1;
+  state.isRunning = false;
+  state.runners = {};
+  state.compiledCommands = flat;
+  scheduleBuild(flat, [...ALL_SURFACE_MODES]);
+}
+function startRun() {
+  const flat = parseAndFlatten();
+  if (!flat) return;
+  state.buildToken += 1;
+  state.compiledCommands = flat;
+  state.runners = {};
+  activeModes().forEach((mode) => {
+    state.runners[mode] = {
+      state: makeDefaultState(state.sphereRadius, mode, state.cylinderBoundaryMode, getSurfaceParams()),
+      output: { polylines: [], currentStroke: null, logs: [] },
+      index: 0,
+      commands: flat,
+    };
+    state.viewCache[mode] = makeEmptyView(mode, state.sphereRadius, state.cylinderBoundaryMode, getSurfaceParams());
+  });
+  state.isRunning = true;
+  renderPreviews();
+  renderStatus();
+}
+function stopRun() { state.isRunning = false; }
+function stepRun() {
+  const flat = state.compiledCommands.length ? state.compiledCommands : parseAndFlatten();
+  if (!flat) return;
+  if (!Object.keys(state.runners).length) {
+    activeModes().forEach((mode) => {
+      state.runners[mode] = {
+        state: makeDefaultState(state.sphereRadius, mode, state.cylinderBoundaryMode, getSurfaceParams()),
+        output: { polylines: [], currentStroke: null, logs: [] },
+        index: 0,
+        commands: flat,
+      };
+    });
+    state.compiledCommands = flat;
+  }
+  activeModes().forEach((mode) => {
+    const runner = state.runners[mode];
+    if (!runner || runner.index >= runner.commands.length) return;
+    executeOne(runner.state, runner.commands[runner.index], runner.output, state.sphereRadius, mode, state.cylinderBoundaryMode, getSurfaceParams(), state.coneForwardMode);
+    runner.index += 1;
+    state.viewCache[mode] = {
+      polylines: [...runner.output.polylines],
+      turtle: { pos: runner.state.pos.clone(), heading: runner.state.heading.clone(), visible: runner.state.turtleVisible },
+      logs: [...runner.output.logs],
+    };
+  });
+  renderPreviews();
+  renderStatus();
+}
+function resetApp() {
+  state.buildToken += 1;
+  state.isRunning = false;
+  state.runners = {};
+  state.compiledCommands = [];
+  state.pendingModes = emptyFlags(false);
+  state.viewCache = makeEmptyCache(state.sphereRadius, state.cylinderBoundaryMode, getSurfaceParams());
+  setParseError('');
+  setDownloadStatus('');
+  renderModeButtons();
+  renderPreviews();
+  renderStatus();
+}
+function downloadVariantsHtml() {
+  const flat = parseAndFlatten();
+  if (!flat) {
+    setDownloadStatus('Export cancelled because the Logo program has a parse error.');
+    return;
+  }
+  const html = buildExportHtml();
+  downloadTextFile('surface-logo-interactive.html', html, 'text/html;charset=utf-8');
+  setDownloadStatus('Downloaded surface-logo-interactive.html.');
+}
+
+function rebuildIfIdle() {
+  if (!state.compiledCommands.length || state.isRunning) return;
+  scheduleBuild(state.compiledCommands, [...ALL_SURFACE_MODES]);
+}
+
+function setupEvents() {
+  document.querySelectorAll('[data-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.activeTab = button.dataset.tab;
+      document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === state.activeTab));
+      document.querySelectorAll('.tab-pane').forEach((pane) => pane.classList.toggle('active', pane.id === `tab-${state.activeTab}`));
+    });
+  });
+  document.getElementById('toggleConeInfo').addEventListener('click', () => { els.coneInfo.hidden = !els.coneInfo.hidden; });
+  document.getElementById('runBtn').addEventListener('click', startRun);
+  document.getElementById('stepBtn').addEventListener('click', stepRun);
+  document.getElementById('stopBtn').addEventListener('click', stopRun);
+  document.getElementById('resetBtn').addEventListener('click', resetApp);
+  document.getElementById('drawAllBtn').addEventListener('click', compileAndDrawAll);
+  document.getElementById('downloadBtn').addEventListener('click', downloadVariantsHtml);
+
+  els.programText.addEventListener('input', () => { state.programText = els.programText.value; setParseError(''); });
+
+  els.torusAspect.addEventListener('input', () => { state.torusAspect = Number(els.torusAspect.value); els.torusAspectValue.textContent = state.torusAspect.toFixed(1); rebuildIfIdle(); renderPreviews(); });
+  els.cylinderAspect.addEventListener('input', () => { state.cylinderAspect = Number(els.cylinderAspect.value); els.cylinderAspectValue.textContent = state.cylinderAspect.toFixed(1); rebuildIfIdle(); renderPreviews(); });
+  els.coneAngleDeg.addEventListener('input', () => { state.coneAngleDeg = Number(els.coneAngleDeg.value); els.coneAngleValue.textContent = `${state.coneAngleDeg.toFixed(0)}°`; rebuildIfIdle(); renderPreviews(); });
+  els.speed.addEventListener('input', () => { state.speed = Number(els.speed.value); els.speedValue.textContent = `${state.speed} cmds/frame`; });
+  els.previewHeight.addEventListener('input', () => { state.previewHeight = Number(els.previewHeight.value); els.previewHeightValue.textContent = `${state.previewHeight} px`; renderPreviews(); });
+  els.surfaceOpacity.addEventListener('input', () => { state.surfaceOpacity = Number(els.surfaceOpacity.value); els.surfaceOpacityValue.textContent = `${state.surfaceOpacity}%`; renderPreviews(); });
+  els.wireframe.addEventListener('change', () => { state.wireframe = els.wireframe.checked; renderPreviews(); });
+  els.showAxes.addEventListener('change', () => { state.showAxes = els.showAxes.checked; renderPreviews(); });
+  els.autoRotate.addEventListener('change', () => { state.autoRotate = els.autoRotate.checked; });
+  els.cylinderBoundaryMode.addEventListener('change', () => { state.cylinderBoundaryMode = els.cylinderBoundaryMode.value; rebuildIfIdle(); renderPreviews(); });
+  els.coneForwardMode.addEventListener('change', () => { state.coneForwardMode = els.coneForwardMode.value; rebuildIfIdle(); renderPreviews(); });
+}
+
+let lastFrame = performance.now();
+function animationLoop(now) {
+  const dt = now - lastFrame;
+  lastFrame = now;
+  let needsRender = false;
+
+  if (state.isRunning) {
+    let anyRemaining = false;
+    activeModes().forEach((mode) => {
+      const runner = state.runners[mode];
+      if (!runner) return;
+      let executed = 0;
+      while (runner.index < runner.commands.length && executed < state.speed) {
+        executeOne(runner.state, runner.commands[runner.index], runner.output, state.sphereRadius, mode, state.cylinderBoundaryMode, getSurfaceParams(), state.coneForwardMode);
+        runner.index += 1;
+        executed += 1;
+      }
+      if (runner.index < runner.commands.length) anyRemaining = true;
+      state.viewCache[mode] = {
+        polylines: [...runner.output.polylines],
+        turtle: { pos: runner.state.pos.clone(), heading: runner.state.heading.clone(), visible: runner.state.turtleVisible },
+        logs: [...runner.output.logs],
+      };
+    });
+    if (!anyRemaining) state.isRunning = false;
+    needsRender = true;
+  }
+
+  if (state.autoRotate && !dragState) {
+    for (const mode of activeModes()) {
+      if (mode === 'plane') continue;
+      state.surfaceViewAngles[mode].yaw += dt * 0.00035;
+      needsRender = true;
+    }
+  }
+
+  if (needsRender) {
+    renderPreviews();
+    renderStatus();
+  }
+  requestAnimationFrame(animationLoop);
+}
+
+function init() {
+  if (window.__BOOT_STATE__) applyBootState(window.__BOOT_STATE__);
+  syncControlsFromState();
+  setupEvents();
+  renderModeButtons();
+  try {
+    runParserSelfTests();
+    runGeometrySelfTests();
+    state.selfTestStatus = 'Parser and geometry self-tests passed.';
+  } catch (err) {
+    state.selfTestStatus = err instanceof Error ? err.message : String(err);
+  }
+  try {
+    const flat = flattenProgram(parseProgram(tokenize(state.programText)));
+    state.compiledCommands = flat;
+    const params = getSurfaceParams();
+    state.viewCache = makeEmptyCache(state.sphereRadius, state.cylinderBoundaryMode, params);
+    scheduleBuild(flat, [...ALL_SURFACE_MODES]);
+  } catch (err) {
+    setParseError(err instanceof Error ? err.message : String(err));
+  }
+  renderPreviews();
+  renderStatus();
+  requestAnimationFrame(animationLoop);
+}
+
+init();
+</script>
+</body>
+</html>
