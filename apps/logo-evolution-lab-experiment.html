@@ -563,6 +563,7 @@ input[type=range]{width:100%;accent-color:var(--teal);background:transparent;cur
     <div id="rStructuralCard" class="card" style="margin-top:12px"></div>
     <div id="rHeatmapCard" class="card" style="margin-top:12px"></div>
     <div id="rScatterCard" class="card" style="margin-top:12px"></div>
+    <div id="rParsimonyCard" class="card" style="margin-top:12px;display:none"></div>
     <div id="rGalleryCard" class="card" style="margin-top:12px"></div>
     <div id="rCSVCard" class="card" style="margin-top:12px"></div>
   </div>
@@ -1347,6 +1348,7 @@ async function callAIExp(system, userText, imgB64s=[], maxTokens=1400, label='',
       const res=await Promise.race([fetchP,timeoutP]);
       if(!res.ok){let eb='';try{eb=await res.text();}catch(e2){}
         const ra=res.headers?.get('retry-after');
+        if(res.status===400){logLine('  ⚠ OpenAI 400 on '+label+' ('+model+'): '+eb.slice(0,200));}
         throw Object.assign(new Error('OpenAI '+res.status+': '+eb.slice(0,200)),{httpStatus:res.status,retryAfter:ra?parseInt(ra):null});}
       const d2=await res.json();
       const content=d2.choices?.[0]?.message?.content;
@@ -1414,6 +1416,11 @@ async function callAIExp(system, userText, imgB64s=[], maxTokens=1400, label='',
         const w = e.retryAfter || (attempt===0?30:60);
         logLine('  ⚡ Rate limit (429) on '+al+' — waiting '+w+'s');
         await _rateLimitWait(w, al); continue;
+      }
+      if (errorCategory === 'transient' && httpStatus === 503) {
+        const w = Math.pow(2, attempt+1);
+        logLine('  🔄 Service overloaded (503) on '+al+' — retry in '+w+'s');
+        await new Promise(res=>setTimeout(res,w*1000)); continue;
       }
       if ((errorCategory==='transient'||errorCategory==='bad_request') && attempt<MAX_ATTEMPTS-1) {
         const w = Math.pow(2, attempt+1);
@@ -1525,7 +1532,7 @@ Score the image on:
 - noveltyScore (1-10): originality, surprise, visual interest
 
 Respond ONLY with JSON:
-{"aestheticScore": N, "noveltyScore": N, "reason": "brief explanation"}`;
+{"aestheticScore": N, "noveltyScore": N, "reason": "one sentence"}`;
 
 // ═══════════════════════════════════════════════════
 //  LOGO UTILITIES
@@ -1918,7 +1925,12 @@ async function agentCritiquePure(baseCode, variantCodes, allImgB64s, taste, iter
   const _critSeed = seedCtx?.seedEnabled
     ? (seedCtx.baseSeed + (seedCtx.phaseOffset||0) + seedCtx.conditionIdx*10000 + seedCtx.repeatIdx*1000 + iter*10 + 1)
     : undefined;
-  const {text:raw} = await callAIExp(CRITIC_SYS,userText,imgs,3000,'Critic',{...apiKeys,model,agent:'critic',forceModel:true,seed:_critSeed,temperature:criticTemp??0.0});
+  // When parsimony is valued, append a brevity note to the critic prompt
+  const _parsW = seedCtx?.parsimonyWeight ?? 0;
+  const _criticSys = _parsW > 0
+    ? CRITIC_SYS + `\n\nParsimony note: this experiment weights program brevity at ${_parsW.toFixed(1)} (scale 0–1). Shorter programs that achieve the same visual effect should score higher. When evaluating variants, mildly penalise unnecessarily verbose code — a program that achieves the same result in half the commands is preferred. Do not penalise structural complexity (nested loops, procedures) if it genuinely adds visual richness.`
+    : CRITIC_SYS;
+  const {text:raw} = await callAIExp(_criticSys,userText,imgs,3000,'Critic',{...apiKeys,model,agent:'critic',forceModel:true,seed:_critSeed,temperature:criticTemp??0.0});
   const critique=parseCritiqueJSON(raw);
   return {critique,rawCriticPrompt:userText,rawCriticResponse:raw};
 }
@@ -1932,7 +1944,7 @@ async function runStepPure(params) {
   const useRoulette=selectionMode==='roulette';
   const timestampStart=new Date().toISOString();
 
-  const _stepSeedCtx = seedCtx ? {...seedCtx, iterationIdx:iteration, encourageNesting} : null;
+  const _stepSeedCtx = seedCtx ? {...seedCtx, iterationIdx:iteration, encourageNesting, parsimonyWeight} : null;
   const modT0=performance.now();
   const {variants,rawModifierPrompt,rawModifierResponse}=await agentModifyPure(baseCode,feedback,numVariants,magnitude,taste,model,criticMode,apiKeys,_stepSeedCtx,modifierTemp);
   const modLatency=Math.round(performance.now()-modT0);
@@ -2077,7 +2089,7 @@ async function runCrossModelEval(evalModels, apiKeys, startDone=0, grandTotal=1)
           const aW=EXP.experiment.parameters.aestheticWeight??1.0;
           const nW=EXP.experiment.parameters.noveltyWeight??0.5;
           const pW=EXP.experiment.parameters.parsimonyWeight??0.0;
-          const {text:raw}=await callAIExp(EVAL_CRITIC_SYS,userText,[imgB64],500,'Cross-eval',{...apiKeys,model:judgeModel,agent:'cross_model_evaluator',forceModel:false,seed:_xeSeed,temperature:EXP.experiment?.parameters?.criticTemp??0.0});
+          const {text:raw}=await callAIExp(EVAL_CRITIC_SYS,userText,[imgB64],1500,'Cross-eval',{...apiKeys,model:judgeModel,agent:'cross_model_evaluator',forceModel:false,seed:_xeSeed,temperature:EXP.experiment?.parameters?.criticTemp??0.0});
           const s=raw.indexOf('{'),e=raw.lastIndexOf('}');
           if(s>=0&&e>s){
             const d=JSON.parse(raw.substring(s,e+1));
@@ -2085,6 +2097,7 @@ async function runCrossModelEval(evalModels, apiKeys, startDone=0, grandTotal=1)
             const score={aesthetic:aes,novelty:nov,total:aes*aW+nov*nW,reason:d.reason||''};
             if(prog.run)prog.run.crossModelScores[judgeModel]=score;
             if(prog.baseline)prog.baseline.criticScores[judgeModel]=score;
+            _modelScoreCounts[judgeModel] = (_modelScoreCounts[judgeModel]||0) + 1;
             evalOk=true; succeeded++;
           }
         }catch(e){
@@ -2659,8 +2672,8 @@ const ALL_MODELS=[
   {id:'gemini-2.5-flash',name:'Gemini 2.5 Flash',provider:'gemini'},
   {id:'gpt-5.4',name:'GPT-5.4',provider:'openai'},
   {id:'gpt-5.4-mini',name:'GPT-5.4 Mini',provider:'openai'},
+  {id:'gpt-5.4-nano',name:'GPT-5.4 Nano',provider:'openai'},
   {id:'o4-mini',name:'o4-mini',provider:'openai'},
-  {id:'o3',name:'o3',provider:'openai'},
 ];
 
 function buildModelCheckboxes(containerId, defaultChecked=[]) {
@@ -2863,7 +2876,14 @@ function openModalCode(encodedCode, title, analysis, metaOrKey) {
     const id1=[kv('seed',meta.seed),kv('taste',meta.taste),kv('model',meta.model),kv('condition',meta.conditionId),kv('repeat',meta.repeatIndex!=null?meta.repeatIndex+1:null),kv('iteration',meta.iteration),kv('run type',meta.runType)].filter(Boolean);
     if(id1.length)sections.push(`<div class='modal-meta-row'>${id1.join('')}</div>`);
     // Section 2: scores
-    const sc=[kv('aesthetic',meta.aesthetic?.toFixed?meta.aesthetic.toFixed(2):meta.aesthetic,'var(--teal)'),kv('novelty',meta.novelty?.toFixed?meta.novelty.toFixed(2):meta.novelty,'var(--amber)'),kv('total',meta.total?.toFixed?meta.total.toFixed(2):meta.total,'var(--teal)'),kv('parsimony',meta.parsimony?.toFixed?meta.parsimony.toFixed(2):meta.parsimony),kv('cross-model aes',meta.xmAesthetic?.toFixed?meta.xmAesthetic.toFixed(2):meta.xmAesthetic,'var(--lav)'),kv('cross-model nov',meta.xmNovelty?.toFixed?meta.xmNovelty.toFixed(2):meta.xmNovelty,'var(--lav)'),kv('judge',meta.judgeModel)].filter(Boolean);
+    // Build judge scores section
+    const _judgeEntries = meta.allJudgeScores
+      ? Object.entries(meta.allJudgeScores).flatMap(([m,s]) => [
+          kv(m.slice(0,22)+' aes', s.aesthetic?.toFixed?s.aesthetic.toFixed(2):s.aesthetic, 'var(--lav)'),
+          kv(m.slice(0,22)+' nov', s.novelty?.toFixed?s.novelty.toFixed(2):s.novelty, 'var(--lav)'),
+        ]).filter(Boolean)
+      : [kv('cross-model aes',meta.xmAesthetic?.toFixed?meta.xmAesthetic.toFixed(2):meta.xmAesthetic,'var(--lav)'),kv('cross-model nov',meta.xmNovelty?.toFixed?meta.xmNovelty.toFixed(2):meta.xmNovelty,'var(--lav)'),kv('judge',meta.judgeModel)].filter(Boolean);
+    const sc=[kv('aesthetic',meta.aesthetic?.toFixed?meta.aesthetic.toFixed(2):meta.aesthetic,'var(--teal)'),kv('novelty',meta.novelty?.toFixed?meta.novelty.toFixed(2):meta.novelty,'var(--amber)'),kv('total',meta.total?.toFixed?meta.total.toFixed(2):meta.total,'var(--teal)'),kv('parsimony',meta.parsimony?.toFixed?meta.parsimony.toFixed(2):meta.parsimony),..._judgeEntries].filter(Boolean);
     if(sc.length)sections.push(`<div class='modal-meta-sep'></div><div class='modal-meta-row'>${sc.join('')}</div>`);
     // Section 3: structural metrics
     const sm=[kv('commands',meta.totalCommands),kv('distinct cmds',meta.distinctCommands),kv('nesting depth',meta.nestingDepth),kv('repeats',meta.repeatCount),kv('procedures',meta.proceduresDefined),kv('color changes',meta.colorChanges),kv('code length',meta.codeLength!=null?(meta.codeLength+' chars'):null)].filter(Boolean);
@@ -2905,8 +2925,7 @@ window.addEventListener('load',()=>{
   buildModelCheckboxes('evalModelsContainer', ['claude-sonnet-4-6']);
 
   // Default seeds
-  addSeed('Spiral', 'REPEAT 36 [FD 100 RT 170]');
-  addSeed('Star', 'REPEAT 8 [FD 120 RT 135]');
+  addSeed('Line', 'FD 100');
 
   // Default tastes
   addTaste('Mathematical beauty where simple rules generate intricate, symmetric complexity');
@@ -2994,7 +3013,7 @@ function scoreLabel(mode) {
   const nW = _p?.noveltyWeight ?? 0.5;
   const pW = _p?.parsimonyWeight ?? 0.0;
   if (pW > 0) return `Total (aes×${aW} + nov×${nW} + par×${pW})`;
-  if (aW === 1.0 && nW === 0.5) return 'Total (aes + nov/2)';
+  if (pW > 0) return `Total (aes×${aW} + nov×${nW} + par×${pW})`;
   return `Total (aes×${aW} + nov×${nW})`;
 }
 
@@ -3021,9 +3040,13 @@ function setScoreMode(mode) {
   renderEvoBaselineChart(cm, exp);
   renderTrajectoryChart(cm, exp);
   renderRunTable(cm, exp, runs);
+  if ((exp.parameters.parsimonyWeight ?? 0) > 0) renderParsimonyScatter(cm, exp, runs, baselines);
 }
 
 function buildResultsDashboard(data) {
+  // Set window._dashData FIRST so getScore() reads correct weights in all charts
+  window._dashData = data;
+  window._dashCm = null;  // will be set after buildCondMap
   const {experiment: exp, runs, baselines} = data;
   document.getElementById('resultsPlaceholder').style.display = 'none';
   document.getElementById('resultsContent').style.display = 'block';
@@ -3032,6 +3055,7 @@ function buildResultsDashboard(data) {
   document.getElementById('loadZoneCard').querySelector('div:nth-child(2)').textContent = '✓ ' + (exp.id || 'Experiment') + ' loaded';
 
   const cm = buildCondMap(exp, runs, baselines);
+  window._dashCm = cm;
 
   renderSummary(cm, exp, runs, baselines);
   renderSweepComparison(cm, exp, runs);
@@ -3042,14 +3066,28 @@ function buildResultsDashboard(data) {
   renderHeatmap(cm, exp, runs, baselines);
   renderScatterPlot(cm, exp, runs, baselines);
   renderGallery(cm, exp);
+  // Aesthetic vs Parsimony scatter — only when parsimony weight is non-zero
+  if ((exp.parameters.parsimonyWeight ?? 0) > 0) renderParsimonyScatter(cm, exp, runs, baselines);
   renderCSVSection(data);
 }
 
 // ── Condition map ────────────────────────────────────
+// Returns the first eval model that actually has scores in this data set.
+// Falls back to evalModels[0] if none have scores (e.g. cross-eval not run).
+function pickEvalModel(exp, runs, baselines) {
+  const evalModels = exp.parameters.evalModels || [];
+  if (!evalModels.length) return '';
+  for (const m of evalModels) {
+    if (runs.some(r => r.crossModelScores?.[m] != null)) return m;
+    if (baselines.some(b => b.criticScores?.[m] != null)) return m;
+  }
+  return evalModels[0]; // none have scores yet
+}
+
 function buildCondMap(exp, runs, baselines) {
   const seedMap = Object.fromEntries(exp.parameters.seeds.map(s => [s.id, s]));
   const tasteMap = Object.fromEntries(exp.parameters.tastes.map(t => [t.id, t]));
-  const evalModel = (exp.parameters.evalModels || [])[0] || null;
+  const evalModel = pickEvalModel(exp, runs, baselines);
 
   return exp.conditions.map((cond, ci) => {
     const seed = seedMap[cond.seedId];
@@ -3139,7 +3177,7 @@ function renderSummary(cm, exp, runs, baselines) {
   const avgFinalScore = completed.length
     ? (completed.reduce((s,r)=>s+r.finalScore,0)/completed.length).toFixed(1) : '—';
 
-  const evalModel = (exp.parameters.evalModels||[])[0]||'';
+  const evalModel = cm.length && cm[0].evalModel || (exp.parameters.evalModels||[])[0]||'';
   const crossModelAvail = completed.filter(r=>r.crossModelScores&&r.crossModelScores[evalModel]).length;
 
   // Compute score gap: average evolved critic score vs average cross-model score
@@ -3175,15 +3213,16 @@ function renderSummary(cm, exp, runs, baselines) {
 // ── 7a Evolution vs Baseline chart ──────────────────
 function renderEvoBaselineChart(cm, exp) {
   const W = 720, H = 320, PAD = {t:30,r:20,b:80,l:50};
-  const evalModel = (exp.parameters.evalModels||[])[0]||'';
+  const evalModel = cm.length && cm[0].evalModel || (exp.parameters.evalModels||[])[0]||'';
 
   // Score range
-  let yMax = 12, yMin = 0;
+  let yMax = 0, yMin = 0;
   for (const c of cm) {
     c.evolvedScores.forEach(s => { if(s.crossModel!=null)yMax=Math.max(yMax,s.crossModel+.5); if(s.score)yMax=Math.max(yMax,s.score+.5); });
     [...c.basA,...c.basB].forEach(b=>{ if(b.crossModel!=null)yMax=Math.max(yMax,b.crossModel+.5); });
+    (c.feedbackOnlyRuns||[]).forEach(r=>r.scoreTrajectory?.forEach(s=>yMax=Math.max(yMax,s+.5)));
   }
-  yMax = Math.min(15, Math.ceil(yMax));
+  yMax = Math.ceil(Math.max(yMax, 1));  // no artificial cap
 
   const yScale = v => PAD.t + (yMax - v) / yMax * (H - PAD.t - PAD.b);
   const nConds = cm.length;
@@ -3320,11 +3359,19 @@ function renderEvoBaselineChart(cm, exp) {
 function renderTrajectoryChart(cm, exp) {
   const W = 720, H = 280, PAD = {t:20,r:20,b:40,l:50};
   const maxIter = exp.parameters.iterationsPerRun;
-  const evalModel = (exp.parameters.evalModels||[])[0]||'';
+  const evalModel = cm.length && cm[0].evalModel || (exp.parameters.evalModels||[])[0]||'';
 
   let yMax = 0;
-  for (const c of cm) c.condRuns.forEach(r=>r.scoreTrajectory.forEach(s=>yMax=Math.max(yMax,s)));
-  yMax = Math.ceil(yMax) + 1;  // no cap — show actual maximum score
+  // Compute yMax from the same values that will be plotted (respects score mode + weights)
+  for (const c of cm) {
+    [...c.condRuns, ...(c.feedbackOnlyRuns||[])].forEach(r => {
+      const traj = (r.iterations && r.iterations.length)
+        ? r.iterations.map(it => getScoreFromIter(it, _scoreMode))
+        : r.scoreTrajectory;
+      (traj||[]).forEach(s => yMax = Math.max(yMax, s));
+    });
+  }
+  yMax = Math.ceil(yMax) + 1;
 
   const xScale = i => PAD.l + (maxIter<=1 ? 0.5 : i/(maxIter-1))*(W-PAD.l-PAD.r);
   const yScale = v => PAD.t + (yMax>0?(yMax-v)/yMax:0.5)*(H-PAD.t-PAD.b);
@@ -3416,7 +3463,7 @@ function renderTrajectoryChart(cm, exp) {
     el.style.borderRadius = '4px';
     el.style.border = '1px solid transparent';
     el.style.transition = 'opacity .2s, border-color .2s';
-    el.title = (c.seed.label||'') + ' / ' + (c.taste.text||'') + ' — click to hide/show';
+    el.title = (cm[i]?.seed?.label||'') + ' / ' + (cm[i]?.taste?.text||'') + ' — click to hide/show';
     el.onclick = () => {
       const key = 'c'+i;
       if (window._trajHidden.has(key)) {
@@ -3438,23 +3485,22 @@ function sparkline(values) {
   if (!values || values.length < 2) return '';
   const max=Math.max(...values), min=Math.min(...values), final=values[values.length-1];
   const pts=values.map((v,i)=>`${(i/(values.length-1))*60},${20-((v-min)/(max-min||1))*18}`).join(' ');
-  const tip=`Peak: ${max.toFixed(1)}  Final: ${final.toFixed(1)}  Min: ${min.toFixed(1)}`;
-  // Mark peak with a dot
-  const peakIdx=values.indexOf(max);
-  const px=(peakIdx/(values.length-1))*60;
-  const py=20-18; // always 2 at peak since normalised
-  // Mark final with a dot if significantly below peak
   const dropped = max - final > 2;
-  const fx=(values.length-1)/(values.length-1)*60;
+  const fx=60;
   const fy=20-((final-min)/(max-min||1))*18;
+  const tip = dropped
+    ? `Peak: ${max.toFixed(1)}  →  Final: ${final.toFixed(1)} (↓${(max-final).toFixed(1)} from peak)  Min: ${min.toFixed(1)}\nRed dot = run declined ${(max-final).toFixed(1)} pts from its best score`
+    : `Peak: ${max.toFixed(1)}  Final: ${final.toFixed(1)}  Min: ${min.toFixed(1)}`;
   return `<svg viewBox="0 0 60 20" width="60" height="20" style="cursor:default"><title>${tip}</title>`
     +`<polyline points="${pts}" fill="none" stroke="var(--teal)" stroke-width="1.5"/>`
-    +(dropped?`<circle cx="${fx}" cy="${fy}" r="2.5" fill="var(--red)" title="Final: ${final.toFixed(1)}"/>`:`<circle cx="${fx}" cy="${fy}" r="2" fill="var(--teal)"/>`) 
+    +(dropped
+      ?`<circle cx="${fx}" cy="${fy}" r="2.5" fill="var(--red)" opacity="0.9"/>` 
+      :`<circle cx="${fx}" cy="${fy}" r="2" fill="var(--teal)"/>`)
     +`</svg>`;
 }
 
 function renderRunTable(cm, exp, runs) {
-  const evalModel = (exp.parameters.evalModels||[])[0]||'';
+  const evalModel = cm.length && cm[0].evalModel || (exp.parameters.evalModels||[])[0]||'';
   const rows = [];
 
   const _allRTRuns = cm.flatMap(c => [
@@ -3540,7 +3586,7 @@ function renderRunTable(cm, exp, runs) {
         ? Math.round((new Date(r.endTime)-new Date(r.startTime))/1000)+'s' : '—';
 
       const typeBadge = r._rt==='feedback_only'
-        ? `<span style="font-family:var(--ff-code);font-size:.55rem;padding:1px 5px;background:rgba(245,74,106,.12);color:var(--red);border:1px solid rgba(245,74,106,.3);border-radius:2px">C</span>`
+        ? `<span style="font-family:var(--ff-code);font-size:.55rem;padding:1px 5px;background:rgba(245,74,106,.12);color:var(--red);border:1px solid rgba(245,74,106,.3);border-radius:2px;cursor:help" title="Baseline C: feedback-only run. The critic provides suggestions and the program is updated each iteration, but there is no selection pressure — only one variant is generated per iteration and it always replaces the parent. This isolates the effect of critic feedback alone, without the evolutionary search (multiple variants + selection) that the main evolution runs use.">C</span>`
         : '';
       // Sweep variant badge — show when condition has non-default sweep params
       const _sel = c.cond?.selectionMode||c.selectionMode||'';
@@ -3592,8 +3638,8 @@ function renderRunTable(cm, exp, runs) {
     <table class="run-table">
       <thead><tr>
         <th>Seed</th><th>Taste</th><th>Rep</th>
-        <th title="Score of the last completed iteration (same source as the rightmost point on the Trajectory chart). May be lower than the peak if quality declined toward the end.">Final Score <span style="font-size:.55rem;opacity:.6">(last iter)</span></th><th title='This run xm.aesthetic − best Baseline A xm.aesthetic. Requires cross-model eval on both.'>vs A</th><th title='This run xm.aesthetic − best Baseline B xm.aesthetic. Requires cross-model eval on both.'>vs B</th><th title='This run vs best Baseline C, using xm scale when available (matching VS A/B), else critic scale (c).'>vs C</th>
-        <th>Trajectory</th><th title="Spatial entropy of the rendered image — 0=blank canvas, ~3=rich complex drawing. Higher=more visually complex.">Entropy ⓘ</th><th title="Fill ratio: fraction of non-background pixels. Low=sparse drawing, high=dense.">Fill ⓘ</th>
+        <th title="Score of the last completed iteration — the rightmost point on the Trajectory sparkline. May be lower than the peak if quality declined toward the end of evolution. Hover the sparkline to see Peak, Final, and Min scores.">Final Score <span style="font-size:.55rem;opacity:.6">(last iter)</span></th><th title="vs Baseline A (from-scratch one-shot): this run's cross-model aesthetic score minus the best Baseline A cross-model aesthetic score for the same condition. Positive = evolution beat one-shot generation. Shows — when cross-model scores are unavailable for either side.">vs A</th><th title="vs Baseline B (single-edit one-shot): this run's cross-model aesthetic score minus the best Baseline B cross-model aesthetic score. Positive = evolution beat a single unconstrained edit. Shows — when cross-model scores are unavailable.">vs B</th><th title="vs Baseline C (feedback loop, no selection): compares on cross-model scale when available (same as vs A/B), otherwise on critic scale (marked c). Positive = evolution with selection pressure outperformed pure feedback.">vs C</th>
+        <th title="Score trajectory across iterations. Hover for Peak/Final/Min. A red dot at the end means the final score was more than 2 points below the run's peak — the run declined toward the end.">Trajectory</th><th title="Spatial entropy of the rendered image. 0 = blank canvas, ~3 = rich complex drawing. Higher values mean more visually complex, space-filling images.">Entropy</th><th title="Fill ratio: fraction of canvas pixels that differ from the background. Low = sparse drawing, high = dense coverage.">Fill</th>
         <th>Status</th><th>Time</th><th>Image</th>
       </tr></thead>
       <tbody>${rows.join('')}</tbody>
@@ -3737,6 +3783,7 @@ function renderStructuralChart(cm, exp) {
 function renderHeatmap(cm, exp, runs, baselines) {
   // Note: show heatmap if ANY eval model differs from evolution models.
   // If all are the same, add a warning but still show if data exists.
+  // Use all eval models that have actual scores
   const evolModels = exp.parameters.models || [];
   const evalMods = exp.parameters.evalModels || [];
   const allSame = evalMods.length > 0 && evalMods.every(m => evolModels.includes(m));
@@ -3753,7 +3800,8 @@ function renderHeatmap(cm, exp, runs, baselines) {
     const seed = exp.parameters.seeds.find(s => s.id === cond?.seedId);
     const taste = exp.parameters.tastes.find(t => t.id === cond?.tasteId);
     programs.push({
-      label: `${seed?.label||'?'} / ${(taste?.text||'').slice(0,14)}… rep${r.repeatIndex+1}`,
+      label: `${seed?.label||'?'} / ${(taste?.text||'').slice(0,30)} rep${r.repeatIndex+1}`,
+      fullLabel: `${seed?.label||'?'} / ${taste?.text||''} — repeat ${r.repeatIndex+1}`,
       type: 'evolved', scores: r.crossModelScores,
     });
   }
@@ -3761,7 +3809,8 @@ function renderHeatmap(cm, exp, runs, baselines) {
     const judges = Object.keys(b.criticScores || {});
     if (!judges.length) continue;
     programs.push({
-      label: `${b.type==='from_scratch'?'A-scratch':'B-edit'}: ${(b.taste||'').slice(0,12)}… #${b.attemptIndex}`,
+      label: `${b.type==='from_scratch'?'A':'B'}: ${(b.taste||'').slice(0,28)} #${b.attemptIndex}`,
+      fullLabel: `${b.type==='from_scratch'?'Baseline A (scratch)':'Baseline B (edit)'}: ${b.taste||''} attempt ${b.attemptIndex}`,
       type: b.type, scores: b.criticScores,
     });
   }
@@ -3812,7 +3861,7 @@ function renderHeatmap(cm, exp, runs, baselines) {
       tbody += `<tr><td colspan="${1+allJudges.length}" style="padding:2px;background:var(--border);"></td></tr>`;
     }
     prevType = prog.type;
-    tbody += `<tr><td style="padding:4px 10px;font-family:var(--ff-code);font-size:.63rem;color:${rowColor};max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid var(--border)" title="${escHtml(prog.label)}">${escHtml(prog.label)}</td>`;
+    tbody += `<tr><td style="padding:4px 10px;font-family:var(--ff-code);font-size:.63rem;color:${rowColor};max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid var(--border)" title="${escHtml(prog.fullLabel||prog.label)}">${escHtml(prog.label)}</td>`;
     allJudges.forEach(judge => {
       const score = prog.scores[judge]?.aesthetic;
       const bg = heatColor(score);
@@ -3845,12 +3894,16 @@ function renderHeatmap(cm, exp, runs, baselines) {
   }
 
   const completedEvolved = runs.filter(r=>r.status==='completed'&&r.type!=='feedback_only').length;
-  const _evalM = (exp?.parameters?.evalModels||[])[0]||'eval model';
+  const _evalM = (cm.length && cm[0].evalModel) || (exp?.parameters?.evalModels||[])[0]||'eval model';
   const coverageNote = programs.filter(p=>p.type==='evolved').length < completedEvolved
     ? `<div style="font-size:.67rem;color:var(--amber);margin-top:8px">⚑ ${programs.filter(p=>p.type==='evolved').length} of ${completedEvolved} evolved runs scored. Some eval calls may have failed. To fill gaps: re-run with the same base seed and the same <strong>${escHtml(_evalM)}</strong> checked in Evaluation Models (Setup panel).</div>` : '';
 
   document.getElementById('rHeatmapCard').innerHTML =
     `<div class="dash-hd">Cross-Model Agreement <small>aesthetic score by judge model · teal=high · amber=low</small></div>`
+    + `<div style="font-size:.73rem;color:var(--text-muted);margin-bottom:10px;line-height:1.7">`
+    + `Each row is a completed program (evolved final winner or baseline attempt). Each column is a <em>judge model</em> that scores it independently. `
+    + `If a model scores its own outputs higher than other models do, that indicates <strong>self-serving bias</strong> — the evolution model inflated scores for the programs it generated. `
+    + `Consistent rankings across judges means the aesthetic quality signal is reliable.</div>`
     + sameModelNote
     + `<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-family:var(--ff-code)">`
     + `<thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`
@@ -4199,6 +4252,7 @@ function renderScatterPlot(cm, exp, runs, baselines) {
 }
 
 function renderGallery(cm, exp) {
+  const _activeEvalModel = cm.length && cm[0].evalModel || (exp.parameters.evalModels||[])[0]||'';
   function _scoreStr(obj, evalModel) {
     if (!obj) return '—';
     const xm = evalModel && obj.criticScores?.[evalModel];
@@ -4227,12 +4281,16 @@ function renderGallery(cm, exp) {
     }, 50);
 
     // Helper: build meta object for openModalCode
+    const _allEvalModels = exp.parameters.evalModels || [];
     const _runMeta = (r) => {
       if (!r) return {};
       const lastIt = r.iterations?.at(-1);
       const sm = lastIt?.structuralMetrics || {};
       const im = lastIt?.imageMetrics || {};
       const xm = c.evalModel && r.crossModelScores?.[c.evalModel];
+      // Collect scores from all judge models
+      const allJudgeScores = {};
+      _allEvalModels.forEach(m => { if(r.crossModelScores?.[m]) allJudgeScores[m]=r.crossModelScores[m]; });
       return {
         seed: c.seed.label, taste: c.taste.text, model: c.cond.model,
         conditionId: r.conditionId, repeatIndex: r.repeatIndex,
@@ -4240,6 +4298,7 @@ function renderGallery(cm, exp) {
         aesthetic: lastIt?.winnerAestheticScore, novelty: lastIt?.winnerNoveltyScore,
         total: r.finalScore, parsimony: lastIt?.winnerParsimonyScore,
         xmAesthetic: xm?.aesthetic, xmNovelty: xm?.novelty, judgeModel: c.evalModel||null,
+        allJudgeScores: Object.keys(allJudgeScores).length ? allJudgeScores : null,
         ...sm, spatialEntropy: im.spatialEntropy, fillRatio: im.fillRatio, symmetryScore: im.symmetryScore,
         feedback: lastIt?.feedback, scoreDropWarning: lastIt?.scoreDropWarning
       };
@@ -4249,10 +4308,13 @@ function renderGallery(cm, exp) {
       const sm = b.structuralMetrics || {};
       const im = b.imageMetrics || {};
       const xm = c.evalModel && b.criticScores?.[c.evalModel];
+      const allJudgeScores = {};
+      _allEvalModels.forEach(m => { if(b.criticScores?.[m]) allJudgeScores[m]=b.criticScores[m]; });
       return {
         seed: b.seedLabel||c.seed.label, taste: c.taste.text, model: b.model||c.cond.model,
         conditionId: b.conditionId, runType: runType,
         xmAesthetic: xm?.aesthetic, xmNovelty: xm?.novelty, judgeModel: c.evalModel||null,
+        allJudgeScores: Object.keys(allJudgeScores).length ? allJudgeScores : null,
         ...sm, spatialEntropy: im.spatialEntropy, fillRatio: im.fillRatio, symmetryScore: im.symmetryScore
       };
     };
@@ -4699,7 +4761,7 @@ function _renderMetaRunTable(exp, runs, expColorMap) {
     const taste=exp.parameters.tastes.find(t=>t.id===cond.tasteId)||{text:'?'};
     const col=expColorMap[r.experimentId]||'var(--text-muted)';
     const expTag=`<span style="font-family:var(--ff-code);font-size:.55rem;padding:1px 4px;border:1px solid ${col};color:${col};border-radius:2px;margin-right:4px">${escHtml((r.experimentId||'').slice(-8))}</span>`;
-    const typeBadge=r.type==='feedback_only'?`<span style="font-family:var(--ff-code);font-size:.55rem;padding:1px 4px;background:rgba(245,74,106,.12);color:var(--red);border:1px solid rgba(245,74,106,.3);border-radius:2px">C</span>`:'';
+    const typeBadge=r.type==='feedback_only'?`<span style="font-family:var(--ff-code);font-size:.55rem;padding:1px 4px;background:rgba(245,74,106,.12);color:var(--red);border:1px solid rgba(245,74,106,.3);border-radius:2px;cursor:help" title="Baseline C: feedback-only (no selection pressure)">C</span>`:'';
     const finalS=(r.scoreTrajectory?.at(-1)||0).toFixed(1);
     const sp=sparkline(r.scoreTrajectory);
     const lastIt=r.iterations?.at(-1);
@@ -5001,7 +5063,7 @@ LLMs can generate in a single shot.`);
       ['model', 'API model identifier used for both modifier and critic agents'],
       ['repeat_index', 'Which repeat of this condition (0-indexed). Different repeats are independent runs with different seeds'],
       ['iterations_completed', 'How many evolution iterations completed before stopping (may be < iterationsPerRun if run errored)'],
-      ['final_score', 'Total score (aesthetic + novelty×0.5) of the last winning iteration, as judged by the evolution model\'s own critic'],
+      ['final_score', `Total score (${_scoreFormula}) of the last winning iteration, as judged by the evolution model's own critic`],
       ['final_aesthetic', 'Aesthetic component of final score (evolution model critic, 1–10 scale)'],
       ['final_novelty', 'Novelty component of final score (evolution model critic, 0–10 scale; measures distance from parent)'],
       ['cross_model_score', 'Aesthetic score from the cross-model judge (different model). NULL if cross-eval did not run for this run. Note: scale may differ from final_score — model calibration varies'],
@@ -5028,7 +5090,7 @@ LLMs can generate in a single shot.`);
       ['condition_id', 'Same as runs.csv'],
       ['repeat_index', 'Which repeat'],
       ['iteration', 'Iteration number (1-indexed)'],
-      ['winner_score', 'Total score (aesthetic + novelty×0.5) of the winning variant this iteration'],
+      ['winner_score', `Total score (${_scoreFormula}) of the winning variant this iteration`],
       ['winner_aesthetic', 'Aesthetic score of winner (1–10, evolution critic)'],
       ['winner_novelty', 'Novelty score of winner (0–10, evolution critic; measures distance from this iteration\'s parent)'],
       ['distinct_commands', 'Distinct Logo command types in the winner program'],
@@ -5350,6 +5412,7 @@ summary:hover{color:#3ff5c0}
 </div>
 <div class="progress" id="prog"></div>
 <div class="infobar" id="infobar"></div>
+<div style="width:min(700px,98vw);background:#0d1425;border:1px solid #1e2d50;border-radius:6px;padding:0"><div style="padding:4px 12px 3px;font-size:.57rem;color:#6a88b0;text-transform:uppercase;letter-spacing:.08em;display:flex;justify-content:space-between;align-items:center"><span>Logo Code</span><button id="btnCopyCode" style="background:none;border:1px solid #233060;color:#6a88b0;padding:1px 8px;font-size:.6rem;border-radius:3px;cursor:pointer" onclick="navigator.clipboard.writeText(document.getElementById('codePanel').textContent).then(()=>{this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1400)})">Copy</button></div><pre id="codePanel" style="font-family:monospace;font-size:.68rem;color:#3aaa6a;padding:8px 12px 10px;margin:0;white-space:pre-wrap;word-break:break-all;max-height:160px;overflow-y:auto"></pre></div>
 <details><summary>Experiment Parameters</summary><div class="det-inner">${metaTable}</div></details>
 <script>
 ${engineSrc}
@@ -5386,9 +5449,9 @@ function redrawB(){drawCode(cvB,F[nxt],0);}
 new ResizeObserver(resize).observe(cvA.parentElement);
 L.forEach(function(_,i){var d=document.createElement("div");d.className="pip"+(i===0?" active":"");d.title=L[i];d.onclick=function(){go(i);};prg.appendChild(d);});
 function pips(){prg.querySelectorAll(".pip").forEach(function(p,i){p.classList.toggle("active",i===cur);});}
-function go(i){cur=i;nxt=(i+1)%F.length;alpha=0;phase="dwell";phaseT=0;cvB.style.opacity=0;cvB.style.transition="opacity 0ms";redrawA();redrawB();pips();document.getElementById("frameLbl").textContent=L[cur];updateInfobar(i);}
+function go(i){cur=i;nxt=(i+1)%F.length;alpha=0;phase="dwell";phaseT=0;cvB.style.opacity=0;cvB.style.transition="opacity 0ms";redrawA();redrawB();pips();document.getElementById("frameLbl").textContent=L[cur];updateInfobar(i);var cp=document.getElementById("codePanel");if(cp)cp.textContent=F[i]||"";}
 resize();go(0);
-function tick(ts){if(!playing){lastT=null;return;}if(!lastT)lastT=ts;var spd=parseFloat(document.getElementById("spd").value);var dt=(ts-lastT)*spd;lastT=ts;var DWELL=1400,FADE=900;if(phase==="dwell"){phaseT+=dt;if(phaseT>=DWELL){phaseT=0;phase="fade";cvB.style.transition="opacity 0ms";}}else{phaseT+=dt;alpha=Math.min(1,phaseT/FADE);cvB.style.transition="opacity 0ms";cvB.style.opacity=alpha;if(alpha>=1){cur=nxt;nxt=(cur+1)%F.length;alpha=0;phase="dwell";phaseT=0;cvB.style.opacity=0;redrawA();redrawB();pips();document.getElementById("frameLbl").textContent=L[cur];updateInfobar(cur);}}requestAnimationFrame(tick);}
+function tick(ts){if(!playing){lastT=null;return;}if(!lastT)lastT=ts;var spd=parseFloat(document.getElementById("spd").value);var dt=(ts-lastT)*spd;lastT=ts;var DWELL=1400,FADE=900;if(phase==="dwell"){phaseT+=dt;if(phaseT>=DWELL){phaseT=0;phase="fade";cvB.style.transition="opacity 0ms";}}else{phaseT+=dt;alpha=Math.min(1,phaseT/FADE);cvB.style.transition="opacity 0ms";cvB.style.opacity=alpha;if(alpha>=1){cur=nxt;nxt=(cur+1)%F.length;alpha=0;phase="dwell";phaseT=0;cvB.style.opacity=0;redrawA();redrawB();pips();document.getElementById("frameLbl").textContent=L[cur];updateInfobar(cur);var cp=document.getElementById("codePanel");if(cp)cp.textContent=F[cur]||"";}}requestAnimationFrame(tick);}
 requestAnimationFrame(tick);
 document.getElementById("spd").oninput=function(){document.getElementById("spdVal").textContent=parseFloat(this.value).toFixed(1)+"×";};
 function togglePlay(){playing=!playing;document.getElementById("btnPlay").textContent=playing?"⏸ Pause":"▶ Play";if(playing)requestAnimationFrame(tick);}
@@ -5811,6 +5874,93 @@ function toggleFit(){
 (function(){var el,down=false,sx,sy,sl,st;function init(){el=document.getElementById('treeWrap');if(!el)return;el.style.cursor='grab';el.addEventListener('mousedown',function(e){if(e.target.closest('.tree-node'))return;down=true;sx=e.pageX;sy=e.pageY;sl=el.scrollLeft;st=el.scrollTop;el.style.cursor='grabbing';});window.addEventListener('mouseup',function(){down=false;if(el)el.style.cursor='grab';});el.addEventListener('mousemove',function(e){if(!down)return;e.preventDefault();el.scrollLeft=sl-(e.pageX-sx);el.scrollTop=st-(e.pageY-sy);});}document.addEventListener('DOMContentLoaded',init);})();
 window.onload=()=>{buildTree();render();};
 <\/script></body></html>`;
+}
+
+
+// ═══════════════════════════════════════════════════
+//  AESTHETIC vs PARSIMONY SPACE
+// ═══════════════════════════════════════════════════
+
+function renderParsimonyScatter(cm, exp, runs, baselines) {
+  const card = document.getElementById('rParsimonyCard');
+  if (!card) return;
+  const pW = exp.parameters.parsimonyWeight ?? 0;
+  if (pW <= 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const W = 600, H = 380, PAD = {t:30,r:160,b:50,l:55};
+  const points = [];
+  const evalModel = (exp.parameters.evalModels||[])[0]||'';
+
+  // Baselines
+  for (const b of baselines) {
+    const sm = b.structuralMetrics||{};
+    const par = Math.max(0, 10 - (sm.totalCommands||0)/5);
+    const xm = evalModel && b.criticScores?.[evalModel];
+    if (xm?.aesthetic == null) continue;
+    points.push({type: b.type==='from_scratch'?'baseline-scratch':'baseline-edit',
+      aes: xm.aesthetic, par, label: (b.seedLabel||'scratch')+' #'+b.attemptIndex});
+  }
+  // Evolution final winners
+  for (const r of runs) {
+    if (!r.iterations?.length) continue;
+    const lastIt = r.iterations.at(-1);
+    const par = lastIt?.winnerParsimonyScore ?? Math.max(0, 10-(lastIt?.structuralMetrics?.totalCommands||0)/5);
+    const aes = lastIt?.winnerAestheticScore;
+    if (aes == null) continue;
+    const cond = exp.conditions.find(c=>c.id===r.conditionId);
+    const seed = exp.parameters.seeds.find(s=>s.id===cond?.seedId);
+    points.push({type: r.type==='feedback_only'?'baseline-c':'evolved',
+      aes, par, label: (seed?.label||'?')+' rep'+(r.repeatIndex+1)+(r.type==='feedback_only'?' [C]':'')});
+  }
+
+  if (!points.length) { card.style.display='none'; return; }
+
+  const TYPES = {
+    'baseline-scratch': {label:'Baseline A', color:'var(--amber)', r:4, open:true},
+    'baseline-edit':    {label:'Baseline B', color:'var(--lav)',   r:4, open:true},
+    'baseline-c':       {label:'Baseline C', color:'var(--red)',   r:4, open:true},
+    'evolved':          {label:'Evolved',    color:'var(--teal)',  r:5, open:false},
+  };
+
+  const allAes = points.map(p=>p.aes);
+  const allPar = points.map(p=>p.par);
+  const xMin = Math.max(0, Math.min(...allAes)-.5), xMax = Math.min(10, Math.max(...allAes)+.5);
+  const yMin = Math.max(0, Math.min(...allPar)-.5), yMax = Math.min(10, Math.max(...allPar)+.5);
+  const xScale = v => PAD.l+(v-xMin)/(xMax-xMin||1)*(W-PAD.l-PAD.r);
+  const yScale = v => H-PAD.b-(v-yMin)/(yMax-yMin||1)*(H-PAD.t-PAD.b);
+
+  let svgParts = [`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`];
+  for(let v=Math.ceil(xMin);v<=xMax;v++){const x=xScale(v);svgParts.push(`<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H-PAD.b}" stroke="var(--border)" stroke-width="0.5"/><text x="${x}" y="${H-PAD.b+12}" text-anchor="middle" fill="var(--text-muted)" font-size="9">${v}</text>`);}
+  for(let v=Math.ceil(yMin);v<=yMax;v++){const y=yScale(v);svgParts.push(`<line x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}" stroke="var(--border)" stroke-width="0.5"/><text x="${PAD.l-5}" y="${y+4}" text-anchor="end" fill="var(--text-muted)" font-size="9">${v}</text>`);}
+  svgParts.push(`<line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${H-PAD.b}" stroke="var(--border2)" stroke-width="1"/>`);
+  svgParts.push(`<line x1="${PAD.l}" y1="${H-PAD.b}" x2="${W-PAD.r}" y2="${H-PAD.b}" stroke="var(--border2)" stroke-width="1"/>`);
+  svgParts.push(`<text x="${PAD.l+(W-PAD.l-PAD.r)/2}" y="${H-4}" text-anchor="middle" fill="var(--text-muted)" font-size="9">Aesthetic Score →</text>`);
+  svgParts.push(`<text x="12" y="${PAD.t+(H-PAD.t-PAD.b)/2}" fill="var(--text-muted)" font-size="9" text-anchor="middle" transform="rotate(-90,12,${PAD.t+(H-PAD.t-PAD.b)/2})">Parsimony Score →</text>`);
+  svgParts.push(`<text x="${PAD.l}" y="${PAD.t-8}" fill="var(--text-muted)" font-size="8">(upper-right = high quality AND brief)</text>`);
+
+  for(const p of points){
+    const t=TYPES[p.type]||TYPES['evolved'];
+    const cx=xScale(p.aes), cy=yScale(p.par);
+    svgParts.push(t.open
+      ?`<circle cx="${cx}" cy="${cy}" r="${t.r}" fill="none" stroke="${t.color}" stroke-width="1.5"><title>${escHtml(p.label)}: aes=${p.aes.toFixed(1)} par=${p.par.toFixed(1)}</title></circle>`
+      :`<circle cx="${cx}" cy="${cy}" r="${t.r}" fill="${t.color}" stroke="none" opacity="0.8"><title>${escHtml(p.label)}: aes=${p.aes.toFixed(1)} par=${p.par.toFixed(1)}</title></circle>`);
+  }
+
+  const lx=W-PAD.r+14; let ly=PAD.t+6;
+  Object.entries(TYPES).forEach(([typ,t])=>{
+    const n=points.filter(p=>p.type===typ).length; if(!n)return;
+    ly+=18;
+    svgParts.push(t.open
+      ?`<circle cx="${lx+5}" cy="${ly}" r="${t.r}" fill="none" stroke="${t.color}" stroke-width="1.5"/>`
+      :`<circle cx="${lx+5}" cy="${ly}" r="${t.r}" fill="${t.color}"/>`);
+    svgParts.push(`<text x="${lx+14}" y="${ly+4}" fill="var(--text-muted)" font-size="8">${t.label} (${n})</text>`);
+  });
+  svgParts.push('</svg>');
+
+  card.innerHTML = `<div class="dash-hd">Aesthetic vs Parsimony Space <small>parsimony = max(0, 10 − commands/5) · weight=${pW}</small></div>`
+    + `<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:8px">Programs in the upper-right are both visually compelling <em>and</em> concise. Upper-left = pretty but verbose; lower-right = brief but unappealing.</div>`
+    + `<div class="chart-wrap">${svgParts.join('')}</div>`;
 }
 
 async function downloadHistoryZip(data) {
