@@ -226,18 +226,19 @@ input[type=range]{width:100%;accent-color:var(--teal);background:transparent;cur
 .run-table .score-val{font-family:var(--ff-code);font-weight:700}
 .run-table .vs-pos{color:var(--green)}
 .run-table .vs-neg{color:var(--red)}
+.run-table .vs-neu{color:var(--text-muted)}
 .run-table .status-err{color:var(--red);font-size:.65rem}
 .run-table .status-ok{color:var(--green);font-size:.65rem}
-.gallery-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
-@media(max-width:700px){.gallery-grid{grid-template-columns:1fr}}
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(700px,1fr));gap:16px;width:100%}
+@media(max-width:760px){.gallery-grid{grid-template-columns:1fr}}
 .gallery-condition{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px}
 .gallery-cond-hd{font-family:var(--ff-code);font-size:.62rem;color:var(--teal);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
 .gallery-taste{font-size:.72rem;color:var(--text-muted);margin-bottom:10px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gallery-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .gallery-canvas-lbl{font-family:var(--ff-code);font-size:.55rem;color:var(--text-muted);text-align:center;margin-bottom:3px;text-transform:uppercase;letter-spacing:.08em}
-.gallery-canvas-wrap{cursor:pointer;border:1px solid var(--border);border-radius:4px;overflow:hidden;background:var(--canvas-bg);position:relative}
+.gallery-canvas-wrap{cursor:pointer;border:1px solid var(--border);border-radius:4px;overflow:hidden;background:var(--canvas-bg);position:relative;width:160px;height:160px;flex-shrink:0}
 .gallery-canvas-wrap:hover::after{content:'↗';position:absolute;top:4px;right:6px;color:#fff;font-size:.8rem;text-shadow:0 0 4px rgba(0,0,0,.8)}
-.gallery-canvas-wrap canvas{display:block;width:100%;background:var(--canvas-bg)}
+.gallery-canvas-wrap canvas{display:block;width:160px;height:160px;background:var(--canvas-bg)}
 .gallery-score{font-family:var(--ff-code);font-size:.6rem;color:var(--lav);text-align:center;margin-top:3px}
 .csv-grid{display:flex;flex-wrap:wrap;gap:10px}
 .legend-row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px}
@@ -356,7 +357,19 @@ input[type=range]{width:100%;accent-color:var(--teal);background:transparent;cur
         </div>
         <div class="field">
           <label class="lbl">Iterations per Run</label>
-          <input type="number" id="expIterationsPerRun" autocomplete="off" min="1" max="50" value="15" oninput="updateRunCount()">
+          <input type="number" id="expIterationsPerRun" autocomplete="off" min="1" max="500" value="15" oninput="updateRunCount()">
+        </div>
+        <div class="field" style="grid-column:span 2">
+          <label class="lbl" style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="expEarlyStopping" onchange="document.getElementById('earlyStopping-opts').style.display=this.checked?'flex':'none'">
+            Early Stopping
+          </label>
+          <span class="field-hint">Stop run if peak aesthetic hasn't improved in N iterations</span>
+          <div id="earlyStopping-opts" style="display:none;align-items:center;gap:8px;margin-top:4px">
+            <label class="lbl" style="white-space:nowrap">Patience</label>
+            <input type="number" id="expPatience" autocomplete="off" min="3" max="100" value="10" style="width:60px">
+            <span class="field-hint">iterations without improvement</span>
+          </div>
         </div>
         <div class="field">
           <label class="lbl">Repeats per Condition</label>
@@ -556,6 +569,7 @@ input[type=range]{width:100%;accent-color:var(--teal);background:transparent;cur
   <!-- Dashboard sections — populated by buildResultsDashboard() -->
   <div id="resultsContent" style="display:none">
     <div id="rSummaryCard" class="card"></div>
+    <div id="rErrorLogCard" class="card" style="margin-top:12px;display:none"></div>
     <div id="rSweepCard" class="card" style="margin-top:12px;display:none"></div>
     <div id="rEvoBaselineCard" class="card" style="margin-top:12px"></div>
     <div id="rTrajectoryCard" class="card" style="margin-top:12px"></div>
@@ -963,7 +977,8 @@ function compileLogo(code, W, H) {
         return [Array.isArray(lst)?[item,...lst]:[item],np3];
       }
 
-      return [0,p];
+      // Unrecognized CMD — treat as a string value (e.g. color names like WHITE, GOLD, RED)
+      return [cmd,p];
     }
     return [0,p+1];
   }
@@ -1258,9 +1273,26 @@ function renderQueue(canvas, queue, getSpeedFn) {
 function drawCode(canvasEl, code, getSpeedFn) {
   const canvas = typeof canvasEl==='string' ? document.getElementById(canvasEl) : canvasEl;
   if (!canvas) return;
-  const {queue:rawQ}=compileLogo(code,canvas.width,canvas.height);
+  const {queue:rawQ, unknownCmds:logoErrors}=compileLogo(code,canvas.width,canvas.height);
+  const hasDrawOps = (rawQ||[]).some(op=>op.type==='line'||op.type==='dot'||op.type==='arc');
   const q=autoFitQueue(rawQ,canvas.width,canvas.height);
   renderQueue(canvas, q, getSpeedFn);
+  // After rendering: detect blank/all-one-color canvas and overlay a notice
+  if (!hasDrawOps && !getSpeedFn) {
+    const ctx2=canvas.getContext('2d');
+    ctx2.save();
+    ctx2.fillStyle='rgba(255,80,80,0.18)';
+    ctx2.fillRect(0,0,canvas.width,canvas.height);
+    ctx2.fillStyle='rgba(255,255,255,0.75)';
+    ctx2.font=`${Math.max(10,canvas.width/18)}px sans-serif`;
+    ctx2.textAlign='center';
+    ctx2.fillText('⚠ No visible output', canvas.width/2, canvas.height/2);
+    if (logoErrors && logoErrors.length) {
+      ctx2.font=`${Math.max(8,canvas.width/24)}px sans-serif`;
+      ctx2.fillText(String(logoErrors[0]).slice(0,40), canvas.width/2, canvas.height/2+canvas.height/14);
+    }
+    ctx2.restore();
+  }
 }
 
 function canvasB64(canvas) { return canvas.toDataURL('image/png').split(',')[1]; }
@@ -1387,7 +1419,9 @@ async function callAIExp(system, userText, imgB64s=[], maxTokens=1400, label='',
 
   const MAX_ATTEMPTS = 3;
   let lastErr = null;
+  let _lastAttempt = 0;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    _lastAttempt = attempt;
     if (EXP.stopRequested) break;
     try {
       text = await _attempt();
@@ -1436,10 +1470,10 @@ async function callAIExp(system, userText, imgB64s=[], maxTokens=1400, label='',
   const errorMsg = lastErr?.message || null;
   const meta = {
     agent, modelRequested:model, modelActuallyUsed:model,
-    systemPrompt:system, userPrompt:userText,
     imageCount:imgB64s.length, responseText:text,
     latencyMs, timestamp:new Date().toISOString(),
     httpStatus, error:errorMsg, errorCategory,
+    attemptNumber:_lastAttempt+1,
     apiSeed:seed??null, temperature:temperature??null
   };
   EXP.apiLog.push(meta);
@@ -1529,7 +1563,7 @@ const EVAL_CRITIC_SYS = `You are an art critic evaluating a single computer-gene
 
 Score the image on:
 - aestheticScore (1-10): visual beauty, composition, harmony relative to the stated taste
-- noveltyScore (1-10): originality, surprise, visual interest
+- noveltyScore (1-10): originality and visual interest as a standalone image (not relative to any prior version)
 
 Respond ONLY with JSON:
 {"aestheticScore": N, "noveltyScore": N, "reason": "one sentence"}`;
@@ -1887,7 +1921,7 @@ async function agentBaselineCCritique(prevCode, currCode, prevImgB64, currImgB64
     ? (seedCtx.baseSeed + (seedCtx.phaseOffset||0) + seedCtx.conditionIdx*10000 + seedCtx.repeatIdx*1000 + iter*10 + 1)
     : undefined;
 
-  const {text:raw} = await callAIExp(BASELINE_C_CRITIC_SYS, userText, imgs, 600, 'Baseline-C-Critic',
+  const {text:raw} = await callAIExp(BASELINE_C_CRITIC_SYS, userText, imgs, 1500, 'Baseline-C-Critic',
     {...apiKeys, model, agent:'baseline_c_critic', forceModel:true, seed:_critSeed, temperature:criticTemp??0.0});
 
   // Parse the JSON response
@@ -2057,8 +2091,12 @@ async function runCrossModelEval(evalModels, apiKeys, startDone=0, grandTotal=1)
   // B5: collect ALL programs — all evolved runs, all baselines (A/B), all Baseline C finals
   const programs=[];
   for(const run of EXP.runs){
-    if(run.status==='completed'&&run.finalWinnerCode){
-      programs.push({type:run.type||'evolved',conditionId:run.conditionId,repeatIndex:run.repeatIndex,code:run.finalWinnerCode,run});
+    if((run.status==='completed'||run.status==='early_stopped')&&run.finalWinnerCode){
+      programs.push({type:run.type||'evolved',conditionId:run.conditionId,repeatIndex:run.repeatIndex,code:run.finalWinnerCode,run,isPeak:false});
+      // Also score peak if different from final
+      if(run.peakCode && run.peakCode!==run.finalWinnerCode){
+        programs.push({type:run.type||'evolved',conditionId:run.conditionId,repeatIndex:run.repeatIndex,code:run.peakCode,run,isPeak:true});
+      }
     }
   }
   // ALL baseline A and B attempts (not just best per condition)
@@ -2070,6 +2108,9 @@ async function runCrossModelEval(evalModels, apiKeys, startDone=0, grandTotal=1)
   const adjustedGrandTotal=startDone+actualCrossTotal;
   let done=0, succeeded=0, failures=0;
   EXP.experiment.failedCalls=EXP.experiment.failedCalls||[];
+  // Track per-model score counts to warn if a model produces 0 scores (use var to avoid any TDZ issues in async context)
+  var _modelScoreCounts = {};
+  evalModels.forEach(function(m){ _modelScoreCounts[m] = 0; });
   for(const prog of programs){
     for(const judgeModel of evalModels){
       if(EXP.stopRequested)return;
@@ -2095,7 +2136,8 @@ async function runCrossModelEval(evalModels, apiKeys, startDone=0, grandTotal=1)
             const d=JSON.parse(raw.substring(s,e+1));
             const aes=parseFloat(d.aestheticScore)||0, nov=parseFloat(d.noveltyScore)||0;
             const score={aesthetic:aes,novelty:nov,total:aes*aW+nov*nW,reason:d.reason||''};
-            if(prog.run)prog.run.crossModelScores[judgeModel]=score;
+            if(prog.run&&!prog.isPeak)prog.run.crossModelScores[judgeModel]=score;
+            if(prog.run&&prog.isPeak)prog.run.crossModelScoresPeak[judgeModel]=score;
             if(prog.baseline)prog.baseline.criticScores[judgeModel]=score;
             _modelScoreCounts[judgeModel] = (_modelScoreCounts[judgeModel]||0) + 1;
             evalOk=true; succeeded++;
@@ -2112,6 +2154,13 @@ async function runCrossModelEval(evalModels, apiKeys, startDone=0, grandTotal=1)
       }
       done++;
     }
+  }
+  // Warn for any model with 0 scores
+  for (const [_m, _cnt] of Object.entries(_modelScoreCounts)) {
+    if (_cnt === 0) {
+      logLine('  ⚠ '+_m+': 0 programs scored — check API key. JSON may have been truncated or key missing.');
+      showExpMsg('⚠ <strong>'+escHtml(_m)+'</strong> produced 0 cross-eval scores. It will not appear in VS A/B comparisons.', true);
+    } else { logLine('  ✓ '+_m+': '+_cnt+' scored'); }
   }
   logLine('── Cross-eval complete: '+succeeded+'/'+actualCrossTotal+' programs scored'+
     (failures?' · '+failures+' failure(s)':'')+
@@ -2261,7 +2310,9 @@ async function startExperiment() {
         startTime:new Date().toISOString(),endTime:null,
         iterations:[],finalWinnerCode:seed.code,finalScore:0,
         scoreTrajectory:[],structuralTrajectory:[],imageTrajectory:[],
-        crossModelScores:{},error:null};
+        crossModelScores:{},crossModelScoresPeak:{},
+        peakIteration:0,peakAestheticScore:-Infinity,peakCode:seed.code,peakIterationData:null,
+        error:null};
       EXP.runs.push(run);
       const ri=EXP.runs.length-1;
       EXP.currentRunIndex=ri;
@@ -2305,13 +2356,34 @@ async function startExperiment() {
           currentCode=stepResult.winnerCode;
           currentFeedback=stepResult.feedback;
           backupPool=stepResult.backupPool;
+          // Peak tracking (uses aesthetic only — primary judgment)
+          const _iterAes = stepResult.iteration.winnerAestheticScore ?? 0;
+          if (_iterAes > EXP.runs[ri].peakAestheticScore) {
+            EXP.runs[ri].peakAestheticScore = _iterAes;
+            EXP.runs[ri].peakIteration = iter;
+            EXP.runs[ri].peakCode = stepResult.winnerCode;
+            EXP.runs[ri].peakIterationData = stepResult.iteration;
+          }
+          // Early stopping check
+          if (params.earlyStoppingEnabled && params.patience > 0 && iter >= params.patience) {
+            const _recentAes = EXP.runs[ri].iterations.slice(-params.patience).map(it=>it.winnerAestheticScore??0);
+            const _peakRecent = Math.max(..._recentAes);
+            const _peakBeforeWindow = Math.max(...EXP.runs[ri].iterations.slice(0,-params.patience).map(it=>it.winnerAestheticScore??0).concat([-Infinity]));
+            if (_peakRecent <= _peakBeforeWindow) {
+              logLine('  ⏹ Early stop: no aesthetic improvement in last '+params.patience+' iterations (peak='+EXP.runs[ri].peakAestheticScore.toFixed(2)+')');
+              updateProgress(_globalDone/grandTotal,grandTotal,'Early stopping — no improvement in '+params.patience+' iters',null,null);
+              EXP.runs[ri].earlyStopped = true;
+              break;
+            }
+          }
           showLiveCanvas(currentCode);
-          logLine('    ✓ Score: '+stepResult.iteration.winnerScore.toFixed(2)+' | entropy: '+stepResult.iteration.imageMetrics.spatialEntropy.toFixed(3));
+          logLine('    ✓ Score: '+stepResult.iteration.winnerScore.toFixed(2)+' | aes: '+_iterAes.toFixed(2)+' | entropy: '+stepResult.iteration.imageMetrics.spatialEntropy.toFixed(3));
         }
         EXP.runs[ri].finalWinnerCode=currentCode;
         EXP.runs[ri].finalScore=EXP.runs[ri].scoreTrajectory.at(-1)||0;
-        EXP.runs[ri].status='completed';
-        logLine('  ✓ Run complete. Final score: '+EXP.runs[ri].finalScore.toFixed(2));
+        EXP.runs[ri].status=EXP.runs[ri].earlyStopped?'early_stopped':'completed';
+        if(EXP.runs[ri].peakAestheticScore===-Infinity){EXP.runs[ri].peakAestheticScore=0;EXP.runs[ri].peakCode=currentCode;}
+        logLine('  ✓ Run '+(EXP.runs[ri].earlyStopped?'early-stopped':'complete')+'. Final: '+EXP.runs[ri].finalScore.toFixed(2)+' | Peak aes: '+EXP.runs[ri].peakAestheticScore.toFixed(2)+' @ iter '+(EXP.runs[ri].peakIteration+1));
       }catch(e){
         EXP.runs[ri].status='error';
         EXP.runs[ri].error=e.message;
@@ -2344,7 +2416,9 @@ async function startExperiment() {
         startTime:new Date().toISOString(),endTime:null,
         iterations:[],finalWinnerCode:seed.code,finalScore:0,
         scoreTrajectory:[],structuralTrajectory:[],imageTrajectory:[],
-        crossModelScores:{},error:null
+        crossModelScores:{},crossModelScoresPeak:{},
+        peakIteration:0,peakAestheticScore:-Infinity,peakCode:seed.code,peakIterationData:null,
+        error:null
       };
       EXP.runs.push(run);
       const ri=EXP.runs.length-1;
@@ -2437,13 +2511,37 @@ async function startExperiment() {
           prevImgB64FB=currImgB64FB;
           currentCode=newCode;
           currentFeedback=fbCritResult.suggestion||'';
+          // Peak tracking
+          const _fbAes = fbCritResult.aestheticScore ?? 0;
+          if (_fbAes > EXP.runs[ri].peakAestheticScore) {
+            EXP.runs[ri].peakAestheticScore = _fbAes;
+            EXP.runs[ri].peakIteration = iter;
+            EXP.runs[ri].peakCode = currentCode;
+            EXP.runs[ri].peakIterationData = fbIt;
+          }
+          // Early stopping
+          if (params.earlyStoppingEnabled && params.patience > 0 && iter >= params.patience) {
+            const _fbRecAes = EXP.runs[ri].iterations.slice(-params.patience).map(it=>it.winnerAestheticScore??0);
+            const _fbPkRec = Math.max(..._fbRecAes);
+            const _fbPkBef = Math.max(...EXP.runs[ri].iterations.slice(0,-params.patience).map(it=>it.winnerAestheticScore??0).concat([-Infinity]));
+            if (_fbPkRec <= _fbPkBef) {
+              logLine('  ⏹ Early stop (Baseline C): no improvement in '+params.patience+' iters');
+              EXP.runs[ri].earlyStopped = true;
+              break;
+            }
+          }
           showLiveCanvas(currentCode);
-          logLine('    FB iter '+(iter+1)+' aes:'+fbCritResult.aestheticScore.toFixed(1)+' nov:'+fbCritResult.noveltyScore.toFixed(1)+' score:'+fbScore.toFixed(2)+(fbScoreDrop?' ⚠ DROP':''));
+          const _fbLowScore = fbCritResult.aestheticScore <= 1.5;
+          logLine('    FB iter '+(iter+1)+' aes:'+fbCritResult.aestheticScore.toFixed(1)+' nov:'+fbCritResult.noveltyScore.toFixed(1)+' score:'+fbScore.toFixed(2)+(fbScoreDrop?' ⚠ DROP':'')+(_fbLowScore?' [low — reason: '+(fbCritResult.reason||'?').slice(0,60)+']':''));
         }
         EXP.runs[ri].finalWinnerCode=currentCode;
         EXP.runs[ri].finalScore=EXP.runs[ri].scoreTrajectory.at(-1)||0;
-        EXP.runs[ri].status='completed';
-        logLine('  ✓ Baseline C complete. Final: '+EXP.runs[ri].finalScore.toFixed(2));
+        EXP.runs[ri].status=EXP.runs[ri].earlyStopped?'early_stopped':'completed';
+        if(EXP.runs[ri].peakAestheticScore===-Infinity){EXP.runs[ri].peakAestheticScore=0;EXP.runs[ri].peakCode=currentCode;}
+        const _fbAesScores = EXP.runs[ri].iterations.map(it=>it.winnerAestheticScore??0);
+        const _fbAesMean = _fbAesScores.length ? _fbAesScores.reduce((a,b)=>a+b,0)/_fbAesScores.length : 0;
+        const _fbLowFlag = _fbAesMean < 2.0 ? ' ⚠ very low avg aes='+_fbAesMean.toFixed(1)+' (possible API/prompt issue)' : '';
+        logLine('  ✓ Baseline C '+(EXP.runs[ri].earlyStopped?'early-stopped':'complete')+'. Final: '+EXP.runs[ri].finalScore.toFixed(2)+_fbLowFlag);
       }catch(e){
         EXP.runs[ri].status='error';EXP.runs[ri].error=e.message;
         logLine('  ✗ Baseline C error: '+e.message);
@@ -2464,9 +2562,11 @@ async function startExperiment() {
   EXP.experiment.baselineBCompleted = true;
   EXP.experiment.evolutionCompleted = true;
   EXP.experiment.baselineCCompleted = true;
-  EXP.experiment.crossEvalStarted = evalModels.length > 0;
-    await runCrossModelEval(evalModels,apiKeys,_globalDone,grandTotal);
-    EXP.experiment.crossEvalCompleted = evalModels.length > 0;
+  // Always include evolution models in cross-eval for absolute self-assessment comparison
+  const allJudgeModels = [...new Set([...models, ...evalModels])];
+  EXP.experiment.crossEvalStarted = allJudgeModels.length > 0;
+    await runCrossModelEval(allJudgeModels,apiKeys,_globalDone,grandTotal);
+    EXP.experiment.crossEvalCompleted = allJudgeModels.length > 0;
   }
 
   finishExperiment('completed');
@@ -2715,6 +2815,8 @@ function getExperimentParams() {
     criticMode:document.getElementById('expCriticMode').value,
     variantsPerIter:parseInt(document.getElementById('expVariantsPerIter').value)||2,
     iterationsPerRun:parseInt(document.getElementById('expIterationsPerRun').value)||15,
+    earlyStoppingEnabled:document.getElementById('expEarlyStopping').checked,
+    patience:parseInt(document.getElementById('expPatience').value)||10,
     repeatsPerCondition:parseInt(document.getElementById('expRepeatsPerCondition').value)||3,
     oneshotAttempts:parseInt(document.getElementById('expOneshotAttempts').value)||10,
     // fitness weights
@@ -2837,7 +2939,7 @@ function toggleAdvanced() {
 
 function showExpMsg(text, isErr) {
   const b=document.getElementById('expMsg');
-  b.textContent=text;
+  b.innerHTML=text;  // callers use <strong>/<em> markup intentionally
   b.className='msg-box '+(isErr?'err':'ok');
   b.style.display='block';
 }
@@ -2975,9 +3077,15 @@ function _loadJSONFile(file) {
     try {
       const data = JSON.parse(e.target.result);
       buildResultsDashboard(data);
-      switchTab('results');
+      if (typeof switchTab === 'function') switchTab('results');
     } catch(err) {
-      alert('Could not parse JSON: ' + err.message);
+      const _lz = document.getElementById('loadZoneCard');
+      if (_lz) {
+        _lz.style.borderColor = 'var(--red)';
+        const _lzMsg = _lz.querySelector('div:nth-child(2)');
+        if (_lzMsg) _lzMsg.textContent = '✗ JSON parse error: ' + err.message.slice(0,120);
+      }
+      console.error('JSON load failed:', err);
     }
   };
   reader.readAsText(file);
@@ -3002,6 +3110,14 @@ function getScore(aes, nov, mode, par) {
 
 function getScoreFromIter(it, mode) {
   return getScore(it.winnerAestheticScore, it.winnerNoveltyScore, mode, it.winnerParsimonyScore);
+}
+
+function scoreFormula(params) {
+  const p = params || window._dashData?.experiment?.parameters || {};
+  const aW = p.aestheticWeight ?? 1.0;
+  const nW = p.noveltyWeight ?? 0.5;
+  const pW = p.parsimonyWeight ?? 0.0;
+  return 'aesthetic × '+aW+' + novelty × '+nW+(pW>0?' + parsimony × '+pW:'');
 }
 
 function scoreLabel(mode) {
@@ -3036,6 +3152,7 @@ function setScoreMode(mode) {
   const cm = window._dashCm;
   // Update all score-dependent views
   renderSummary(cm, exp, runs, baselines);
+  renderErrorLog(exp, runs);
   renderSweepComparison(cm, exp, runs);
   renderEvoBaselineChart(cm, exp);
   renderTrajectoryChart(cm, exp);
@@ -3058,6 +3175,7 @@ function buildResultsDashboard(data) {
   window._dashCm = cm;
 
   renderSummary(cm, exp, runs, baselines);
+  renderErrorLog(exp, runs);
   renderSweepComparison(cm, exp, runs);
   renderEvoBaselineChart(cm, exp);
   renderTrajectoryChart(cm, exp);
@@ -3111,34 +3229,53 @@ function buildCondMap(exp, runs, baselines) {
           nov: lastIt?.winnerNoveltyScore ?? null,
           crossModel: xm?.aesthetic ?? null,
           crossModelNov: xm?.novelty ?? null,
+          xmTotal: xm?.total ?? null,  // full weighted composite for Total mode
           run: r, errored: r.status === 'error'
         };
       });
 
+    const _expParams = exp.parameters;
+    const _aW = _expParams.aestheticWeight ?? 1.0;
+    const _nW = _expParams.noveltyWeight ?? 0.5;
+    const _pW = _expParams.parsimonyWeight ?? 0.0;
     const baselinesWithScore = (bls) => bls.map(b => {
       const xm = evalModel && b.criticScores && b.criticScores[evalModel] ? b.criticScores[evalModel] : null;
+      const aes = xm?.aesthetic ?? null;
+      const nov = xm?.novelty ?? null;
+      // Parsimony is structural — computable from any Logo code
+      const par = b.parsimonyScore ?? (b.structuralMetrics ? computeParsimonyScore(b.structuralMetrics) : null);
+      const total = (aes != null && nov != null) ? aes*_aW + nov*_nW + (par??0)*_pW : null;
       return {
-        crossModel: xm?.aesthetic ?? null,
-        crossModelNov: xm?.novelty ?? null,
-        aesthetic: xm?.aesthetic ?? null,
-        novelty: xm?.novelty ?? null,
+        crossModel: total,  // full composite for Total mode (same scale as evolution)
+        crossModelAes: aes,  // aesthetic only, for Aesthetic mode
+        crossModelNov: nov,
+        aesthetic: aes,
+        novelty: nov,
+        parsimony: par,
+        score: total,
         entropy: b.imageMetrics ? b.imageMetrics.spatialEntropy : null,
         fillRatio: b.imageMetrics ? b.imageMetrics.fillRatio : null,
         bl: b
       };
     });
 
-    const bestBasA = basA.sort((a,b2) => {
-      const sa = (a.criticScores && evalModel && a.criticScores[evalModel]?.aesthetic) || a.imageMetrics?.spatialEntropy || 0;
-      const sb = (b2.criticScores && evalModel && b2.criticScores[evalModel]?.aesthetic) || b2.imageMetrics?.spatialEntropy || 0;
-      return sb - sa;
-    })[0] || null;
-
-    const bestBasB = basB.sort((a,b2) => {
-      const sa = (a.criticScores && evalModel && a.criticScores[evalModel]?.aesthetic) || a.imageMetrics?.spatialEntropy || 0;
-      const sb = (b2.criticScores && evalModel && b2.criticScores[evalModel]?.aesthetic) || b2.imageMetrics?.spatialEntropy || 0;
-      return sb - sa;
-    })[0] || null;
+    // Best baseline: average total score across ALL eval models that judged it.
+    // This is more robust than using just one judge, and avoids arbitrary ordering effects.
+    const _allEvalModels2 = exp.parameters.evalModels || [];
+    const _blScore = (b) => {
+      const aW=exp.parameters.aestheticWeight??1, nW=exp.parameters.noveltyWeight??0.5, pW=exp.parameters.parsimonyWeight??0;
+      const par=b.parsimonyScore??(b.structuralMetrics?computeParsimonyScore(b.structuralMetrics):0);
+      const scores = _allEvalModels2.map(m => {
+        const xm = b.criticScores?.[m];
+        if (xm?.total != null) return xm.total;
+        if (xm?.aesthetic != null) return xm.aesthetic*aW+(xm.novelty??0)*nW+par*pW;
+        return null;
+      }).filter(v => v != null);
+      if (scores.length) return scores.reduce((a,b2)=>a+b2,0)/scores.length;  // mean across judges
+      return b.imageMetrics?.spatialEntropy||0;  // fallback: no judge scores yet
+    };
+    const bestBasA = basA.sort((a,b2)=>_blScore(b2)-_blScore(a))[0]||null;
+    const bestBasB = basB.sort((a,b2)=>_blScore(b2)-_blScore(a))[0]||null;
 
     const bestRun = condRuns.filter(r=>r.status==='completed').sort((a,b2)=>b2.finalScore-a.finalScore)[0]||null;
     const bestBasC = (feedbackOnlyRuns||[]).filter(r=>r.status==='completed').sort((a,b2)=>b2.finalScore-a.finalScore)[0]||null;
@@ -3158,19 +3295,41 @@ function buildCondMap(exp, runs, baselines) {
   });
 }
 
+// ── Condition label helpers ─────────────────────────────
+// Omit seed label when there is only one seed (unambiguous).
+function condLabel(seedLabel, tasteText, maxTaste, expObj) {
+  const one = !expObj || (expObj.parameters?.seeds||[]).length <= 1;
+  const t = tasteText.slice(0, maxTaste||16);
+  return one ? escHtml(t)+(tasteText.length>maxTaste?'…':'') : escHtml(seedLabel)+' / '+escHtml(t)+(tasteText.length>maxTaste?'…':'');
+}
+function condTitle(seedLabel, tasteText, expObj) {
+  const one = !expObj || (expObj.parameters?.seeds||[]).length <= 1;
+  return one ? escHtml(tasteText) : escHtml(seedLabel)+' / '+escHtml(tasteText);
+}
+function oneSeed(expObj) { return !expObj || (expObj.parameters?.seeds||[]).length <= 1; }
+
 // ── 7a Summary header ────────────────────────────────
 function renderSummary(cm, exp, runs, baselines) {
   const completed = runs.filter(r=>r.status==='completed');
   const errored = runs.filter(r=>r.status==='error');
 
   // Count conditions where best evolved exceeds best cross-model baseline
-  let evolBeatsBl = 0, totalComparable = 0;
+  let evolBeatsBl = 0, evolBeatsBlAes = 0, evolBeatsBlNov = 0, evolBeatsBlPar = 0, totalComparable = 0;
   for (const c of cm) {
-    const evolXM = c.evolvedScores.map(s=>s.crossModel).filter(x=>x!=null);
-    const blXM = [...c.basA,...c.basB].map(b=>b.crossModel).filter(x=>x!=null);
+    const evolXM   = c.evolvedScores.map(s=>s.xmTotal ?? s.score).filter(x=>x!=null);
+    const evolAes  = c.evolvedScores.map(s=>s.crossModel).filter(x=>x!=null);
+    const evolNov  = c.evolvedScores.map(s=>s.crossModelNov).filter(x=>x!=null);
+    const evolPar  = c.evolvedScores.map(s=>s.par).filter(x=>x!=null);
+    const blXM     = [...c.basA,...c.basB].map(b=>b.score).filter(x=>x!=null);
+    const blAes    = [...c.basA,...c.basB].map(b=>b.aesthetic).filter(x=>x!=null);
+    const blNov    = [...c.basA,...c.basB].map(b=>b.novelty).filter(x=>x!=null);
+    const blPar    = [...c.basA,...c.basB].map(b=>b.parsimony).filter(x=>x!=null);
     if (evolXM.length && blXM.length) {
       totalComparable++;
-      if (Math.max(...evolXM) > Math.max(...blXM)) evolBeatsBl++;
+      if (Math.max(...evolXM)  > Math.max(...blXM))  evolBeatsBl++;
+      if (evolAes.length && blAes.length && Math.max(...evolAes) > Math.max(...blAes)) evolBeatsBlAes++;
+      if (evolNov.length && blNov.length && Math.max(...evolNov) > Math.max(...blNov)) evolBeatsBlNov++;
+      if (evolPar.length && blPar.length && Math.max(...evolPar) > Math.max(...blPar)) evolBeatsBlPar++;
     }
   }
 
@@ -3186,16 +3345,31 @@ function renderSummary(cm, exp, runs, baselines) {
     const lastIt = r.iterations && r.iterations[r.iterations.length-1];
     if (lastIt && lastIt.winnerScore) { avgCriticScore += lastIt.winnerScore; criticCount++; }
     if (evalModel && r.crossModelScores && r.crossModelScores[evalModel]) {
-      avgCrossModelScore += r.crossModelScores[evalModel].aesthetic; xmCount++;
+      // Average total score across all judges for this run
+      (exp.parameters.evalModels||[evalModel]).forEach(m=>{
+        const _e=r.crossModelScores[m]; if(_e){avgCrossModelScore+=_e.total??_e.aesthetic;xmCount++;}
+      });
     }
   }
   const criAvg = criticCount ? (avgCriticScore/criticCount).toFixed(1) : null;
   const xmAvg = xmCount ? (avgCrossModelScore/xmCount).toFixed(1) : null;
-  const scoreGapNote = (criAvg && xmAvg)
-    ? `<br><span style="color:var(--amber)">⚑ Score gap: evolution critic avg <strong>${criAvg}</strong> vs cross-model judge avg <strong>${xmAvg}</strong> — a gap of ${(parseFloat(criAvg)-parseFloat(xmAvg)).toFixed(1)} points. Likely causes: (1) self-serving bias (the evolution model judged its own outputs); (2) relative vs absolute scoring (critic scores each variant relative to the parent, inflating over iterations); (3) scale calibration differences between models.</span>`
+  const _gapVal = criAvg && xmAvg ? parseFloat(criAvg)-parseFloat(xmAvg) : 0;
+  const scoreGapNote = (criAvg && xmAvg && _gapVal > 2)
+    ? `<br><span style="color:var(--text-muted);font-size:.76rem">ⓘ Both averages use the same composite formula (${scoreFormula(exp.parameters)}). `
+      + `Evolution critic avg <strong>${criAvg}</strong>; independent judge avg <strong>${xmAvg}</strong>. `
+      + ((_gapVal>2) ? `A gap of ${_gapVal.toFixed(1)} pts is typical: the evolution critic scores <em>novelty relative to the parent program</em> each iteration (winner always looks novel vs its immediate predecessor), which inflates novelty scores over time. The independent judge scores novelty in absolute terms with no parent for comparison.` : `Scores are closely aligned (${_gapVal.toFixed(1)} pt difference).`)
+      + `</span>`
     : '';
   const finding = totalComparable > 0
-    ? `Cross-model judge (${evalModel||'—'}): evolution beat best baseline in <strong>${evolBeatsBl}/${totalComparable}</strong> comparable conditions.${scoreGapNote}`
+    ? (() => {
+        const _pW = exp.parameters.parsimonyWeight ?? 0;
+        const _parLine = _pW > 0 ? ` Parsimony: <strong>${evolBeatsBlPar}/${totalComparable}</strong>.` : '';
+        return `Cross-model judge (${evalModel||'—'}): best evolved run beat best baseline (A or B) — `
+          + `Total: <strong>${evolBeatsBl}/${totalComparable}</strong> conditions · `
+          + `Aesthetic: <strong>${evolBeatsBlAes}/${totalComparable}</strong> · `
+          + `Novelty: <strong>${evolBeatsBlNov}/${totalComparable}</strong>.${_parLine} `
+          + `<span style='font-size:.7rem;color:var(--text-muted)'>(each: best evolved repeat vs best baseline attempt on cross-model score)</span>${scoreGapNote}`;
+      })()
     : `No cross-model comparison available — <strong>${crossModelAvail}</strong> evolved runs have cross-model scores. Run cross-eval with matching eval models to enable comparison.${scoreGapNote}`;
 
   document.getElementById('rSummaryCard').innerHTML = `
@@ -3218,8 +3392,15 @@ function renderEvoBaselineChart(cm, exp) {
   // Score range
   let yMax = 0, yMin = 0;
   for (const c of cm) {
-    c.evolvedScores.forEach(s => { if(s.crossModel!=null)yMax=Math.max(yMax,s.crossModel+.5); if(s.score)yMax=Math.max(yMax,s.score+.5); });
-    [...c.basA,...c.basB].forEach(b=>{ if(b.crossModel!=null)yMax=Math.max(yMax,b.crossModel+.5); });
+    // yMax from the same values that _pickScore/_pickBl will plot
+    c.evolvedScores.forEach(s => {
+      const v = _scoreMode==='aesthetic'?(s.crossModel??s.aes) : _scoreMode==='novelty'?(s.crossModelNov??s.nov) : _scoreMode==='parsimony'?(s.par??0) : (s.xmTotal??s.score);
+      if(v!=null)yMax=Math.max(yMax,v+.5);
+    });
+    [...c.basA,...c.basB].forEach(b=>{
+      const v = _scoreMode==='aesthetic'?b.aesthetic : _scoreMode==='novelty'?b.novelty : _scoreMode==='parsimony'?b.parsimony : b.score;
+      if(v!=null)yMax=Math.max(yMax,v+.5);
+    });
     (c.feedbackOnlyRuns||[]).forEach(r=>r.scoreTrajectory?.forEach(s=>yMax=Math.max(yMax,s+.5)));
   }
   yMax = Math.ceil(Math.max(yMax, 1));  // no artificial cap
@@ -3256,12 +3437,31 @@ function renderEvoBaselineChart(cm, exp) {
     const _tooMany = nConds > 5;
     if (_tooMany) {
       const rot = `rotate(-38,${lx},${labelY})`;
-      const shortSeed = escHtml(c.seed.label.slice(0,10));
-      const shortTaste = escHtml(c.taste.text.slice(0,10));
-      svgParts.push(`<text x="${lx}" y="${labelY}" text-anchor="end" fill="${c.color}" font-size="8" font-weight="bold" transform="${rot}">${shortSeed}·${shortTaste}…</text>`);
+      const _rotLbl = oneSeed(exp) ? escHtml(c.taste.text.slice(0,20)) : escHtml(c.seed.label.slice(0,8))+'·'+escHtml(c.taste.text.slice(0,10));
+      svgParts.push(`<text x="${lx}" y="${labelY}" text-anchor="end" fill="${c.color}" font-size="8" font-weight="bold" transform="${rot}"><title>${escHtml((oneSeed(exp)?'':c.seed.label+' / ')+c.taste.text)}</title>${_rotLbl}…</text>`);
     } else {
-      svgParts.push(`<text x="${lx}" y="${labelY}" text-anchor="middle" fill="${c.color}" font-size="9" font-weight="bold">${escHtml(c.seed.label)}</text>`);
-      svgParts.push(`<text x="${lx}" y="${labelY+12}" text-anchor="middle" fill="var(--text-muted)" font-size="7.5">${escHtml(c.taste.text.slice(0,14))}…</text>`);
+      // When single taste + sweep: label ALL groups by the swept parameter value
+      const _sweepLabel = (() => {
+        const _allTastes = [...new Set(cm.map(_c=>_c.taste.text))];
+        if (_allTastes.length > 1) return null;  // multi-taste: use taste text
+        // Detect which params vary across ALL conditions
+        const _mags = [...new Set(cm.map(_c=>String(_c.magnitude||5)))];
+        const _sels = [...new Set(cm.map(_c=>_c.selectionMode||'deterministic'))];
+        const _crits = [...new Set(cm.map(_c=>_c.criticMode||'both'))];
+        const _vars = [...new Set(cm.map(_c=>String(_c.variantsPerIter||2)))];
+        if (_mags.length<=1 && _sels.length<=1 && _crits.length<=1 && _vars.length<=1) return null;  // no sweep
+        // Build label from ALL varying dimensions for this condition
+        const parts = [];
+        if (_mags.length > 1) parts.push('Magnitude '+(c.cond?.magnitude||exp.parameters.magnitude||5));
+        if (_sels.length > 1) parts.push(c.cond?.selectionMode||exp.parameters.selectionMode||'deterministic');
+        if (_crits.length > 1) parts.push(c.cond?.criticMode||exp.parameters.criticMode||'both');
+        if (_vars.length > 1) parts.push((c.cond?.variantsPerIter||exp.parameters.variantsPerIter||2)+' variants');
+        return parts.length ? parts.join(' · ') : null;
+      })();
+      if(!oneSeed(exp))svgParts.push(`<text x="${lx}" y="${labelY}" text-anchor="middle" fill="${c.color}" font-size="9" font-weight="bold"><title>${escHtml(c.seed.label+' / '+c.taste.text)}</title>${escHtml(c.seed.label)}</text>`);
+      const _xLbl = _sweepLabel || escHtml(c.taste.text.slice(0,oneSeed(exp)?22:14));
+      const _xTitle = escHtml((oneSeed(exp)?'':c.seed.label+' / ')+c.taste.text+(_sweepLabel?' ['+_sweepLabel+']':''));
+      svgParts.push(`<text x="${lx}" y="${oneSeed(exp)?labelY:labelY+12}" text-anchor="middle" fill="${oneSeed(exp)?c.color:'var(--text-muted)'}" font-size="${oneSeed(exp)?'9':'7.5'}" ${oneSeed(exp)?'font-weight="bold"':''}><title>${_xTitle}</title>${_xLbl}${!_sweepLabel&&c.taste.text.length>(oneSeed(exp)?22:14)?'…':''}</text>`);
     }
 
     // Vertical divider
@@ -3271,12 +3471,16 @@ function renderEvoBaselineChart(cm, exp) {
     const _pickScore = (s) => {
       if (_scoreMode==='aesthetic') return s.crossModel!=null?s.crossModel:(s.aes??s.score??0);
       if (_scoreMode==='novelty')   return s.crossModelNov!=null?s.crossModelNov:(s.nov??0);
-      return s.crossModel!=null ? s.crossModel : (s.score??0);
+      if (_scoreMode==='parsimony') return s.par??0;
+      // Total: prefer xm.total (same formula as winnerScore), fall back to critic score
+      return s.xmTotal!=null ? s.xmTotal : (s.score??0);
     };
     const _pickBl = (b) => {
       if (_scoreMode==='aesthetic') return b.aesthetic;
       if (_scoreMode==='novelty')   return b.novelty;
-      return b.crossModel;
+      if (_scoreMode==='parsimony') return b.parsimony;
+      // Total: b.score = aes×aW + nov×nW + par×pW (same formula as evolution)
+      return b.score;  // was incorrectly using b.crossModel (aesthetic only)
     };
 
     const evolScores = c.evolvedScores.map(_pickScore);
@@ -3341,15 +3545,20 @@ function renderEvoBaselineChart(cm, exp) {
 
   const legend = `
     <div class="legend-row">
-      <div class="legend-item"><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--text-muted)"/></svg>Evolved (filled = cross-model, open = critic)</div>
-      <div class="legend-item"><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="3,1"/></svg>Baseline A — from scratch</div>
-      <div class="legend-item"><svg width="14" height="14"><rect x="2" y="2" width="10" height="10" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="2,1"/></svg>Baseline B — single edit</div>
-      <div class="legend-item"><svg width="14" height="14"><polygon points="7,2 12,12 2,12" fill="none" stroke="var(--text-muted)" stroke-width="1.5"/></svg>Baseline C — feedback only</div>
-      <div class="legend-item"><svg width="20" height="14"><line x1="0" y1="7" x2="20" y2="7" stroke="var(--text-muted)" stroke-width="2"/></svg>Group mean</div>
+      <div class="legend-item" title="Each dot is one completed evolution run's final score. Filled dot = cross-model (independent judge) score. Open dot = evolution critic score (relative, may be inflated). Dots are scattered horizontally within the group to avoid overlap."><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--text-muted)"/></svg>Evolved (filled = cross-model, open = critic)</div>
+      <div class="legend-item" title="Baseline A: the model writes a Logo program from scratch given only the taste description, with no seed and no iteration. Run multiple times to sample the one-shot distribution. Circle outline = cross-model score."><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="3,1"/></svg>Baseline A — from scratch</div>
+      <div class="legend-item" title="Baseline B: the model takes the seed program and improves it in one step — can rewrite completely. Isolates what a single unconstrained edit can achieve, without iterative feedback. Square outline = cross-model score."><svg width="14" height="14"><rect x="2" y="2" width="10" height="10" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="2,1"/></svg>Baseline B — single edit</div>
+      <div class="legend-item" title="Baseline C: the critic gives feedback each iteration and the program is updated, but only ONE variant is generated and it always replaces the parent. No selection pressure. Shows what iterative feedback alone can achieve, without the evolutionary search of multiple variants + selection."><svg width="14" height="14"><polygon points="7,2 12,12 2,12" fill="none" stroke="var(--text-muted)" stroke-width="1.5"/></svg>Baseline C — feedback only</div>
+      <div class="legend-item" title="Horizontal line showing the mean score across all runs in this condition group. Helps see the average level rather than just individual data points."><svg width="20" height="14"><line x1="0" y1="7" x2="20" y2="7" stroke="var(--text-muted)" stroke-width="2"/></svg>Group mean</div>
     </div>`;
 
   document.getElementById('rEvoBaselineCard').innerHTML =
-    `<div class="dash-hd">Evolution vs Baseline <small>scored by ${evalModel||'critic (self)'} · ${scoreLabel(_scoreMode)}</small>${scoreModeToggleHTML()}</div>`
+    `<div class="dash-hd">Evolution vs Baseline <small>scored by ${evalModel||'critic (self)'} · <strong style="color:var(--lav)">cross-model scale</strong> · ${scoreLabel(_scoreMode)}</small>${scoreModeToggleHTML()}</div>`
+    + (() => {
+        const _uts = [...new Set(cm.map(_c=>_c.taste.text))];
+        const _sweepActive2 = cm.some(c=>c.cond?.magnitude||c.cond?.selectionMode||c.cond?.criticMode);
+        return _uts.length===1 && _sweepActive2 ? `<div style="font-size:.7rem;color:var(--text-muted);padding:2px 0 4px">Taste: <em title="${escHtml(_uts[0])}">${escHtml(_uts[0].slice(0,100))}${_uts[0].length>100?'…':''}</em> · Groups differ by sweep parameter shown on x-axis</div>` : '';
+      })()
     + legend
     + `<div class="chart-wrap">${svgParts.join('')}</div>`
     + (!hasAnyData ? '<div style="color:var(--text-muted);font-size:.78rem;margin-top:8px">No cross-model scores available for this experiment. Run with an eval model selected to populate this chart.</div>' : '');
@@ -3393,12 +3602,39 @@ function renderTrajectoryChart(cm, exp) {
   svgParts.push(`<text x="${PAD.l+(W-PAD.l-PAD.r)/2}" y="${H-2}" text-anchor="middle" fill="var(--text-muted)" font-size="9">Iteration</text>`);
   svgParts.push(`<text x="12" y="${H/2}" fill="var(--text-muted)" font-size="9" text-anchor="middle" transform="rotate(-90,12,${H/2})">${scoreLabel(_scoreMode)}</text>`);
 
-  // Baseline reference bands per condition
+  // Baseline reference lines per condition (mean scores as horizontal dashed lines)
   for (const c of cm) {
-    const blScores = [...c.basA,...c.basB].map(b=>b.crossModel).filter(x=>x!=null);
-    if (blScores.length >= 2) {
-      const blMax = Math.max(...blScores), blMin = Math.min(...blScores);
+    // Cross-model shaded band when available
+    const blXmScores = [...c.basA,...c.basB].map(b=>b.crossModel).filter(x=>x!=null);
+    if (blXmScores.length >= 2) {
+      const blMax = Math.max(...blXmScores), blMin = Math.min(...blXmScores);
       svgParts.push(`<rect data-cond="${c.ci}" x="${PAD.l}" y="${yScale(blMax)}" width="${W-PAD.l-PAD.r}" height="${yScale(blMin)-yScale(blMax)}" fill="${c.color}" opacity="0.06"/>`);
+    }
+    // Baseline A mean — dashed horizontal line (uses same score mode as trajectories)
+    const blAscores = c.basA.map(b => {
+      if (_scoreMode==='aesthetic') return b.aesthetic ?? b.crossModel;
+      if (_scoreMode==='novelty') return b.novelty;
+      if (_scoreMode==='parsimony') return b.parsimony;
+      return b.score;
+    }).filter(x => x != null);
+    if (blAscores.length) {
+      const blAmean = blAscores.reduce((a,b2)=>a+b2,0)/blAscores.length;
+      const blAy = yScale(blAmean);
+      svgParts.push(`<line data-cond="${c.ci}" x1="${PAD.l}" y1="${blAy}" x2="${W-PAD.r}" y2="${blAy}" stroke="${c.color}" stroke-width="1" stroke-dasharray="4,4" opacity="0.45"/>`);
+      svgParts.push(`<text data-cond="${c.ci}" x="${W-PAD.r+2}" y="${blAy+3}" fill="${c.color}" font-size="7" opacity="0.6"><title>Baseline A mean (cross-model judge score) — different scale from trajectory lines above</title>A xm</text>`);
+    }
+    // Baseline B mean
+    const blBscores = c.basB.map(b => {
+      if (_scoreMode==='aesthetic') return b.aesthetic ?? b.crossModel;
+      if (_scoreMode==='novelty') return b.novelty;
+      if (_scoreMode==='parsimony') return b.parsimony;
+      return b.score;
+    }).filter(x => x != null);
+    if (blBscores.length) {
+      const blBmean = blBscores.reduce((a,b2)=>a+b2,0)/blBscores.length;
+      const blBy = yScale(blBmean);
+      svgParts.push(`<line data-cond="${c.ci}" x1="${PAD.l}" y1="${blBy}" x2="${W-PAD.r}" y2="${blBy}" stroke="${c.color}" stroke-width="1" stroke-dasharray="2,3" opacity="0.35"/>`);
+      svgParts.push(`<text data-cond="${c.ci}" x="${W-PAD.r+2}" y="${blBy+3}" fill="${c.color}" font-size="7" opacity="0.5"><title>Baseline B mean (cross-model judge score) — different scale from trajectory lines above</title>B xm</text>`);
     }
   }
 
@@ -3439,16 +3675,19 @@ function renderTrajectoryChart(cm, exp) {
 
   // Legend
   const legendItems = cm.map(c =>
-    `<div class="legend-item" title="${escHtml(c.seed.label)} / ${escHtml(c.taste.text)} (click to hide/show)"><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="${c.color}" stroke-width="2"/></svg>${escHtml(c.seed.label)} / ${escHtml(c.taste.text.slice(0,16))}…</div>`
+    `<div class="legend-item" title="${condTitle(c.seed.label,c.taste.text,exp)} (click to hide/show)"><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="${c.color}" stroke-width="2"/></svg>${(()=>{ const _oneTaste=[...new Set(cm.map(_c=>_c.taste.text))].length<=1; const _oneSeed=[...new Set(cm.map(_c=>_c.seed.label))].length<=1; const _allMags=[...new Set(cm.map(_c=>String(_c.magnitude||5)))]; const _allSels=[...new Set(cm.map(_c=>_c.selectionMode||'deterministic'))]; const _allCrits=[...new Set(cm.map(_c=>_c.criticMode||'both'))]; const _hasSweep=_allMags.length>1||_allSels.length>1||_allCrits.length>1; if (_oneTaste&&_oneSeed&&_hasSweep) {   const _parts=[];   if(_allMags.length>1) _parts.push('Magnitude '+c.magnitude);   if(_allSels.length>1) _parts.push(c.selectionMode);   if(_allCrits.length>1) _parts.push(c.criticMode);   return _parts.join(' · '); } return condLabel(c.seed.label,c.taste.text,22,exp);})()} </div>`
   ).join('');
 
-  const blNote = cm.some(c=>[...c.basA,...c.basB].some(b=>b.crossModel!=null))
-    ? ' · shaded band = cross-model baseline score range' : '';
+  const hasBlA = cm.some(c => c.basA.some(b => b.score != null || b.crossModel != null));
+  const hasBlXm = cm.some(c=>[...c.basA,...c.basB].some(b=>b.crossModel!=null));
+  const blNote = hasBlA ? ' · A/B lines = baseline means' + (hasBlXm ? ', shaded band = range' : '') : '';
 
   // Strip the outer <svg> tag since we'll embed the inner content
   const _svgInner = svgParts.join('').replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
   document.getElementById('rTrajectoryCard').innerHTML =
-    `<div class="dash-hd">Trajectories <small>${scoreLabel(_scoreMode)} · solid=evolved · long-dash=Baseline C · click legend to hide/show</small>${scoreModeToggleHTML()}</div>`
+    `<div class="dash-hd">Trajectories <small>${scoreLabel(_scoreMode)} · <strong style="color:var(--amber)">evolution critic scale</strong> (relative, per-iteration) · solid=evolved · long-dash=Baseline C${blNote} · click legend to hide/show</small>${scoreModeToggleHTML()}</div>`
+    + (() => { const _ut=[...new Set(cm.map(_c=>_c.taste.text))]; const _sw=cm.some(c=>c.cond?.magnitude||c.cond?.selectionMode||c.cond?.criticMode); return _ut.length===1&&_sw?`<div style="font-size:.7rem;color:var(--text-muted);margin:-2px 0 4px">Taste: <em title="${escHtml(_ut[0])}">${escHtml(_ut[0].slice(0,100))}${_ut[0].length>100?'…':''}</em></div>`:''; })()
+    + (() => { const _hasXM = cm.some(c=>c.evolvedScores.some(s=>s.xmTotal!=null)); return _hasXM ? `<div style="font-size:.68rem;color:var(--amber);margin:-2px 0 4px;padding:3px 8px;background:rgba(245,167,63,.08);border-left:2px solid var(--amber);border-radius:2px">⚠ Trajectory lines use the <strong>evolution critic scale</strong> (relative, inflates over iterations). The A xm / B xm reference lines use the <strong>cross-model judge scale</strong> (absolute). These are not directly comparable — see Evolution vs Baseline chart for a same-scale comparison.</div>` : ''; })()
     + `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">`
     + `<button class="btn-sm" onclick="trajSelectAll(true)" style="padding:2px 8px">Select All</button>`
     + `<button class="btn-sm" onclick="trajSelectAll(false)" style="padding:2px 8px">Deselect All</button>`
@@ -3539,7 +3778,7 @@ function renderRunTable(cm, exp, runs) {
       const _vsCell = (best, lbl) => {
         if (best != null && _xmAes != null) {
           const d = _xmAes - best;
-          return `<span class="${d>=0?'vs-pos':'vs-neg'}" title="xm: this run ${_xmAes.toFixed(1)} vs ${lbl} ${best.toFixed(1)}">${d>=0?'+':''}${d.toFixed(1)}</span>`;
+          return `<span class="${d>0?'vs-pos':d<0?'vs-neg':'vs-neu'}" title="xm: this run ${_xmAes.toFixed(1)} vs ${lbl} ${best.toFixed(1)}">${d>0?'+':''}${d.toFixed(1)}</span>`;
         }
         return '<span style="color:var(--border2);font-size:.6rem">—</span>';
       };
@@ -3558,16 +3797,21 @@ function renderRunTable(cm, exp, runs) {
       // Fallback: use stored finalScore on both sides (critic scale, same source)
       const _fbCriticScores = _fbRuns.map(r2=>r2.finalScore).filter(x=>x!=null);
       const _bestCcritic = _fbCriticScores.length ? Math.max(..._fbCriticScores) : null;
+      // For Baseline C rows: this run IS baseline C — show as reference, not a delta
+      const _isBaselineC = r._rt === 'feedback_only';
       let vsC;
-      if (_bestCxm != null && _xmAes != null) {
+      if (_isBaselineC) {
+        // This row IS a Baseline C run — it is the reference, not a comparator
+        vsC = `<span style="color:var(--text-muted);font-size:.7rem" title="This is a Baseline C run — it forms the baseline that other runs are compared against">ref</span>`;
+      } else if (_bestCxm != null && _xmAes != null) {
         // Both have xm scores: compare on xm scale (same as VS A/B)
         const d = _xmAes - _bestCxm;
-        vsC = `<span class="${d>=0?'vs-pos':'vs-neg'}" title="xm: this run ${_xmAes.toFixed(1)} vs best Baseline C ${_bestCxm.toFixed(1)}">${d>=0?'+':''}${d.toFixed(1)}</span>`;
-      } else if (_bestCcritic != null) {
+        vsC = `<span class="${d>0?'vs-pos':d<0?'vs-neg':'vs-neu'}" title="xm: this run ${_xmAes.toFixed(1)} vs best Baseline C ${_bestCxm.toFixed(1)}">${d>0?'+':''}${d.toFixed(1)}</span>`;
+      } else if (!_isBaselineC && _bestCcritic != null) {
         // No xm scores: compare stored critic totals (same run-time formula, same scale)
         const _thisCritic = r.finalScore ?? finalScore;
         const d = _thisCritic - _bestCcritic;
-        vsC = `<span class="${d>=0?'vs-pos':'vs-neg'}" title="critic: this run ${_thisCritic.toFixed(1)} vs best Baseline C ${_bestCcritic.toFixed(1)}">${d>=0?'+':''}${d.toFixed(1)}<span style='font-size:.5rem;opacity:.6'>c</span></span>`;
+        vsC = `<span class="${d>0?'vs-pos':d<0?'vs-neg':'vs-neu'}" title="critic: this run ${_thisCritic.toFixed(1)} vs best Baseline C ${_bestCcritic.toFixed(1)}">${d>0?'+':''}${d.toFixed(1)}<span style='font-size:.5rem;opacity:.6'>c</span></span>`;
       } else {
         vsC = '<span style="color:var(--border2);font-size:.6rem">—</span>';
       }
@@ -3616,8 +3860,25 @@ function renderRunTable(cm, exp, runs) {
         ? `<button class="btn-sm" onclick="openModalCode('${encodeURIComponent(_winCode)}','${escHtml(c.seed.label)} rep${r.repeatIndex+1}',null,'${_rtKey}')" title="View final image" style="padding:2px 6px">👁</button>`
         : '';
       rows.push(`<tr>
-        <td><span style="color:${c.color};font-weight:700">${escHtml(c.seed.label)}</span> ${typeBadge}${sweepBadge}</td>
-        <td style="font-size:.65rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(c.taste.text)}">${escHtml(c.taste.text.slice(0,24))}…</td>
+        ${oneSeed(exp)?'':'<td><span style="color:'+c.color+';font-weight:700">'+escHtml(c.seed.label)+'</span></td>'}
+        ${(()=>{
+          const _oneTaste2 = [...new Set(cm.map(_c=>_c.taste.text))].length<=1;
+          // Run type badge: E(volution) or C(baseline feedback)
+          const _rtBadge = r._rt==='feedback_only' ? typeBadge : `<span style="font-family:var(--ff-code);font-size:.55rem;padding:1px 5px;background:rgba(63,245,192,.08);color:var(--teal);border:1px solid rgba(63,245,192,.25);border-radius:2px" title="Evolution run: multiple variants generated each iteration, best selected.">E</span>`;
+          if (_oneTaste2) {
+            // Single taste: show sweep param (magnitude etc.) as the distinguishing label
+            const _mags3=[...new Set(cm.map(_c=>String(_c.magnitude||5)))];
+            const _sweepParts=[];
+            if(_mags3.length>1)_sweepParts.push('Magnitude '+c.magnitude);
+            const _sels3=[...new Set(cm.map(_c=>_c.selectionMode||'deterministic'))];
+            if(_sels3.length>1)_sweepParts.push(c.selectionMode);
+            const _sweepStr = _sweepParts.length ? _sweepParts.join(' · ') : '';
+            return `<td style="font-size:.65rem;white-space:nowrap" title="${escHtml(c.taste.text)}">${_rtBadge}${_sweepStr?` <span style='color:var(--text-muted)'>${escHtml(_sweepStr)}</span>`:''}</td>`;
+          } else {
+            // Multi-taste: show run type + taste
+            return `<td style="font-size:.65rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help" title="${escHtml(r._rt==='feedback_only'?'Baseline C: ':'')+escHtml(c.taste.text)}">${_rtBadge} <span style='color:var(--text-muted)'>${escHtml(c.taste.text.slice(0,26))}${c.taste.text.length>26?'…':''}</span></td>`;
+          }
+        })()}
         <td style="text-align:center">${r.repeatIndex+1}</td>
         <td class="score-val">${scoreDisp}</td>
         <td class="score-val">${vsA}</td><td class="score-val">${vsB}</td><td class="score-val">${vsC}</td>
@@ -3637,7 +3898,7 @@ function renderRunTable(cm, exp, runs) {
     <div style="overflow-x:auto">
     <table class="run-table">
       <thead><tr>
-        <th>Seed</th><th>Taste</th><th>Rep</th>
+        ${oneSeed(exp)?'':'<th>Seed</th>'}<th title="Run type (Evolution/Baseline C) and distinguishing label">Run</th><th>Rep</th>
         <th title="Score of the last completed iteration — the rightmost point on the Trajectory sparkline. May be lower than the peak if quality declined toward the end of evolution. Hover the sparkline to see Peak, Final, and Min scores.">Final Score <span style="font-size:.55rem;opacity:.6">(last iter)</span></th><th title="vs Baseline A (from-scratch one-shot): this run's cross-model aesthetic score minus the best Baseline A cross-model aesthetic score for the same condition. Positive = evolution beat one-shot generation. Shows — when cross-model scores are unavailable for either side.">vs A</th><th title="vs Baseline B (single-edit one-shot): this run's cross-model aesthetic score minus the best Baseline B cross-model aesthetic score. Positive = evolution beat a single unconstrained edit. Shows — when cross-model scores are unavailable.">vs B</th><th title="vs Baseline C (feedback loop, no selection): compares on cross-model scale when available (same as vs A/B), otherwise on critic scale (marked c). Positive = evolution with selection pressure outperformed pure feedback.">vs C</th>
         <th title="Score trajectory across iterations. Hover for Peak/Final/Min. A red dot at the end means the final score was more than 2 points below the run's peak — the run declined toward the end.">Trajectory</th><th title="Spatial entropy of the rendered image. 0 = blank canvas, ~3 = rich complex drawing. Higher values mean more visually complex, space-filling images.">Entropy</th><th title="Fill ratio: fraction of canvas pixels that differ from the background. Low = sparse drawing, high = dense coverage.">Fill</th>
         <th>Status</th><th>Time</th><th>Image</th>
@@ -3800,8 +4061,8 @@ function renderHeatmap(cm, exp, runs, baselines) {
     const seed = exp.parameters.seeds.find(s => s.id === cond?.seedId);
     const taste = exp.parameters.tastes.find(t => t.id === cond?.tasteId);
     programs.push({
-      label: `${seed?.label||'?'} / ${(taste?.text||'').slice(0,30)} rep${r.repeatIndex+1}`,
-      fullLabel: `${seed?.label||'?'} / ${taste?.text||''} — repeat ${r.repeatIndex+1}`,
+      label: `${oneSeed(exp)?(taste?.text||'').slice(0,42):(seed?.label||'?')+' / '+(taste?.text||'').slice(0,28)} rep${r.repeatIndex+1}`,
+      fullLabel: `${oneSeed(exp)?(taste?.text||''):(seed?.label||'?')+' / '+(taste?.text||'')} — repeat ${r.repeatIndex+1}`,
       type: 'evolved', scores: r.crossModelScores,
     });
   }
@@ -3916,7 +4177,7 @@ function renderHeatmap(cm, exp, runs, baselines) {
 
 async function downloadPNGZip() {
   const btn = document.getElementById('btnPNGZip');
-  if (!window._dashData) { alert('Load experiment data first.'); return; }
+  if (!window._dashData) { showExpMsg('Load experiment data in the Results tab first.', true); if(typeof switchTab==='function')switchTab('results'); return; }
   if (btn) { btn.textContent = 'Building zip…'; btn.disabled = true; }
 
   // Dynamically load JSZip from CDN
@@ -3992,6 +4253,105 @@ async function downloadPNGZip() {
 //  SWEEP COMPARISON CHART
 // ═══════════════════════════════════════════════════
 
+
+function renderErrorLog(exp, runs) {
+  const card = document.getElementById('rErrorLogCard');
+  if (!card) return;
+
+  // Collect errors from apiLog and failedCalls
+  const apiLog = exp.apiLog || [];
+  const failedCalls = exp.failedCalls || [];
+  
+  // Filter apiLog for entries with errors or non-200 status
+  const errorEntries = apiLog.filter(e => 
+    (e.error || (e.httpStatus && e.httpStatus !== 200)) &&
+    e.agent !== 'cross_model_evaluator'  // cross-eval has its own section
+  );
+  const crossEvalErrors = apiLog.filter(e =>
+    (e.error || (e.httpStatus && e.httpStatus !== 200)) &&
+    e.agent === 'cross_model_evaluator'
+  );
+  
+  // Count error types from all runs' iteration data
+  const iterErrors = [];
+  for (const r of runs) {
+    for (const it of r.iterations || []) {
+      if (it.modifierError) iterErrors.push({type:'modifier', iter:it.iteration, cond:r.conditionId, msg:it.modifierError});
+      if (it.criticError) iterErrors.push({type:'critic', iter:it.iteration, cond:r.conditionId, msg:it.criticError});
+    }
+  }
+
+  const totalErrors = errorEntries.length + failedCalls.length + iterErrors.length;
+  if (totalErrors === 0 && crossEvalErrors.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+
+  // Error type breakdown
+  const byCategory = {};
+  for (const e of errorEntries) {
+    const cat = e.errorCategory || (e.httpStatus >= 500 ? 'server' : e.httpStatus === 429 ? 'rate_limit' : e.httpStatus === 401 || e.httpStatus === 403 ? 'auth' : 'other');
+    byCategory[cat] = (byCategory[cat] || 0) + 1;
+  }
+  for (const e of failedCalls) {
+    const cat = e.httpStatus >= 500 ? 'server' : e.httpStatus === 429 ? 'rate_limit' : e.httpStatus === 401 || e.httpStatus === 403 ? 'auth' : 'other';
+    byCategory[cat] = (byCategory[cat] || 0) + 1;
+  }
+
+  const catColors = {rate_limit:'var(--amber)', auth:'var(--red)', server:'var(--lav)', transient:'var(--teal)', other:'var(--text-muted)'};
+  const catLabels = {rate_limit:'Rate limited', auth:'Auth error', server:'Server error (5xx)', transient:'Transient / retry', other:'Other'};
+
+  const summary = Object.entries(byCategory).map(([k,v]) => 
+    `<span style="color:${catColors[k]||'var(--text-muted)'};font-size:.72rem;margin-right:10px">■ ${catLabels[k]||k}: ${v}</span>`
+  ).join('');
+
+  // Sample of recent errors
+  const allErrors = [
+    ...errorEntries.slice(-30).map(e => ({
+      agent: e.agent||'?', model: e.modelActuallyUsed||e.modelRequested||'?',
+      status: e.httpStatus, cat: e.errorCategory||'other',
+      msg: e.error||('HTTP '+e.httpStatus), ts: e.timestamp
+    })),
+    ...failedCalls.slice(-10).map(e => ({
+      agent: e.agent||'cross-eval', model: e.modelRequested||'?',
+      status: e.httpStatus, cat: 'cross-eval',
+      msg: e.errorMessage||('HTTP '+e.httpStatus), ts: e.timestamp
+    })),
+  ].sort((a,b) => (b.ts||'') > (a.ts||'') ? 1 : -1).slice(0, 25);
+
+  const errorRows = allErrors.map(e => {
+    const clr = catColors[e.cat] || 'var(--text-muted)';
+    return `<tr style="font-size:.65rem;border-bottom:1px solid rgba(255,255,255,.04)">
+      <td style="padding:3px 6px;color:${clr};white-space:nowrap">${(e.cat||'').replace('_',' ')}</td>
+      <td style="padding:3px 6px;color:var(--text-muted);font-family:var(--ff-code)">${escHtml((e.model||'').slice(0,24))}</td>
+      <td style="padding:3px 6px;color:var(--text-muted)">${escHtml((e.agent||'').replace('_',' '))}</td>
+      <td style="padding:3px 6px;color:var(--text-muted)">${e.status||'—'}</td>
+      <td style="padding:3px 6px;color:var(--text-muted);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(String(e.msg||''))}">${escHtml(String(e.msg||'').slice(0,80))}</td>
+    </tr>`;
+  }).join('');
+
+  // Retry stats from apiLog
+  const totalCalls = apiLog.length;
+  const retriedCalls = apiLog.filter(e => e.attemptNumber > 1).length;
+  const avgLatency = apiLog.length ? Math.round(apiLog.reduce((s,e) => s+(e.latencyMs||0), 0)/apiLog.length) : 0;
+
+  card.innerHTML = `
+    <div class="dash-hd">API Call Errors <small>${totalErrors} errors from ${totalCalls} total calls · avg latency ${avgLatency}ms · ${retriedCalls} retried</small></div>
+    <div style="margin-bottom:8px">${summary||'<span style="color:var(--text-muted);font-size:.72rem">No categorised errors</span>'}</div>
+    ${iterErrors.length ? `<div style="font-size:.68rem;color:var(--amber);margin-bottom:6px">⚠ ${iterErrors.length} modifier/critic errors recorded in iteration data (runs may have skipped iterations)</div>` : ''}
+    ${allErrors.length ? `<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase">
+        <th style="padding:2px 6px;text-align:left">Type</th><th style="padding:2px 6px;text-align:left">Model</th>
+        <th style="padding:2px 6px;text-align:left">Agent</th><th style="padding:2px 6px;text-align:left">HTTP</th>
+        <th style="padding:2px 6px;text-align:left">Message</th>
+      </tr></thead>
+      <tbody>${errorRows}</tbody>
+    </table>` : ''}
+    ${crossEvalErrors.length ? `<div style="margin-top:8px;font-size:.68rem;color:var(--lav)">+ ${crossEvalErrors.length} cross-eval errors (see experiment log)</div>` : ''}
+  `;
+}
+
 function renderSweepComparison(cm, exp, runs) {
   const card = document.getElementById('rSweepCard');
   if (!card) return;
@@ -4056,8 +4416,9 @@ function renderSweepComparison(cm, exp, runs) {
     baseKeys.forEach((bk, bi) => {
       const [seedId, tasteId] = bk.split('|');
       const bx = PAD.l + bi*groupW + groupW/2;
-      const baseLabel = (exp.parameters.seeds.find(s=>s.id===seedId)?.label||'?')
-        + '/' + (exp.parameters.tastes.find(t=>t.id===tasteId)?.text.slice(0,10)||'?')+'…';
+      const _swSeed = exp.parameters.seeds.find(s=>s.id===seedId);
+      const _swTaste = exp.parameters.tastes.find(t=>t.id===tasteId);
+      const baseLabel = condLabel(_swSeed?.label||'?', _swTaste?.text||'?', oneSeed(exp)?14:10, exp);
 
       svgParts.push(`<text x="${bx}" y="${H-PAD.b+12}" text-anchor="middle" fill="var(--text-muted)" font-size="8">${escHtml(baseLabel)}</text>`);
       if (bi>0) svgParts.push(`<line x1="${bx-groupW/2}" y1="${PAD.t}" x2="${bx-groupW/2}" y2="${H-PAD.b}" stroke="var(--border)" stroke-width="0.4" stroke-dasharray="2,2"/>`);
@@ -4251,6 +4612,13 @@ function renderScatterPlot(cm, exp, runs, baselines) {
   });
 }
 
+function _galClick(el) {
+  const enc = el.getAttribute('data-enc');
+  const key = el.getAttribute('data-mkey');
+  const title = el.getAttribute('data-title') || '';
+  openModalCode(enc, title, null, key);
+}
+
 function renderGallery(cm, exp) {
   const _activeEvalModel = cm.length && cm[0].evalModel || (exp.parameters.evalModels||[])[0]||'';
   function _scoreStr(obj, evalModel) {
@@ -4273,12 +4641,13 @@ function renderGallery(cm, exp) {
       ? c.evalModel.slice(0,14)+' '+run.crossModelScores[c.evalModel].aesthetic
       : (run ? 'critic '+run.finalScore.toFixed(1) : '—');
 
-    setTimeout(() => {
+    // Double RAF ensures the DOM is painted before we draw
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if (winCode) drawCode(ids.ev, winCode, 0);
       if (blACode) drawCode(ids.ba, blACode, 0);
       if (blBCode) drawCode(ids.bb, blBCode, 0);
       if (blCCode) drawCode(ids.bc, blCCode, 0);
-    }, 50);
+    }));
 
     // Helper: build meta object for openModalCode
     const _allEvalModels = exp.parameters.evalModels || [];
@@ -4328,8 +4697,8 @@ function renderGallery(cm, exp) {
       const _mKey = _mStore(metaObj || {});
       return `<div>
         <div class="gallery-canvas-lbl">${title}</div>
-        <div class="gallery-canvas-wrap" onclick="openModalCode('${_enc}','${escHtml(title)}',null,'${_mKey}')">
-          <canvas id="${id}" width="200" height="200"></canvas>
+        <div class="gallery-canvas-wrap" data-enc="${_enc}" data-mkey="${_mKey}" data-title="${escHtml(title)}" onclick="_galClick(this)">
+          <canvas id="${id}" width="160" height="160" style="display:block;width:160px;height:160px"></canvas>
         </div>
         <div style="font-family:var(--ff-code);font-size:.58rem;color:var(--text-muted);text-align:center;margin-top:3px">${scoreStr}</div>
       </div>`;
@@ -4341,9 +4710,9 @@ function renderGallery(cm, exp) {
     if(c.variantsPerIter&&c.variantsPerIter!==exp.parameters.variantsPerIter)_svDesc.push(c.variantsPerIter+'v');
     const _svTag=_svDesc.length?`<span style='font-size:.5rem;padding:1px 5px;background:rgba(102,170,255,.15);color:#66aaff;border:1px solid rgba(102,170,255,.3);border-radius:2px;margin-left:6px'>${escHtml(_svDesc.join('·'))}</span>`:''
 ;    return `<div class="gallery-condition">
-      <div class="gallery-cond-hd" style="color:${c.color}">${escHtml(c.seed.label)} · ${escHtml(exp.parameters.models[0]||'')}${_svTag}</div>
-      <div class="gallery-taste" title="${escHtml(c.taste.text)}">${escHtml(c.taste.text)}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+      <div class="gallery-cond-hd" style="color:${c.color}" title="${escHtml((oneSeed(exp)?'':c.seed.label+' · ')+c.taste.text)}">${oneSeed(exp)?'':escHtml(c.seed.label)+' · '}${escHtml(exp.parameters.models[0]||'')}${_svTag}</div>
+      <div class="gallery-taste" title="${escHtml(c.taste.text)}" style="cursor:help">${escHtml(c.taste.text)}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,160px);gap:8px;justify-content:start">
         ${cel(ids.ev, winCode, 'Best Evolved', xmScore, _runMeta(run))}
         ${cel(ids.ba, blACode, 'Best Scratch (A)', _scoreStr(c.bestBasA, c.evalModel), _blMeta(c.bestBasA,'Baseline A (from scratch)'))}
         ${cel(ids.bb, blBCode, 'Best Edit (B)', _scoreStr(c.bestBasB, c.evalModel), _blMeta(c.bestBasB,'Baseline B (single edit)'))}
@@ -4390,6 +4759,7 @@ function renderCSVSection(data) {
     <div>
       <div style="font-family:var(--ff-code);font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:6px">LLM analysis</div>
       <button class="btn btn-primary" onclick="downloadAnalysisBrief(window._dashData)" style="width:100%">↓ analysis_brief.md — full context for LLM analyst (Claude / ChatGPT / Gemini)</button>
+      <button class="btn btn-sm" onclick="showPromptsModal()" style="margin-top:6px;width:100%">📋 View All System Prompts Used in This Experiment</button>
     </div>`;
   window._dashData = data;
 }
@@ -4419,6 +4789,17 @@ function buildRunsCSV({experiment:exp, runs, baselines}) {
   const xmCols = evalModels.flatMap(m => [
     'xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_aesthetic',
     'xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_novelty',
+    'xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_parsimony',
+    'xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_total',
+  ]);
+  const peakXmCols = evalModels.flatMap(m => [
+    'peak_xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_aesthetic',
+    'peak_xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_novelty',
+    'peak_xm_'+m.replace(/[^a-z0-9]/gi,'_')+'_total',
+  ]);
+  const peakVsBaseCols = evalModels.flatMap(m => [
+    'peak_vs_baseline_a_'+m.replace(/[^a-z0-9]/gi,'_'),
+    'peak_vs_baseline_b_'+m.replace(/[^a-z0-9]/gi,'_'),
   ]);
   const baseXmCols = evalModels.flatMap(m => [
     'best_baseline_a_xm_'+m.replace(/[^a-z0-9]/gi,'_'),
@@ -4430,7 +4811,10 @@ function buildRunsCSV({experiment:exp, runs, baselines}) {
     'final_score','final_aesthetic','final_novelty','final_parsimony',
     ...xmCols, ...baseXmCols,
     'final_distinct_commands','final_nesting_depth','final_code_length',
-    'final_spatial_entropy','final_fill_ratio','score_drop_warnings','status','elapsed_ms','error'];
+    'final_spatial_entropy','final_fill_ratio','score_drop_warnings',
+    'peak_iteration','peak_aesthetic','peak_code_length',
+    ...peakXmCols, ...peakVsBaseCols,
+    'status','elapsed_ms','error'];
   const rows = [csvRow(header)];
 
   for (const cond of exp.conditions) {
@@ -4447,7 +4831,23 @@ function buildRunsCSV({experiment:exp, runs, baselines}) {
       // Per-eval-model cross-model scores (honest: blank only when truly missing)
       const xmScores = evalModels.flatMap(m => {
         const xm = r.crossModelScores?.[m];
-        return [xm?.aesthetic ?? '', xm?.novelty ?? ''];
+        return [xm?.aesthetic ?? '', xm?.novelty ?? '', xm?.parsimony?.toFixed(2) ?? '', xm?.total?.toFixed(2) ?? ''];
+      });
+      const _peakSm = r.peakIterationData?.structuralMetrics || {};
+      const peakXmScores = evalModels.flatMap(m => {
+        const samePeak = !r.peakCode || r.peakCode===r.finalWinnerCode;
+        const xmP = r.crossModelScoresPeak?.[m] ?? (samePeak ? r.crossModelScores?.[m] : null);
+        return [xmP?.aesthetic??'', xmP?.novelty??'', xmP?.total?.toFixed(2)??''];
+      });
+      const peakVsBaseScores = evalModels.flatMap(m => {
+        const samePeak = !r.peakCode || r.peakCode===r.finalWinnerCode;
+        const xmP = r.crossModelScoresPeak?.[m] ?? (samePeak ? r.crossModelScores?.[m] : null);
+        const bAs = basA.map(b=>b.criticScores?.[m]?.aesthetic).filter(v=>v!=null);
+        const bBs = basB.map(b=>b.criticScores?.[m]?.aesthetic).filter(v=>v!=null);
+        const bestA = bAs.length?Math.max(...bAs):null;
+        const bestB = bBs.length?Math.max(...bBs):null;
+        return [xmP?.aesthetic!=null&&bestA!=null?(xmP.aesthetic-bestA).toFixed(2):'',
+                xmP?.aesthetic!=null&&bestB!=null?(xmP.aesthetic-bestB).toFixed(2):''];
       });
       // Per-eval-model baseline comparisons
       const baseXmScores = evalModels.flatMap(m => {
@@ -4814,7 +5214,8 @@ function _renderMetaScatter(exp, runs, baselines, expColorMap) {
       if(!isFinal) return; // only show finals in meta scatter for clarity
       points.push({type:isFB?'meta-fb':'meta-evol',
         aes:it.winnerAestheticScore, nov:it.winnerNoveltyScore,
-        expId:r.experimentId||'', label:seed.label+(isFB?' [C]':'')});
+        expId:r.experimentId||'', label:(oneSeed(exp)?'':(seed.label+' / '))+(taste?.text||'').slice(0,20)+(isFB?' [C]':''),
+        fullLabel:(oneSeed(exp)?'':(seed.label+' / '))+(taste?.text||'')+(isFB?' [C]':'')});
     });
   }
 
@@ -5039,6 +5440,7 @@ LLMs can generate in a single shot.`);
       ['Novelty weight', String(p.noveltyWeight??0.5), 'Multiplier for novelty component in composite score'],
       ['Parsimony weight', String(p.parsimonyWeight??0.0), 'Multiplier for brevity reward (0=disabled). Formula: max(0,10−commandCount/5)'],
       ['Nesting encouraged', String(p.encourageNesting??false), 'Whether modifier prompt includes nested REPEAT hint'],
+      ['Early stopping', p.earlyStoppingEnabled?'Yes (patience='+p.patience+')':'No', 'Stop run if peak aesthetic has not improved in N consecutive iterations'],
     ]
   );
 
@@ -5063,7 +5465,7 @@ LLMs can generate in a single shot.`);
       ['model', 'API model identifier used for both modifier and critic agents'],
       ['repeat_index', 'Which repeat of this condition (0-indexed). Different repeats are independent runs with different seeds'],
       ['iterations_completed', 'How many evolution iterations completed before stopping (may be < iterationsPerRun if run errored)'],
-      ['final_score', `Total score (${_scoreFormula}) of the last winning iteration, as judged by the evolution model's own critic`],
+      ['final_score', `Composite score (${scoreFormula(p)}). Aesthetic+novelty from critic JSON response; parsimony computed from code command count.`],
       ['final_aesthetic', 'Aesthetic component of final score (evolution model critic, 1–10 scale)'],
       ['final_novelty', 'Novelty component of final score (evolution model critic, 0–10 scale; measures distance from parent)'],
       ['cross_model_score', 'Aesthetic score from the cross-model judge (different model). NULL if cross-eval did not run for this run. Note: scale may differ from final_score — model calibration varies'],
@@ -5090,7 +5492,7 @@ LLMs can generate in a single shot.`);
       ['condition_id', 'Same as runs.csv'],
       ['repeat_index', 'Which repeat'],
       ['iteration', 'Iteration number (1-indexed)'],
-      ['winner_score', `Total score (${_scoreFormula}) of the winning variant this iteration`],
+      ['winner_score', `Composite score (${scoreFormula(p)}) of the winning variant. All three components computed each iteration.`],
       ['winner_aesthetic', 'Aesthetic score of winner (1–10, evolution critic)'],
       ['winner_novelty', 'Novelty score of winner (0–10, evolution critic; measures distance from this iteration\'s parent)'],
       ['distinct_commands', 'Distinct Logo command types in the winner program'],
@@ -5135,8 +5537,7 @@ LLMs can generate in a single shot.`);
   h2('Metrics Glossary');
 
   h3('Score Components');
-  const _scoreFormula='aesthetic × '+(p.aestheticWeight??1.0)+' + novelty × '+(p.noveltyWeight??0.5)+((p.parsimonyWeight??0)>0?' + parsimony × '+p.parsimonyWeight:'');
-  para('All scores from the evolution critic are on a 1–10 scale for aesthetic, 0–10 for novelty. The composite score is: **'+_scoreFormula+'**. Parsimony = max(0, 10 − commandCount/5). Note: these scores are **relative** — the critic sees the parent program as a reference, so scores can inflate over iterations as the baseline shifts upward. The cross-model scores are **absolute** — a different model evaluates the final program in isolation, providing a more stable scale.');
+  para('All scores from the evolution critic are on a 1–10 scale for aesthetic, 0–10 for novelty. The composite score is: **'+scoreFormula(p)+'**. Parsimony = max(0, 10 − commandCount/5). Note: these scores are **relative** — the critic sees the parent program as a reference, so scores can inflate over iterations as the baseline shifts upward. The cross-model scores are **absolute** — a different model evaluates the final program in isolation, providing a more stable scale.');
 
   h3('Structural Metrics (from Logo source)');
   table(
@@ -5282,6 +5683,8 @@ LLMs can generate in a single shot.`);
     '**Does evolution tend toward shorter or longer programs?** How does program length (command count) relate to visual quality (spatial entropy, fill ratio)? Do one-shot baselines produce different length profiles than evolved programs?',
     '**How often do catastrophic score drops occur** (winner score drops >4 points between consecutive iterations)? Check `score_drop_warning` in iterations.csv. Are these associated with specific conditions or iteration depths?',
     '**Based on the patterns in this data, what follow-up experiments would be most informative?** Consider: different fitness weightings (pure aesthetic, pure novelty, parsimony pressure), prompt interventions (nesting encouragement), increased repeats, deterministic vs probabilistic selection, and multi-model comparisons.',
+    '**How does peak-iteration performance compare to final and baseline performance?** Use `peak_xm_*` columns vs `xm_*` columns and `peak_vs_baseline_a/b_*`. Does evolution drift away from its cross-model-judged peak over continued iterations? Which models (self-critic vs cross-model judges) are most sensitive to this drift?',
+    '**When early stopping is enabled, at which iteration do runs typically stop?** Use `peak_iteration` and `iterations_completed`. Is the patience threshold consistent with the hypothesis that the full iteration budget is more than needed for this configuration? Compute what fraction of iterations were actually used vs requested.',
   ].forEach((q,i) => item(`${i+1}. ${q}`));
 
   // ── Footer ────────────────────────────────────────────────────────────────
@@ -5292,7 +5695,7 @@ LLMs can generate in a single shot.`);
 }
 
 function downloadAnalysisBrief(data) {
-  if (!data) { alert('Load experiment data first.'); return; }
+  if (!data) { showExpMsg('Load experiment data in the Results tab first.', true); if(typeof switchTab==='function')switchTab('results'); return; }
   const md = buildAnalysisBrief(data);
   const blob = new Blob([md], {type:'text/markdown;charset=utf-8'});
   const url = URL.createObjectURL(blob);
@@ -5453,7 +5856,19 @@ function go(i){cur=i;nxt=(i+1)%F.length;alpha=0;phase="dwell";phaseT=0;cvB.style
 resize();go(0);
 function tick(ts){if(!playing){lastT=null;return;}if(!lastT)lastT=ts;var spd=parseFloat(document.getElementById("spd").value);var dt=(ts-lastT)*spd;lastT=ts;var DWELL=1400,FADE=900;if(phase==="dwell"){phaseT+=dt;if(phaseT>=DWELL){phaseT=0;phase="fade";cvB.style.transition="opacity 0ms";}}else{phaseT+=dt;alpha=Math.min(1,phaseT/FADE);cvB.style.transition="opacity 0ms";cvB.style.opacity=alpha;if(alpha>=1){cur=nxt;nxt=(cur+1)%F.length;alpha=0;phase="dwell";phaseT=0;cvB.style.opacity=0;redrawA();redrawB();pips();document.getElementById("frameLbl").textContent=L[cur];updateInfobar(cur);var cp=document.getElementById("codePanel");if(cp)cp.textContent=F[cur]||"";}}requestAnimationFrame(tick);}
 requestAnimationFrame(tick);
-document.getElementById("spd").oninput=function(){document.getElementById("spdVal").textContent=parseFloat(this.value).toFixed(1)+"×";};
+// Restore speed from parent index.html if available
+(function(){
+  try{
+    var saved = window.parent && window.parent._dissolveSpeed;
+    if(saved && saved>0){document.getElementById('spd').value=saved;document.getElementById('spdVal').textContent=parseFloat(saved).toFixed(1)+'×';}
+  }catch(e){}
+})();
+document.getElementById("spd").oninput=function(){
+  var v=parseFloat(this.value);
+  document.getElementById("spdVal").textContent=v.toFixed(1)+"×";
+  // Persist to parent so next dissolve file opens at same speed
+  try{if(window.parent)window.parent._dissolveSpeed=v;}catch(e){}
+};
 function togglePlay(){playing=!playing;document.getElementById("btnPlay").textContent=playing?"⏸ Pause":"▶ Play";if(playing)requestAnimationFrame(tick);}
 function step(d){playing=false;document.getElementById("btnPlay").textContent="▶ Play";go((cur+d+F.length)%F.length);}
 <\/script></body></html>`;
@@ -5963,9 +6378,201 @@ function renderParsimonyScatter(cm, exp, runs, baselines) {
     + `<div class="chart-wrap">${svgParts.join('')}</div>`;
 }
 
+
+// ═══════════════════════════════════════════════════
+//  MASTER INDEX HTML for histories zip
+// ═══════════════════════════════════════════════════
+function _buildMasterIndexHTML(runManifest, expInfo, fileContents) {
+  // fileContents: Map of {histFile, disFile} → HTML strings for srcdoc embedding
+  // Embed into manifest entries so index.html is fully self-contained
+  runManifest = runManifest.map(r => ({
+    ...r,
+    histContent: (fileContents && fileContents[r.histFile]) || null,
+    disContent:  (fileContents && fileContents[r.disFile])  || null,
+  }));
+  // runManifest: array of {condId, seedLabel, taste, model, rep, isC, histFile, disFile, metaObj}
+  const conditions = [...new Set(runManifest.map(r => r.condId))];
+  const nRuns = runManifest.length;
+
+  const escJ = s => JSON.stringify(String(s||''));
+  // escHtml is available from main app scope — but also inline it in the
+  // generated JS so the index.html is fully self-contained
+  const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+  const sidebarItems = runManifest.map((r, i) => {
+    const typeTag = r.isC ? '<span class="tag tag-c">C</span>' : '<span class="tag tag-e">E</span>';
+    const label = r.seedLabel ? `<span class="item-seed">${_esc(r.seedLabel)}</span> ` : '';
+    const meta = r.metaObj || {};
+    const score = meta.finalScore != null ? `<span class="item-score">${parseFloat(meta.finalScore).toFixed(1)}</span>` : '';
+    return `<div class="sidebar-item" data-idx="${i}" onclick="select(${i})" title="${escHtml(r.taste)}">
+      ${typeTag}${score}
+      <div class="item-body">
+        ${label}<span class="item-taste">${escHtml(r.taste.slice(0,60))}${r.taste.length>60?'…':''}</span>
+        <div class="item-meta">${escHtml(r.model.slice(0,20))} · rep ${r.rep}${r.isC?' · feedback only':''}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Escape HTML-breaking sequences in values
+  const _safeVal = v => String(v||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const expRows = [
+    ['Experiment', expInfo.id || '—'],
+    ['Models', (expInfo.models||[]).join(', ')],
+    ['Seeds', (expInfo.seeds||[]).map(s=>s.label).join(', ')],
+    ['Eval models', (expInfo.evalModels||[]).join(', ')||'none'],
+    ['Weights', `aes×${expInfo.aW??1} + nov×${expInfo.nW??0.5} + par×${expInfo.pW??0}`],
+    ['Iterations/run', expInfo.iters??'—'],
+    ['Conditions', conditions.length],
+    ['Total runs', nRuns],
+  ].map(([k,v]) => `<tr><td class="ek">${k}</td><td class="ev">${_safeVal(v)}</td></tr>`).join('');
+
+  // Escape <\/script> to prevent premature script tag closure in the HTML
+  const manifest = JSON.stringify(runManifest).replace(/<\/script>/gi, '<\/scri"+"pt>');
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Logo Evolution Lab — Experiment Viewer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:system-ui,sans-serif;background:#0a0e1a;color:#b8cce4}
+#layout{display:flex;height:100vh;width:100vw;overflow:hidden}
+#sidebar{width:300px;min-width:160px;max-width:600px;display:flex;flex-direction:column;background:#0d1425;border-right:1px solid #1e2d50;overflow:hidden;flex-shrink:0}
+#divider{width:5px;cursor:col-resize;background:#1e2d50;flex-shrink:0;transition:background .15s}
+#divider:hover,#divider.dragging{background:#3ff5c0}
+#main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+iframe{flex:1;width:100%;border:none;background:#f0f4f8}
+.sidebar-top{padding:12px;border-bottom:1px solid #1e2d50;flex-shrink:0}
+h1{font-size:.85rem;color:#3ff5c0;font-weight:700;letter-spacing:.05em;margin-bottom:8px}
+.exp-table{width:100%;border-collapse:collapse;font-size:.62rem}
+.ek{color:#6a88b0;padding:2px 0;white-space:nowrap;width:40%}
+.ev{color:#d4e4f7;padding:2px 4px}
+.filter-row{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.filter-btn{font-size:.6rem;padding:2px 7px;border-radius:3px;border:1px solid #233060;background:none;color:#b8cce4;cursor:pointer}
+.filter-btn.active{background:rgba(63,245,192,.15);border-color:#3ff5c0;color:#3ff5c0}
+#searchBox{width:100%;margin-top:6px;padding:4px 8px;font-size:.68rem;background:#040810;border:1px solid #233060;border-radius:4px;color:#b8cce4;outline:none}
+#searchBox:focus{border-color:#3ff5c0}
+.sidebar-scroll{flex:1;overflow-y:auto;padding:4px 0}
+.sidebar-item{display:flex;gap:6px;align-items:flex-start;padding:7px 10px;cursor:pointer;border-bottom:1px solid rgba(30,45,80,.5);transition:background .1s}
+.sidebar-item:hover{background:rgba(63,245,192,.05)}
+.sidebar-item.active{background:rgba(63,245,192,.1);border-left:2px solid #3ff5c0}
+.tag{font-size:.55rem;padding:1px 5px;border-radius:3px;font-weight:700;margin-top:2px;flex-shrink:0}
+.tag-e{background:rgba(63,245,192,.15);color:#3ff5c0;border:1px solid rgba(63,245,192,.3)}
+.tag-c{background:rgba(245,74,106,.12);color:#f54a6a;border:1px solid rgba(245,74,106,.3)}
+.item-body{flex:1;min-width:0}
+.item-seed{font-size:.62rem;color:#3ff5c0;font-weight:700}
+.item-taste{font-size:.66rem;color:#d4e4f7;word-break:break-word}
+.item-meta{font-size:.58rem;color:#6a88b0;margin-top:2px}
+.item-score{font-size:.72rem;font-weight:700;color:#b87cf0;margin-top:2px;flex-shrink:0;min-width:28px;text-align:right}
+#viewBar{display:flex;gap:6px;padding:6px 10px;background:#0d1425;border-bottom:1px solid #1e2d50;flex-shrink:0;align-items:center}
+.view-btn{font-size:.7rem;padding:3px 10px;border-radius:4px;border:1px solid #233060;background:none;color:#b8cce4;cursor:pointer}
+.view-btn.active{background:rgba(63,245,192,.15);border-color:#3ff5c0;color:#3ff5c0}
+#frameLabel{font-size:.65rem;color:#6a88b0;margin-left:auto}
+.placeholder{display:flex;align-items:center;justify-content:center;flex:1;font-size:.85rem;color:#4a6080;text-align:center;padding:24px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#0d1425}::-webkit-scrollbar-thumb{background:#233060;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="layout">
+  <div id="sidebar">
+    <div class="sidebar-top">
+      <h1>Logo Evolution Lab</h1>
+      <table class="exp-table">${expRows}</table>
+      <input id="searchBox" placeholder="Filter by taste…" oninput="filterItems(this.value)">
+      <div class="filter-row">
+        <button class="filter-btn active" data-f="all" onclick="setFilter('all',this)">All (${nRuns})</button>
+        <button class="filter-btn" data-f="e" onclick="setFilter('e',this)">Evolved</button>
+        <button class="filter-btn" data-f="c" onclick="setFilter('c',this)">Baseline C</button>
+      </div>
+    </div>
+    <div class="sidebar-scroll" id="sidebarScroll">${sidebarItems}</div>
+  </div>
+  <div id="divider"></div>
+  <div id="main">
+    <div id="viewBar">
+      <button class="view-btn active" id="btnHist" onclick="setView('history')">📄 History</button>
+      <button class="view-btn" id="btnDis" onclick="setView('dissolve')">▶ Dissolve</button>
+      <span id="frameLabel">Select a run from the left panel</span>
+    </div>
+    <iframe id="viewer" src="about:blank"></iframe>
+  </div>
+</div>
+<script>
+var MANIFEST = ${manifest};
+var curIdx = -1, curView = 'history', curFilter = 'all', curSearch = '';
+window._dissolveSpeed = null;  // shared between dissolve iframes
+
+function select(i) {
+  curIdx = i;
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.toggle('active', +el.dataset.idx === i));
+  var r = MANIFEST[i];
+  document.getElementById('frameLabel').textContent = (r.seedLabel ? r.seedLabel+' / ' : '') + r.taste.slice(0,60) + (r.taste.length>60?'…':'') + ' · rep' + r.rep + (r.isC?' [C]':'');
+  loadView();
+}
+
+function setView(v) {
+  curView = v;
+  document.getElementById('btnHist').classList.toggle('active', v==='history');
+  document.getElementById('btnDis').classList.toggle('active', v==='dissolve');
+  loadView();
+}
+
+function loadView() {
+  if (curIdx < 0) return;
+  var r = MANIFEST[curIdx];
+  var iframe = document.getElementById('viewer');
+  var content = curView === 'dissolve' ? r.disContent : r.histContent;
+  if (content) {
+    // Use srcdoc to avoid file:// cross-origin restrictions
+    iframe.srcdoc = content;
+    iframe.removeAttribute('src');
+  } else {
+    iframe.srcdoc = '<p style="padding:20px;font-family:sans-serif;color:#666">File not embedded — re-generate the zip.</p>';
+  }
+}
+
+function setFilter(f, btn) {
+  curFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b===btn));
+  applyFilter();
+}
+function filterItems(q) { curSearch = q.toLowerCase(); applyFilter(); }
+function applyFilter() {
+  document.querySelectorAll('.sidebar-item').forEach(el => {
+    var i = +el.dataset.idx, r = MANIFEST[i];
+    var fOk = curFilter==='all' || (curFilter==='e'&&!r.isC) || (curFilter==='c'&&r.isC);
+    var sOk = !curSearch || r.taste.toLowerCase().includes(curSearch) || (r.seedLabel||'').toLowerCase().includes(curSearch);
+    el.style.display = (fOk && sOk) ? '' : 'none';
+  });
+}
+
+// Draggable divider
+(function(){
+  var div = document.getElementById('divider');
+  var sidebar = document.getElementById('sidebar');
+  var dragging = false, startX, startW;
+  div.addEventListener('mousedown', function(e){
+    dragging=true; startX=e.clientX; startW=sidebar.offsetWidth;
+    div.classList.add('dragging');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!dragging)return;
+    var w = Math.max(160, Math.min(600, startW+(e.clientX-startX)));
+    sidebar.style.width = w+'px';
+  });
+  document.addEventListener('mouseup', function(){
+    dragging=false; div.classList.remove('dragging');
+  });
+})();
+
+// Auto-select first item
+if (MANIFEST.length) select(0);
+` + '<' + '/script>\n</body></html>';
+}
+
 async function downloadHistoryZip(data) {
   const btn = document.getElementById('btnHistZip');
-  if (!data) { alert('Load experiment data first.'); return; }
+  if (!data) { showExpMsg('Load experiment data in the Results tab first.', true); if(typeof switchTab==='function')switchTab('results'); return; }
 
   // Load JSZip if needed
   if (!window.JSZip) {
@@ -5980,7 +6587,11 @@ async function downloadHistoryZip(data) {
 
   const {experiment: exp, runs} = data;
   const completedRuns = runs.filter(r => r.status === 'completed' && r.iterations?.length);
-  if (!completedRuns.length) { alert('No completed runs with iteration data.'); return; }
+  if (!completedRuns.length) {
+    const _msgEl = document.getElementById('rCSVCard');
+    if (_msgEl) { const _w=document.createElement('div'); _w.style.cssText='color:var(--red);font-size:.75rem;margin-top:8px'; _w.textContent='No completed runs with iteration data to export.'; _msgEl.appendChild(_w); setTimeout(()=>_w.remove(),4000); }
+    return;
+  }
 
   btn.disabled = true;
   const zip = new window.JSZip();
@@ -5989,6 +6600,7 @@ async function downloadHistoryZip(data) {
 
   const engineSrc = _buildEngineSource();
   const total = completedRuns.length;
+  const _fileContents = {};  // populated inside loop, used in master index
 
   for (let i = 0; i < completedRuns.length; i++) {
     const r = completedRuns[i];
@@ -6007,7 +6619,7 @@ async function downloadHistoryZip(data) {
     // Build dissolve data
     const frames = [seed.code, ...r.iterations.map(it => it.winnerCode).filter(Boolean)];
     const labels = ['Seed', ...r.iterations.map((it, idx) => `Iteration ${idx+1}`)];
-    const titleStr = `${seed.label} / ${taste.text.slice(0,30)} · rep${r.repeatIndex+1}${isC?' (C)':''}`;
+    const titleStr = `${oneSeed(exp)?taste.text.slice(0,48):seed.label+' / '+taste.text.slice(0,30)} · rep${r.repeatIndex+1}${isC?' (C)':''}`;
     // Per-frame metrics for the dissolve info bar (index 0 = seed, no metrics)
     const xmFinal = (exp.parameters.evalModels||[])[0] && r.crossModelScores?.[(exp.parameters.evalModels||[])[0]];
     const frameData = [{}, ...r.iterations.map(it => ({
@@ -6027,20 +6639,51 @@ async function downloadHistoryZip(data) {
       xmAes: xmFinal?.aesthetic, judgeModel: (exp.parameters.evalModels||[])[0]||null
     };
 
+    let dissolveHtml = '';
     if (frames.length >= 2) {
-      const dissolveHtml = _buildDissolveHTML(frames, labels, frameData, titleStr, metaObj);
+      dissolveHtml = _buildDissolveHTML(frames, labels, frameData, titleStr, metaObj);
       disFolder.file(`${baseName}_dissolve.html`, dissolveHtml);
     }
 
     // Build history HTML (slightly heavier — do asynchronously to not block)
     const histHtml = _buildHistoryHTML(r, exp, engineSrc);
     histFolder.file(`${baseName}_history.html`, histHtml);
+    _fileContents[`history/${baseName}_history.html`] = histHtml;
+    if (frames.length >= 2) _fileContents[`dissolve/${baseName}_dissolve.html`] = dissolveHtml || '';
 
     // Yield to UI between files
     await new Promise(res => setTimeout(res, 0));
   }
 
-  btn.textContent = `Compressing ${total * 2} files…`;
+  // Build master index HTML
+  btn.textContent = `Building index…`;
+  const _manifest = completedRuns.map(r => {
+    const isC = r.type === 'feedback_only';
+    const cond = exp.conditions.find(c => c.id === r.conditionId) || {};
+    const seed = exp.parameters.seeds.find(s => s.id === cond.seedId) || {label:'',code:''};
+    const taste = exp.parameters.tastes.find(t => t.id === cond.tasteId) || {text:''};
+    const safeCond = r.conditionId.replace(/[^a-z0-9_]/gi,'_').slice(0,40);
+    const typeTag = isC ? '_baselineC' : '';
+    const baseName = `${safeCond}${typeTag}_rep${r.repeatIndex+1}`;
+    const lastIt = r.iterations?.at(-1);
+    return {
+      condId: r.conditionId, seedLabel: oneSeed(exp) ? '' : seed.label,
+      taste: taste.text, model: cond.model||'?', rep: r.repeatIndex+1,
+      isC, status: r.status,
+      histFile: `history/${baseName}_history.html`,
+      disFile: `dissolve/${baseName}_dissolve.html`,
+      metaObj: { finalScore: r.finalScore, iterations: r.iterations?.length }
+    };
+  });
+  const _expInfo = {
+    id: exp.id, models: exp.parameters.models, evalModels: exp.parameters.evalModels,
+    seeds: exp.parameters.seeds, aW: exp.parameters.aestheticWeight,
+    nW: exp.parameters.noveltyWeight, pW: exp.parameters.parsimonyWeight,
+    iters: exp.parameters.iterationsPerRun
+  };
+  zip.file('index.html', _buildMasterIndexHTML(_manifest, _expInfo, _fileContents));
+
+  btn.textContent = `Compressing ${total * 2 + 1} files…`;
   const blob = await zip.generateAsync({type: 'blob', compression: 'DEFLATE', compressionOptions: {level: 6}});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -6052,5 +6695,69 @@ async function downloadHistoryZip(data) {
   btn.textContent = `↓ History + Dissolve files (zip) — ${total} runs`;
   btn.disabled = false;
 }
+
+
+function showPromptsModal() {
+  var PROMPTS = [
+    { name: 'Modifier', 
+      role: 'Generates N code variants per iteration. Receives parent code + images + taste + feedback from critic. Drives the evolutionary search.',
+      sys: window._MODIFIER_SYS },
+    { name: 'Evolution Critic', 
+      role: 'Scores all variants against the parent each iteration. Uses relative novelty (0 = no change from parent). NOT used in Baseline C.',
+      sys: window._CRITIC_SYS },
+    { name: 'Baseline Generator (A & B)',
+      role: 'One-shot generator for Baseline A (from scratch) and Baseline B (single edit from seed). No iteration or feedback.',
+      sys: window._BASELINE_SYS },
+    { name: 'Baseline C Critic',
+      role: 'Feedback-only critic for Baseline C runs. Compares current vs previous version. No selection pressure — single variant always replaces parent.',
+      sys: window._BASELINE_C_CRITIC_SYS },
+    { name: 'Cross-model Judge (eval models)',
+      role: 'Post-experiment independent evaluation. Scores final programs in isolation on absolute 1-10 scale — no parent shown. Different model(s) from the evolver.',
+      sys: window._EVAL_CRITIC_SYS },
+  ];
+  var overlay = document.createElement('div');
+  overlay.className = 'prompt-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;overflow-y:auto;padding:24px 16px;display:flex;justify-content:center';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:24px;width:100%;max-width:800px;height:fit-content';
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
+  hdr.innerHTML = '<h2 style="font-size:1rem;color:var(--teal);margin:0">System Prompts</h2>';
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer';
+  closeBtn.onclick = function(){ overlay.remove(); };
+  hdr.appendChild(closeBtn);
+  box.appendChild(hdr);
+  var note = document.createElement('p');
+  note.style.cssText = 'font-size:.7rem;color:var(--text-muted);margin-bottom:16px;padding:8px;background:var(--panel);border-radius:4px;border-left:2px solid var(--amber)';
+  note.textContent = 'Note on relative vs absolute scoring: the Evolution Critic and Baseline C Critic see two images side-by-side and score novelty relative to the parent (0 = identical to parent). Scores accumulate over iterations as the reference shifts. The Cross-model Judge sees only the final image in isolation — no parent — so novelty reflects absolute originality. This is why critic scores (10-18 range) are much higher than cross-model scores (2-6 range).';
+  box.appendChild(note);
+  PROMPTS.forEach(function(p) {
+    var sec = document.createElement('div');
+    sec.style.cssText = 'margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:14px';
+    var nameEl = document.createElement('div');
+    nameEl.style.cssText = 'font-size:.82rem;font-weight:700;color:var(--lav);margin-bottom:3px';
+    nameEl.textContent = p.name;
+    var roleEl = document.createElement('div');
+    roleEl.style.cssText = 'font-size:.7rem;color:var(--text-muted);margin-bottom:8px';
+    roleEl.textContent = p.role;
+    var pre = document.createElement('pre');
+    pre.style.cssText = 'font-family:var(--ff-code);font-size:.63rem;color:var(--text);background:var(--panel);padding:10px;border-radius:5px;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow-y:auto;border:1px solid var(--border);margin:0';
+    pre.textContent = p.sys || '(not available)';
+    sec.appendChild(nameEl);
+    sec.appendChild(roleEl);
+    sec.appendChild(pre);
+    box.appendChild(sec);
+  });
+  overlay.appendChild(box);
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+window._MODIFIER_SYS = MODIFIER_SYS;
+window._CRITIC_SYS = CRITIC_SYS;
+window._BASELINE_SYS = BASELINE_SYS;
+window._BASELINE_C_CRITIC_SYS = BASELINE_C_CRITIC_SYS;
+window._EVAL_CRITIC_SYS = EVAL_CRITIC_SYS;
 
 </script></body></html>
