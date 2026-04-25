@@ -486,15 +486,13 @@ input[type=range]{width:100%;accent-color:var(--teal);background:transparent;cur
     <!-- API KEYS -->
     <div class="exp-section">
       <div class="section-hd">API Keys <span>Keys are never sent anywhere except the respective AI API</span></div>
+      <div id="claudeArtifactNote" style="display:none;font-size:.7rem;padding:6px 10px;background:rgba(63,245,192,.08);border:1px solid rgba(63,245,192,.2);border-radius:5px;color:var(--teal);margin-bottom:8px">✓ Running as Claude artifact — Claude Sonnet is available without an API key</div>
       <div class="key-grid">
-        <div class="key-field">
-          <label class="lbl kl-claude key-provider-lbl">Anthropic (Claude)</label>
-          <input type="text" id="expAnthropicKey" class="api-key-input" placeholder="sk-ant-… or leave blank for keyless" autocomplete="new-password" oninput="expKeyAutoSave('anthropic')">
-          <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-            <input type="checkbox" id="expSaveAnthropicKey" style="accent-color:var(--teal);cursor:pointer" onchange="expToggleSaveKey('anthropic')">
-            <label for="expSaveAnthropicKey" style="font-size:.65rem;color:var(--text-muted);cursor:pointer">Save in browser (this device only)</label>
-          </div>
-          <span class="field-hint">Leave blank for keyless Claude (claude.ai only). <strong style="color:var(--amber)">⚠ Gemini/OpenAI need http://localhost, not file://</strong></span>
+        <div id="anthropicKeySection" class="key-field" style="display:none">
+          <!-- Anthropic key hidden: Claude is only usable inside Claude artifact context
+               (API key injected automatically by the artifact runtime). -->
+          <input type="text" id="expAnthropicKey" style="display:none" autocomplete="new-password">
+          <input type="checkbox" id="expSaveAnthropicKey" style="display:none">
         </div>
         <div class="key-field">
           <label class="lbl kl-gemini key-provider-lbl">Google (Gemini)</label>
@@ -653,7 +651,17 @@ input[type=range]{width:100%;accent-color:var(--teal);background:transparent;cur
 // ═══════════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════════
-function isArtifact(){try{return window.location.href==='about:srcdoc'||window.location.protocol==='about:';}catch(e){return true;}}
+function isArtifact(){
+  try{
+    const h=window.location.href;
+    // Claude artifact contexts
+    if(h==='about:srcdoc'||window.location.protocol==='about:') return true;
+    if(window.location.hostname.includes('claudeusercontent.com')) return true;
+    // Check parent frame (srcdoc iframes have null origin but parent may be claude.ai)
+    try{ if(window.parent!==window && window.parent.location.hostname.includes('claude.ai')) return true; }catch(e2){}
+    return false;
+  }catch(e){return true;}
+}
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function parseMarkdown(t){return (t||'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/\n/g,'<br>');}
 function diffHTML(oldStr,newStr){if(!oldStr)oldStr='';const oldSet=new Set(oldStr.trim().split(/\s+/).filter(Boolean));return newStr.replace(/[^\s]+|\s+/g,function(chunk){if(/^\s/.test(chunk))return chunk;const safe=escHtml(chunk);return oldSet.has(chunk)?safe:'<span style="color:var(--amber);font-weight:700">'+safe+'</span>';});}
@@ -1379,15 +1387,31 @@ async function callAIExp(system, userText, imgB64s=[], maxTokens=1400, label='',
       if(seed!=null) body.seed=seed;
       const fetchP=fetch('https://api.openai.com/v1/chat/completions',{method:'POST',
         headers:{'Content-Type':'application/json','Authorization':'Bearer '+openaiKey},body:JSON.stringify(body)});
-      const timeoutP=new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error('OpenAI timed out after 90s'),{httpStatus:0})),90000));
+      const _oaiTimeout = (model.includes('5.5')||model.includes('5.4-pro')||model.includes('o4')) ? 180000 : 90000;
+      const timeoutP=new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error('OpenAI timed out after '+(_oaiTimeout/1000)+'s'),{httpStatus:0})),_oaiTimeout));
       const res=await Promise.race([fetchP,timeoutP]);
       if(!res.ok){let eb='';try{eb=await res.text();}catch(e2){}
         const ra=res.headers?.get('retry-after');
         if(res.status===400){logLine('  ⚠ OpenAI 400 on '+label+' ('+model+'): '+eb.slice(0,200));}
         throw Object.assign(new Error('OpenAI '+res.status+': '+eb.slice(0,200)),{httpStatus:res.status,retryAfter:ra?parseInt(ra):null});}
       const d2=await res.json();
-      const content=d2.choices?.[0]?.message?.content;
-      if(content==null) throw Object.assign(new Error('OpenAI response missing content'),{httpStatus:200});
+      const _msg=d2.choices?.[0]?.message;
+      // Handle content as string OR array [{type:'text',text:'...'}] (newer OpenAI format)
+      let content = _msg?.content;
+      if(Array.isArray(content)) content=content.filter(p=>p.type==='text').map(p=>p.text||'').join('');
+      // Fallback: check reasoning content if main content is empty (o-series / GPT-5.5 Pro)
+      if(!content && _msg?.reasoning_content) content=_msg.reasoning_content;
+      // Check for refusal
+      if(!content && _msg?.refusal) throw Object.assign(new Error('OpenAI refused: '+_msg.refusal.slice(0,100)),{httpStatus:200});
+      // Log raw response to help debug empty content
+      // Log details when content is empty (null OR empty string)
+      if(!content) {
+        const _fr=d2.choices?.[0]?.finish_reason||'?';
+        const _keys=Object.keys(_msg||{}).join(',');
+        logLine('  ⚠ OpenAI '+(content==null?'null':'empty')+' content on '+label+' ('+model+') finish_reason='+_fr+' msg_keys='+_keys);
+        if(content==null) throw Object.assign(new Error('OpenAI null content — finish_reason:'+_fr),{httpStatus:200});
+        throw Object.assign(new Error('OpenAI empty response — finish_reason:'+_fr+' msg_keys:'+_keys),{httpStatus:200});
+      }
       // Track system_fingerprint for model change detection
       const fp=d2.system_fingerprint;
       if(fp&&EXP.systemFingerprints){
@@ -1881,7 +1905,7 @@ async function agentModifyPure(baseCode, feedback, numV, magnitude, taste, model
     ? '\n\nNote: Logo\'s most visually striking outputs often use NESTED REPEAT loops (REPEAT inside REPEAT) and procedure definitions (TO...END). Consider these structures when they could enhance the visual result. Example: REPEAT 12 [REPEAT 6 [FD 50 RT 60] RT 30]'
     : '';
   const _sysWithHint = MODIFIER_SYS + _nestingHint;
-  const {text:raw} = await callAIExp(_sysWithHint,userText,[],5000,'Modifier',{...apiKeys,model,agent:'modifier',forceModel:true,seed:_modSeed,temperature:modifierTemp??1.0});
+  const {text:raw} = await callAIExp(_sysWithHint,userText,[],(model?.includes('5.5')?16000:5000),'Modifier',{...apiKeys,model,agent:'modifier',forceModel:true,seed:_modSeed,temperature:modifierTemp??1.0});
   if(!raw) throw new Error('Modifier returned empty response');
 
   const parsed=[];
@@ -2051,7 +2075,8 @@ async function runStepPure(params) {
 async function generateBaselineA(taste, model, attemptIndex, conditionId, apiKeys, apiSeed=undefined, modifierTemp=undefined) {
   const userText='Write a Logo turtle graphics program that achieves this aesthetic goal: "'+taste+'"\nMake it as visually compelling and sophisticated as possible.\nReturn ONLY the Logo code.';
   const t0=performance.now();
-  const {text:raw}=await callAIExp(BASELINE_SYS,userText,[],3000,'Baseline-A',{...apiKeys,model,agent:'baseline_generator',forceModel:true,seed:apiSeed,temperature:modifierTemp??1.0});
+  const _blATok = (model.includes('5.5')||model.includes('5.4-pro')) ? 16000 : 3000;
+  const {text:raw}=await callAIExp(BASELINE_SYS,userText,[],_blATok,'Baseline-A',{...apiKeys,model,agent:'baseline_generator',forceModel:true,seed:apiSeed,temperature:modifierTemp??1.0});
   const code=cleanCode(raw)||raw.trim()||'FD 100 RT 90 FD 100 RT 90 FD 100 RT 90 FD 100';
   const offC=document.createElement('canvas');offC.width=400;offC.height=400;
   drawCode(offC,code,0);
@@ -2456,7 +2481,7 @@ async function startExperiment() {
             +'STRICT MAGNITUDE CONSTRAINT: '+magDesc(cond.magnitude??params.magnitude)+'\n'
             +(currentFeedback?'Critic suggestion to incorporate: "'+currentFeedback+'"\n\n':'')
             +'Base program:\n'+currentCode+'\n\nGenerate 1 VARIANT. Format:\n---VARIANT 1---\n[Logo code]',
-            [],5000,'FB-Modifier',{...apiKeys,model:cond.model,agent:'modifier',forceModel:true,seed:_fbModSeed,temperature:params.modifierTemp??1.0});
+            [],(cond.model?.includes('5.5')?16000:5000),'FB-Modifier',{...apiKeys,model:cond.model,agent:'modifier',forceModel:true,seed:_fbModSeed,temperature:params.modifierTemp??1.0});
           const modFBLatency=Math.round(performance.now()-modFBT0);
 
           // Extract variant code
@@ -2773,6 +2798,8 @@ const ALL_MODELS=[
   {id:'gemini-3-flash-preview',name:'Gemini 3 Flash',provider:'gemini'},
   {id:'gemini-2.5-pro',name:'Gemini 2.5 Pro',provider:'gemini'},
   {id:'gemini-2.5-flash',name:'Gemini 2.5 Flash',provider:'gemini'},
+  {id:'gpt-5.5',name:'GPT-5.5',provider:'openai'},
+  {id:'gpt-5.5-pro',name:'GPT-5.5 Pro',provider:'openai'},
   {id:'gpt-5.4',name:'GPT-5.4',provider:'openai'},
   {id:'gpt-5.4-mini',name:'GPT-5.4 Mini',provider:'openai'},
   {id:'gpt-5.4-nano',name:'GPT-5.4 Nano',provider:'openai'},
@@ -2781,7 +2808,11 @@ const ALL_MODELS=[
 
 function buildModelCheckboxes(containerId, defaultChecked=[]) {
   const cont=document.getElementById(containerId);
+  const _inArtifact = isArtifact();
   ALL_MODELS.forEach(m=>{
+    // Claude Sonnet is only usable inside Claude artifact context
+    // (the API key is injected by the artifact runtime)
+    if(m.provider==='claude' && !_inArtifact) return;
     const lbl=document.createElement('label');
     const checked=defaultChecked.includes(m.id);
     lbl.className='model-chk-label'+(checked?' checked':'');
@@ -3026,8 +3057,14 @@ function playModal(){
 
 window.addEventListener('load',()=>{
   // Build model checkboxes
-  buildModelCheckboxes('modelsContainer', ['claude-sonnet-4-6']);
-  buildModelCheckboxes('evalModelsContainer', ['claude-sonnet-4-6']);
+  const _defaultModel = isArtifact() ? 'claude-sonnet-4-6' : 'gpt-5.5';
+  buildModelCheckboxes('modelsContainer', [_defaultModel]);
+  buildModelCheckboxes('evalModelsContainer', [_defaultModel]);
+  // Show artifact note / hide Anthropic key section appropriately
+  if (isArtifact()) {
+    const note = document.getElementById('claudeArtifactNote');
+    if (note) note.style.display = 'block';
+  }
 
   // Default seeds
   addSeed('Line', 'FD 100');
@@ -4027,10 +4064,28 @@ function renderStructuralChart(cm, exp) {
   eParts.push(`<text x="${MINI_W/2}" y="${MPAD.t-5}" text-anchor="middle" fill="var(--green)" font-size="9" font-weight="bold">Spatial Entropy</text>`);
   eParts.push('</svg>');
 
-  // Condition legend
-  const legend = cm.map(c =>
-    `<div class="legend-item"><svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="${c.color}" stroke-width="2"/></svg>${escHtml(c.seed.label)} / ${escHtml(c.taste.text.slice(0,16))}…</div>`
-  ).join('');
+  // Condition legend — use sweep param as label when single seed+taste
+  const _smOneTaste = [...new Set(cm.map(_c=>_c.taste.text))].length <= 1;
+  const _smOneSeed  = [...new Set(cm.map(_c=>_c.seed.label))].length <= 1;
+  const _smAllMags  = [...new Set(cm.map(_c=>String(_c.magnitude||5)))];
+  const _smAllSels  = [...new Set(cm.map(_c=>_c.selectionMode||'deterministic'))];
+  const _smAllCrits = [...new Set(cm.map(_c=>_c.criticMode||'both'))];
+  const _smHasSweep = _smAllMags.length>1||_smAllSels.length>1||_smAllCrits.length>1;
+  const legend = cm.map(c => {
+    let _smLabel;
+    if (_smOneTaste && _smOneSeed && _smHasSweep) {
+      const _p=[];
+      if(_smAllMags.length>1)  _p.push('Magnitude '+c.magnitude);
+      if(_smAllSels.length>1)  _p.push(c.selectionMode);
+      if(_smAllCrits.length>1) _p.push(c.criticMode);
+      _smLabel = _p.join(' · ');
+    } else {
+      _smLabel = condLabel(c.seed.label, c.taste.text, 22, exp);
+      const _sm=[...new Set(cm.map(_c=>String(_c.magnitude||exp.parameters.magnitude||5)))];
+      if(_sm.length>1) _smLabel += ' [Magnitude '+c.magnitude+']';
+    }
+    return `<div class="legend-item" title="${condTitle(c.seed.label,c.taste.text,exp)}"><svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="${c.color}" stroke-width="2"/></svg>${escHtml(_smLabel)}</div>`;
+  }).join('');
 
   // Build all 5 charts (4 structural + entropy) with unique IDs
   const allChartDefs = [
@@ -6371,24 +6426,96 @@ function buildTree(){
   var root2={code:OC,title:'Seed',score:null,isWinner:true,children:[]};
   nodesMap[OC]=root2;
   H.forEach(function(e,i){
+    // Find parent node using the baseCode of this iteration
     var parent=nodesMap[e.baseCode]||root2;
-    var variants=(e.variants&&e.variants.length)?e.variants:[{code:e.code,score:e.score,isWinner:true}];
+    var variants=(e.variants&&e.variants.length)?e.variants:[];
+    var winnerCode=e.code; // e.code = it.winnerCode (the actual winner)
+
+    // Add all variants (non-winners as branches, winner as the main trunk)
+    var winnerNode=null;
+    // Deduplicate variants by code — same code can appear multiple times
+    // (backup pool entries evaluated at different iterations get different scores)
+    var seenCodes={}; // code → {scores:[], isWin:bool}
     variants.forEach(function(v){
-      if(!v.code||v.code===parent.code)return;
-      var lbl=v.isWinner?('Iter '+(i+1)+' ✓'):('Iter '+(i+1));
-      var node={code:v.code,title:lbl,score:v.score,isWinner:v.isWinner,children:[]};
-      parent.children.push(node);
-      if(!nodesMap[v.code])nodesMap[v.code]=node;
+      if(!v.code)return;
+      var isWin=(v.code===winnerCode)||(v.isWinner===true);
+      if(!seenCodes[v.code])seenCodes[v.code]={scores:[],isWin:false};
+      if(v.score!=null)seenCodes[v.code].scores.push(v.score);
+      if(isWin)seenCodes[v.code].isWin=true;
     });
+
+    // Add one node per unique code
+    Object.keys(seenCodes).forEach(function(code){
+      var info=seenCodes[code];
+      var isWin=info.isWin||(code===winnerCode);
+      if(!isWin&&code===parent.code)return; // skip non-winner identical to parent
+      // Score display: winner score bold, all scores listed
+      var winScore=isWin?e.score:(info.scores.length?Math.max.apply(null,info.scores):null);
+      var allScores=info.scores.slice().sort(function(a,b){return b-a;});
+      if(isWin){
+        var wlbl='Iter '+(i+1)+' ✓';
+        winnerNode={code:code,title:wlbl,score:winScore,allScores:allScores,isWinner:true,children:[]};
+        parent.children.push(winnerNode);
+      } else {
+        var lbl='Iter '+(i+1);
+        var node={code:code,title:lbl,score:winScore,allScores:allScores,isWinner:false,children:[]};
+        parent.children.push(node);
+        if(!nodesMap[code])nodesMap[code]=node;
+      }
+    });
+
+    // If winner not yet created: either backup pool re-selection or all variants = parent
+    if(!winnerNode&&winnerCode){
+      if(nodesMap[winnerCode]&&winnerCode!==parent.code){
+        // Backup pool winner: already in tree from a prior iteration.
+        // Re-use the existing node — don't add a phantom duplicate child.
+        // Mark it as re-selected so the chain continues from there.
+        winnerNode=nodesMap[winnerCode];
+        if(!winnerNode.reSelectedAt)winnerNode.reSelectedAt=[];
+        winnerNode.reSelectedAt.push(i+1);
+      } else {
+        // Truly new winner (winner=parent reselected, or code not seen before)
+        var lbl2='Iter '+(i+1)+' ✓';
+        winnerNode={code:winnerCode,title:lbl2,score:e.score,allScores:[e.score],isWinner:true,children:[]};
+        parent.children.push(winnerNode);
+      }
+    }
+
+    // ALWAYS update nodesMap with this iteration's winner — override to keep chain correct
+    if(winnerNode){
+      nodesMap[winnerCode]=winnerNode;
+      if(false){
+        // Code collision: same code used as winner in multiple iters
+        // Create a shadow key by iteration so chain still works
+        nodesMap['__iter_'+i+'_winner']=winnerNode;
+        // Override lookup for this specific code to point to latest winner
+        nodesMap[winnerCode]=winnerNode;
+      }
+    }
   });
+
+  // Second pass: fix parent for any iteration whose baseCode
+  // was a shadow-keyed winner (code reuse across iterations)
+  // nodesMap is already set to the latest occurrence so this is automatic.
   function renderNode(n){
     var enc=encodeURIComponent(n.code);
     var cls='tree-node'+(n.isWinner?' winner-node':'');
-    var scoreHtml=(n.score!=null)?'<div class="node-score">'+parseFloat(n.score).toFixed(1)+'</div>':'';
+    var reSelHtml=n.reSelectedAt&&n.reSelectedAt.length
+      ?'<div style="font-size:.55rem;color:#f59e0b;margin-top:1px">↩ re-selected iter '+n.reSelectedAt.join(',')+' </div>':'  ';
+    var scoreHtml='';
+    if(n.score!=null){
+      var mainScore='<span style="font-weight:'+(n.isWinner?'700':'400')+';color:#7c3aed">'+parseFloat(n.score).toFixed(1)+'</span>';
+      var extras='';
+      if(n.allScores&&n.allScores.length>1){
+        var others=n.allScores.filter(function(s){return Math.abs(s-n.score)>0.05;});
+        if(others.length)extras='<span style="font-size:.6rem;color:#94a3b8;margin-left:3px">('+others.map(function(s){return s.toFixed(1);}).join(', ')+')</span>';
+      }
+      scoreHtml='<div class="node-score">'+mainScore+extras+'</div>';
+    }
     var childrenHtml=n.children.length?'<ul>'+n.children.map(renderNode).join('')+'</ul>':'';
     return '<li><div class="'+cls+'" data-enc="'+enc+'" data-label="'+n.title+'">'+
       '<canvas data-lazy="'+enc+'" width="105" height="78" style="display:block;width:100%;background:#fff;border-radius:3px"></canvas>'+
-      '<div class="node-title">'+n.title+'</div>'+scoreHtml+'</div>'+childrenHtml+'</li>';
+      '<div class="node-title">'+n.title+'</div>'+scoreHtml+reSelHtml+'</div>'+childrenHtml+'</li>';
   }
   document.getElementById('treeRoot').innerHTML=renderNode(root2);
   observeLazy();
@@ -6740,7 +6867,7 @@ async function downloadHistoryZip(data) {
   btn.disabled = true;
   const zip = new window.JSZip();
   const histFolder = zip.folder('history');
-  const disFolder = zip.folder('dissolve');
+  const disFolder  = zip.folder('dissolve');
 
   const engineSrc = _buildEngineSource();
   const total = completedRuns.length;
@@ -6815,7 +6942,7 @@ async function downloadHistoryZip(data) {
       taste: taste.text, model: cond.model||'?', rep: r.repeatIndex+1,
       isC, status: r.status,
       histFile: `history/${baseName}_history.html`,
-      disFile: `dissolve/${baseName}_dissolve.html`,
+      disFile:  `dissolve/${baseName}_dissolve.html`,
       metaObj: { finalScore: r.finalScore, iterations: r.iterations?.length }
     };
   });
@@ -6827,7 +6954,7 @@ async function downloadHistoryZip(data) {
   };
   zip.file('index.html', _buildMasterIndexHTML(_manifest, _expInfo, _fileContents));
 
-  btn.textContent = `Compressing ${total * 2 + 1} files…`;
+  btn.textContent = `Compressing ${completedRuns.length * 2 + 1} files…`;
   const blob = await zip.generateAsync({type: 'blob', compression: 'DEFLATE', compressionOptions: {level: 6}});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
