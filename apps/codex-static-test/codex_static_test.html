@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Static Page → Local Codex Helper Tool Tests (v16)</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
+    body { margin: 0; padding: 24px; line-height: 1.45; }
+    main { max-width: 1180px; margin: 0 auto; }
+    h1 { margin-top: 0; font-size: clamp(1.55rem, 3vw, 2.35rem); }
+    h2 { margin-top: 28px; }
+    label { display: block; margin: 14px 0 6px; font-weight: 650; }
+    input, textarea, select, button { font: inherit; box-sizing: border-box; }
+    input, textarea, select { width: 100%; padding: 10px 12px; border: 1px solid #9996; border-radius: 10px; background: Canvas; color: CanvasText; }
+    textarea { min-height: 130px; resize: vertical; }
+    button { border: 0; border-radius: 999px; padding: 10px 16px; cursor: pointer; font-weight: 700; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .row4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .primary { background: #2563eb; color: white; }
+    .secondary { background: #e5e7eb; color: #111827; }
+    .note { border: 1px solid #9994; border-radius: 16px; padding: 14px 16px; background: #8881; }
+    .warning { border-color: #f59e0b88; background: #f59e0b17; }
+    .status { margin-top: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
+    .answer, .raw { margin-top: 14px; padding: 16px; border-radius: 16px; border: 1px solid #9994; min-height: 80px; background: #8881; }
+    .answer { white-space: normal; }
+    .answer.plain { white-space: pre-wrap; }
+    .answer :first-child { margin-top: 0; }
+    .answer :last-child { margin-bottom: 0; }
+    .answer h1, .answer h2, .answer h3 { line-height: 1.18; margin: 1.05em 0 0.45em; }
+    .answer h1 { font-size: 1.55rem; }
+    .answer h2 { font-size: 1.3rem; }
+    .answer h3 { font-size: 1.12rem; }
+    .answer p { margin: 0.55em 0; }
+    .answer ul, .answer ol { margin: 0.55em 0 0.85em 1.45em; padding: 0; }
+    .answer li { margin: 0.24em 0; }
+    .answer blockquote { margin: 0.8em 0; padding: 0.55em 0.85em; border-left: 4px solid #9998; background: #8881; border-radius: 8px; }
+    .answer pre { overflow: auto; padding: 12px; border-radius: 12px; background: #0002; }
+    .answer code { padding: 0.1em 0.28em; border-radius: 6px; background: #0002; }
+    .answer pre code { padding: 0; background: transparent; }
+    .answer table { border-collapse: collapse; width: 100%; margin: 0.8em 0; display: block; overflow-x: auto; }
+    .answer th, .answer td { border: 1px solid #9995; padding: 0.45em 0.6em; text-align: left; }
+    .answer th { background: #8882; }
+    .raw { overflow: auto; max-height: 520px; }
+    .small { font-size: 0.92rem; opacity: 0.84; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .checks { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; }
+    .checks label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin: 0; }
+    .checks input[type="checkbox"] { width: auto; }
+    .preview-grid, .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-top: 12px; }
+    .thumb, .outimg { border: 1px solid #9994; border-radius: 14px; overflow: hidden; background: #0001; padding: 8px; }
+    .thumb img, .outimg img { display: block; width: 100%; height: 160px; object-fit: contain; background: #0001; border-radius: 10px; }
+    .thumb .cap, .outimg .cap { font-size: 0.85rem; margin-top: 8px; word-break: break-word; }
+    details { margin-top: 18px; }
+    @media (max-width: 820px) {
+      body { padding: 14px; }
+      .row, .row3, .row4 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Static Page → Local Codex Helper Tool Tests (v16)</h1>
+
+  <p class="note warning"><strong>Page version:</strong> <code>v16</code>. Click <strong>Check helper</strong> first and confirm helper version <code>0.16</code>. If it shows anything else, stop the old Python helper with Ctrl+C and restart this shared helper.</p>
+
+  <div class="row">
+    <div>
+      <label for="helperUrl">Helper URL</label>
+      <input id="helperUrl" value="http://127.0.0.1:8787" />
+    </div>
+    <div>
+      <label for="model">Model</label>
+      <select id="model">
+        <option>gpt-5.4-mini</option>
+        <option>gpt-5.4</option>
+        <option>gpt-5.4-nano</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row3">
+    <div>
+      <label for="toolTest">Tool test preset</label>
+      <select id="toolTest">
+        <option value="none">None: normal text / image input</option>
+        <option value="web_search">Web search</option>
+        <option value="image_generation">Image generation</option>
+        <option value="code_interpreter">Code interpreter (known unsupported here)</option>
+        <option value="roll_dice">Local function: roll_dice</option>
+        <option value="get_local_time">Local function: get_local_time</option>
+        <option value="run_agent_roundtable">Local multi-agent roundtable</option>
+      </select>
+    </div>
+    <div>
+      <label for="mode">Mode</label>
+      <select id="mode">
+        <option value="nonstreaming">nonstreaming, emulated via stream=true</option>
+        <option value="streaming">streaming, collected by helper</option>
+      </select>
+    </div>
+    <div>
+      <label for="reasoning">Reasoning effort</label>
+      <select id="reasoning">
+        <option value="">default</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+        <option value="xhigh">xhigh</option>
+      </select>
+    </div>
+  </div>
+
+  <label for="system">System / instructions</label>
+  <input id="system" value="You are concise and helpful. Use any requested tool when it is available. Report if a tool was unavailable or failed." />
+
+  <label for="prompt">Prompt</label>
+  <textarea id="prompt">Say hello from a static page using the local helper.</textarea>
+
+  <div class="buttons">
+    <button class="secondary" id="applyPresetBtn">Apply selected preset</button>
+    <button class="secondary" id="healthBtn">Check helper</button>
+    <button class="secondary" id="modelsBtn">Load models</button>
+    <button class="primary" id="sendBtn">Send request</button>
+  </div>
+
+  <h2>Image input / image generation options</h2>
+  <div class="row3">
+    <div>
+      <label for="imageShape">Image input payload shape</label>
+      <select id="imageShape">
+        <option value="responses_no_detail">Responses: input_image, no detail</option>
+        <option value="responses_with_detail">Responses: input_image + detail</option>
+        <option value="responses_with_mime">input_image + mime_type</option>
+        <option value="input_file_data_url">input_file + file_data</option>
+        <option value="chat_completions_style">Chat Completions style image_url object</option>
+      </select>
+    </div>
+    <div>
+      <label for="imageDetail">Image detail</label>
+      <select id="imageDetail">
+        <option value="auto">auto</option>
+        <option value="low">low</option>
+        <option value="high">high</option>
+        <option value="omit">omit</option>
+      </select>
+    </div>
+    <div>
+      <label for="imageInput">Attach image(s)</label>
+      <input id="imageInput" type="file" accept="image/*" multiple />
+    </div>
+  </div>
+  <div id="preview" class="preview-grid"></div>
+
+  <div class="row4">
+    <div>
+      <label for="partialImages">Partial image events</label>
+      <select id="partialImages">
+        <option value="0">0</option>
+        <option value="1" selected>1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </div>
+    <div>
+      <label for="imageModel">Image model</label>
+      <select id="imageModel">
+        <option value="gpt-image-2" selected>gpt-image-2</option>
+        <option value="gpt-image-1.5">gpt-image-1.5</option>
+        <option value="gpt-image-1">gpt-image-1</option>
+      </select>
+    </div>
+    <div>
+      <label for="outputFormat">Image output format</label>
+      <select id="outputFormat">
+        <option value="png" selected>png</option>
+        <option value="jpeg">jpeg</option>
+        <option value="webp">webp</option>
+      </select>
+    </div>
+    <div>
+      <label for="imageSize">Image size</label>
+      <select id="imageSize">
+        <option value="auto" selected>auto</option>
+        <option value="1024x1024">1024x1024</option>
+        <option value="1536x1024">1536x1024</option>
+        <option value="1024x1536">1024x1536</option>
+      </select>
+    </div>
+  </div>
+
+  <h2>Other tool options</h2>
+  <div class="row3">
+    <div>
+      <label for="webSearchToolType">Web search tool type</label>
+      <select id="webSearchToolType">
+        <option value="web_search" selected>web_search</option>
+        <option value="web_search_preview">web_search_preview</option>
+      </select>
+    </div>
+    <div>
+      <label for="webSearchContextSize">Web search context size</label>
+      <select id="webSearchContextSize">
+        <option value="">omit</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+      </select>
+    </div>
+    <div>
+      <label for="codeInterpreterMemory">Code interpreter (known unsupported here) memory</label>
+      <select id="codeInterpreterMemory">
+        <option value="">omit</option>
+        <option value="1g">1g</option>
+        <option value="4g">4g</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="checks">
+    <label><input id="messageType" type="checkbox" /> Add <code>type: "message"</code></label>
+    <label><input id="includeInputImageUrl" type="checkbox" /> Add image include request</label>
+    <label><input id="forceTool" type="checkbox" /> Force selected tool when possible</label>
+    <label><input id="autoContinueFunctions" type="checkbox" checked /> Auto-continue local function calls</label>
+    <label><input id="showRaw" type="checkbox" checked /> Show raw response JSON</label>
+    <label><input id="renderMarkdown" type="checkbox" checked /> Render Markdown output</label>
+  </div>
+
+  <div id="status" class="status small">Not connected yet.</div>
+
+  <h2>Text output</h2>
+  <div id="answer" class="answer">The text response will appear here.</div>
+
+  <h2>Image output</h2>
+  <div id="images" class="image-grid"></div>
+
+  <h2>Diagnostics</h2>
+  <pre id="diagnostics" class="raw">{}</pre>
+
+  <details id="payloadWrap" open>
+    <summary>Outgoing payload summary</summary>
+    <pre id="payloadSummary" class="raw">{}</pre>
+  </details>
+
+  <details id="rawWrap" open>
+    <summary>Raw response JSON</summary>
+    <pre id="raw" class="raw">{}</pre>
+  </details>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const PAGE_VERSION = 'v16';
+  const status = $('status');
+  const answer = $('answer');
+  const raw = $('raw');
+  const payloadSummary = $('payloadSummary');
+  const diagnostics = $('diagnostics');
+  const images = $('images');
+  const preview = $('preview');
+  const rawWrap = $('rawWrap');
+
+  const presets = {
+    none: {
+      prompt: 'Say hello from a static page using the local helper.',
+      system: 'You are concise and helpful. Use any requested tool when it is available. Report if a tool was unavailable or failed.',
+      model: 'gpt-5.4-mini'
+    },
+    web_search: {
+      prompt: 'Use web search to find one current headline about OpenAI Codex or ChatGPT today. Give the source name and a one-sentence summary.',
+      system: 'You are concise. Use web search for current information and say what source you used.',
+      model: 'gpt-5.4-mini'
+    },
+    image_generation: {
+      prompt: 'Generate a small square image of a rainbow octopus on a plain white background. Also provide a brief caption.',
+      system: 'You are concise. If asked to generate an image, use the image generation tool.',
+      model: 'gpt-5.4-mini'
+    },
+    code_interpreter: {
+      prompt: 'Use Python to compute the first 20 prime numbers, then give their sum. Show only the prime list and the sum.',
+      system: 'Use code interpreter if it is available. If the tool is unavailable, say so clearly.',
+      model: 'gpt-5.4'
+    },
+    roll_dice: {
+      prompt: 'Use the roll_dice tool to roll 3 dice, then tell me the rolls and the total.',
+      system: 'Use the provided local function tool when requested, then summarize the result concisely.',
+      model: 'gpt-5.4-mini'
+    },
+    get_local_time: {
+      prompt: 'Use the get_local_time tool, then tell me the local time reported by the helper.',
+      system: 'Use the provided local function tool when requested, then summarize the result concisely.',
+      model: 'gpt-5.4-mini'
+    }
+  };
+
+  function helperBase() { return $('helperUrl').value.replace(/\/$/, ''); }
+  function showStatus(obj) { status.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2); }
+  function showRaw(obj) { raw.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2); rawWrap.open = $('showRaw').checked; }
+  function showDiagnostics(obj) { diagnostics.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj || {}, null, 2); }
+  function showPayload(obj) { payloadSummary.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj || {}, null, 2); }
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function renderInlineMarkdown(text) {
+    let out = escapeHtml(text);
+    out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    out = out.replace(/(^|[^_])_([^_\n]+)_/g, '$1<em>$2</em>');
+    out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+    return out;
+  }
+
+  function renderMarkdown(markdown) {
+    const src = String(markdown || '').replace(/\r\n/g, '\n');
+    const lines = src.split('\n');
+    const html = [];
+    let paragraph = [];
+    let listType = null;
+    let inCode = false;
+    let codeLines = [];
+    let tableBuffer = [];
+
+    function flushParagraph() {
+      if (!paragraph.length) return;
+      html.push('<p>' + renderInlineMarkdown(paragraph.join(' ')) + '</p>');
+      paragraph = [];
+    }
+    function flushList() {
+      if (!listType) return;
+      html.push('</' + listType + '>');
+      listType = null;
+    }
+    function flushCode() {
+      if (!inCode) return;
+      html.push('<pre><code>' + escapeHtml(codeLines.join('\n')) + '</code></pre>');
+      inCode = false;
+      codeLines = [];
+    }
+    function isTableSeparator(line) {
+      return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+    }
+    function splitTableRow(line) {
+      return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
+    }
+    function flushTable() {
+      if (tableBuffer.length < 2 || !isTableSeparator(tableBuffer[1])) {
+        for (const line of tableBuffer) paragraph.push(line);
+        tableBuffer = [];
+        return;
+      }
+      const header = splitTableRow(tableBuffer[0]);
+      const rows = tableBuffer.slice(2).filter(line => line.includes('|')).map(splitTableRow);
+      html.push('<table><thead><tr>' + header.map(cell => '<th>' + renderInlineMarkdown(cell) + '</th>').join('') + '</tr></thead><tbody>' +
+        rows.map(row => '<tr>' + row.map(cell => '<td>' + renderInlineMarkdown(cell) + '</td>').join('') + '</tr>').join('') +
+        '</tbody></table>');
+      tableBuffer = [];
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith('```')) {
+        if (inCode) { flushCode(); } else { flushParagraph(); flushList(); flushTable(); inCode = true; codeLines = []; }
+        continue;
+      }
+      if (inCode) { codeLines.push(line); continue; }
+
+      if (trimmed.includes('|') && (tableBuffer.length || (i + 1 < lines.length && isTableSeparator(lines[i + 1])))) {
+        flushParagraph(); flushList();
+        tableBuffer.push(line);
+        continue;
+      } else if (tableBuffer.length) {
+        flushTable();
+      }
+
+      if (!trimmed) {
+        flushParagraph();
+        flushList();
+        flushTable();
+        continue;
+      }
+
+      const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+      if (heading) {
+        flushParagraph(); flushList(); flushTable();
+        const level = heading[1].length;
+        html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+        continue;
+      }
+
+      const blockquote = /^>\s?(.+)$/.exec(trimmed);
+      if (blockquote) {
+        flushParagraph(); flushList(); flushTable();
+        html.push('<blockquote>' + renderInlineMarkdown(blockquote[1]) + '</blockquote>');
+        continue;
+      }
+
+      const unordered = /^[-*+]\s+(.+)$/.exec(trimmed);
+      const ordered = /^\d+[.)]\s+(.+)$/.exec(trimmed);
+      if (unordered || ordered) {
+        flushParagraph(); flushTable();
+        const wanted = unordered ? 'ul' : 'ol';
+        if (listType !== wanted) { flushList(); html.push('<' + wanted + '>'); listType = wanted; }
+        html.push('<li>' + renderInlineMarkdown((unordered || ordered)[1]) + '</li>');
+        continue;
+      }
+
+      paragraph.push(trimmed);
+    }
+    flushCode();
+    flushTable();
+    flushParagraph();
+    flushList();
+    return html.join('\n') || '<p><em>No text returned.</em></p>';
+  }
+
+  function showAnswer(text) {
+    const value = text || '(No text returned. Inspect diagnostics and raw response.)';
+    if ($('renderMarkdown').checked) {
+      answer.classList.remove('plain');
+      answer.innerHTML = renderMarkdown(value);
+    } else {
+      answer.classList.add('plain');
+      answer.textContent = value;
+    }
+  }
+
+  function renderOutputImages(list) {
+    images.innerHTML = '';
+    if (!Array.isArray(list) || !list.length) {
+      images.textContent = 'No image output detected.';
+      return;
+    }
+    for (const [index, item] of list.entries()) {
+      const card = document.createElement('div');
+      card.className = 'outimg';
+      const img = document.createElement('img');
+      img.src = item.data_url;
+      img.alt = 'Generated image ' + (index + 1);
+      const cap = document.createElement('div');
+      cap.className = 'cap';
+      cap.textContent = `Image ${index + 1} · ${item.mime_type || 'image/png'} · ${item.source_key || 'unknown source'}`;
+      card.appendChild(img);
+      card.appendChild(cap);
+      images.appendChild(card);
+    }
+  }
+
+  async function getJson(path) {
+    const res = await fetch(helperBase() + path, { method: 'GET' });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { ok: false, raw: text }; }
+    if (!res.ok || data.ok === false) throw new Error(data.error || text || res.statusText);
+    return data;
+  }
+
+  async function postJson(path, body) {
+    const res = await fetch(helperBase() + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { ok: false, raw: text }; }
+    if (!res.ok || data.ok === false) throw new Error(data.error || text || res.statusText);
+    return data;
+  }
+
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name: file.name, type: file.type || 'image/png', size: file.size, data_url: reader.result });
+      reader.onerror = () => reject(reader.error || new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function getSelectedImages() {
+    const files = Array.from($('imageInput').files || []);
+    return Promise.all(files.map(readFileAsDataURL));
+  }
+
+
+  function applyToolPreset() {
+    const tool = $('toolTest').value;
+    if (tool === 'run_agent_roundtable') {
+      $('prompt').value = 'Use the run_agent_roundtable tool. Task: Design a tiny static web app that teaches children how a simple rule-based agent works. Use agents Planner, Implementer, Critic, and Tester for 2 rounds. Then summarize the safest next implementation step.';
+      $('system').value = 'You are concise and helpful. Use the requested local multi-agent tool when available. Make clear that this is a text-only safe simulation, not a file-writing coding agent.';
+      $('forceTool').checked = true;
+    } else if (tool === 'roll_dice') {
+      $('prompt').value = 'Roll 3 dice using the local tool and tell me the individual rolls and total.';
+      $('forceTool').checked = true;
+    } else if (tool === 'get_local_time') {
+      $('prompt').value = 'Use the local time tool and tell me the current local time.';
+      $('forceTool').checked = true;
+    } else if (tool === 'web_search') {
+      $('prompt').value = 'Use web search. What is one current OpenAI Codex-related item today? Give one sentence and mention the source.';
+      $('forceTool').checked = false;
+    } else if (tool === 'image_generation') {
+      $('prompt').value = 'Generate a small square image of a friendly robot reading a book.';
+      $('forceTool').checked = false;
+    } else if (tool === 'code_interpreter') {
+      $('prompt').value = 'Use Python to compute the first 20 prime numbers and their sum.';
+      $('forceTool').checked = false;
+    }
+  }
+
+  async function refreshPreview() {
+    preview.innerHTML = '';
+    const selected = await getSelectedImages().catch(() => []);
+    for (const item of selected) {
+      const card = document.createElement('div');
+      card.className = 'thumb';
+      const img = document.createElement('img');
+      img.src = item.data_url;
+      img.alt = item.name;
+      const cap = document.createElement('div');
+      cap.className = 'cap';
+      cap.textContent = `${item.name} · ${Math.round(item.size / 1024)} KB`;
+      card.appendChild(img);
+      card.appendChild(cap);
+      preview.appendChild(card);
+    }
+  }
+
+  function applyPreset() {
+    const selected = $('toolTest').value;
+    const preset = presets[selected] || presets.none;
+    $('prompt').value = preset.prompt;
+    $('system').value = preset.system;
+    $('model').value = preset.model;
+    $('forceTool').checked = selected === 'image_generation';
+    $('mode').value = selected === 'image_generation' ? 'nonstreaming' : 'streaming';
+  }
+
+  $('applyPresetBtn').addEventListener('click', applyPreset);
+  $('toolTest').addEventListener('change', applyPreset);
+  $('imageInput').addEventListener('change', refreshPreview);
+  $('toolTest').addEventListener('change', applyToolPreset);
+  $('showRaw').addEventListener('change', () => { rawWrap.open = $('showRaw').checked; });
+  $('renderMarkdown').addEventListener('change', () => {
+    const current = answer.innerText || answer.textContent || '';
+    if (current && current !== 'The text response will appear here.') showAnswer(current);
+  });
+
+  $('healthBtn').addEventListener('click', async () => {
+    try {
+      showStatus('Checking helper...');
+      const data = await getJson('/health');
+      showStatus(data);
+      showRaw(data);
+      showPayload({ page_version: PAGE_VERSION, helper_version_seen: data.version });
+      showDiagnostics(data.version === '0.16'
+        ? { ok: true, page_version: PAGE_VERSION, helper_version_seen: data.version }
+        : { ok: false, page_version: PAGE_VERSION, helper_version_seen: data.version, fix: 'Restart the shared v16 helper.' });
+    } catch (err) {
+      showStatus('Helper check failed: ' + err.message);
+      showRaw(String(err));
+      showDiagnostics(String(err));
+    }
+  });
+
+  $('modelsBtn').addEventListener('click', async () => {
+    try {
+      showStatus('Loading models...');
+      const data = await getJson('/models');
+      const select = $('model');
+      select.innerHTML = '';
+      for (const model of data.models || []) {
+        const option = document.createElement('option');
+        option.textContent = model;
+        option.value = model;
+        select.appendChild(option);
+      }
+      showStatus(data);
+      showRaw(data);
+      showDiagnostics({ note: 'No request diagnostics for model listing.', page_version: PAGE_VERSION });
+    } catch (err) {
+      showStatus('Model load failed: ' + err.message);
+      showRaw(String(err));
+      showDiagnostics(String(err));
+    }
+  });
+
+  $('sendBtn').addEventListener('click', async () => {
+    try {
+      answer.innerHTML = '';
+      answer.classList.remove('plain');
+      images.innerHTML = '';
+      const selectedImages = await getSelectedImages();
+      const selectedToolTest = $('toolTest').value;
+      const body = {
+        model: $('model').value,
+        system: $('system').value,
+        prompt: $('prompt').value,
+        reasoning_effort: $('reasoning').value || undefined,
+        mode: $('mode').value,
+        tool_test: selectedToolTest,
+        input_images: selectedImages,
+        image_shape: $('imageShape').value,
+        image_detail: $('imageDetail').value,
+        message_type: $('messageType').checked,
+        include_input_image_url: $('includeInputImageUrl').checked,
+        partial_images: $('partialImages').value,
+        image_model: $('imageModel').value,
+        output_format: $('outputFormat').value,
+        image_size: $('imageSize').value,
+        web_search_tool_type: $('webSearchToolType').value,
+        web_search_context_size: $('webSearchContextSize').value,
+        code_interpreter_memory: $('codeInterpreterMemory').value,
+        force_tool: $('forceTool').checked,
+        force_image_tool: $('forceTool').checked,
+        auto_continue_functions: $('autoContinueFunctions').checked
+      };
+      showStatus(`Sending request...\npage: ${PAGE_VERSION}\ntool_test: ${selectedToolTest}\nimages selected: ${selectedImages.length}`);
+      const started = performance.now();
+      const data = await postJson('/chat', body);
+      const elapsed = ((performance.now() - started) / 1000).toFixed(1);
+      showAnswer(data.text);
+      renderOutputImages(data.images || []);
+      showPayload(data.payload_summary || {});
+      showDiagnostics(data.diagnostics || {
+        page_version: PAGE_VERSION,
+        helper_version_seen: data.helper_version || '(none)',
+        problem: 'No diagnostics returned. You may still be hitting an old helper.'
+      });
+      showRaw(data.response || data);
+      showStatus({
+        ok: true,
+        page_version: PAGE_VERSION,
+        helper_version: data.helper_version,
+        elapsed_seconds: elapsed,
+        events_seen: data.events_seen || 0,
+        tool_test: selectedToolTest,
+        input_images_selected: selectedImages.length,
+        output_images: (data.images || []).length,
+        function_calls_seen: data.diagnostics && data.diagnostics.function_calls_detected,
+        raw_response_present: !!data.response
+      });
+    } catch (err) {
+      answer.classList.add('plain');
+      answer.textContent = 'Error: ' + err.message;
+      images.textContent = 'No image output.';
+      showStatus('Request failed: ' + err.message);
+      showRaw(String(err));
+      showDiagnostics(String(err));
+    }
+  });
+
+  applyPreset();
+</script>
+</body>
+</html>

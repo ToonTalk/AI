@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>How Agents Think — Agents Kids v2</title>
+<style>
+:root{
+  --bg:#f7f3ff;
+  --ink:#1f2340;
+  --muted:#646a83;
+  --card:#ffffff;
+  --line:#d8d2ff;
+  --accent:#6655ff;
+  --good:#147a4d;
+  --warn:#9b5b00;
+  --shadow:0 16px 40px rgba(42, 35, 88, .14);
+  --radius:24px;
+  font-family: ui-rounded, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  color:var(--ink);
+  background:
+    radial-gradient(circle at top left, #fff7c2 0 18rem, transparent 18.5rem),
+    radial-gradient(circle at 85% 15%, #c6fbff 0 14rem, transparent 14.5rem),
+    radial-gradient(circle at 20% 90%, #ffd9f0 0 16rem, transparent 16.5rem),
+    var(--bg);
+  min-height:100vh;
+}
+header{
+  padding:28px clamp(18px,4vw,52px) 14px;
+}
+.hero{
+  display:grid;
+  grid-template-columns: minmax(0,1.1fr) minmax(300px,.9fr);
+  gap:22px;
+  align-items:stretch;
+}
+h1{
+  font-size:clamp(2rem,5vw,4rem);
+  line-height:1;
+  margin:0 0 12px;
+  letter-spacing:-.04em;
+}
+.lede{
+  font-size:clamp(1rem,2.2vw,1.28rem);
+  line-height:1.45;
+  margin:0;
+  color:#343955;
+}
+.badge-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:1px solid rgba(102,85,255,.18);
+  background:rgba(255,255,255,.72);
+  padding:8px 11px;
+  border-radius:999px;
+  font-weight:700;
+  font-size:.88rem;
+}
+.panel{
+  background:rgba(255,255,255,.8);
+  backdrop-filter: blur(10px);
+  border:1px solid rgba(255,255,255,.75);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:18px;
+}
+main{
+  padding:10px clamp(18px,4vw,52px) 42px;
+}
+.grid{
+  display:grid;
+  grid-template-columns: minmax(300px, 430px) minmax(0,1fr);
+  gap:22px;
+  align-items:start;
+}
+label{
+  display:block;
+  font-weight:800;
+  margin:12px 0 7px;
+}
+input, textarea, select, button{
+  font:inherit;
+}
+textarea, input, select{
+  width:100%;
+  border:2px solid #ded9ff;
+  background:#fff;
+  border-radius:16px;
+  padding:12px 14px;
+  color:var(--ink);
+}
+textarea{min-height:112px;resize:vertical;line-height:1.35}
+button{
+  border:0;
+  border-radius:18px;
+  padding:12px 16px;
+  font-weight:900;
+  cursor:pointer;
+  color:#fff;
+  background:linear-gradient(135deg,#6655ff,#9a54ff);
+  box-shadow:0 10px 22px rgba(102,85,255,.25);
+}
+button.secondary{
+  background:#fff;
+  color:#3b3f60;
+  border:2px solid #ded9ff;
+  box-shadow:none;
+}
+button:disabled{
+  opacity:.55;
+  cursor:progress;
+}
+.button-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.small{
+  color:var(--muted);
+  font-size:.92rem;
+  line-height:1.35;
+}
+.status{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:14px;
+  background:#f1efff;
+  color:#3b3f60;
+  font-weight:700;
+}
+.stage{
+  position:relative;
+  min-height:390px;
+  overflow:hidden;
+}
+.agent-map{
+  position:relative;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(130px,1fr));
+  gap:14px;
+  margin-top:12px;
+}
+.agent{
+  position:relative;
+  background:#fff;
+  border:2px solid #e4e0ff;
+  border-radius:24px;
+  padding:16px 14px;
+  box-shadow:0 10px 22px rgba(60,55,115,.08);
+  min-height:180px;
+  transition:transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.agent.active{
+  transform:translateY(-7px) scale(1.02);
+  border-color:var(--accent);
+  box-shadow:0 16px 32px rgba(102,85,255,.24);
+}
+.avatar{
+  width:74px;
+  height:74px;
+  border-radius:24px;
+  display:grid;
+  place-items:center;
+  font-size:2.1rem;
+  margin-bottom:10px;
+  background:linear-gradient(135deg,#fff5ad,#ffd5f7);
+}
+.agent:nth-child(2) .avatar{background:linear-gradient(135deg,#c4fff5,#d5e0ff)}
+.agent:nth-child(3) .avatar{background:linear-gradient(135deg,#d8ffbd,#fff0bd)}
+.agent:nth-child(4) .avatar{background:linear-gradient(135deg,#ffd0d0,#d5dfff)}
+.agent h3{margin:0;font-size:1.05rem}
+.agent p{margin:7px 0 0;color:#5d637e;line-height:1.32;font-size:.93rem}
+.message-bubble{
+  margin-top:12px;
+  border:1px solid #eee9ff;
+  border-radius:16px;
+  padding:10px;
+  background:#fbfaff;
+  min-height:58px;
+  line-height:1.33;
+  font-size:.92rem;
+}
+.packet{
+  position:absolute;
+  left:20px;
+  top:278px;
+  width:24px;
+  height:24px;
+  border-radius:999px;
+  background:#6655ff;
+  box-shadow:0 0 0 8px rgba(102,85,255,.16);
+  opacity:0;
+  transform:translateX(0);
+}
+.packet.move{
+  opacity:1;
+  animation:packetMove 3.4s ease-in-out infinite;
+}
+@keyframes packetMove{
+  0%{transform:translateX(0) scale(.75);opacity:0}
+  10%{opacity:1}
+  30%{transform:translateX(calc(25vw - 14px)) scale(1)}
+  55%{transform:translateX(calc(50vw - 28px)) scale(1)}
+  80%{transform:translateX(calc(75vw - 42px)) scale(1)}
+  100%{transform:translateX(calc(90vw - 80px)) scale(.8);opacity:0}
+}
+.rule-card{
+  margin-top:16px;
+  display:grid;
+  gap:10px;
+}
+.rule{
+  background:#1f2340;
+  color:#fff;
+  border-radius:18px;
+  padding:13px 14px;
+  line-height:1.35;
+}
+.rule strong{color:#fff7a5}
+.output-layout{
+  display:grid;
+  grid-template-columns:minmax(260px,.75fr) minmax(320px,1.25fr);
+  gap:18px;
+  margin-top:18px;
+}
+.timeline, .synthesis{
+  background:#fff;
+  border:1px solid #e8e4ff;
+  border-radius:24px;
+  padding:16px;
+  box-shadow:0 10px 22px rgba(60,55,115,.08);
+}
+.timeline h2,.synthesis h2{margin:0 0 10px}
+.turn{
+  border-left:5px solid #ded9ff;
+  padding:10px 12px;
+  margin:10px 0;
+  background:#fbfaff;
+  border-radius:0 16px 16px 0;
+}
+.turn strong{display:block;margin-bottom:4px}
+.turn[data-agent="Looker"], .turn[data-agent="Planner"]{border-left-color:#ffb347}
+.turn[data-agent="Decider"], .turn[data-agent="Implementer"]{border-left-color:#5ad8d0}
+.turn[data-agent="Doer"], .turn[data-agent="Tester"]{border-left-color:#8bdd68}
+.turn[data-agent="Checker"], .turn[data-agent="Critic"]{border-left-color:#ff8585}
+.markdown{
+  line-height:1.45;
+}
+.markdown h1,.markdown h2,.markdown h3{margin:1em 0 .4em}
+.markdown ul,.markdown ol{padding-left:1.4em}
+.markdown code{background:#f1efff;border-radius:6px;padding:.1em .3em}
+.markdown pre{background:#1f2340;color:#fff;border-radius:14px;padding:12px;overflow:auto}
+details{
+  margin-top:18px;
+  background:rgba(255,255,255,.75);
+  border-radius:18px;
+  padding:12px;
+  border:1px solid #e8e4ff;
+}
+pre{
+  white-space:pre-wrap;
+  word-break:break-word;
+  font-size:.82rem;
+}
+@media (max-width: 980px){
+  .hero,.grid,.output-layout{grid-template-columns:1fr}
+  .agent-map{grid-template-columns:repeat(2,minmax(130px,1fr))}
+  .packet{display:none}
+}
+@media (max-width: 560px){
+  .agent-map{grid-template-columns:1fr}
+  .agent{min-height:auto}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hero">
+    <section class="panel">
+      <h1>How Agents Think</h1>
+      <p class="lede">
+        Give the agents a small goal. Watch them pass messages around:
+        <strong>Looker</strong> notices, <strong>Decider</strong> chooses,
+        <strong>Doer</strong> acts, and <strong>Checker</strong> asks “did it work?”
+      </p>
+      <div class="badge-row">
+        <span class="badge">👀 Observe</span>
+        <span class="badge">🧠 Decide</span>
+        <span class="badge">🛠️ Act</span>
+        <span class="badge">✅ Check</span>
+        <span class="badge">No file writing</span>
+      </div>
+    </section>
+    <section class="panel">
+      <h2 style="margin-top:0">The simple rule</h2>
+      <div class="rule-card">
+        <div class="rule"><strong>IF</strong> I see something important...</div>
+        <div class="rule"><strong>THEN</strong> I choose what to do next...</div>
+        <div class="rule"><strong>THEN</strong> I try one small action...</div>
+        <div class="rule"><strong>THEN</strong> I check what happened.</div>
+      </div>
+      <p class="small">This page uses your local helper on <code>127.0.0.1:8787</code>. The agents only exchange text.</p>
+    </section>
+  </div>
+</header>
+
+<main>
+  <div class="grid">
+    <section class="panel">
+      <h2 style="margin-top:0">Try a goal</h2>
+      <label for="goal">Goal for the agents</label>
+      <textarea id="goal">Help a robot decide what to do when it sees a toy on the floor, a sleepy cat nearby, and a child asking for help.</textarea>
+
+      <label for="example">Starter examples</label>
+      <select id="example">
+        <option value="">Choose an example...</option>
+        <option>Help a robot clean a messy desk without losing anything important.</option>
+        <option>Help a garden robot decide when to water a plant.</option>
+        <option>Help a story character decide how to cross a river safely.</option>
+        <option>Help a game character decide whether to explore, hide, or ask for help.</option>
+      </select>
+
+      <div class="button-row">
+        <button id="runBtn">Make the agents think</button>
+        <button id="demoBtn" class="secondary">Run local demo only</button>
+      </div>
+
+      <div class="status" id="status">Ready. Start the helper, then click the big button.</div>
+
+      <details>
+        <summary>Setup reminder</summary>
+        <pre>PowerShell window 1:
+cd C:\Users\toont\Documents\AI\apps\codex-local-apps-v16
+$env:CODEX_HOME = "C:\Users\toont\.codex"
+python codex_local_helper.py
+
+PowerShell window 2:
+cd C:\Users\toont\Documents\AI\apps\codex-local-apps-v16
+python -m http.server 8000
+
+Open:
+http://127.0.0.1:8000/agents_think.html</pre>
+      </details>
+    </section>
+
+    <section class="panel stage">
+      <h2 style="margin-top:0">Message-passing machine</h2>
+      <div class="agent-map" id="agentMap">
+        <article class="agent" data-agent="Looker">
+          <div class="avatar">👀</div>
+          <h3>Looker</h3>
+          <p>Notices the situation.</p>
+          <div class="message-bubble" id="bubble-Looker">Waiting to look...</div>
+        </article>
+        <article class="agent" data-agent="Decider">
+          <div class="avatar">🧠</div>
+          <h3>Decider</h3>
+          <p>Chooses a tiny next step.</p>
+          <div class="message-bubble" id="bubble-Decider">Waiting to decide...</div>
+        </article>
+        <article class="agent" data-agent="Doer">
+          <div class="avatar">🛠️</div>
+          <h3>Doer</h3>
+          <p>Tries the action.</p>
+          <div class="message-bubble" id="bubble-Doer">Waiting to act...</div>
+        </article>
+        <article class="agent" data-agent="Checker">
+          <div class="avatar">✅</div>
+          <h3>Checker</h3>
+          <p>Checks if it helped.</p>
+          <div class="message-bubble" id="bubble-Checker">Waiting to check...</div>
+        </article>
+      </div>
+      <div id="packet" class="packet"></div>
+    </section>
+  </div>
+
+  <section class="output-layout">
+    <div class="timeline">
+      <h2>Agent turns</h2>
+      <div id="timeline">
+        <p class="small">The transcript will appear here.</p>
+      </div>
+    </div>
+    <div class="synthesis">
+      <h2>What the agents learned</h2>
+      <div id="synthesis" class="markdown">
+        <p class="small">The final explanation will appear here.</p>
+      </div>
+    </div>
+  </section>
+
+  <details>
+    <summary>Diagnostics</summary>
+    <pre id="diag">{}</pre>
+  </details>
+</main>
+
+<script>
+const HELPER = "http://127.0.0.1:8787";
+const AGENTS = ["Looker","Decider","Doer","Checker"];
+const AGENT_TO_ROUND_TABLE = {
+  Looker: "Planner",
+  Decider: "Implementer",
+  Doer: "Tester",
+  Checker: "Critic"
+};
+
+const $ = id => document.getElementById(id);
+const statusEl = $("status");
+const timelineEl = $("timeline");
+const synthesisEl = $("synthesis");
+const diagEl = $("diag");
+const packet = $("packet");
+
+$("example").addEventListener("change", e => {
+  if (e.target.value) $("goal").value = e.target.value;
+});
+
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+function renderMarkdown(md){
+  let s = escapeHtml(md || "");
+  s = s.replace(/^### (.*)$/gm, "<h3>$1</h3>");
+  s = s.replace(/^## (.*)$/gm, "<h2>$1</h2>");
+  s = s.replace(/^# (.*)$/gm, "<h1>$1</h1>");
+  s = s.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*(.*?)\*/g, "<em>$1</em>");
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/^\s*[-*]\s+(.*)$/gm, "<li>$1</li>");
+  s = s.replace(/(<li>.*<\/li>\n?)+/g, m => "<ul>" + m + "</ul>");
+  s = s.replace(/\n{2,}/g, "</p><p>");
+  s = "<p>" + s.replace(/\n/g, "<br>") + "</p>";
+  s = s.replace(/<p>\s*<\/p>/g, "");
+  return s;
+}
+
+function setStatus(text){ statusEl.textContent = text; }
+
+function clearActive(){
+  document.querySelectorAll(".agent").forEach(a => a.classList.remove("active"));
+}
+function activate(name, text){
+  clearActive();
+  const card = document.querySelector(`.agent[data-agent="${name}"]`);
+  if (card) card.classList.add("active");
+  const bubble = $("bubble-" + name);
+  if (bubble) bubble.textContent = text;
+}
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+async function runAnimation(goal){
+  packet.classList.add("move");
+  const snippets = {
+    Looker: "I see the goal and collect clues.",
+    Decider: "I choose one small safe step.",
+    Doer: "I try the step in imagination only.",
+    Checker: "I check whether the plan is clear and safe."
+  };
+  for (const name of AGENTS){
+    activate(name, snippets[name]);
+    await sleep(700);
+  }
+  packet.classList.remove("move");
+  clearActive();
+}
+
+function localDemo(){
+  const goal = $("goal").value.trim() || "Help a robot make a safe choice.";
+  const turns = [
+    {round:1, agent:"Looker", text:`I notice the goal: ${goal} I should list what is visible before deciding.`},
+    {round:1, agent:"Decider", text:"I choose the smallest helpful action that avoids surprises."},
+    {round:1, agent:"Doer", text:"I would act slowly and explain what I am doing."},
+    {round:1, agent:"Checker", text:"I check whether the action was safe, useful, and easy to understand."}
+  ];
+  renderTurns(turns);
+  synthesisEl.innerHTML = renderMarkdown("**Local demo only.** The agents used a simple IF/THEN loop: observe, decide, act, check. Start the helper and click **Make the agents think** for a fresh generated version.");
+}
+
+function renderTurns(turns){
+  if (!turns || !turns.length){
+    timelineEl.innerHTML = `<p class="small">No turns returned.</p>`;
+    return;
+  }
+  timelineEl.innerHTML = turns.map(t => {
+    const agent = AGENT_TO_ROUND_TABLE[t.agent] ? t.agent : mapBackAgent(t.agent);
+    return `<div class="turn" data-agent="${escapeHtml(agent)}">
+      <strong>Round ${escapeHtml(t.round)} — ${escapeHtml(agent)}</strong>
+      <div>${renderMarkdown(t.text || "").replace(/^<p>|<\/p>$/g,"")}</div>
+    </div>`;
+  }).join("");
+}
+function mapBackAgent(agent){
+  const reverse = {Planner:"Looker", Implementer:"Decider", Tester:"Doer", Critic:"Checker"};
+  return reverse[agent] || agent || "Agent";
+}
+
+function parseLocalFunctionResult(data){
+  const results = data.local_function_results || [];
+  for (const item of results){
+    try{
+      const parsed = JSON.parse(item.output || "{}");
+      if (parsed && parsed.name === "run_agent_roundtable") return parsed;
+    }catch(e){}
+  }
+  return null;
+}
+
+async function postJson(path, body){
+  const res = await fetch(HELPER + path, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(body)
+  });
+  const text = await res.text();
+  let data;
+  try{ data = JSON.parse(text); } catch(e){ throw new Error(text); }
+  if (!res.ok || data.ok === false) throw new Error(data.error || text);
+  return data;
+}
+
+async function runHelper(){
+  const goal = $("goal").value.trim();
+  if (!goal){ setStatus("Please type a goal first."); return; }
+
+  $("runBtn").disabled = true;
+  setStatus("Animating the agents...");
+  timelineEl.innerHTML = `<p class="small">Thinking...</p>`;
+  synthesisEl.innerHTML = `<p class="small">Waiting for the helper...</p>`;
+  diagEl.textContent = "{}";
+
+  try{
+    await runAnimation(goal);
+    setStatus("Asking the local helper for a fresh agent trace...");
+
+    const task = `Teach a child how a simple rule-based agent thinks about this goal: ${goal}
+
+Use four child-friendly agents:
+- Looker: observes facts and clues
+- Decider: chooses one small next step
+- Doer: describes the action safely
+- Checker: checks if the action helped
+
+Keep it concrete, friendly, safe, and text-only. Do not write files, run commands, or claim to control the computer.`;
+
+    const prompt = `Use the run_agent_roundtable tool. Task: ${task}
+Use agents Looker, Decider, Doer, and Checker for 2 rounds. Then summarize the rule in child-friendly language.`;
+
+    const data = await postJson("/chat", {
+      model: "gpt-5.4-mini",
+      prompt,
+      system: "You are a friendly teacher for children. Use the requested local multi-agent tool. Explain that this is a text-only simulation of agents thinking, not real-world control.",
+      tool_test: "run_agent_roundtable",
+      force_tool: true,
+      auto_continue_functions: true,
+      message_type: false,
+      mode: "streaming"
+    });
+
+    const func = parseLocalFunctionResult(data);
+    if (func && Array.isArray(func.transcript)){
+      const mapped = func.transcript.map(t => ({
+        round: t.round,
+        agent: mapBackAgent(t.agent),
+        text: t.text
+      }));
+      renderTurns(mapped);
+      synthesisEl.innerHTML = renderMarkdown(func.synthesis || data.text || "The agents finished thinking.");
+    } else {
+      timelineEl.innerHTML = `<p class="small">The helper answered, but no structured transcript was returned. Showing text output instead.</p>`;
+      synthesisEl.innerHTML = renderMarkdown(data.text || "(No text returned.)");
+    }
+
+    diagEl.textContent = JSON.stringify({
+      helper_version: data.helper_version,
+      events_seen: data.events_seen,
+      function_results_seen: (data.local_function_results || []).length,
+      diagnostics: data.diagnostics,
+      payload_summary: data.payload_summary
+    }, null, 2);
+    setStatus("Done. The agents only exchanged text.");
+  }catch(err){
+    console.error(err);
+    setStatus("Request failed: " + err.message);
+    synthesisEl.innerHTML = renderMarkdown("**Something failed.** Check that `codex_local_helper.py` is running on `127.0.0.1:8787`, then try again.");
+    diagEl.textContent = String(err.stack || err);
+  }finally{
+    $("runBtn").disabled = false;
+    clearActive();
+  }
+}
+
+$("runBtn").addEventListener("click", runHelper);
+$("demoBtn").addEventListener("click", async () => {
+  await runAnimation($("goal").value);
+  localDemo();
+  setStatus("Local demo complete. No network/helper used.");
+});
+
+localDemo();
+</script>
+</body>
+</html>
