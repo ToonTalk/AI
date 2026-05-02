@@ -33,7 +33,7 @@
             <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
                 Visual Audio Capture
             </h1>
-            <p class="text-slate-400">Speak naturally. An image will be generated every 15 seconds based on your words.</p>
+            <p class="text-slate-400" id="header-desc">Speak naturally. An image will be generated every 15 seconds based on your words.</p>
         </div>
 
         <!-- Error State -->
@@ -89,7 +89,7 @@
                             <h4 class="text-slate-300 font-semibold uppercase text-xs tracking-wider">Global API Keys</h4>
                             
                             <div class="space-y-2">
-                                <label class="text-sm font-medium text-slate-400">OpenAI API Key (Required for Audio Uploads & DALL-E)</label>
+                                <label class="text-sm font-medium text-slate-400">OpenAI API Key (Required for Audio Uploads & OpenAI Images)</label>
                                 <input type="password" id="openai-key-input" placeholder="sk-..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none" />
                             </div>
                             <div class="space-y-2">
@@ -107,13 +107,20 @@
                         <!-- Image Generation Settings -->
                         <div class="space-y-4">
                             <h4 class="text-slate-300 font-semibold uppercase text-xs tracking-wider">Image Generation</h4>
-                            <div class="space-y-2">
-                                <label class="text-sm font-medium text-slate-400">Image Provider</label>
-                                <select id="model-provider-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none">
-                                    <option value="gemini">Imagen 4.0 (Default / Keyless in Canvas)</option>
-                                    <option value="gemini-advanced">Gemini Advanced (3.1 Flash / 3 Pro)</option>
-                                    <option value="openai">OpenAI DALL-E (API Key Req.)</option>
-                                </select>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-2">
+                                    <label class="text-sm font-medium text-slate-400">Image Provider</label>
+                                    <select id="model-provider-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none">
+                                        <option value="gemini">Imagen 4.0 (Default / Keyless in Canvas)</option>
+                                        <option value="gemini-advanced">Gemini Advanced (3.1 Flash / 3 Pro)</option>
+                                        <option value="openai">OpenAI GPT-Image (API Key Req.)</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-sm font-medium text-slate-400">Interval (Seconds)</label>
+                                    <input type="number" id="generation-interval-input" value="15" min="5" max="300" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none" />
+                                </div>
                             </div>
                             
                             <div id="openai-image-settings" class="hidden space-y-2">
@@ -205,7 +212,6 @@
 
         // --- Application State ---
         const API_KEY = ""; // Injected by runtime if available, otherwise relies on user input
-        const GENERATION_INTERVAL_MS = 15000;
         const isCanvas = window.self !== window.top;
         
         // --- Helpers ---
@@ -267,6 +273,9 @@
             openaiKeyInput: document.getElementById('openai-key-input'),
             openaiOrgInput: document.getElementById('openai-org-input'),
             openaiModelInput: document.getElementById('openai-model-input'),
+            
+            generationIntervalInput: document.getElementById('generation-interval-input'),
+            headerDesc: document.getElementById('header-desc'),
 
             mainImageContainer: document.getElementById('main-image-container'),
             mainImage: document.getElementById('main-image'),
@@ -295,6 +304,15 @@
             els.settingsPanel.classList.toggle('hidden');
             const isHidden = els.settingsPanel.classList.contains('hidden');
             els.toggleSettingsText.innerText = isHidden ? 'Advanced Model Settings' : 'Hide Settings';
+        });
+
+        els.generationIntervalInput.addEventListener('change', (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val) || val < 5) {
+                val = 15;
+                e.target.value = 15;
+            }
+            els.headerDesc.innerText = `Speak naturally. An image will be generated every ${val} seconds based on your words.`;
         });
 
         els.modelSelect.addEventListener('change', (e) => {
@@ -677,7 +695,9 @@
             timerInterval = setInterval(() => {
                 state.audioTimeMs = accumulatedTime + (Date.now() - recordingStartTime);
                 
-                if (state.audioTimeMs - lastGenTime >= GENERATION_INTERVAL_MS) {
+                const intervalMs = (parseInt(els.generationIntervalInput.value) || 15) * 1000;
+                
+                if (state.audioTimeMs - lastGenTime >= intervalMs) {
                     const contextText = currentTranscriptRef.substring(0, lastGenTextIndex).trim();
                     const newText = currentTranscriptRef.substring(lastGenTextIndex).trim();
                     if (newText.length > 10) {
@@ -890,13 +910,14 @@
 
                 const data = await res.json();
                 
+                const intervalSec = parseInt(els.generationIntervalInput.value) || 15;
                 const buckets = [];
                 let fullTranscript = "";
                 if (data.segments && data.segments.length > 0) {
                     data.segments.forEach(seg => {
                         fullTranscript += seg.text + " ";
-                        const bucketIdx = Math.floor(seg.start / (GENERATION_INTERVAL_MS / 1000));
-                        if (!buckets[bucketIdx]) buckets[bucketIdx] = { text: "", start: bucketIdx * (GENERATION_INTERVAL_MS / 1000) };
+                        const bucketIdx = Math.floor(seg.start / intervalSec);
+                        if (!buckets[bucketIdx]) buckets[bucketIdx] = { text: "", start: bucketIdx * intervalSec };
                         buckets[bucketIdx].text += seg.text + " ";
                     });
                 } else if (data.text) {
