@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Audio Capture</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        .timeline-container { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem; }
+        
+        /* Lightbox Styles */
+        .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.95); backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 2rem; }
+        .lightbox.active { opacity: 1; pointer-events: auto; }
+        .lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 0.75rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans p-4 md:p-8 flex flex-col items-center">
+
+    <div class="max-w-4xl w-full space-y-6">
+        
+        <!-- Header -->
+        <div class="text-center space-y-2">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                Visual Audio Capture
+            </h1>
+            <p class="text-slate-400">Speak naturally. An image will be generated every 15 seconds based on your words.</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-container" class="hidden bg-red-900/50 border border-red-500 text-red-200 p-4 rounded-xl flex items-start gap-3 shadow-lg">
+            <i data-lucide="alert-circle" class="shrink-0 mt-0.5 w-5 h-5"></i>
+            <p id="error-text" class="flex-1"></p>
+        </div>
+
+        <!-- Hidden File Input for Audio Uploads -->
+        <input type="file" id="audio-upload-input" accept="audio/*" class="hidden" onchange="processUploadedAudio(event)" />
+
+        <!-- Controls & Style Configuration -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+            <div class="flex flex-col md:flex-row gap-6 items-center">
+                
+                <!-- Timer & Controls -->
+                <div class="flex flex-col items-center gap-4 min-w-[200px]">
+                    <div class="flex items-center gap-3">
+                        <div id="status-indicator" class="w-3 h-3 rounded-full bg-slate-600"></div>
+                        <span id="timer-display" class="font-mono text-2xl tracking-wider text-slate-300">0:00</span>
+                    </div>
+                    
+                    <div id="controls-container" class="flex justify-center gap-4">
+                        <!-- Buttons injected via JS based on state -->
+                    </div>
+                    <div id="status-text" class="text-xs font-medium text-slate-500 uppercase tracking-widest">idle</div>
+                </div>
+
+                <!-- Style Input & Settings -->
+                <div class="flex-1 w-full space-y-4">
+                    <div class="space-y-2">
+                        <label class="text-sm font-semibold text-slate-400 uppercase tracking-wide">Image Style</label>
+                        <input 
+                            type="text" 
+                            id="image-style-input"
+                            value="A detailed, vibrant digital illustration in a cinematic style" 
+                            class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
+                            placeholder="e.g., A watercolor painting, surreal, cyberpunk..."
+                        />
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <button id="toggle-settings-btn" class="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors">
+                            <i data-lucide="settings" class="w-4 h-4"></i> <span id="toggle-settings-text">Advanced Model Settings</span>
+                        </button>
+                    </div>
+
+                    <!-- Settings Panel -->
+                    <div id="settings-panel" class="hidden p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-6 mt-2 transition-all">
+                        
+                        <!-- Global Keys Section -->
+                        <div class="space-y-4 pb-4 border-b border-slate-800">
+                            <h4 class="text-slate-300 font-semibold uppercase text-xs tracking-wider">Global API Keys</h4>
+                            
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-400">OpenAI API Key (Required for Audio Uploads & DALL-E)</label>
+                                <input type="password" id="openai-key-input" placeholder="sk-..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none" />
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-400">OpenAI Org ID (Optional)</label>
+                                <input type="text" id="openai-org-input" placeholder="org-..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none" />
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-400">Gemini API Key</label>
+                                <input type="password" id="gemini-key-input" placeholder="AIzaSy..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none" />
+                                <p class="text-xs text-slate-500">Only needed if running locally or to bypass default environment keys.</p>
+                            </div>
+                        </div>
+
+                        <!-- Image Generation Settings -->
+                        <div class="space-y-4">
+                            <h4 class="text-slate-300 font-semibold uppercase text-xs tracking-wider">Image Generation</h4>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-400">Image Provider</label>
+                                <select id="model-provider-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none">
+                                    <option value="gemini">Imagen 4.0 (Default / Keyless in Canvas)</option>
+                                    <option value="gemini-advanced">Gemini Advanced (3.1 Flash / 3 Pro)</option>
+                                    <option value="openai">OpenAI DALL-E (API Key Req.)</option>
+                                </select>
+                            </div>
+                            
+                            <div id="openai-image-settings" class="hidden space-y-2">
+                                <label class="text-sm font-medium text-slate-400">OpenAI Model Target</label>
+                                <input type="text" id="openai-model-input" value="gpt-image-2" placeholder="gpt-image-2" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none" />
+                            </div>
+                            
+                            <div id="gemini-advanced-settings" class="hidden space-y-2">
+                                <label class="text-sm font-medium text-slate-400">Gemini Model Target</label>
+                                <select id="gemini-model-input" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:border-blue-500 outline-none">
+                                    <option value="gemini-3.1-flash-image-preview">gemini-3.1-flash-image-preview</option>
+                                    <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
+                                    <option value="gemini-2.5-flash-image-preview">gemini-2.5-flash-image-preview</option>
+                                </select>
+                                <p class="text-xs text-slate-500">Select the advanced model. These keyless preview models may require Canvas execution or a valid API key locally.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Visualizer Area -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            
+            <!-- Prominent Large Image -->
+            <div class="w-full aspect-video bg-black relative flex items-center justify-center border-b border-slate-800">
+                <div id="main-image-container" class="w-full h-full hidden cursor-pointer hover:scale-[1.02] transition-all duration-700">
+                    <img id="main-image" src="" alt="Generated" class="w-full h-full object-contain" />
+                </div>
+                
+                <div id="main-image-placeholder" class="text-slate-600 flex flex-col items-center gap-4">
+                    <i data-lucide="image" class="w-12 h-12 opacity-20"></i>
+                    <span>Waiting for speech to generate imagery...</span>
+                </div>
+                
+                <div id="generation-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm z-10">
+                    <i data-lucide="loader-2" class="w-12 h-12 text-blue-500 animate-spin mb-4"></i>
+                    <span id="generation-overlay-text" class="text-sm text-blue-300 font-bold tracking-[0.2em] uppercase drop-shadow-md">Painting Visual</span>
+                </div>
+            </div>
+
+            <!-- Scrolling Transcript Underneath -->
+            <div id="transcript-container" class="h-32 bg-slate-950 p-4 overflow-y-auto custom-scrollbar scroll-smooth">
+                <p id="transcript-text" class="text-slate-300 leading-relaxed text-lg whitespace-pre-wrap hidden"></p>
+                <p id="transcript-placeholder" class="text-slate-600 h-full flex items-center justify-center italic">Live transcript will appear here...</p>
+            </div>
+        </div>
+
+        <!-- Timeline -->
+        <div id="timeline-section" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+            <h3 class="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">Timeline History</h3>
+            <div id="timeline-container" class="timeline-container custom-scrollbar"></div>
+        </div>
+
+        <!-- Post-recording Actions -->
+        <div id="post-actions" class="hidden flex flex-wrap justify-center gap-4 pt-4">
+            <button onclick="initRecording()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors flex items-center gap-2 shadow-lg">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Start New Recording
+            </button>
+            <button onclick="downloadExport()" class="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors flex items-center gap-2 shadow-lg">
+                <i data-lucide="download" class="w-4 h-4"></i> Download HTML Again
+            </button>
+            <button id="regenerate-btn" onclick="regenerateAllImages()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium transition-colors flex items-center gap-2 shadow-lg shadow-indigo-900/50 disabled:opacity-50 disabled:shadow-none">
+                <i id="regenerate-icon" data-lucide="sparkles" class="w-4 h-4"></i>
+                <span id="regenerate-text">Regenerate Images & Download</span>
+            </button>
+        </div>
+
+    </div>
+
+    <!-- App Lightbox Modal -->
+    <div id="lightbox" class="lightbox" onclick="closeLightbox(event)">
+        <button id="lightbox-close-main" class="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors p-2 bg-slate-900/50 rounded-full hover:bg-slate-800 z-[1001]" onclick="closeLightbox(event)">
+            <i data-lucide="x" class="w-8 h-8 pointer-events-none"></i>
+        </button>
+        <button id="lightbox-prev" class="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors p-3 bg-slate-900/50 rounded-full hover:bg-slate-800 z-[1001]" onclick="navLightbox(event, -1)">
+            <i data-lucide="chevron-left" class="w-8 h-8 pointer-events-none"></i>
+        </button>
+        <button id="lightbox-next" class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors p-3 bg-slate-900/50 rounded-full hover:bg-slate-800 z-[1001]" onclick="navLightbox(event, 1)">
+            <i data-lucide="chevron-right" class="w-8 h-8 pointer-events-none"></i>
+        </button>
+        <img id="lightbox-img" src="" alt="Full size view" />
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // --- Application State ---
+        const API_KEY = ""; // Injected by runtime if available, otherwise relies on user input
+        const GENERATION_INTERVAL_MS = 15000;
+        const isCanvas = window.self !== window.top;
+        
+        // --- Helpers ---
+        const blobToBase64 = (blob) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        };
+
+        let state = {
+            status: 'idle', // idle, recording, paused, exporting, exported
+            error: null,
+            events: [], // { time, text, image }
+            audioBlob: null,
+            generatingCount: 0,
+            isRegenerating: false,
+            audioTimeMs: 0,
+            currentTranscript: '',
+        };
+
+        // Internal tracking variables
+        let mediaRecorder = null;
+        let speechRecognition = null;
+        let stream = null;
+        let audioChunks = [];
+        let timerInterval = null;
+        
+        let currentTranscriptRef = '';
+        let finalTranscriptRef = '';
+        let lastGenTextIndex = 0;
+        let lastGenTime = 0;
+
+        let recordingStartTime = 0;
+        let accumulatedTime = 0;
+
+        // --- DOM Elements ---
+        const els = {
+            errorContainer: document.getElementById('error-container'),
+            errorText: document.getElementById('error-text'),
+            timerDisplay: document.getElementById('timer-display'),
+            statusIndicator: document.getElementById('status-indicator'),
+            statusText: document.getElementById('status-text'),
+            controlsContainer: document.getElementById('controls-container'),
+            imageStyleInput: document.getElementById('image-style-input'),
+            
+            toggleSettingsBtn: document.getElementById('toggle-settings-btn'),
+            toggleSettingsText: document.getElementById('toggle-settings-text'),
+            settingsPanel: document.getElementById('settings-panel'),
+            modelSelect: document.getElementById('model-provider-select'),
+            
+            openaiImageSettings: document.getElementById('openai-image-settings'),
+            geminiAdvancedSettings: document.getElementById('gemini-advanced-settings'),
+            geminiModelInput: document.getElementById('gemini-model-input'),
+            
+            geminiKeyInput: document.getElementById('gemini-key-input'),
+            openaiKeyInput: document.getElementById('openai-key-input'),
+            openaiOrgInput: document.getElementById('openai-org-input'),
+            openaiModelInput: document.getElementById('openai-model-input'),
+
+            mainImageContainer: document.getElementById('main-image-container'),
+            mainImage: document.getElementById('main-image'),
+            mainImagePlaceholder: document.getElementById('main-image-placeholder'),
+            genOverlay: document.getElementById('generation-overlay'),
+            genOverlayText: document.getElementById('generation-overlay-text'),
+
+            transcriptContainer: document.getElementById('transcript-container'),
+            transcriptText: document.getElementById('transcript-text'),
+            transcriptPlaceholder: document.getElementById('transcript-placeholder'),
+
+            timelineSection: document.getElementById('timeline-section'),
+            timelineContainer: document.getElementById('timeline-container'),
+            postActions: document.getElementById('post-actions'),
+            
+            regenerateBtn: document.getElementById('regenerate-btn'),
+            regenerateIcon: document.getElementById('regenerate-icon'),
+            regenerateText: document.getElementById('regenerate-text'),
+
+            lightbox: document.getElementById('lightbox'),
+            lightboxImg: document.getElementById('lightbox-img'),
+        };
+
+        // --- Settings Event Listeners ---
+        els.toggleSettingsBtn.addEventListener('click', () => {
+            els.settingsPanel.classList.toggle('hidden');
+            const isHidden = els.settingsPanel.classList.contains('hidden');
+            els.toggleSettingsText.innerText = isHidden ? 'Advanced Model Settings' : 'Hide Settings';
+        });
+
+        els.modelSelect.addEventListener('change', (e) => {
+            const val = e.target.value;
+            els.openaiImageSettings.classList.add('hidden');
+            els.geminiAdvancedSettings.classList.add('hidden');
+            if (val === 'openai') els.openaiImageSettings.classList.remove('hidden');
+            if (val === 'gemini-advanced') els.geminiAdvancedSettings.classList.remove('hidden');
+        });
+
+        let currentLightboxIndex = -1;
+
+        // --- Lightbox Functions ---
+        els.mainImageContainer.addEventListener('click', () => {
+            if (state.events.length > 0) openLightbox(state.events.length - 1);
+        });
+        
+        function openLightbox(index) {
+            if (index < 0 || index >= state.events.length) return;
+            currentLightboxIndex = index;
+            els.lightboxImg.src = state.events[index].image;
+            els.lightbox.classList.add('active');
+            updateLightboxNav();
+        }
+
+        function closeLightbox(e) {
+            if (e && (e.target.tagName === 'IMG' || (e.target.closest('button') && e.target.closest('button').id !== 'lightbox-close-main'))) return;
+            els.lightbox.classList.remove('active');
+        }
+
+        function navLightbox(e, dir) {
+            if (e) e.stopPropagation();
+            let newIdx = currentLightboxIndex + dir;
+            if (newIdx >= 0 && newIdx < state.events.length) {
+                currentLightboxIndex = newIdx;
+                els.lightboxImg.src = state.events[currentLightboxIndex].image;
+                updateLightboxNav();
+            }
+        }
+
+        function updateLightboxNav() {
+            const prevBtn = document.getElementById('lightbox-prev');
+            const nextBtn = document.getElementById('lightbox-next');
+            prevBtn.style.opacity = currentLightboxIndex > 0 ? '1' : '0.3';
+            prevBtn.style.pointerEvents = currentLightboxIndex > 0 ? 'auto' : 'none';
+            nextBtn.style.opacity = currentLightboxIndex < state.events.length - 1 ? '1' : '0.3';
+            nextBtn.style.pointerEvents = currentLightboxIndex < state.events.length - 1 ? 'auto' : 'none';
+        }
+
+        // --- Core UI Updaters ---
+        function updateState(updates) {
+            state = { ...state, ...updates };
+            renderUI();
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const m = Math.floor(totalSeconds / 60);
+            const s = (totalSeconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function renderUI() {
+            // Error
+            if (state.error) {
+                els.errorText.innerText = state.error;
+                els.errorContainer.classList.remove('hidden');
+            } else {
+                els.errorContainer.classList.add('hidden');
+            }
+
+            // Status & Timer
+            els.timerDisplay.innerText = formatTime(state.audioTimeMs);
+            els.statusText.innerText = state.status === 'processing_upload' ? 'processing' : state.status;
+            
+            els.statusIndicator.className = 'w-3 h-3 rounded-full ' + 
+                (state.status === 'recording' ? 'bg-red-500 animate-pulse' : 
+                 state.status === 'paused' ? 'bg-amber-500' : 
+                 state.status === 'processing_upload' ? 'bg-blue-500 animate-pulse' : 'bg-slate-600');
+
+            // Inputs state
+            els.imageStyleInput.disabled = (state.status === 'recording' || state.status === 'paused' || state.status === 'processing_upload');
+
+            // Controls Render
+            let controlsHTML = '';
+            if (state.status === 'idle' || state.status === 'exported') {
+                controlsHTML = `
+                    <button onclick="initRecording()" class="w-14 h-14 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all shadow-lg hover:scale-105" title="Record Audio"><i data-lucide="mic" class="w-6 h-6"></i></button>
+                    <button onclick="document.getElementById('audio-upload-input').click()" class="w-14 h-14 flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white rounded-full transition-all shadow-lg hover:scale-105" title="Upload Audio File"><i data-lucide="upload" class="w-6 h-6"></i></button>
+                `;
+            } else if (state.status === 'processing_upload') {
+                controlsHTML = `<button disabled class="w-14 h-14 flex items-center justify-center bg-blue-600 text-white rounded-full shadow-lg opacity-50"><i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i></button>`;
+            } else {
+                if (state.status === 'recording') {
+                    controlsHTML += `<button onclick="pauseRecording()" class="w-14 h-14 flex items-center justify-center bg-amber-600 hover:bg-amber-500 text-white rounded-full transition-all shadow-lg hover:scale-105"><i data-lucide="pause" class="w-6 h-6"></i></button>`;
+                } else {
+                    controlsHTML += `<button onclick="resumeRecording()" class="w-14 h-14 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all shadow-lg hover:scale-105"><i data-lucide="play" class="w-6 h-6 ml-1"></i></button>`;
+                }
+                
+                const isExporting = state.status === 'exporting';
+                controlsHTML += `<button onclick="stopRecording()" ${isExporting ? 'disabled' : ''} class="w-14 h-14 flex items-center justify-center bg-red-600 hover:bg-red-500 text-white rounded-full transition-all shadow-lg hover:scale-105 disabled:opacity-50 disabled:hover:scale-100">
+                    ${isExporting ? `<i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>` : `<i data-lucide="square" class="w-5 h-5"></i>`}
+                </button>`;
+            }
+            els.controlsContainer.innerHTML = controlsHTML;
+
+            // Main Visual Area
+            if (state.events.length > 0) {
+                els.mainImage.src = state.events[state.events.length - 1].image;
+                els.mainImageContainer.classList.remove('hidden');
+                els.mainImagePlaceholder.classList.add('hidden');
+            } else {
+                els.mainImageContainer.classList.add('hidden');
+                els.mainImagePlaceholder.classList.remove('hidden');
+            }
+
+            // Image Generation Overlay
+            const isWorking = state.generatingCount > 0 || state.isRegenerating;
+            els.mainImageContainer.style.opacity = isWorking ? '0.4' : '1';
+            if (isWorking) {
+                els.genOverlayText.innerText = state.isRegenerating ? 'Repainting All Visuals' : 'Painting Visual';
+                els.genOverlay.classList.remove('hidden');
+            } else {
+                els.genOverlay.classList.add('hidden');
+            }
+
+            // Transcript
+            if (state.currentTranscript) {
+                els.transcriptText.innerText = state.currentTranscript;
+                els.transcriptText.classList.remove('hidden');
+                els.transcriptPlaceholder.classList.add('hidden');
+                els.transcriptContainer.scrollTop = els.transcriptContainer.scrollHeight;
+            } else {
+                els.transcriptText.classList.add('hidden');
+                els.transcriptPlaceholder.classList.remove('hidden');
+            }
+
+            // Timeline
+            if (state.events.length > 0) {
+                els.timelineSection.classList.remove('hidden');
+                renderTimeline();
+            } else {
+                els.timelineSection.classList.add('hidden');
+            }
+
+            // Post Actions
+            if (state.status === 'exported') {
+                els.postActions.classList.remove('hidden');
+                els.postActions.style.display = 'flex';
+                
+                if (state.isRegenerating) {
+                    els.regenerateBtn.disabled = true;
+                    els.regenerateIcon.setAttribute('data-lucide', 'loader-2');
+                    els.regenerateIcon.classList.add('animate-spin');
+                    els.regenerateText.innerText = 'Regenerating...';
+                } else {
+                    els.regenerateBtn.disabled = state.events.length === 0;
+                    els.regenerateIcon.setAttribute('data-lucide', 'sparkles');
+                    els.regenerateIcon.classList.remove('animate-spin');
+                    els.regenerateText.innerText = 'Regenerate Images & Download';
+                }
+            } else {
+                els.postActions.classList.add('hidden');
+                els.postActions.style.display = 'none';
+            }
+
+            lucide.createIcons();
+        }
+
+        function renderTimeline() {
+            els.timelineContainer.innerHTML = '';
+            state.events.forEach((ev, idx) => {
+                const item = document.createElement('div');
+                item.className = 'w-24 shrink-0 flex flex-col gap-2';
+                
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'aspect-square rounded-lg overflow-hidden border border-slate-700 cursor-pointer hover:border-blue-500 transition-colors';
+                imgContainer.onclick = () => openLightbox(idx);
+                
+                const img = document.createElement('img');
+                img.src = ev.image;
+                img.className = 'w-full h-full object-cover hover:scale-110 transition-transform';
+                
+                const timeLabel = document.createElement('div');
+                timeLabel.className = 'text-xs text-emerald-400 font-mono text-center';
+                timeLabel.innerText = formatTime(ev.time * 1000);
+
+                imgContainer.appendChild(img);
+                item.appendChild(imgContainer);
+                item.appendChild(timeLabel);
+                els.timelineContainer.appendChild(item);
+            });
+        }
+
+        // --- Image Generation Logic ---
+        async function fetchImageBase64(promptText, contextText = "") {
+            const provider = els.modelSelect.value;
+            const style = els.imageStyleInput.value;
+            
+            let fullPrompt = `${style}. Create an illustration focusing mainly on this specific text: "${promptText}".`;
+            if (contextText && contextText.trim().length > 0) {
+                fullPrompt += ` For background context and visual consistency, here is what was said previously: "${contextText}"`;
+            }
+
+            if (fullPrompt.length > 3900) {
+                fullPrompt = fullPrompt.substring(0, 3900) + '..."';
+            }
+            
+            const fetchWithRetry = async (retries = 5) => {
+                const delays = [1000, 2000, 4000, 8000, 16000];
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        if (provider === 'openai') {
+                            const key = els.openaiKeyInput.value;
+                            const org = els.openaiOrgInput.value.trim();
+                            const model = els.openaiModelInput.value;
+                            if (!key) throw new Error("OpenAI API key is required. Please add it in settings.");
+                            
+                            const headers = { 
+                                'Content-Type': 'application/json', 
+                                'Authorization': `Bearer ${key}` 
+                            };
+                            if (org) headers['OpenAI-Organization'] = org;
+
+                            const res = await fetch('https://api.openai.com/v1/images/generations', {
+                                method: 'POST',
+                                headers: headers,
+                                body: JSON.stringify({
+                                    model: model,
+                                    prompt: fullPrompt,
+                                    n: 1, size: "1024x1024"
+                                })
+                            });
+                            if (!res.ok) {
+                                const errData = await res.json().catch(()=>({}));
+                                throw new Error(errData.error?.message || `HTTP error! status: ${res.status}`);
+                            }
+                            const data = await res.json();
+                            
+                            if (data.data[0].b64_json) return `data:image/png;base64,${data.data[0].b64_json}`;
+                            else if (data.data[0].url) {
+                                const imgRes = await fetch(data.data[0].url);
+                                const imgBlob = await imgRes.blob();
+                                return await blobToBase64(imgBlob);
+                            }
+                            throw new Error("No valid image data returned from OpenAI");
+                            
+                        } else if (provider === 'gemini-advanced') {
+                            const key = els.geminiKeyInput.value || API_KEY;
+                            const modelTarget = els.geminiModelInput.value.trim() || 'gemini-3.1-flash-image-preview';
+                            
+                            if (!key && !isCanvas) throw new Error("Gemini API key is required for advanced models. Please add it in settings.");
+                            
+                            if (modelTarget.includes('gemini')) {
+                                // 'gemini-' prefix uses generateContent
+                                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelTarget}:generateContent?key=${key}`;
+                                const res = await fetch(url, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        contents: [{ parts: [{ text: fullPrompt }] }],
+                                        generationConfig: { responseModalities: ["IMAGE"] }
+                                    })
+                                });
+                                
+                                if (!res.ok) {
+                                    const errData = await res.json().catch(()=>({}));
+                                    throw new Error(errData.error?.message || `HTTP error! status: ${res.status}`);
+                                }
+                                
+                                const data = await res.json();
+                                const base64 = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+                                if (base64) return `data:image/png;base64,${base64}`;
+                                throw new Error("Invalid response format from Gemini Advanced API");
+                                
+                            } else {
+                                // 'imagen-' prefix uses predict
+                                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelTarget}:predict?key=${key}`;
+                                const res = await fetch(url, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ instances: { prompt: fullPrompt }, parameters: { sampleCount: 1 } })
+                                });
+                                
+                                if (!res.ok) {
+                                    const errData = await res.json().catch(()=>({}));
+                                    throw new Error(errData.error?.message || `HTTP error! status: ${res.status}`);
+                                }
+                                
+                                const data = await res.json();
+                                if (data.predictions && data.predictions[0]) {
+                                    const b64 = data.predictions[0].bytesBase64Encoded || data.predictions[0];
+                                    return `data:image/png;base64,${b64}`;
+                                }
+                                throw new Error("Invalid response format from Gemini Advanced API");
+                            }
+                            
+                        } else {
+                            // Default Gemini Imagen
+                            const key = els.geminiKeyInput.value || API_KEY;
+                            
+                            // Bypass the key requirement if running inside the Canvas environment
+                            if (!key && !isCanvas) throw new Error("Gemini API key is required. Please add it in settings.");
+
+                            const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${key}`;
+                            const res = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ instances: { prompt: fullPrompt }, parameters: { sampleCount: 1 } })
+                            });
+                            
+                            if (!res.ok) {
+                                const errData = await res.json().catch(()=>({}));
+                                throw new Error(errData.error?.message || `HTTP error! status: ${res.status}`);
+                            }
+                            
+                            const data = await res.json();
+                            if (data.predictions && data.predictions[0]) return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+                            throw new Error("Invalid response format from Image API");
+                        }
+                    } catch (err) {
+                        // Ensure the Canvas bypass is also respected in the error handling logic
+                        if (i === retries - 1 || provider === 'openai' || ((provider === 'gemini' || provider === 'gemini-advanced') && !els.geminiKeyInput.value && !API_KEY && !isCanvas)) throw err;
+                        await new Promise(r => setTimeout(r, delays[i]));
+                    }
+                }
+            };
+            return await fetchWithRetry();
+        }
+
+        async function triggerImageGeneration(text, timeInSeconds, contextText = "") {
+            updateState({ generatingCount: state.generatingCount + 1, error: null });
+            try {
+                const base64Image = await fetchImageBase64(text, contextText);
+                const newEvents = [...state.events, { time: timeInSeconds, text, context: contextText, image: base64Image }];
+                newEvents.sort((a, b) => a.time - b.time);
+                updateState({ events: newEvents, generatingCount: Math.max(0, state.generatingCount - 1) });
+            } catch (err) {
+                console.error("Failed to generate image:", err);
+                const isExternalAuth = els.modelSelect.value !== 'gemini';
+                if (isExternalAuth || state.events.length === 0) {
+                    updateState({ error: `Image API Error: ${err.message}`, generatingCount: Math.max(0, state.generatingCount - 1) });
+                } else {
+                    updateState({ generatingCount: Math.max(0, state.generatingCount - 1) });
+                }
+            }
+        }
+
+        async function regenerateAllImages() {
+            if (!state.audioBlob || state.events.length === 0) return;
+            updateState({ isRegenerating: true, error: null });
+
+            try {
+                const newEvents = [...state.events];
+                for (let i = 0; i < state.events.length; i++) {
+                    const ev = state.events[i];
+                    try {
+                        const newBase64 = await fetchImageBase64(ev.text, ev.context || "");
+                        newEvents[i] = { ...ev, image: newBase64 };
+                        updateState({ events: [...newEvents] });
+                    } catch (err) {
+                        console.error("Failed to regenerate image:", err);
+                        updateState({ error: `Skipped image ${i + 1}: ${err.message}` });
+                    }
+                }
+                await generateExportHTML(state.audioBlob, newEvents);
+            } catch (err) {
+                console.error("Regeneration failed", err);
+                updateState({ error: "Failed during the regeneration process." });
+            } finally {
+                updateState({ isRegenerating: false });
+            }
+        }
+
+        // --- Audio & Recording Logic ---
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            recordingStartTime = Date.now();
+            
+            timerInterval = setInterval(() => {
+                state.audioTimeMs = accumulatedTime + (Date.now() - recordingStartTime);
+                
+                if (state.audioTimeMs - lastGenTime >= GENERATION_INTERVAL_MS) {
+                    const contextText = currentTranscriptRef.substring(0, lastGenTextIndex).trim();
+                    const newText = currentTranscriptRef.substring(lastGenTextIndex).trim();
+                    if (newText.length > 10) {
+                        const triggerTimeSec = state.audioTimeMs / 1000;
+                        triggerImageGeneration(newText, triggerTimeSec, contextText);
+                        lastGenTextIndex = currentTranscriptRef.length;
+                        lastGenTime = state.audioTimeMs;
+                    }
+                }
+                
+                els.timerDisplay.innerText = formatTime(state.audioTimeMs);
+            }, 100);
+        }
+
+        async function initRecording() {
+            updateState({ error: null, events: [], audioTimeMs: 0, currentTranscript: '', audioBlob: null });
+            currentTranscriptRef = '';
+            finalTranscriptRef = '';
+            lastGenTextIndex = 0;
+            lastGenTime = 0;
+            accumulatedTime = 0;
+            audioChunks = [];
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    state.audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                };
+
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) throw new Error("Speech recognition is not supported in your browser. Please use Chrome or Edge.");
+
+                speechRecognition = new SpeechRecognition();
+                speechRecognition.continuous = true;
+                speechRecognition.interimResults = true;
+
+                speechRecognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) finalTranscriptRef += event.results[i][0].transcript + ' ';
+                        else interimTranscript += event.results[i][0].transcript;
+                    }
+                    currentTranscriptRef = finalTranscriptRef + interimTranscript;
+                    updateState({ currentTranscript: currentTranscriptRef });
+                };
+
+                speechRecognition.onerror = (event) => {
+                    console.error("Speech recognition error", event.error);
+                    if (event.error === 'not-allowed') {
+                        updateState({ error: "Microphone access was denied." });
+                        stopEverything();
+                    }
+                };
+
+                speechRecognition.onend = () => {
+                    if (state.status === 'recording') {
+                        try { speechRecognition.start(); } catch(e){}
+                    }
+                };
+
+                mediaRecorder.start(100);
+                speechRecognition.start();
+                updateState({ status: 'recording' });
+                startTimer();
+
+            } catch (err) {
+                console.error(err);
+                updateState({ error: err.message || "Failed to start recording. Check permissions." });
+            }
+        }
+
+        function pauseRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.pause();
+            if (speechRecognition) speechRecognition.stop();
+            if (timerInterval) clearInterval(timerInterval);
+            
+            accumulatedTime += (Date.now() - recordingStartTime);
+            updateState({ status: 'paused' });
+        }
+
+        function resumeRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'paused') mediaRecorder.resume();
+            if (speechRecognition) {
+                try { speechRecognition.start(); } catch(e) {}
+            }
+            recordingStartTime = Date.now();
+            updateState({ status: 'recording' });
+            startTimer();
+        }
+
+        function stopEverything() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                accumulatedTime += (Date.now() - recordingStartTime);
+                state.audioTimeMs = accumulatedTime; 
+                timerInterval = null;
+            }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (speechRecognition) {
+                speechRecognition.onend = null;
+                speechRecognition.stop();
+            }
+            if (stream) stream.getTracks().forEach(track => track.stop());
+        }
+
+        function stopRecording() {
+            updateState({ status: 'exporting' });
+            
+            setTimeout(async () => {
+                stopEverything();
+
+                while (state.generatingCount > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+
+                const contextText = currentTranscriptRef.substring(0, lastGenTextIndex).trim();
+                const remainingText = currentTranscriptRef.substring(lastGenTextIndex).trim();
+                if (remainingText.length > 5) {
+                    updateState({ generatingCount: state.generatingCount + 1 });
+                    try {
+                        const finalTimeSec = state.audioTimeMs / 1000;
+                        const base64Image = await fetchImageBase64(remainingText, contextText);
+                        const newEvents = [...state.events, { time: finalTimeSec, text: remainingText, context: contextText, image: base64Image }];
+                        newEvents.sort((a, b) => a.time - b.time);
+                        updateState({ events: newEvents });
+                    } catch (err) {
+                        console.error("Final image generation failed:", err);
+                    } finally {
+                        updateState({ generatingCount: Math.max(0, state.generatingCount - 1) });
+                    }
+                }
+
+                setTimeout(() => {
+                    if (state.audioBlob) generateExportHTML(state.audioBlob, state.events);
+                }, 200);
+
+            }, 600);
+        }
+
+        // --- Upload Audio Logic (Whisper API) ---
+        function getAudioDuration(file) {
+            return new Promise((resolve) => {
+                const url = URL.createObjectURL(file);
+                const audio = new Audio(url);
+                audio.addEventListener('loadedmetadata', () => {
+                    resolve(audio.duration);
+                    URL.revokeObjectURL(url);
+                });
+                audio.addEventListener('error', () => {
+                    resolve(0);
+                    URL.revokeObjectURL(url);
+                });
+            });
+        }
+
+        async function processUploadedAudio(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const openAiKey = els.openaiKeyInput.value;
+            if (!openAiKey) {
+                updateState({ error: "Uploading audio requires an OpenAI API key for transcription (Whisper API). Please add it in settings." });
+                event.target.value = '';
+                return;
+            }
+            if (file.size > 25 * 1024 * 1024) {
+                updateState({ error: "Audio file must be under 25MB for the OpenAI Whisper API." });
+                event.target.value = '';
+                return;
+            }
+
+            updateState({ 
+                status: 'processing_upload', 
+                error: null, 
+                events: [], 
+                audioBlob: file,
+                currentTranscript: 'Uploading and transcribing audio file...',
+                audioTimeMs: 0
+            });
+
+            try {
+                const duration = await getAudioDuration(file);
+                updateState({ audioTimeMs: duration * 1000 });
+
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("model", "whisper-1");
+                formData.append("response_format", "verbose_json");
+
+                const headers = { "Authorization": `Bearer ${openAiKey}` };
+                const org = els.openaiOrgInput.value.trim();
+                if (org) headers['OpenAI-Organization'] = org;
+
+                const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+                    method: "POST",
+                    headers: headers,
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(()=>({}));
+                    throw new Error(errData.error?.message || `Whisper API failed: ${res.status}`);
+                }
+
+                const data = await res.json();
+                
+                const buckets = [];
+                let fullTranscript = "";
+                if (data.segments && data.segments.length > 0) {
+                    data.segments.forEach(seg => {
+                        fullTranscript += seg.text + " ";
+                        const bucketIdx = Math.floor(seg.start / (GENERATION_INTERVAL_MS / 1000));
+                        if (!buckets[bucketIdx]) buckets[bucketIdx] = { text: "", start: bucketIdx * (GENERATION_INTERVAL_MS / 1000) };
+                        buckets[bucketIdx].text += seg.text + " ";
+                    });
+                } else if (data.text) {
+                    fullTranscript = data.text;
+                    buckets.push({ text: data.text, start: 0 });
+                }
+
+                updateState({ currentTranscript: fullTranscript.trim() });
+
+                let context = "";
+                let newEvents = [];
+                const validBuckets = buckets.filter(b => b && b.text.trim().length > 5);
+                updateState({ generatingCount: validBuckets.length });
+
+                for (let i = 0; i < validBuckets.length; i++) {
+                    const bucket = validBuckets[i];
+                    try {
+                        const base64Image = await fetchImageBase64(bucket.text.trim(), context);
+                        newEvents.push({ 
+                            time: bucket.start, 
+                            text: bucket.text.trim(), 
+                            context: context, 
+                            image: base64Image 
+                        });
+                        newEvents.sort((a,b) => a.time - b.time);
+                        updateState({ events: [...newEvents], generatingCount: Math.max(0, state.generatingCount - 1) });
+                        context += bucket.text.trim() + " ";
+                    } catch (err) {
+                        console.error("Image generation failed for uploaded chunk:", err);
+                        updateState({ generatingCount: Math.max(0, state.generatingCount - 1) });
+                    }
+                }
+                
+                updateState({ status: 'exported' });
+                
+                setTimeout(() => {
+                    generateExportHTML(file, newEvents);
+                }, 500);
+
+            } catch (err) {
+                console.error(err);
+                updateState({ error: err.message, status: 'idle', currentTranscript: '' });
+            }
+            
+            event.target.value = '';
+        }
+
+        // --- Export Logic ---
+        function downloadExport() {
+            if (state.audioBlob) generateExportHTML(state.audioBlob, state.events);
+        }
+
+        async function generateExportHTML(blob, exportEvents) {
+            try {
+                const base64Audio = await blobToBase64(blob);
+                
+                const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Audio Playback</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
+    <style>
+        :root { --bg: #0f172a; --surface: #1e293b; --text: #f8fafc; --accent: #3b82f6; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .container { max-width: 800px; width: 100%; display: flex; flex-direction: column; gap: 1.5rem; position: relative; z-index: 1; }
+        .header { text-align: center; margin-bottom: 1rem; }
+        .player-card { background: var(--surface); padding: 1.5rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        audio { width: 100%; height: 40px; border-radius: 999px; outline: none; }
+        .visual-area { background: #000; border-radius: 1rem; aspect-ratio: 16/9; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; border: 1px solid #334155; }
+        #display { width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.4s ease-in-out, transform 0.2s; cursor: pointer; }
+        #display:hover { transform: scale(1.02); }
+        #display.active { opacity: 1; }
+        .placeholder { position: absolute; color: #64748b; font-size: 1.1rem; z-index: 0; }
+        .transcript-area { background: var(--surface); padding: 1.5rem; border-radius: 1rem; min-height: 100px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 1.2rem; line-height: 1.6; border: 1px solid #334155;}
+        .timeline { margin-top: 2rem; display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; }
+        .timeline-item { width: 120px; flex-shrink: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+        .timeline-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 0.5rem; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .timeline-img:hover { transform: scale(1.05); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5); }
+        .timeline-time { text-align: center; font-size: 0.8rem; color: #94a3b8; cursor: pointer; padding: 0.25rem; border-radius: 0.25rem; transition: background 0.2s, color 0.2s; }
+        .timeline-time:hover { background: #334155; color: #f8fafc; }
+        
+        /* Lightbox Styles */
+        .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 2rem; }
+        .lightbox.active { opacity: 1; pointer-events: auto; }
+        .lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+        .lightbox-close { position: absolute; top: 1.5rem; right: 1.5rem; background: none; border: none; color: white; font-size: 2.5rem; cursor: pointer; opacity: 0.7; transition: opacity 0.2s; padding: 0.5rem; z-index: 1001;}
+        .lightbox-close:hover { opacity: 1; }
+        .lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(15, 23, 42, 0.6); border: none; color: white; font-size: 2rem; cursor: pointer; width: 3.5rem; height: 3.5rem; border-radius: 50%; transition: all 0.2s; z-index: 1001; display: flex; align-items: center; justify-content: center; }
+        .lightbox-nav:hover { background: rgba(15, 23, 42, 0.9); }
+        .lightbox-prev { left: 1.5rem; }
+        .lightbox-next { right: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Visual Audio Playback</h1>
+            <p style="color: #94a3b8">Press play to listen. Click any image to view full size.</p>
+        </div>
+        
+        <div class="player-card">
+            <audio id="player" controls></audio>
+        </div>
+
+        <div class="visual-area">
+            <div class="placeholder" id="placeholder">Listening...</div>
+            <img id="display" src="" alt="Generated Visual" style="z-index: 1;" />
+        </div>
+
+        <div class="transcript-area" id="text-display">
+            Transcript will appear here...
+        </div>
+
+        <h3 style="color: #cbd5e1; margin-bottom: -1rem;">Generated Timeline (Click times to seek)</h3>
+        <div class="timeline" id="timeline"></div>
+    </div>
+
+    <!-- Lightbox Element -->
+    <div id="lightbox" class="lightbox" onclick="closeLightbox(event)">
+        <button class="lightbox-close" onclick="closeLightbox(event)">×</button>
+        <button id="lightbox-prev" class="lightbox-nav lightbox-prev" onclick="navLightbox(event, -1)">&#10094;</button>
+        <button id="lightbox-next" class="lightbox-nav lightbox-next" onclick="navLightbox(event, 1)">&#10095;</button>
+        <img id="lightbox-img" src="" alt="Full size">
+    </div>
+
+    <script>
+        const audioDataURI = "${base64Audio}";
+        const audio = document.getElementById('player');
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightbox-img');
+        const prevBtn = document.getElementById('lightbox-prev');
+        const nextBtn = document.getElementById('lightbox-next');
+        let currentLightboxIndex = -1;
+        
+        fetch(audioDataURI)
+            .then(res => res.blob())
+            .then(blob => { audio.src = URL.createObjectURL(blob); });
+
+        const events = ${JSON.stringify(exportEvents)};
+        events.sort((a,b) => a.time - b.time);
+        
+        const img = document.getElementById('display');
+        const txt = document.getElementById('text-display');
+        const placeholder = document.getElementById('placeholder');
+        const timeline = document.getElementById('timeline');
+
+        if (events.length === 0) placeholder.innerText = "No images were generated during this recording.";
+
+        function openLightbox(index) {
+            if (index < 0 || index >= events.length) return;
+            currentLightboxIndex = index;
+            lightboxImg.src = events[index].image;
+            lightbox.classList.add('active');
+            updateNav();
+        }
+
+        function closeLightbox(e) {
+            // Fix: We removed the check that prevented closing when clicking the lightbox-close button
+            if (e && (e.target.tagName === 'IMG' || e.target.closest('.lightbox-nav'))) return;
+            lightbox.classList.remove('active');
+        }
+
+        function navLightbox(e, dir) {
+            if (e) e.stopPropagation();
+            let newIdx = currentLightboxIndex + dir;
+            if (newIdx >= 0 && newIdx < events.length) {
+                currentLightboxIndex = newIdx;
+                lightboxImg.src = events[currentLightboxIndex].image;
+                updateNav();
+            }
+        }
+
+        function updateNav() {
+            prevBtn.style.opacity = currentLightboxIndex > 0 ? '1' : '0.3';
+            prevBtn.style.pointerEvents = currentLightboxIndex > 0 ? 'auto' : 'none';
+            nextBtn.style.opacity = currentLightboxIndex < events.length - 1 ? '1' : '0.3';
+            nextBtn.style.pointerEvents = currentLightboxIndex < events.length - 1 ? 'auto' : 'none';
+        }
+
+        img.onclick = () => {
+            if (img.src && img.classList.contains('active')) {
+                const currentT = audio.currentTime;
+                let activeIdx = -1;
+                for(let i = events.length - 1; i >= 0; i--) {
+                    if(events[i].time <= currentT) {
+                        activeIdx = i;
+                        break;
+                    }
+                }
+                if(activeIdx !== -1) openLightbox(activeIdx);
+            }
+        };
+
+        events.forEach((ev, idx) => {
+            const div = document.createElement('div');
+            div.className = 'timeline-item';
+            
+            const thumb = document.createElement('img');
+            thumb.src = ev.image;
+            thumb.className = 'timeline-img';
+            thumb.onclick = (e) => {
+                e.stopPropagation();
+                openLightbox(idx);
+            };
+            
+            const timeLabel = document.createElement('div');
+            timeLabel.className = 'timeline-time';
+            const m = Math.floor(ev.time / 60);
+            const s = Math.floor(ev.time % 60).toString().padStart(2, '0');
+            timeLabel.innerText = m + ':' + s;
+            timeLabel.onclick = (e) => {
+                e.stopPropagation();
+                audio.currentTime = ev.time;
+                audio.play();
+            };
+
+            div.appendChild(thumb);
+            div.appendChild(timeLabel);
+            timeline.appendChild(div);
+        });
+
+        audio.addEventListener('timeupdate', () => {
+            const t = audio.currentTime;
+            let currentEvent = null;
+            for(let i = events.length - 1; i >= 0; i--) {
+                if(events[i].time <= t) {
+                    currentEvent = events[i];
+                    break;
+                }
+            }
+            if(currentEvent) {
+                if (img.src !== currentEvent.image) {
+                    img.src = currentEvent.image;
+                    img.classList.add('active');
+                    placeholder.style.opacity = '0';
+                }
+                txt.innerText = currentEvent.text;
+            } else {
+                img.classList.remove('active');
+                placeholder.style.opacity = '1';
+                txt.innerText = "Recording started...";
+            }
+        });
+    <\/script>
+</body>
+</html>`;
+
+                const finalBlob = new Blob([htmlContent], { type: 'text/html' });
+                const url = URL.createObjectURL(finalBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `visual-audio-recording-${new Date().toISOString().slice(0,10)}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                updateState({ status: 'exported' });
+            } catch (err) {
+                console.error("Export failed", err);
+                updateState({ error: "Failed to generate export file.", status: 'idle' });
+            }
+        }
+
+        // Initial Render
+        renderUI();
+
+    </script>
+</body>
+</html>
