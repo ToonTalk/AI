@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <base href="https://localhost/"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local MLC Chat - PWA</title>
+
+    <!-- Inline SVG favicon: rounded square with indigo→sky gradient and three white dots
+         (generic AI/chat motif, no brand association). -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%236366F1'/%3E%3Cstop offset='100%25' stop-color='%230EA5E9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='url(%23g)'/%3E%3Ccircle cx='22' cy='32' r='4' fill='white'/%3E%3Ccircle cx='32' cy='32' r='4' fill='white'/%3E%3Ccircle cx='42' cy='32' r='4' fill='white'/%3E%3C/svg%3E">
+    
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        google: { blue: '#4285F4', red: '#EA4335', yellow: '#FBBC05', green: '#34A853', dark: '#202124', surface: '#28292C' }
+                    }
+                }
+            }
+        }
+        marked.setOptions({ breaks: true, gfm: true });
+    </script>
+    <style>
+        body { background-color: #1a1a1c; color: #e8eaed; }
+        .glass-panel { background: rgba(40, 41, 44, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .prose pre { background-color: #202124; border: 1px solid #3c4043; border-radius: 0.5rem; }
+        .prose code { color: #8ab4f8; background-color: rgba(66, 133, 244, 0.1); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-weight: normal; }
+        .prose pre code { background-color: transparent; padding: 0; color: #e8eaed; }
+        
+        .typing-indicator span {
+            display: inline-block; width: 6px; height: 6px; background-color: #9aa0a6; border-radius: 50%; animation: typing 1.4s infinite ease-in-out; margin: 0 2px;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.5); opacity: 1; } }
+    </style>
+</head>
+<body class="h-screen flex flex-col font-sans overflow-hidden selection:bg-google-blue selection:text-white">
+
+    <!-- Header -->
+    <header class="glass-panel py-3 px-6 flex justify-between items-center z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex items-center justify-center font-bold text-white shadow-lg">
+                G4
+            </div>
+            <h1 class="text-xl font-semibold tracking-wide text-white">Local MLC Chat</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="openStorageManager()" class="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition-colors flex items-center gap-2" title="Manage Storage">
+                <i class="fa-solid fa-hard-drive"></i> <span class="hidden sm:inline">Storage</span>
+            </button>
+            <button id="new-chat-btn" onclick="startNewChat()" class="hidden px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> New Chat
+            </button>
+            <div id="hardware-badge" class="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 flex items-center gap-2">
+                <i class="fa-solid fa-microchip"></i> Analyzing Hardware...
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Left Pane: Setup & Chat -->
+        <div id="left-pane" class="flex-1 relative flex flex-col transition-all duration-300 ease-in-out">
+            
+            <!-- Setup / Download Screen -->
+            <div id="setup-screen" class="absolute inset-0 z-20 flex justify-center items-center p-4 transition-opacity duration-500">
+                <div class="glass-panel w-full max-w-md rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
+                    <div class="text-center">
+                        <h2 class="text-2xl font-bold text-white mb-2">Initialize Local AI</h2>
+                        <p class="text-sm text-gray-400">Download the model weights to run entirely in your browser.</p>
+                    </div>
+
+                    <!-- Hardware Capabilities Box -->
+                    <div class="bg-[#202124] rounded-xl p-4 border border-gray-700/50">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Detected Capabilities</h3>
+                        <div class="flex flex-col gap-2 text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-300"><i class="fa-solid fa-memory w-5 text-google-blue"></i> System RAM</span>
+                                <span id="ram-detected" class="font-mono text-white">Detecting...</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-300"><i class="fa-solid fa-cubes w-5 text-google-green"></i> WebGPU Support</span>
+                                <span id="gpu-detected" class="font-mono text-white">Detecting...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Model Selector -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-300">Select Model</label>
+                        <select id="model-selector" onchange="window.updateModelFeatures()" class="bg-[#202124] border border-gray-600 text-white text-sm rounded-lg focus:ring-google-blue focus:border-google-blue block w-full p-2.5 outline-none transition-colors cursor-pointer">
+                            <!-- Populated dynamically via JS -->
+                        </select>
+                        <p id="model-warning" class="text-xs text-google-yellow mt-1 hidden">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Your device has less than 8GB RAM. The heavier models may crash the tab. Gemma 3 1B is the smallest and safest option.
+                        </p>
+                        <p class="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                            <i class="fa-brands fa-google text-gray-400 mr-1"></i> Model weights are loaded in MLC format for WebLLM from Hugging Face model repositories.
+                        </p>
+
+                        <label class="mt-3 flex items-start gap-2 cursor-pointer text-xs text-gray-300 hover:text-white transition-colors select-none">
+                            <input type="checkbox" id="code-only-mode" class="mt-0.5 accent-google-blue cursor-pointer flex-shrink-0">
+                            <span><strong class="text-gray-200">Code-only mode.</strong> Instruct the model to skip planning, analysis, and commentary for code requests &mdash; output only the fenced code block. Applies to subsequent messages.</span>
+                        </label>
+                    </div>
+
+                    <!-- Action Button & Progress -->
+                    <div class="mt-2 flex flex-col gap-4">
+                        <button id="download-btn" onclick="startDownload()" class="w-full bg-google-blue hover:bg-blue-600 text-white font-medium rounded-lg text-sm px-5 py-3 transition-colors shadow-lg shadow-blue-500/20 flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-down"></i> Download & Cache Model
+                        </button>
+                        
+                        <div id="progress-container" class="hidden flex-col gap-2">
+                            <div class="flex justify-between text-xs text-gray-400">
+                                <span id="progress-text">Downloading weights...</span>
+                                <span id="progress-percent">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                                <div id="progress-bar" class="bg-gradient-to-r from-google-blue to-google-green h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Screen (Hidden Initially) -->
+            <div id="chat-screen" class="absolute inset-0 z-10 flex flex-col opacity-0 pointer-events-none transition-opacity duration-500 w-full mx-auto max-w-5xl">
+                <!-- Messages Area -->
+                <div id="chat-history" class="flex-1 overflow-y-auto p-4 flex flex-col gap-6 scrollbar-hide pb-36">
+                    <!-- Welcome Message -->
+                    <div class="flex gap-4 w-full md:max-w-[85%] mt-4">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-md">AI</div>
+                        <div class="bg-google-surface border border-gray-700 rounded-2xl rounded-tl-sm p-4 text-gray-200 text-sm shadow-sm prose prose-invert max-w-none">
+                            <p>System loaded successfully from local cache. I am running entirely in your browser using WebGPU.</p>
+                            <p>You can ask me to write a web app, explain an image, or help debug code.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Area with Attachments -->
+                <!-- pointer-events-none on the gradient overlay so clicks pass through to chat content
+                     below; pointer-events-auto restored on the inner control wrapper so the input
+                     box and its buttons remain interactive. -->
+                <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#1a1a1c] via-[#1a1a1c] to-transparent pt-12 pointer-events-none">
+                    <div class="max-w-4xl mx-auto relative flex flex-col gap-2 pointer-events-auto">
+                        
+                        <!-- Attachment Preview Container -->
+                        <div id="attachment-preview" class="hidden bg-[#303134] border border-gray-600 rounded-xl p-2 flex items-center gap-3 w-fit max-w-[200px] shadow-lg relative">
+                            <div id="attachment-icon" class="w-10 h-10 rounded bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
+                                <!-- Thumbnail injected here -->
+                            </div>
+                            <div class="flex-1 overflow-hidden">
+                                <p id="attachment-name" class="text-xs text-gray-300 truncate w-full"></p>
+                            </div>
+                            <button onclick="removeAttachment()" class="text-gray-400 hover:text-white px-2 cursor-pointer">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <div class="relative w-full">
+                            <input type="file" id="file-upload" class="hidden" accept="image/*" onchange="handleFileUpload(event)">
+                            <button id="attachment-btn" class="absolute left-2 bottom-2 w-10 h-10 text-gray-400 hover:text-white transition-colors flex items-center justify-center z-10" title="Attach file">
+                                <i class="fa-solid fa-paperclip"></i>
+                            </button>
+
+                            <textarea id="chat-input" rows="1" placeholder="Ask local AI..." class="w-full bg-google-surface border border-gray-600 text-white text-sm rounded-2xl pl-12 pr-14 py-4 focus:ring-1 focus:ring-google-blue focus:border-google-blue block outline-none resize-none shadow-lg custom-scrollbar overflow-hidden" oninput="autoResize(this)" onkeydown="handleEnter(event)"></textarea>
+                            
+                            <button id="send-btn" onclick="sendMessage()" class="absolute right-2 bottom-2 w-10 h-10 bg-google-blue text-white rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i id="send-icon" class="fa-solid fa-arrow-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-center text-[10px] text-gray-500 mt-2">Local execution keeps prompts and model inference on-device.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Pane: Live App Preview Canvas (Hidden Initially) -->
+        <div id="preview-container" class="w-0 overflow-hidden transition-all duration-300 ease-in-out flex flex-col bg-white border-l border-gray-700 shadow-2xl relative z-30">
+            <div class="bg-[#202124] text-gray-300 text-sm px-4 py-3 flex justify-between items-center border-b border-gray-700 shrink-0">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-laptop-code text-google-blue"></i>
+                    <span class="font-medium tracking-wide">Live App Preview</span>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="refreshPreview()" class="text-gray-400 hover:text-white transition-colors" title="Refresh">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    <button onclick="closePreview()" class="text-gray-400 hover:text-white transition-colors" title="Close Preview">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <iframe id="app-preview-frame" class="flex-1 w-full border-none bg-white" sandbox="allow-scripts allow-forms allow-popups"></iframe>
+        </div>
+
+        <!-- Storage Management Modal -->
+        <div id="storage-modal" class="absolute inset-0 z-50 flex justify-center items-center p-4 bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+            <div class="glass-panel w-full max-w-md rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
+                <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+                    <h3 class="text-lg font-bold text-white"><i class="fa-solid fa-hard-drive text-google-blue mr-2"></i>Manage Storage</h3>
+                    <button onclick="closeStorageManager()" class="text-gray-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="text-sm text-gray-300">
+                    <p class="mb-3 leading-relaxed">Local AI models are permanently cached on your device for fast offline loading.</p>
+                    <div class="bg-[#202124] rounded-lg p-3 border border-gray-700 flex justify-between items-center mb-4">
+                        <span class="text-gray-400">Total Space Used:</span>
+                        <span id="storage-used" class="font-mono font-bold text-white">Calculating...</span>
+                    </div>
+                    
+                    <p class="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Specific Cached Models</p>
+                    <div id="cache-list" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1 pb-1 scrollbar-hide">
+                        <!-- Dynamically populated via JS -->
+                    </div>
+                </div>
+                <div class="mt-2 flex flex-col gap-2">
+                    <button onclick="clearAllStorage(event)" class="w-full bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-900/50 hover:text-white font-medium rounded-lg text-sm px-4 py-2.5 transition-colors flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Clear All Storage & Reload
+                    </button>
+                    <button onclick="closeStorageManager()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg text-sm px-4 py-2.5 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import * as webllm from "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm";
+
+        // --- APP STATE & CONFIG ---
+        let engine = null;
+        let isGenerating = false;
+        let stopRequested = false;
+        window.latestExtractedCode = "";
+        window.attachedFile = null; 
+        let currentModelKey = 'phi-3.5-vision'; // Default
+        let activeModelId = null;
+        let isRecovering = false;
+
+        // ---- System prompt and content helpers ---------------------------------------------
+        // Base prompt is always present; code-only addition is appended when the sidebar
+        // checkbox is ticked. Centralised so both initial chat and "New Chat" share one source.
+        const BASE_SYSTEM_PROMPT = "You are a helpful, local AI assistant running in the browser. When generating code, provide it as a single, complete HTML file (including CSS and JS) inside an ```html codeblock.";
+        const CODE_ONLY_ADDITION = " When asked to write code, output ONLY the code in a single fenced block. Do not include planning, analysis, step-by-step reasoning, or commentary before or after.";
+
+        function getSystemPromptContent() {
+            const codeOnly = document.getElementById('code-only-mode')?.checked;
+            return codeOnly ? (BASE_SYSTEM_PROMPT + CODE_ONLY_ADDITION) : BASE_SYSTEM_PROMPT;
+        }
+
+        // Strip Qwen-style <think>…</think> blocks from model output. Removes both complete
+        // blocks and any unclosed trailing block (so partial thinking during streaming hides
+        // until it's closed). Applied to both the rendered text and the content stored in
+        // chatContext, so thinking artefacts never leak into future turns.
+        function stripThinkBlocks(text) {
+            if (!text) return text;
+            let result = text.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
+            const openIdx = result.lastIndexOf('<think>');
+            if (openIdx !== -1) result = result.substring(0, openIdx);
+            return result;
+        }
+
+        // Remove spurious ```language fence markers that appear inside an already-open code block.
+        // Models sometimes emit e.g. ```javascript inside an open ```html block, thinking they're
+        // "switching" to a labelled inline section. That extra marker confuses both rendering and
+        // fence-counting (it makes the total ``` count odd, falsely flagging the response as
+        // truncated). Walks the text tracking block state; preserves legitimate closing ```
+        // (no language tag) while dropping mid-block ```language markers entirely.
+        function cleanSpuriousFences(text) {
+            if (!text) return text;
+            let result = '';
+            let i = 0;
+            let inBlock = false;
+            while (i < text.length) {
+                if (text[i] === '`' && text[i + 1] === '`' && text[i + 2] === '`') {
+                    let j = i + 3;
+                    while (j < text.length && text[j] !== '\n') j++;
+                    const langTag = text.substring(i + 3, j).trim();
+                    const hasLangTag = !!langTag && /^[a-zA-Z][a-zA-Z0-9_+-]*$/.test(langTag);
+
+                    if (!inBlock) {
+                        // Opening fence (with or without language tag) — keep as-is, enter block.
+                        const sliceEnd = Math.min(j + 1, text.length);
+                        result += text.substring(i, sliceEnd);
+                        i = sliceEnd;
+                        inBlock = true;
+                    } else if (hasLangTag) {
+                        // Spurious mid-block ```language marker — skip the entire marker (including
+                        // its trailing newline if present). Stay inside the current block.
+                        i = j < text.length ? j + 1 : text.length;
+                    } else {
+                        // Legitimate closing fence (no language tag) — keep and exit block.
+                        result += '```';
+                        i += 3;
+                        inBlock = false;
+                    }
+                } else {
+                    result += text[i];
+                    i++;
+                }
+            }
+            return result;
+        }
+
+        let chatContext = [
+            { role: "system", content: BASE_SYSTEM_PROMPT }
+        ];
+
+        // Model Registry
+        // Token budget rationale: precompiled WASMs cap context_window at 4096.
+        // We split that into promptBudget (history+system) + responseMax + ~300 headroom.
+        // Larger responseMax = longer code blocks before truncation; smaller promptBudget
+        // means trimMessagesToFit() will drop older turns sooner.
+        const MODELS = {
+            'gemma-3-1b-q4f16': {
+                id: 'gemma-3-1b-it-q4f16_1-MLC',
+                name: 'gemma-3-1b-it-q4f16_1-MLC — ~0.70 GB (Text Only)',
+                type: 'LLM',
+                approxSizeGB: 0.70,
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 1800,
+                responseMaxTokens: 2000,
+                approxCharsPerToken: 3.2
+            },
+            'qwen3-4b-instruct-2507': {
+                id: 'Qwen3-4B-Instruct-2507-q4f16_1-MLC',
+                name: 'Qwen3-4B-Instruct-2507-q4f16_1-MLC — ~2.5 GB (Text Only)',
+                type: 'LLM',
+                approxSizeGB: 2.5,
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 1800,
+                responseMaxTokens: 2000,
+                approxCharsPerToken: 3.2,
+                presencePenalty: 1.5
+            },
+            'phi-3.5-vision': {
+                id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
+                name: 'Phi-3.5-vision-instruct-q4f16_1-MLC — 2.58 GB (Vision)',
+                type: 'VLM',
+                approxSizeGB: 2.58,
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 2200,
+                responseMaxTokens: 1500,
+                approxCharsPerToken: 3.2,
+                imageTokenCost: 1100
+            },
+            'llama-3-8b': {
+                id: 'Llama-3-8B-Instruct-q4f32_1-MLC',
+                name: 'Llama-3-8B-Instruct-q4f32_1-MLC — 4.21 GB (Text Only)',
+                type: 'LLM',
+                approxSizeGB: 4.21,
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 1800,
+                responseMaxTokens: 2000,
+                approxCharsPerToken: 3.2
+            },
+            'gemma-2-9b': {
+                id: 'gemma-2-9b-it-q4f32_1-MLC',
+                name: 'gemma-2-9b-it-q4f32_1-MLC — 4.86 GB (Text Only)',
+                type: 'LLM',
+                approxSizeGB: 4.86,
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 1800,
+                responseMaxTokens: 2000,
+                approxCharsPerToken: 3.2
+            },
+            'qwen3.5-9b': {
+                id: 'Qwen3.5-9B-q4f16_1-MLC',
+                name: 'Qwen3.5-9B-q4f16_1-MLC — ~5.0 GB (Text Only)',
+                type: 'LLM',
+                approxSizeGB: 5.0,
+                contextWindowTokens: 4096,
+                promptBudgetTokens: 1500,
+                responseMaxTokens: 2300,
+                approxCharsPerToken: 3.2,
+                presencePenalty: 1.5
+            }
+        };
+
+        // --- 1. HARDWARE DETECTION & DYNAMIC UI ---
+        window.detectHardware = function() {
+            const memory = navigator.deviceMemory || 4; 
+            const hasWebGPU = !!navigator.gpu;
+            
+            const ramEl = document.getElementById('ram-detected');
+            const gpuEl = document.getElementById('gpu-detected');
+            const badge = document.getElementById('hardware-badge');
+            const selector = document.getElementById('model-selector');
+
+            ramEl.textContent = `~${memory} GB`;
+            
+            if (hasWebGPU) {
+                gpuEl.innerHTML = `<span class="text-google-green">Supported</span>`;
+                badge.innerHTML = `<i class="fa-solid fa-bolt text-google-yellow"></i> WebGPU Active`;
+            } else {
+                gpuEl.innerHTML = `<span class="text-google-red">Not Supported</span>`;
+                badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-google-red"></i> CPU Mode`;
+                document.getElementById('download-btn').disabled = true;
+                document.getElementById('download-btn').innerHTML = "WebGPU Required";
+                document.getElementById('download-btn').classList.replace('bg-google-blue', 'bg-gray-600');
+            }
+
+            // Populate selector dynamically
+            selector.innerHTML = '';
+            for (const [key, config] of Object.entries(MODELS)) {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = config.name;
+                selector.appendChild(opt);
+            }
+
+            // Enforce safe defaults based on RAM
+            if (memory < 8) {
+                selector.value = 'gemma-3-1b-q4f16';
+            } else {
+                selector.value = 'llama-3-8b';
+            }
+
+            window.updateModelFeatures();
+
+            // Code-only mode toggle: rewrite the active chat's system prompt on toggle so the
+            // change takes effect on the very next message without requiring "New Chat".
+            const codeOnlyCheckbox = document.getElementById('code-only-mode');
+            if (codeOnlyCheckbox) {
+                codeOnlyCheckbox.addEventListener('change', () => {
+                    if (chatContext[0]?.role === 'system') {
+                        chatContext[0] = { ...chatContext[0], content: getSystemPromptContent() };
+                    }
+                });
+            }
+        }
+
+        window.updateModelFeatures = function() {
+            const selector = document.getElementById('model-selector');
+            currentModelKey = selector.value;
+            const config = MODELS[currentModelKey];
+            const memory = navigator.deviceMemory || 4;
+            const warning = document.getElementById('model-warning');
+            
+            // Memory warnings for heavier models
+            if (memory < 8 && config.approxSizeGB > 3.0) {
+                warning.classList.remove('hidden');
+            } else {
+                warning.classList.add('hidden');
+            }
+
+            // Enable/Disable image upload based on model capabilities
+            const attachBtn = document.getElementById('attachment-btn');
+            if (config.type === 'LLM') {
+                attachBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                attachBtn.title = "Image upload disabled: selected model is text-only.";
+                attachBtn.onclick = (e) => { 
+                    e.preventDefault(); 
+                    alert("The selected model is text-only. Switch to Phi-3.5 vision to attach an image."); 
+                };
+            } else {
+                attachBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                attachBtn.title = "Attach image";
+                attachBtn.onclick = () => document.getElementById('file-upload').click();
+            }
+        }
+
+        function getCustomAppConfig() {
+            const existingModels = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list)
+                ? webllm.prebuiltAppConfig.model_list.filter(m => ![
+                    'Llama-3-8B-Instruct-q4f32_1-MLC',
+                    'gemma-2-9b-it-q4f32_1-MLC',
+                    'Phi-3.5-vision-instruct-q4f16_1-MLC',
+                    'gemma-3-1b-it-q4f16_1-MLC',
+                    'Qwen3-4B-Instruct-2507-q4f16_1-MLC',
+                    'Qwen3.5-9B-q4f16_1-MLC'
+                ].includes(m.model_id))
+                : [];
+
+            // NOTE on WASM filename pattern:
+            // WebLLM 0.2.83 reorganised binary-mlc-llm-libs into web-llm-models/v0_2_83/{base,sg32}/
+            // and renamed the wasms: the old "<model>-ctx4k_cs1k-webgpu.wasm" became
+            // "<model>_cs1k-webgpu.wasm" (drop "-ctx4k", change "-cs1k" to "_cs1k").
+            // webllm.modelVersion now resolves to "v0_2_83/base", so the prefix+version+filename
+            // pattern still works as long as filenames use the new convention.
+            // q4f16_1 models need ["shader-f16"]; q4f32_1 do not.
+            return {
+                model_list: [
+                    ...existingModels,
+                    {
+                        // Gemma 3 1B Instruct — q4f16_1 (~700 MB, text-only)
+                        // HF repo uses "gemma-3-" (hyphenated) but compiled WASM uses "gemma3-".
+                        // Only q4f16_1 has a WebGPU wasm in v0_2_83/base; q4f32_1 is not yet built.
+                        model_id: 'gemma-3-1b-it-q4f16_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/gemma-3-1b-it-q4f16_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/gemma3-1b-it-q4f16_1_cs1k-webgpu.wasm`,
+                        required_features: ['shader-f16'],
+                        overrides: { context_window_size: 4096 }
+                    },
+                    {
+                        // Qwen3-4B-Instruct-2507 — q4f16_1 (~2.5 GB, text-only, non-thinking by default)
+                        // 2507 = July 2025 update to Qwen3-4B with stronger instruct/coding/long-context.
+                        model_id: 'Qwen3-4B-Instruct-2507-q4f16_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/Qwen3-4B-Instruct-2507-q4f16_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Qwen3-4B-Instruct-2507-q4f16_1_cs1k-webgpu.wasm`,
+                        required_features: ['shader-f16'],
+                        overrides: { context_window_size: 4096 }
+                    },
+                    {
+                        // Qwen3.5-9B — q4f16_1 (~5 GB, text-only, non-thinking by default)
+                        // Reasoning mode can be toggled at the chat-template level if needed.
+                        model_id: 'Qwen3.5-9B-q4f16_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/Qwen3.5-9B-q4f16_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Qwen3.5-9B-q4f16_1_cs1k-webgpu.wasm`,
+                        required_features: ['shader-f16'],
+                        overrides: { context_window_size: 4096 }
+                    },
+                    {
+                        model_id: 'Llama-3-8B-Instruct-q4f32_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/Llama-3-8B-Instruct-q4f32_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Llama-3-8B-Instruct-q4f32_1_cs1k-webgpu.wasm`,
+                        overrides: { context_window_size: 4096 }
+                    },
+                    {
+                        model_id: 'gemma-2-9b-it-q4f32_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/gemma-2-9b-it-q4f32_1-MLC',
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/gemma-2-9b-it-q4f32_1_cs1k-webgpu.wasm`,
+                        overrides: { context_window_size: 4096 }
+                    },
+                    {
+                        model_id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
+                        model: 'https://huggingface.co/mlc-ai/Phi-3.5-vision-instruct-q4f16_1-MLC',
+                        model_type: webllm.ModelType.VLM,
+                        model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/Phi-3.5-vision-instruct-q4f16_1_cs2k-webgpu.wasm`,
+                        required_features: ['shader-f16'],
+                        overrides: { context_window_size: 4096 }
+                    }
+                ]
+            };
+        }
+
+        function setHardwareBadgeTemporary(html) {
+            const badge = document.getElementById('hardware-badge');
+            if (badge) badge.innerHTML = html;
+        }
+
+        async function recoverEngineAfterStop() {
+            if (!engine || !activeModelId || isRecovering) return;
+            isRecovering = true;
+            setHardwareBadgeTemporary(`<i class="fa-solid fa-rotate-right fa-spin text-google-yellow"></i> Recovering...`);
+            try {
+                if (typeof engine.setInitProgressCallback === 'function') {
+                    engine.setInitProgressCallback(() => {});
+                }
+                if (typeof engine.reload === 'function') {
+                    await engine.reload(activeModelId);
+                } else {
+                    engine = await webllm.CreateMLCEngine(
+                        activeModelId,
+                        { appConfig: getCustomAppConfig() }
+                    );
+                }
+                setHardwareBadgeTemporary(`<i class="fa-solid fa-bolt text-google-yellow"></i> Ready Again`);
+                setTimeout(() => window.detectHardware(), 1200);
+            } catch (err) {
+                console.error('Recovery after stop failed:', err);
+                setHardwareBadgeTemporary(`<i class="fa-solid fa-triangle-exclamation text-google-red"></i> Reload Needed`);
+                throw err;
+            } finally {
+                isRecovering = false;
+            }
+        }
+
+        // --- 2. WEBGPU DOWNLOAD & CACHING ---
+        window.startDownload = async function() {
+            const btn = document.getElementById('download-btn');
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            const progressPercent = document.getElementById('progress-percent');
+            const progressText = document.getElementById('progress-text');
+            const selector = document.getElementById('model-selector');
+
+            const modelId = MODELS[currentModelKey].id;
+
+            selector.disabled = true;
+            btn.classList.add('hidden');
+            progressContainer.classList.remove('hidden');
+            progressText.textContent = `Initializing WebLLM Engine...`;
+
+            try {
+                const initProgressCallback = (report) => {
+                    progressText.textContent = report.text.split('] ')[1] || report.text;
+                    const percent = Math.round(report.progress * 100);
+                    progressBar.style.width = `${percent}%`;
+                    progressPercent.textContent = `${percent}%`;
+                };
+
+                const customAppConfig = getCustomAppConfig();
+
+                engine = await webllm.CreateMLCEngine(
+                    modelId,
+                    { initProgressCallback: initProgressCallback, appConfig: customAppConfig }
+                );
+                activeModelId = modelId;
+
+                progressText.textContent = `Model Ready!`;
+                progressBar.style.width = `100%`;
+                progressPercent.textContent = `100%`;
+                
+                setTimeout(initializeChat, 800);
+
+            } catch (err) {
+                progressText.textContent = `Error: ${err.message}`;
+                progressText.classList.add('text-google-red');
+                console.error(err);
+            }
+        }
+
+        // --- 3. UI TRANSITIONS & PREVIEW LOGIC ---
+        function initializeChat() {
+            const setupScreen = document.getElementById('setup-screen');
+            const chatScreen = document.getElementById('chat-screen');
+            const newChatBtn = document.getElementById('new-chat-btn');
+
+            setupScreen.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                chatScreen.classList.remove('opacity-0', 'pointer-events-none');
+                document.getElementById('chat-input').focus();
+                if (newChatBtn) newChatBtn.classList.remove('hidden');
+            }, 500);
+        }
+
+        window.startNewChat = function() {
+            if (isGenerating || isRecovering) return;
+            chatContext = [
+                { role: "system", content: getSystemPromptContent() }
+            ];
+            
+            const chatHistory = document.getElementById('chat-history');
+            const welcomeMsg = chatHistory.firstElementChild;
+            chatHistory.innerHTML = '';
+            if (welcomeMsg) chatHistory.appendChild(welcomeMsg);
+            
+            window.closePreview();
+            window.removeAttachment();
+            
+            const inputEl = document.getElementById('chat-input');
+            inputEl.value = '';
+            window.autoResize(inputEl);
+        }
+
+        window.openPreview = function(code) {
+            const previewContainer = document.getElementById('preview-container');
+            const frame = document.getElementById('app-preview-frame');
+            
+            const errorInterceptor = `<script>
+                window.onerror = function(message, source, lineno, colno, error) {
+                    window.parent.postMessage({ type: 'iframe-error', content: message + ' (Line ' + lineno + ')' }, '*');
+                };
+                const origError = console.error;
+                console.error = function(...args) {
+                    window.parent.postMessage({ type: 'iframe-error', content: args.join(' ') }, '*');
+                    origError.apply(console, args);
+                };
+            <\/script>`;
+            
+            let injectedCode = code;
+            if (injectedCode.includes('<head>')) {
+                injectedCode = injectedCode.replace('<head>', '<head>' + errorInterceptor);
+            } else {
+                injectedCode = errorInterceptor + injectedCode;
+            }
+
+            window.latestExtractedCode = code; 
+            frame.srcdoc = injectedCode;
+            previewContainer.style.width = '50%';
+        }
+
+        window.closePreview = function() {
+            document.getElementById('preview-container').style.width = '0px';
+        }
+
+        window.refreshPreview = function() {
+            window.openPreview(window.latestExtractedCode); 
+        }
+
+        function extractHTMLBlocks(text) {
+            const regex = /```[a-zA-Z]*\s*\n([\s\S]*?)```/ig;
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const code = match[1];
+                if (code.toLowerCase().includes('<html') || code.toLowerCase().includes('<!doctype')) {
+                    return code; 
+                }
+            }
+            return null;
+        }
+
+        window.autoResize = function(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = (textarea.scrollHeight < 120 ? textarea.scrollHeight : 120) + 'px';
+        }
+
+        window.handleEnter = function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!isGenerating) {
+                    sendMessage();
+                }
+            }
+        }
+
+        // --- 4. FILE UPLOAD HANDLING ---
+        window.handleFileUpload = function(event) {
+            if (MODELS[currentModelKey].type === 'LLM') {
+                alert("The selected model does not support file attachments.");
+                return;
+            }
+
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                window.attachedFile = {
+                    type: 'image',
+                    data: e.target.result,
+                    name: file.name
+                };
+
+                const preview = document.getElementById('attachment-preview');
+                const iconContainer = document.getElementById('attachment-icon');
+                const nameEl = document.getElementById('attachment-name');
+
+                iconContainer.innerHTML = `<img src="${window.attachedFile.data}" class="w-full h-full object-cover">`;
+                
+                nameEl.textContent = window.attachedFile.name;
+                preview.classList.remove('hidden');
+                document.getElementById('chat-input').focus();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        window.removeAttachment = function() {
+            window.attachedFile = null;
+            document.getElementById('file-upload').value = '';
+            document.getElementById('attachment-preview').classList.add('hidden');
+        }
+
+        function updateSendButtonState(generating) {
+            const btn = document.getElementById('send-btn');
+            const icon = document.getElementById('send-icon') || btn.querySelector('i');
+            if (generating) {
+                btn.onclick = window.stopGeneration;
+                btn.classList.remove('bg-google-blue', 'hover:bg-blue-600');
+                btn.classList.add('bg-google-red', 'hover:bg-red-600');
+                icon.className = "fa-solid fa-square"; // Stop icon
+            } else {
+                btn.onclick = () => window.sendMessage();
+                btn.classList.remove('bg-google-red', 'hover:bg-red-600');
+                btn.classList.add('bg-google-blue', 'hover:bg-blue-600');
+                icon.className = "fa-solid fa-arrow-up"; // Send icon
+            }
+        }
+
+        window.stopGeneration = async function() {
+            stopRequested = true;
+            setHardwareBadgeTemporary(`<i class="fa-solid fa-hand text-google-yellow"></i> Stopping...`);
+            if (engine && typeof engine.interruptGenerate === 'function') {
+                try {
+                    await engine.interruptGenerate();
+                } catch (err) {
+                    console.warn('interruptGenerate failed:', err);
+                }
+            }
+        }
+
+        function estimateTokensForContent(content) {
+            const config = MODELS[currentModelKey] || { approxCharsPerToken: 3.2, imageTokenCost: 1100 };
+            if (Array.isArray(content)) {
+                return content.reduce((sum, part) => {
+                    if (!part) return sum;
+                    if (part.type === 'text') {
+                        return sum + Math.ceil((part.text || '').length / config.approxCharsPerToken);
+                    }
+                    if (part.type === 'image_url') {
+                        return sum + (config.imageTokenCost || 1100);
+                    }
+                    return sum + 32;
+                }, 24);
+            }
+            return Math.ceil(String(content || '').length / config.approxCharsPerToken) + 12;
+        }
+
+        function estimateTokensForMessages(messages) {
+            return messages.reduce((sum, msg) => sum + estimateTokensForContent(msg.content) + 12, 0);
+        }
+
+        function trimMessagesToFit(messages, targetPromptTokens) {
+            const trimmed = messages.map(msg => ({ ...msg }));
+            while (estimateTokensForMessages(trimmed) > targetPromptTokens && trimmed.length > 2) {
+                let removeCount = 1;
+                if (
+                    trimmed.length > 2 &&
+                    trimmed[1] &&
+                    trimmed[1].role === 'user' &&
+                    trimmed[2] &&
+                    trimmed[2].role === 'assistant'
+                ) {
+                    removeCount = 2;
+                }
+                trimmed.splice(1, removeCount);
+            }
+            return trimmed;
+        }
+
+        // Continuation-aware trim: the LAST user/assistant pair before the continuation user message
+        // MUST be preserved — that pair is the content being continued. Older pairs in the middle can
+        // be dropped freely. Input order assumed: [system, ...older pairs..., user, assistant, user_continue].
+        function trimMessagesForContinuation(messages, targetPromptTokens) {
+            const cloned = messages.map(msg => ({ ...msg }));
+            // Minimum continuation shape: [system, user, assistant, user_continue] = 4 messages.
+            // Anything ≤4 has no middle to trim; return as-is even if over-budget (caller handles
+            // by dynamically shrinking response budget).
+            if (cloned.length <= 4) return cloned;
+            // Trim pairs only from the "middle" region: indices [1 .. length-3).
+            while (estimateTokensForMessages(cloned) > targetPromptTokens && cloned.length > 4) {
+                let removeCount = 1;
+                if (
+                    cloned[1] && cloned[1].role === 'user' &&
+                    cloned[2] && cloned[2].role === 'assistant'
+                ) {
+                    removeCount = 2;
+                }
+                cloned.splice(1, removeCount);
+            }
+            return cloned;
+        }
+
+        function isContextWindowError(err) {
+            const message = String(err && err.message ? err.message : err).toLowerCase();
+            return message.includes('context window') || message.includes('prompt tokens exceed');
+        }
+
+        function getRequestConfig() {
+            const config = MODELS[currentModelKey];
+            return {
+                promptBudgetTokens: config.promptBudgetTokens,
+                maxTokens: config.responseMaxTokens,
+                // Qwen3.5 docs recommend presence_penalty=1.5 in non-thinking mode to
+                // reduce repetition/rambling. Other models default to 0.
+                presencePenalty: config.presencePenalty ?? 0
+            };
+        }
+
+        function addContinueButton(contentContainer, msgId) {
+            const wrapper = document.createElement('div');
+            wrapper.id = `${msgId}-continue-wrapper`;
+            wrapper.className = "mt-4 pt-4 border-t border-gray-600";
+            wrapper.innerHTML = `
+                <div class="text-xs text-google-yellow mb-2"><i class="fa-solid fa-scissors mr-1"></i> Response was truncated at max tokens.</div>
+                <button type="button" class="cursor-pointer bg-google-blue hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded inline-flex items-center gap-2 transition-colors shadow-sm">
+                    <i class="fa-solid fa-forward"></i> Continue generating
+                </button>
+            `;
+            wrapper.querySelector('button').addEventListener('click', () => {
+                wrapper.remove();
+                // Pull the last assistant message from chatContext — that's the prior content the
+                // model will continue from. We pass it back so sendMessage can render the combined
+                // text in the SAME bubble and later merge it back into chatContext as one turn.
+                let priorContent = '';
+                for (let i = chatContext.length - 1; i >= 0; i--) {
+                    if (chatContext[i].role === 'assistant' && typeof chatContext[i].content === 'string') {
+                        priorContent = chatContext[i].content;
+                        break;
+                    }
+                }
+                window.sendMessage(
+                    'Your previous response was cut off because it hit the output token limit. Pick up exactly where it stopped and continue. Do not repeat anything you already wrote. Do not add any preamble — just continue the content.',
+                    {
+                        silent: true,
+                        continuation: true,
+                        mergeInto: { contentContainer, priorContent }
+                    }
+                );
+            });
+            contentContainer.appendChild(wrapper);
+        }
+
+        // --- 5. CHAT GENERATION & MARKDOWN ---
+        window.sendMessage = async function(overrideText = null, options = {}) {
+            if (!engine || isGenerating || isRecovering) return;
+
+            const silent = options.silent === true;
+            const inputEl = document.getElementById('chat-input');
+            // Guard against a stray Event being passed as overrideText (defensive: should now be impossible
+            // after wrapping btn.onclick in an arrow function, but cheap to keep).
+            const hasOverride = typeof overrideText === 'string' && overrideText.length > 0;
+            const text = hasOverride ? overrideText : inputEl.value.trim();
+
+            if (!text && !window.attachedFile) return;
+
+            if (!hasOverride) {
+                inputEl.value = '';
+                inputEl.style.height = 'auto';
+            }
+            
+            let aiPayload = text;
+            let uiHtml = text ? `<p class="leading-relaxed whitespace-pre-wrap">${escapeHTML(text)}</p>` : "";
+
+            if (window.attachedFile) {
+                // Double check rejection logic
+                if (MODELS[currentModelKey].type === 'LLM') {
+                    alert("This text-only model does not support image attachments. Removing image.");
+                    window.removeAttachment();
+                    return;
+                }
+
+                // Prevent stale multimodal image state from accumulating in context.
+                chatContext = chatContext.map(msg => {
+                    if (Array.isArray(msg.content)) {
+                        const textPart = msg.content.find(p => p.type === 'text');
+                        return { ...msg, content: (textPart ? textPart.text : "") + "\n[System: Previous image cleared from memory to free VRAM for new image.]" };
+                    }
+                    return msg;
+                });
+
+                aiPayload = [
+                    { type: "text", text: text || "Please observe this image carefully and describe it in detail." },
+                    { type: "image_url", image_url: { url: window.attachedFile.data } }
+                ];
+                uiHtml = `<img src="${window.attachedFile.data}" class="max-w-xs w-full rounded-lg mb-2 shadow-md border border-gray-700">
+` + uiHtml;
+                window.removeAttachment();
+            }
+
+            if (!silent) {
+                appendMessage('user', uiHtml, true);
+            }
+
+            const requestConfig = getRequestConfig();
+            // Continuation mode: we MUST preserve the previous assistant turn (the truncated content
+            // we're continuing from), so use the continuation-aware trimmer which protects the most
+            // recent user/assistant pair, and dynamically allocate response budget based on how much
+            // of the context window remains after the prompt is constructed.
+            const isContinuation = options.continuation === true;
+            let effectivePromptBudget = requestConfig.promptBudgetTokens;
+            let effectiveMaxTokens = requestConfig.maxTokens;
+
+            if (isContinuation) {
+                const ctxWindow = MODELS[currentModelKey].contextWindowTokens || 4096;
+                const headroom = 256; // padding for chat-template overhead my estimator under-counts
+                const minResponse = 256;
+                // Reserve at least minResponse tokens for output; prompt can use the rest.
+                effectivePromptBudget = ctxWindow - minResponse - headroom;
+
+                chatContext = trimMessagesForContinuation(
+                    [...chatContext, { role: 'user', content: aiPayload }],
+                    effectivePromptBudget
+                );
+
+                // Whatever prompt budget we actually used, give the remainder to response.
+                const actualPromptTokens = estimateTokensForMessages(chatContext);
+                effectiveMaxTokens = Math.max(minResponse, ctxWindow - actualPromptTokens - headroom);
+                console.log('[continuation] msgs:', chatContext.length,
+                    'roles:', chatContext.map(m => m.role).join(','),
+                    'est prompt tokens:', actualPromptTokens,
+                    'response budget:', effectiveMaxTokens);
+            } else {
+                chatContext = trimMessagesToFit(
+                    [...chatContext, { role: 'user', content: aiPayload }],
+                    effectivePromptBudget
+                );
+            }
+            
+            // Bubble setup: in merge mode (continuation), reuse the existing bubble so the user sees
+            // one continuous response. Otherwise create a new typing indicator.
+            const isMerge = !!options.mergeInto;
+            const priorRenderedContent = isMerge ? (options.mergeInto.priorContent || '') : '';
+            let msgId, contentContainer;
+            if (isMerge) {
+                contentContainer = options.mergeInto.contentContainer;
+                const cidMatch = contentContainer.id.match(/^(.*)-content$/);
+                msgId = cidMatch ? cidMatch[1] : ('merge-' + Date.now());
+            } else {
+                msgId = 'msg-' + Date.now();
+                appendTypingIndicator(msgId);
+            }
+
+            isGenerating = true;
+            stopRequested = false;
+            updateSendButtonState(true);
+            scrollToBottom();
+
+            try {
+                const indicator = document.getElementById(`${msgId}-indicator`);
+                const tpsContainer = document.getElementById(`${msgId}-tps-container`);
+                const tpsValue = document.getElementById(`${msgId}-tps-value`);
+
+                if (!isMerge) {
+                    contentContainer = document.getElementById(`${msgId}-content`);
+                    indicator.style.display = 'none';
+                    contentContainer.classList.remove('hidden');
+                }
+                // Re-show tps for continuation streaming (it may have been hidden after the prior stop).
+                if (tpsContainer) tpsContainer.classList.remove('hidden');
+
+                let fullResponse = "";
+                let tokenCount = 0;
+                let completedGeneration = false;
+                let finishReason = null;
+
+                for (let attempt = 0; attempt < 2 && !completedGeneration; attempt++) {
+                    if (attempt > 0) {
+                        contentContainer.innerHTML = `<p class="text-google-yellow">Context filled up. Dropping older turns and retrying…</p>`;
+                        scrollToBottom();
+                    }
+
+                    const startTime = performance.now();
+                    const chunks = await engine.chat.completions.create({
+                        messages: chatContext,
+                        temperature: 0.7,
+                        max_tokens: effectiveMaxTokens,
+                        presence_penalty: requestConfig.presencePenalty,
+                        stream: true,
+                    });
+
+                    fullResponse = "";
+                    tokenCount = 0;
+                    finishReason = null;
+
+                    try {
+                        for await (const chunk of chunks) {
+                            if (stopRequested) break;
+
+                            const choice = chunk.choices[0];
+                            const delta = choice?.delta?.content || "";
+                            fullResponse += delta;
+                            tokenCount++;
+                            if (choice?.finish_reason) finishReason = choice.finish_reason;
+
+                            if (tokenCount % 3 === 0) {
+                                const elapsedSecs = (performance.now() - startTime) / 1000;
+                                tpsValue.textContent = elapsedSecs > 0 ? (tokenCount / elapsedSecs).toFixed(1) : '0.0';
+                            }
+
+                            // In merge mode, prepend prior content so the bubble shows one continuous response.
+                            // Strip <think>…</think> blocks (Qwen-style) and any spurious ```language
+                            // fence markers emitted inside an already-open code block (some models do
+                            // this mid-HTML, polluting both the render and the fence count).
+                            const visibleResponse = cleanSpuriousFences(stripThinkBlocks(fullResponse));
+                            let renderText = priorRenderedContent + visibleResponse;
+                            const openBlocks = (renderText.match(/```/g) || []).length;
+                            if (openBlocks % 2 !== 0) renderText += '\n```';
+
+                            contentContainer.innerHTML = marked.parse(renderText);
+                            scrollToBottom();
+                        }
+                        completedGeneration = true;
+                        const finalElapsedSecs = (performance.now() - startTime) / 1000;
+                        tpsValue.textContent = finalElapsedSecs > 0 ? (tokenCount / finalElapsedSecs).toFixed(1) : '0.0';
+                    } catch (err) {
+                        if (attempt === 0 && isContextWindowError(err)) {
+                            const tighterBudget = Math.max(900, Math.floor(effectivePromptBudget * 0.6));
+                            chatContext = trimMessagesToFit(chatContext, tighterBudget);
+                            continue;
+                        }
+                        throw err;
+                    }
+                }
+
+                if (!completedGeneration) {
+                    throw new Error('Generation did not complete.');
+                }
+                if (stopRequested) {
+                    tpsContainer.classList.add('hidden');
+                    contentContainer.insertAdjacentHTML(
+                        'beforeend',
+                        `<div class="mt-3 text-xs text-google-yellow border-t border-gray-700 pt-3"><i class="fa-solid fa-hand mr-1"></i> Generation stopped. Recovering the model so the next prompt works.</div>`
+                    );
+                }
+
+                // Strip <think>…</think> blocks AND collapse spurious mid-block ```language fences from
+                // what we keep — both stored history and the content used for code-block detection.
+                // Prior content was already cleaned on its own store, so a merged content = clean
+                // prior + clean new.
+                const cleanResponse = cleanSpuriousFences(stripThinkBlocks(fullResponse));
+
+                // Update chatContext: in merge mode, replace the prior assistant message with the
+                // combined content and drop the user_continue we injected; otherwise push fresh.
+                if (isMerge) {
+                    // Always merge in merge mode (even if cleanResponse is empty), so the injected
+                    // user_continue gets dropped and chatContext returns to a clean state.
+                    let lastAssistantIdx = -1;
+                    for (let i = chatContext.length - 1; i >= 0; i--) {
+                        if (chatContext[i].role === 'assistant') { lastAssistantIdx = i; break; }
+                    }
+                    if (lastAssistantIdx !== -1) {
+                        chatContext[lastAssistantIdx] = {
+                            ...chatContext[lastAssistantIdx],
+                            content: priorRenderedContent + cleanResponse
+                        };
+                        chatContext = chatContext.slice(0, lastAssistantIdx + 1);
+                    } else if (cleanResponse.trim() || priorRenderedContent) {
+                        chatContext.push({ role: 'assistant', content: priorRenderedContent + cleanResponse });
+                    }
+                } else if (cleanResponse.trim()) {
+                    chatContext.push({ role: 'assistant', content: cleanResponse });
+                }
+
+                if (!stopRequested) {
+                    // Detect a code block in the combined (clean) content.
+                    const fullContentForExtraction = priorRenderedContent + cleanResponse;
+
+                    // Truncation signals:
+                    //  1. finishReason === 'length' (model hit max_tokens — definitive)
+                    //  2. An unclosed ``` fence (model emitted a stop token mid-output)
+                    // BUT: if a complete HTML artifact (closing </html>) is present in a fenced
+                    // block, treat the response as complete — the user has what they asked for,
+                    // any trailing prose truncation is not worth a Continue prompt.
+                    const hitMaxTokens = finishReason === 'length';
+                    const openFences = (fullContentForExtraction.match(/```/g) || []).length;
+                    const hasUnclosedFence = openFences % 2 !== 0;
+                    const codeBlock = extractHTMLBlocks(fullContentForExtraction);
+                    const hasCompleteHtmlArtifact = !!codeBlock && /<\/html>/i.test(codeBlock);
+                    const isComplete = hasCompleteHtmlArtifact || (!hitMaxTokens && !hasUnclosedFence);
+
+                    // If the continuation produced no visible content (e.g. model emitted only
+                    // empty <think></think>), leave a small notice so the bubble doesn't look stuck.
+                    if (isMerge && !cleanResponse.trim()) {
+                        contentContainer.insertAdjacentHTML('beforeend', `
+                            <div class="mt-3 pt-3 text-xs text-google-yellow border-t border-gray-700">
+                                <i class="fa-solid fa-brain mr-1"></i> Continuation produced only thinking content (no visible output) this round.
+                            </div>
+                        `);
+                    }
+
+                    if (codeBlock && isComplete) {
+                        // Complete HTML artifact: attach a manual re-open button and auto-open the preview.
+                        const btnContainer = document.createElement('div');
+                        btnContainer.className = "mt-4 pt-4 border-t border-gray-600";
+                        btnContainer.innerHTML = `
+                            <button type="button" class="cursor-pointer bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded inline-flex items-center gap-2 transition-colors">
+                                <i class="fa-solid fa-play"></i> Open App in Preview Canvas
+                            </button>
+                        `;
+                        btnContainer.querySelector('button').addEventListener('click', () => {
+                            window.openPreview(codeBlock);
+                        });
+                        contentContainer.appendChild(btnContainer);
+
+                        window.openPreview(codeBlock);
+                    }
+
+                    // Truncated → offer Continue (regardless of whether a partial code block was detected).
+                    if (!isComplete) {
+                        addContinueButton(contentContainer, msgId);
+                        scrollToBottom();
+                    }
+                }
+
+            } catch (err) {
+                const errContainer = document.getElementById(`${msgId}-content`);
+                const extraHint = isContextWindowError(err)
+                    ? 'Older turns were trimmed automatically, but the remaining prompt is still too large for this model. Start a new chat or shorten the latest message.'
+                    : 'Try shortening the context by clicking New Chat.';
+                const errHtml = `<div class="mt-3 border-t border-red-900/50 pt-3 text-google-red font-sans">
+                    <p>Error during generation: ${escapeHTML(err.message)}</p>
+                    <p class="mt-2 text-xs text-gray-400">${escapeHTML(extraHint)}</p>
+                </div>`;
+                if (errContainer) {
+                    if (isMerge) {
+                        // Preserve the prior content; append error below.
+                        errContainer.insertAdjacentHTML('beforeend', errHtml);
+                    } else {
+                        errContainer.innerHTML = errHtml;
+                    }
+                }
+                console.error(err);
+            } finally {
+                if (stopRequested) {
+                    try {
+                        await recoverEngineAfterStop();
+                    } catch (recoveryErr) {
+                        const contentContainer = document.getElementById(`${msgId}-content`);
+                        if (contentContainer) {
+                            contentContainer.insertAdjacentHTML(
+                                'beforeend',
+                                `<div class="mt-3 text-xs text-google-red border-t border-red-900/50 pt-3">Recovery failed after stop: ${escapeHTML(recoveryErr.message || String(recoveryErr))}. Reload the page if the next prompt does not start.</div>`
+                            );
+                        }
+                    } finally {
+                        stopRequested = false;
+                    }
+                }
+                isGenerating = false;
+                updateSendButtonState(false);
+            }
+        }
+
+        function appendMessage(role, content, isHtml = false) {
+            const chatHistory = document.getElementById('chat-history');
+            const div = document.createElement('div');
+            
+            if (role === 'user') {
+                div.className = 'flex gap-4 w-full justify-end mt-2';
+                const innerData = isHtml ? content : `<p class="leading-relaxed whitespace-pre-wrap">${escapeHTML(content)}</p>`;
+                div.innerHTML = `
+                    <div class="bg-[#303134] text-white border border-gray-700 rounded-2xl rounded-tr-sm p-4 text-sm shadow-sm md:max-w-[85%]">
+                        ${innerData}
+                    </div>
+                `;
+            }
+            chatHistory.appendChild(div);
+        }
+
+        function appendTypingIndicator(id) {
+            const chatHistory = document.getElementById('chat-history');
+            const div = document.createElement('div');
+            div.className = 'flex gap-4 w-full md:max-w-[85%] mt-4 ai-message';
+            div.id = id;
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-google-blue to-google-red flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-md">AI</div>
+                <div class="flex flex-col w-full">
+                    <div class="bg-google-surface border border-gray-700 rounded-2xl rounded-tl-sm p-4 text-gray-200 text-sm shadow-sm min-w-[60px] flex items-center prose prose-invert max-w-none w-full overflow-x-auto">
+                        <div class="typing-indicator m-0" id="${id}-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="hidden w-full" id="${id}-content"></div>
+                    </div>
+                    <div id="${id}-tps-container" class="hidden text-[10px] text-gray-500 mt-1.5 ml-2 flex items-center gap-1.5 font-mono">
+                        <i class="fa-solid fa-bolt text-google-yellow"></i>
+                        <span><span id="${id}-tps-value">0.0</span> tok/s</span>
+                    </div>
+                </div>
+            `;
+            chatHistory.appendChild(div);
+        }
+
+        function scrollToBottom() {
+            const history = document.getElementById('chat-history');
+            history.scrollTop = history.scrollHeight;
+        }
+
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'iframe-error') {
+                const chatHistory = document.getElementById('chat-history');
+                const div = document.createElement('div');
+                div.className = 'flex gap-4 w-full md:max-w-[85%] mt-4';
+
+                // Hold the error content in a closure so the click handler doesn't have to deal
+                // with string-escaping nightmares (the previous inline onclick="…${safeErrorString}…"
+                // approach was failing silently when the error string contained anything tricky).
+                const errorContent = event.data.content;
+
+                div.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 flex items-center justify-center text-google-red text-xs shadow-md border border-red-900/50">
+                        <i class="fa-solid fa-bug"></i>
+                    </div>
+                    <div class="bg-red-900/20 text-red-200 border border-red-900/50 rounded-2xl rounded-tl-sm p-4 text-sm shadow-sm font-mono text-xs overflow-x-auto w-full">
+                        <p class="whitespace-pre-wrap font-bold mb-1">Preview App Error Captured:</p>
+                        <p class="whitespace-pre-wrap mb-3">${escapeHTML(errorContent)}</p>
+                        <button type="button" class="fix-error-btn cursor-pointer bg-red-900/50 hover:bg-red-900/80 text-white font-sans text-xs px-3 py-1.5 rounded transition-colors shadow-sm">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Ask AI to fix this
+                        </button>
+                    </div>
+                `;
+                const fixBtn = div.querySelector('.fix-error-btn');
+                fixBtn.addEventListener('click', () => {
+                    const inputEl = document.getElementById('chat-input');
+                    if (!inputEl) {
+                        console.error('[fix-error] chat-input not found');
+                        return;
+                    }
+                    inputEl.value = `I got this error from the preview:\n\n${errorContent}\n\nCan you fix the code?`;
+                    if (typeof window.autoResize === 'function') window.autoResize(inputEl);
+                    inputEl.focus();
+                    // Move the caret to the end so Enter sends what the user expects.
+                    inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+                    inputEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                });
+
+                chatHistory.appendChild(div);
+                scrollToBottom();
+            }
+        });
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+        }
+
+        window.onload = window.detectHardware;
+
+        // --- 6. STORAGE MANAGEMENT ---
+        window.openStorageManager = async function() {
+            const modal = document.getElementById('storage-modal');
+            const usedEl = document.getElementById('storage-used');
+            const cacheListEl = document.getElementById('cache-list');
+            
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            
+            usedEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-google-blue"></i>';
+            cacheListEl.innerHTML = '<div class="text-center text-gray-500 py-4"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Reading cache...</div>';
+            
+            // 1. Calculate Global Storage Estimate
+            if (navigator.storage && navigator.storage.estimate) {
+                try {
+                    const estimate = await navigator.storage.estimate();
+                    const usedGB = (estimate.usage / (1024 * 1024 * 1024)).toFixed(2);
+                    usedEl.textContent = `${usedGB} GB`;
+                } catch(e) {
+                    usedEl.textContent = "Unknown";
+                }
+            } else {
+                usedEl.textContent = "Not supported";
+            }
+
+            // 2. Fetch Individual Caches & Calculate Sizes
+            try {
+                const cacheNames = await caches.keys();
+                cacheListEl.innerHTML = '';
+                
+                if (cacheNames.length === 0) {
+                    cacheListEl.innerHTML = '<p class="text-xs text-gray-500 text-center py-4">No cached models found.</p>';
+                } else {
+                    for (const name of cacheNames) {
+                        // Drill down specifically into the model cache to separate out individual model files
+                        if (name === 'webllm/model') {
+                            let modelMap = {};
+                            try {
+                                const cache = await caches.open(name);
+                                const requests = await cache.keys();
+                                for (const req of requests) {
+                                    const url = req.url;
+                                    let mId = "Unknown Model Files";
+                                    
+                                    // Extract the huggingface model repo identifier from the request URL
+                                    const hfMatch = url.match(/huggingface\.co\/[^\/]+\/([^\/]+)/);
+                                    if (hfMatch) mId = hfMatch[1];
+
+                                    const res = await cache.match(req);
+                                    const size = res && res.headers.has('content-length') ? parseInt(res.headers.get('content-length'), 10) : 0;
+                                    
+                                    if (!modelMap[mId]) modelMap[mId] = 0;
+                                    modelMap[mId] += size;
+                                }
+                            } catch(e) { console.warn(e); }
+
+                            // Render individual models found inside the monolith cache
+                            for (const [mId, sizeBytes] of Object.entries(modelMap)) {
+                                if (sizeBytes === 0) continue;
+                                const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1);
+                                const displaySize = sizeBytes > 1024 * 1024 * 1024 
+                                    ? `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} GB` 
+                                    : `${sizeMB} MB`;
+                                
+                                const div = document.createElement('div');
+                                div.className = "flex justify-between items-center bg-[#1a1a1c] p-3 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors group";
+                                div.innerHTML = `
+                                    <div class="flex items-center gap-3 overflow-hidden mr-2">
+                                        <i class="fa-solid fa-brain text-gray-500 group-hover:text-google-blue transition-colors text-lg shrink-0"></i>
+                                        <div class="flex flex-col overflow-hidden">
+                                            <span class="text-xs text-gray-200 truncate font-medium w-48" title="${mId}">${mId}</span>
+                                            <span class="text-[10px] text-gray-400 font-mono">${displaySize} (Weights)</span>
+                                        </div>
+                                    </div>
+                                    <button onclick="deleteModelCache('${mId}', this)" class="text-gray-500 hover:text-red-400 p-2 rounded-md hover:bg-red-900/30 transition-colors shrink-0" title="Delete this model's weights">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                `;
+                                cacheListEl.appendChild(div);
+                            }
+                        } else {
+                            // Render standard config/wasm architecture caches
+                            let sizeBytes = 0;
+                            try {
+                                const cache = await caches.open(name);
+                                const requests = await cache.keys();
+                                for (const req of requests) {
+                                    const res = await cache.match(req);
+                                    if (res && res.headers.has('content-length')) {
+                                        sizeBytes += parseInt(res.headers.get('content-length'), 10);
+                                    }
+                                }
+                            } catch(e) { console.warn("Could not calculate size for cache:", name) }
+                            
+                            let displayName = name;
+                            let icon = "fa-box";
+                            if (name.startsWith("webllm/wasm/")) {
+                                displayName = name.replace("webllm/wasm/", "[WASM Engine] ");
+                                icon = "fa-gear";
+                            } else if (name.startsWith("webllm/config")) {
+                                displayName = "[Config] System Flags";
+                                icon = "fa-sliders";
+                            }
+
+                            const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1);
+                            
+                            const div = document.createElement('div');
+                            div.className = "flex justify-between items-center bg-[#1a1a1c] p-3 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors group";
+                            div.innerHTML = `
+                                <div class="flex items-center gap-3 overflow-hidden mr-2">
+                                    <i class="fa-solid ${icon} text-gray-500 group-hover:text-google-blue transition-colors text-lg shrink-0"></i>
+                                    <div class="flex flex-col overflow-hidden">
+                                        <span class="text-xs text-gray-200 truncate font-medium w-48" title="${name}">${displayName}</span>
+                                        <span class="text-[10px] text-gray-400 font-mono">${sizeMB} MB</span>
+                                    </div>
+                                </div>
+                                <button onclick="deleteSpecificCache('${name}', this)" class="text-gray-500 hover:text-red-400 p-2 rounded-md hover:bg-red-900/30 transition-colors shrink-0" title="Delete this cache">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            `;
+                            cacheListEl.appendChild(div);
+                        }
+                    }
+                }
+            } catch(e) {
+                cacheListEl.innerHTML = '<p class="text-xs text-red-400 text-center py-4">Failed to load cache list.</p>';
+                console.error(e);
+            }
+        }
+
+        window.closeStorageManager = function() {
+            const modal = document.getElementById('storage-modal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        window.deleteModelCache = async function(modelId, btnElement) {
+            if (!confirm(`Are you sure you want to delete the weights for "${modelId}"?`)) return;
+            
+            const originalHtml = btnElement.innerHTML;
+            btnElement.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
+            btnElement.disabled = true;
+
+            try {
+                const cache = await caches.open('webllm/model');
+                const requests = await cache.keys();
+                // Filter and delete only the network requests matching this model's HuggingFace ID
+                for (const req of requests) {
+                    if (req.url.includes(modelId)) {
+                        await cache.delete(req);
+                    }
+                }
+                window.openStorageManager();
+            } catch (e) {
+                console.error("Error deleting model cache:", e);
+                alert("Error deleting cache: " + e.message);
+                btnElement.innerHTML = originalHtml;
+                btnElement.disabled = false;
+            }
+        }
+
+        window.deleteSpecificCache = async function(cacheName, btnElement) {
+            if (!confirm(`Are you sure you want to delete "${cacheName}"?`)) return;
+            
+            const originalHtml = btnElement.innerHTML;
+            btnElement.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
+            btnElement.disabled = true;
+
+            try {
+                await caches.delete(cacheName);
+                // Refresh modal to update storage numbers and remove the item
+                window.openStorageManager();
+            } catch (e) {
+                console.error("Error deleting specific cache:", e);
+                alert("Error deleting cache: " + e.message);
+                btnElement.innerHTML = originalHtml;
+                btnElement.disabled = false;
+            }
+        }
+
+        window.clearAllStorage = async function(event) {
+            if (!confirm("Are you sure? This will delete ALL downloaded models. The page will reload and you will need to re-download the models to use the AI again.")) return;
+            
+            const btn = event.currentTarget;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Clearing...`;
+            btn.disabled = true;
+
+            try {
+                // Delete all Cache API data (this is where WebLLM stores its shards)
+                const cacheNames = await caches.keys();
+                for (const name of cacheNames) {
+                    await caches.delete(name);
+                }
+                
+                // Clear out IndexedDB as well just in case
+                if (indexedDB.databases) {
+                    const databases = await indexedDB.databases();
+                    for (const db of databases) {
+                        indexedDB.deleteDatabase(db.name);
+                    }
+                }
+
+                // Force reload to reset engine states and VRAM
+                window.location.reload();
+            } catch (e) {
+                console.error("Storage clearing error:", e);
+                alert("Error clearing storage: " + e.message);
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        }
+
+    </script>
+</body>
+</html>
