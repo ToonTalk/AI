@@ -62,6 +62,12 @@
             <button id="new-chat-btn" onclick="startNewChat()" class="hidden px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition-colors flex items-center gap-2">
                 <i class="fa-solid fa-plus"></i> New Chat
             </button>
+            <button type="button" id="discussion-toggle" onclick="toggleMode('discussion-mode')" class="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition-colors flex items-center gap-2" title="Discussion mode — tells the model to explain rather than generate code. Toggle any time; applies to subsequent messages.">
+                <i class="fa-solid fa-comments"></i> <span class="hidden md:inline">Discussion</span>
+            </button>
+            <button type="button" id="code-only-toggle" onclick="toggleMode('code-only-mode')" class="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition-colors flex items-center gap-2" title="Code-only mode — output only the fenced code block, no commentary. Toggle any time; applies to subsequent messages.">
+                <i class="fa-solid fa-code"></i> <span class="hidden md:inline">Code-only</span>
+            </button>
             <div id="hardware-badge" class="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 flex items-center gap-2">
                 <i class="fa-solid fa-microchip"></i> Analyzing Hardware...
             </div>
@@ -109,6 +115,11 @@
                         <p class="text-[10px] text-gray-500 mt-2 leading-relaxed">
                             <i class="fa-brands fa-google text-gray-400 mr-1"></i> Model weights are loaded in MLC format for WebLLM from Hugging Face model repositories.
                         </p>
+
+                        <label class="mt-3 flex items-start gap-2 cursor-pointer text-xs text-gray-300 hover:text-white transition-colors select-none">
+                            <input type="checkbox" id="discussion-mode" class="mt-0.5 accent-google-blue cursor-pointer flex-shrink-0">
+                            <span><strong class="text-gray-200">Discussion mode.</strong> Tell the model to discuss and explain rather than generate complete code files. Useful for asking questions about code already in the conversation. Applies to subsequent messages.</span>
+                        </label>
 
                         <label class="mt-3 flex items-start gap-2 cursor-pointer text-xs text-gray-300 hover:text-white transition-colors select-none">
                             <input type="checkbox" id="code-only-mode" class="mt-0.5 accent-google-blue cursor-pointer flex-shrink-0">
@@ -194,7 +205,14 @@
                     <i class="fa-solid fa-laptop-code text-google-blue"></i>
                     <span class="font-medium tracking-wide">Live App Preview</span>
                 </div>
-                <div class="flex gap-3">
+                <div class="flex gap-3 items-center">
+                    <button id="preview-copy-btn" onclick="copyPreviewCode()" class="text-gray-400 hover:text-white transition-colors" title="Copy HTML to clipboard">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+                    <button id="preview-download-btn" onclick="downloadPreviewCode()" class="text-gray-400 hover:text-white transition-colors" title="Download HTML file">
+                        <i class="fa-solid fa-download"></i>
+                    </button>
+                    <span class="text-gray-700">|</span>
                     <button onclick="refreshPreview()" class="text-gray-400 hover:text-white transition-colors" title="Refresh">
                         <i class="fa-solid fa-rotate-right"></i>
                     </button>
@@ -253,11 +271,15 @@
 
         // ---- System prompt and content helpers ---------------------------------------------
         // Base prompt is always present; code-only addition is appended when the sidebar
-        // checkbox is ticked. Centralised so both initial chat and "New Chat" share one source.
+        // checkbox is ticked. Discussion mode replaces the whole prompt with a discussion-
+        // focused version (and wins over code-only if both are toggled).
         const BASE_SYSTEM_PROMPT = "You are a helpful, local AI assistant running in the browser. When generating code, provide it as a single, complete HTML file (including CSS and JS) inside an ```html codeblock.";
         const CODE_ONLY_ADDITION = " When asked to write code, output ONLY the code in a single fenced block. Do not include planning, analysis, step-by-step reasoning, or commentary before or after.";
+        const DISCUSSION_PROMPT = "You are a helpful, local AI assistant running in the browser. The user wants to discuss code and concepts. Explain clearly and concisely. Do not generate complete HTML files or large code blocks. If you must reference code, use only short inline snippets when essential — prefer prose explanation.";
 
         function getSystemPromptContent() {
+            const discussionMode = document.getElementById('discussion-mode')?.checked;
+            if (discussionMode) return DISCUSSION_PROMPT;
             const codeOnly = document.getElementById('code-only-mode')?.checked;
             return codeOnly ? (BASE_SYSTEM_PROMPT + CODE_ONLY_ADDITION) : BASE_SYSTEM_PROMPT;
         }
@@ -278,8 +300,8 @@
         // Models sometimes emit e.g. ```javascript inside an open ```html block, thinking they're
         // "switching" to a labelled inline section. That extra marker confuses both rendering and
         // fence-counting (it makes the total ``` count odd, falsely flagging the response as
-        // truncated). Walks the text tracking block state; preserves legitimate closing ```
-        // (no language tag) while dropping mid-block ```language markers entirely.
+        // truncated). Walks the text tracking fence-block state, and removes ```language markers
+        // that appear inside an already-open block (preserving legitimate closing ``` markers).
         function cleanSpuriousFences(text) {
             if (!text) return text;
             let result = '';
@@ -293,17 +315,13 @@
                     const hasLangTag = !!langTag && /^[a-zA-Z][a-zA-Z0-9_+-]*$/.test(langTag);
 
                     if (!inBlock) {
-                        // Opening fence (with or without language tag) — keep as-is, enter block.
                         const sliceEnd = Math.min(j + 1, text.length);
                         result += text.substring(i, sliceEnd);
                         i = sliceEnd;
                         inBlock = true;
                     } else if (hasLangTag) {
-                        // Spurious mid-block ```language marker — skip the entire marker (including
-                        // its trailing newline if present). Stay inside the current block.
                         i = j < text.length ? j + 1 : text.length;
                     } else {
-                        // Legitimate closing fence (no language tag) — keep and exit block.
                         result += '```';
                         i += 3;
                         inBlock = false;
@@ -313,6 +331,43 @@
                     i++;
                 }
             }
+            return result;
+        }
+
+        // Clean up the boundary between a truncated prior response and the model's continuation.
+        // Models routinely mess up the boundary in two ways:
+        //   (a) Direct overlap — prior ends with "let alpha =", continuation begins with
+        //       "let alpha = 1;", producing "let alpha =let alpha = 1;" when concatenated.
+        //   (b) Spurious leading fence — continuation begins with ```language\n even though prior
+        //       had an open code block (model trying to "reopen" the block).
+        // Both cases are deterministically fixable here. Out-of-order re-emission (continuation
+        // jumps backwards inside the prior content) is not handled — that's a model-quirk issue.
+        function cleanContinuationStart(priorContent, newContent) {
+            if (!newContent || !priorContent) return newContent;
+            let result = newContent;
+
+            // (b) If prior has an open code block (odd fence count), strip any leading ```language
+            // marker that the model emitted to "reopen" it.
+            const priorFenceCount = (priorContent.match(/```/g) || []).length;
+            const insideOpenBlock = priorFenceCount % 2 !== 0;
+            if (insideOpenBlock) {
+                const leadingFenceMatch = result.match(/^(\s*)```[a-zA-Z][a-zA-Z0-9_+-]*\s*\n?/);
+                if (leadingFenceMatch) result = result.substring(leadingFenceMatch[0].length);
+            }
+
+            // (a) Find the longest suffix of priorContent that's also a prefix of result. Minimum
+            // 5 chars to avoid trimming on tiny coincidental matches. Cap check window at 200
+            // chars for performance.
+            const maxCheck = Math.min(priorContent.length, result.length, 200);
+            for (let len = maxCheck; len >= 5; len--) {
+                const priorSuffix = priorContent.substring(priorContent.length - len);
+                const resultPrefix = result.substring(0, len);
+                if (priorSuffix === resultPrefix) {
+                    result = result.substring(len);
+                    break;
+                }
+            }
+
             return result;
         }
 
@@ -432,16 +487,53 @@
 
             window.updateModelFeatures();
 
-            // Code-only mode toggle: rewrite the active chat's system prompt on toggle so the
-            // change takes effect on the very next message without requiring "New Chat".
-            const codeOnlyCheckbox = document.getElementById('code-only-mode');
-            if (codeOnlyCheckbox) {
-                codeOnlyCheckbox.addEventListener('change', () => {
-                    if (chatContext[0]?.role === 'system') {
-                        chatContext[0] = { ...chatContext[0], content: getSystemPromptContent() };
-                    }
-                });
-            }
+            // Mode toggles in the header pills + the sidebar checkboxes are two views of the same
+            // underlying state. Both write through the checkbox `.checked` property and dispatch a
+            // change event so the existing listener can update the system prompt + pill appearance
+            // in one place.
+            ['discussion-mode', 'code-only-mode'].forEach(id => {
+                const cb = document.getElementById(id);
+                if (cb) {
+                    cb.addEventListener('change', () => {
+                        if (chatContext[0]?.role === 'system') {
+                            chatContext[0] = { ...chatContext[0], content: getSystemPromptContent() };
+                        }
+                        updateModePillAppearance();
+                    });
+                }
+            });
+            // Set initial pill appearance based on current checkbox state.
+            updateModePillAppearance();
+        }
+
+        // Pill button click → flip the underlying checkbox + dispatch change to trigger the
+        // existing listener (system-prompt rewrite + pill re-render).
+        window.toggleMode = function(checkboxId) {
+            const cb = document.getElementById(checkboxId);
+            if (!cb) return;
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event('change'));
+        };
+
+        function updateModePillAppearance() {
+            const map = {
+                'discussion-mode': 'discussion-toggle',
+                'code-only-mode': 'code-only-toggle'
+            };
+            const activeClasses = ['bg-google-blue/30', 'hover:bg-google-blue/50', 'text-white', 'border-google-blue/70'];
+            const inactiveClasses = ['bg-gray-800', 'hover:bg-gray-700', 'text-gray-300', 'border-gray-700'];
+            Object.entries(map).forEach(([cbId, pillId]) => {
+                const cb = document.getElementById(cbId);
+                const pill = document.getElementById(pillId);
+                if (!cb || !pill) return;
+                if (cb.checked) {
+                    pill.classList.remove(...inactiveClasses);
+                    pill.classList.add(...activeClasses);
+                } else {
+                    pill.classList.remove(...activeClasses);
+                    pill.classList.add(...inactiveClasses);
+                }
+            });
         }
 
         window.updateModelFeatures = function() {
@@ -658,6 +750,11 @@
             window.autoResize(inputEl);
         }
 
+        // Errors fired during the current preview iframe's lifetime. Deduplicated by content so a
+        // single bug that fires every animation frame doesn't spam the chat. Cleared on every
+        // openPreview call so a fresh app run can re-surface its own errors.
+        const previewRunErrors = new Set();
+
         window.openPreview = function(code) {
             const previewContainer = document.getElementById('preview-container');
             const frame = document.getElementById('app-preview-frame');
@@ -681,6 +778,7 @@
             }
 
             window.latestExtractedCode = code; 
+            previewRunErrors.clear();
             frame.srcdoc = injectedCode;
             previewContainer.style.width = '50%';
         }
@@ -692,6 +790,35 @@
         window.refreshPreview = function() {
             window.openPreview(window.latestExtractedCode); 
         }
+
+        // Preview-header Copy / Download — operate on the most recent extracted code so the user
+        // can grab the running app at any time without scrolling back to its chat bubble.
+        window.copyPreviewCode = async function() {
+            if (!window.latestExtractedCode) return;
+            const btn = document.getElementById('preview-copy-btn');
+            const original = btn?.innerHTML;
+            try {
+                await navigator.clipboard.writeText(window.latestExtractedCode);
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-check text-google-green"></i>';
+            } catch (err) {
+                console.error('[copy] failed', err);
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-xmark text-google-red"></i>';
+            }
+            if (btn) setTimeout(() => { btn.innerHTML = original; }, 1500);
+        };
+
+        window.downloadPreviewCode = function() {
+            if (!window.latestExtractedCode) return;
+            const blob = new Blob([window.latestExtractedCode], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `local-ai-app-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.html`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
 
         function extractHTMLBlocks(text) {
             const regex = /```[a-zA-Z]*\s*\n([\s\S]*?)```/ig;
@@ -884,16 +1011,188 @@
                         break;
                     }
                 }
-                window.sendMessage(
-                    'Your previous response was cut off because it hit the output token limit. Pick up exactly where it stopped and continue. Do not repeat anything you already wrote. Do not add any preamble — just continue the content.',
-                    {
-                        silent: true,
-                        continuation: true,
-                        mergeInto: { contentContainer, priorContent }
-                    }
-                );
+                // Include the verbatim tail of priorContent as an explicit anchor. Some models
+                // (notably Qwen3.5-9B) lose track of "where" they were in their own output and
+                // pick up at a semantically-plausible-but-grammatically-wrong point (e.g. jumping
+                // from inside an if-condition to inside the if-body). Showing them the literal
+                // last 80 chars makes the boundary unambiguous.
+                const tail = priorContent.slice(-80);
+                const continuationPrompt =
+                    `Your previous response was cut off mid-output. Here are the last ${tail.length} characters you wrote, ending exactly where the cutoff happened:\n\n` +
+                    `[BEGIN TAIL]\n${tail}\n[END TAIL]\n\n` +
+                    `Your continuation begins at the very next character after [END TAIL]. Pay close attention to whitespace, brackets, and quoting — your first output character must produce valid syntax when concatenated directly to the tail above. Do NOT repeat any of the tail. Do NOT start a new code block; you are already inside an open one. Do NOT add any preamble, acknowledgement, or commentary. Output ONLY the missing continuation.`;
+                window.sendMessage(continuationPrompt, {
+                    silent: true,
+                    continuation: true,
+                    mergeInto: { contentContainer, priorContent }
+                });
             });
             contentContainer.appendChild(wrapper);
+        }
+
+        // Action bar for a complete HTML artifact: Preview, Copy, Download, Edit code.
+        // Editable code with Resume/Start over is handled by enableCodeEdit below.
+        function attachArtifactActions(contentContainer, codeBlock) {
+            // Remove any pre-existing action bar so re-renders don't duplicate.
+            const existing = contentContainer.querySelector('.artifact-actions');
+            if (existing) existing.remove();
+
+            const btnContainer = document.createElement('div');
+            btnContainer.className = "artifact-actions mt-4 pt-4 border-t border-gray-600 flex flex-wrap gap-2";
+            const btnClass = "cursor-pointer bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded inline-flex items-center gap-2 transition-colors";
+            btnContainer.innerHTML = `
+                <button type="button" data-action="preview" class="${btnClass}">
+                    <i class="fa-solid fa-play"></i> Open in Preview
+                </button>
+                <button type="button" data-action="copy" class="${btnClass}">
+                    <i class="fa-solid fa-copy"></i> Copy code
+                </button>
+                <button type="button" data-action="download" class="${btnClass}">
+                    <i class="fa-solid fa-download"></i> Download
+                </button>
+                <button type="button" data-action="edit" class="${btnClass}">
+                    <i class="fa-solid fa-pen-to-square"></i> Edit code
+                </button>
+            `;
+            btnContainer.querySelector('[data-action="preview"]').addEventListener('click', () => {
+                window.openPreview(codeBlock);
+            });
+            btnContainer.querySelector('[data-action="copy"]').addEventListener('click', async (e) => {
+                const btn = e.currentTarget;
+                const original = btn.innerHTML;
+                try {
+                    await navigator.clipboard.writeText(codeBlock);
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied';
+                } catch (err) {
+                    console.error('[copy] failed', err);
+                    btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Copy failed';
+                }
+                setTimeout(() => { btn.innerHTML = original; }, 1500);
+            });
+            btnContainer.querySelector('[data-action="download"]').addEventListener('click', () => {
+                const blob = new Blob([codeBlock], { type: 'text/html;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `local-ai-app-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+            btnContainer.querySelector('[data-action="edit"]').addEventListener('click', () => {
+                enableCodeEdit(contentContainer, codeBlock);
+            });
+            contentContainer.appendChild(btnContainer);
+        }
+
+        // Switch the bubble into edit mode: show the raw code in a textarea with Resume / Start
+        // over / Cancel buttons. Resume saves the edit, replaces the code in the stored assistant
+        // message, and triggers a continuation generation from the edited content. Start over
+        // rolls back chatContext to before the user message that produced this response and
+        // re-runs that user message. Cancel reverts the bubble to its prior render.
+        function enableCodeEdit(contentContainer, codeBlock) {
+            if (isGenerating) {
+                console.warn('[edit] cannot edit while generation is in progress');
+                return;
+            }
+            // Snapshot for cancel.
+            const originalInnerHTML = contentContainer.innerHTML;
+
+            // Find the last assistant + the user message that preceded it.
+            let lastAssistantIdx = -1;
+            for (let i = chatContext.length - 1; i >= 0; i--) {
+                if (chatContext[i].role === 'assistant') { lastAssistantIdx = i; break; }
+            }
+            if (lastAssistantIdx === -1) return;
+            const originalAssistant = chatContext[lastAssistantIdx].content;
+            let lastUserIdx = -1;
+            for (let i = lastAssistantIdx - 1; i >= 0; i--) {
+                if (chatContext[i].role === 'user') { lastUserIdx = i; break; }
+            }
+
+            const wrapper = document.createElement('div');
+            wrapper.className = "code-edit-wrapper";
+            wrapper.innerHTML = `
+                <div class="text-xs text-gray-300 mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>Editing the code in this response. Resume to continue generation from the edited version; Start over to re-run the original prompt.</span>
+                </div>
+                <textarea class="code-edit-textarea w-full bg-[#0f0f10] border border-gray-600 text-gray-100 font-mono text-xs p-3 rounded resize-y focus:outline-none focus:ring-1 focus:ring-google-blue" rows="20" spellcheck="false"></textarea>
+                <div class="flex flex-wrap gap-2 mt-3">
+                    <button type="button" data-action="resume" class="cursor-pointer bg-google-blue hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded inline-flex items-center gap-2 transition-colors shadow-sm">
+                        <i class="fa-solid fa-forward"></i> Resume with edits
+                    </button>
+                    <button type="button" data-action="restart" class="cursor-pointer bg-google-yellow/80 hover:bg-google-yellow text-gray-900 text-xs px-3 py-1.5 rounded inline-flex items-center gap-2 transition-colors shadow-sm">
+                        <i class="fa-solid fa-rotate-left"></i> Start over
+                    </button>
+                    <button type="button" data-action="cancel" class="cursor-pointer bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded inline-flex items-center gap-2 transition-colors">
+                        <i class="fa-solid fa-xmark"></i> Cancel
+                    </button>
+                </div>
+            `;
+            const textarea = wrapper.querySelector('.code-edit-textarea');
+            textarea.value = codeBlock;
+            contentContainer.innerHTML = '';
+            contentContainer.appendChild(wrapper);
+            textarea.focus();
+
+            wrapper.querySelector('[data-action="cancel"]').addEventListener('click', () => {
+                contentContainer.innerHTML = originalInnerHTML;
+            });
+
+            wrapper.querySelector('[data-action="resume"]').addEventListener('click', () => {
+                const newCode = textarea.value;
+                // Replace the original code block content inside the assistant message. Use string
+                // replace (not regex) to preserve the surrounding ```html\n…``` fence markers.
+                const newAssistant = originalAssistant.replace(codeBlock, newCode);
+                chatContext[lastAssistantIdx] = { ...chatContext[lastAssistantIdx], content: newAssistant };
+                // Re-render the bubble with the edited content so streaming continues from a clean slate.
+                contentContainer.innerHTML = marked.parse(newAssistant);
+                // Same tail-anchor pattern as the Continue button — give the model an explicit
+                // marker of where to pick up, since the edit may have changed the boundary.
+                const tail = newAssistant.slice(-80);
+                const resumePrompt =
+                    `The code in your previous response has been edited. Here are the last ${tail.length} characters of the edited response:\n\n` +
+                    `[BEGIN TAIL]\n${tail}\n[END TAIL]\n\n` +
+                    `Continue the response starting at the very next character after [END TAIL]. Do NOT repeat or restate any of the tail above. Do NOT add preamble. Output only what comes next.`;
+                window.sendMessage(resumePrompt, {
+                    silent: true,
+                    continuation: true,
+                    mergeInto: { contentContainer, priorContent: newAssistant }
+                });
+            });
+
+            wrapper.querySelector('[data-action="restart"]').addEventListener('click', () => {
+                if (lastUserIdx === -1) {
+                    console.warn('[restart] no preceding user message to restart from');
+                    contentContainer.innerHTML = originalInnerHTML;
+                    return;
+                }
+                const userText = chatContext[lastUserIdx].content;
+                const userPlainText = typeof userText === 'string'
+                    ? userText
+                    : (Array.isArray(userText) ? userText.filter(p => p.type === 'text').map(p => p.text).join(' ') : '');
+                if (!userPlainText) {
+                    console.warn('[restart] could not extract text from user message');
+                    contentContainer.innerHTML = originalInnerHTML;
+                    return;
+                }
+                // Roll chatContext back to BEFORE the user message; sendMessage will re-add it.
+                chatContext = chatContext.slice(0, lastUserIdx);
+                // Remove the assistant bubble AND the user bubble that preceded it from the DOM, so
+                // sendMessage's re-add creates fresh bubbles below.
+                let bubbleRoot = contentContainer;
+                while (bubbleRoot && !bubbleRoot.classList.contains('ai-message')) {
+                    bubbleRoot = bubbleRoot.parentElement;
+                }
+                if (bubbleRoot) {
+                    const userBubble = bubbleRoot.previousElementSibling;
+                    bubbleRoot.remove();
+                    if (userBubble && !userBubble.id) userBubble.remove();
+                }
+                window.sendMessage(userPlainText);
+            });
         }
 
         // --- 5. CHAT GENERATION & MARKDOWN ---
@@ -952,7 +1251,14 @@
             // we're continuing from), so use the continuation-aware trimmer which protects the most
             // recent user/assistant pair, and dynamically allocate response budget based on how much
             // of the context window remains after the prompt is constructed.
+            //
+            // preserveLastTurn mode: same trim behaviour (keep most recent user/assistant pair) but
+            // normal response budget. Used when the new user message NEEDS the prior assistant
+            // content in context — e.g. "fix this error" prompts that reference code the model just
+            // wrote. Without this, small-budget models drop the code from context and produce
+            // generic advice instead of an actual fix.
             const isContinuation = options.continuation === true;
+            const preserveLastTurn = options.preserveLastTurn === true;
             let effectivePromptBudget = requestConfig.promptBudgetTokens;
             let effectiveMaxTokens = requestConfig.maxTokens;
 
@@ -975,6 +1281,15 @@
                     'roles:', chatContext.map(m => m.role).join(','),
                     'est prompt tokens:', actualPromptTokens,
                     'response budget:', effectiveMaxTokens);
+            } else if (preserveLastTurn) {
+                // Same protected-pair trim as continuation, but normal response budget.
+                chatContext = trimMessagesForContinuation(
+                    [...chatContext, { role: 'user', content: aiPayload }],
+                    effectivePromptBudget
+                );
+                console.log('[preserveLastTurn] msgs:', chatContext.length,
+                    'roles:', chatContext.map(m => m.role).join(','),
+                    'est prompt tokens:', estimateTokensForMessages(chatContext));
             } else {
                 chatContext = trimMessagesToFit(
                     [...chatContext, { role: 'user', content: aiPayload }],
@@ -1054,10 +1369,11 @@
                             }
 
                             // In merge mode, prepend prior content so the bubble shows one continuous response.
-                            // Strip <think>…</think> blocks (Qwen-style) and any spurious ```language
-                            // fence markers emitted inside an already-open code block (some models do
-                            // this mid-HTML, polluting both the render and the fence count).
-                            const visibleResponse = cleanSpuriousFences(stripThinkBlocks(fullResponse));
+                            // Strip <think>…</think>, collapse spurious mid-block ```language fences, and
+                            // (in merge mode) detect/trim boundary overlap or leading ```language markers
+                            // that the model emits when continuing.
+                            const baseClean = cleanSpuriousFences(stripThinkBlocks(fullResponse));
+                            const visibleResponse = isMerge ? cleanContinuationStart(priorRenderedContent, baseClean) : baseClean;
                             let renderText = priorRenderedContent + visibleResponse;
                             const openBlocks = (renderText.match(/```/g) || []).length;
                             if (openBlocks % 2 !== 0) renderText += '\n```';
@@ -1089,11 +1405,11 @@
                     );
                 }
 
-                // Strip <think>…</think> blocks AND collapse spurious mid-block ```language fences from
-                // what we keep — both stored history and the content used for code-block detection.
-                // Prior content was already cleaned on its own store, so a merged content = clean
-                // prior + clean new.
-                const cleanResponse = cleanSpuriousFences(stripThinkBlocks(fullResponse));
+                // Strip <think>…</think>, collapse spurious mid-block ```language fences, and (in
+                // merge mode) clean up the boundary the model produced when continuing. The
+                // resulting cleanResponse is what we both display and store in chatContext.
+                const baseClean = cleanSpuriousFences(stripThinkBlocks(fullResponse));
+                const cleanResponse = isMerge ? cleanContinuationStart(priorRenderedContent, baseClean) : baseClean;
 
                 // Update chatContext: in merge mode, replace the prior assistant message with the
                 // combined content and drop the user_continue we injected; otherwise push fresh.
@@ -1145,19 +1461,9 @@
                     }
 
                     if (codeBlock && isComplete) {
-                        // Complete HTML artifact: attach a manual re-open button and auto-open the preview.
-                        const btnContainer = document.createElement('div');
-                        btnContainer.className = "mt-4 pt-4 border-t border-gray-600";
-                        btnContainer.innerHTML = `
-                            <button type="button" class="cursor-pointer bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded inline-flex items-center gap-2 transition-colors">
-                                <i class="fa-solid fa-play"></i> Open App in Preview Canvas
-                            </button>
-                        `;
-                        btnContainer.querySelector('button').addEventListener('click', () => {
-                            window.openPreview(codeBlock);
-                        });
-                        contentContainer.appendChild(btnContainer);
-
+                        // Complete HTML artifact: attach the artifact-action bar (preview / copy /
+                        // download / edit) and auto-open the preview.
+                        attachArtifactActions(contentContainer, codeBlock);
                         window.openPreview(codeBlock);
                     }
 
@@ -1253,14 +1559,15 @@
 
         window.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'iframe-error') {
+                const errorContent = event.data.content;
+                // Dedupe within the current preview run — a loop throwing the same error every
+                // frame would otherwise spam the chat. Cleared on each openPreview call.
+                if (previewRunErrors.has(errorContent)) return;
+                previewRunErrors.add(errorContent);
+
                 const chatHistory = document.getElementById('chat-history');
                 const div = document.createElement('div');
                 div.className = 'flex gap-4 w-full md:max-w-[85%] mt-4';
-
-                // Hold the error content in a closure so the click handler doesn't have to deal
-                // with string-escaping nightmares (the previous inline onclick="…${safeErrorString}…"
-                // approach was failing silently when the error string contained anything tricky).
-                const errorContent = event.data.content;
 
                 div.innerHTML = `
                     <div class="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 flex items-center justify-center text-google-red text-xs shadow-md border border-red-900/50">
@@ -1269,24 +1576,31 @@
                     <div class="bg-red-900/20 text-red-200 border border-red-900/50 rounded-2xl rounded-tl-sm p-4 text-sm shadow-sm font-mono text-xs overflow-x-auto w-full">
                         <p class="whitespace-pre-wrap font-bold mb-1">Preview App Error Captured:</p>
                         <p class="whitespace-pre-wrap mb-3">${escapeHTML(errorContent)}</p>
-                        <button type="button" class="fix-error-btn cursor-pointer bg-red-900/50 hover:bg-red-900/80 text-white font-sans text-xs px-3 py-1.5 rounded transition-colors shadow-sm">
+                        <button type="button" class="fix-error-btn cursor-pointer bg-red-900/50 hover:bg-red-900/80 text-white font-sans text-xs px-3 py-1.5 rounded transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                             <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Ask AI to fix this
                         </button>
                     </div>
                 `;
                 const fixBtn = div.querySelector('.fix-error-btn');
                 fixBtn.addEventListener('click', () => {
-                    const inputEl = document.getElementById('chat-input');
-                    if (!inputEl) {
-                        console.error('[fix-error] chat-input not found');
+                    if (isGenerating || isRecovering) {
+                        console.warn('[fix-error] generation in progress, ignoring');
                         return;
                     }
-                    inputEl.value = `I got this error from the preview:\n\n${errorContent}\n\nCan you fix the code?`;
-                    if (typeof window.autoResize === 'function') window.autoResize(inputEl);
-                    inputEl.focus();
-                    // Move the caret to the end so Enter sends what the user expects.
-                    inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
-                    inputEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    fixBtn.disabled = true;
+                    fixBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Sending…';
+
+                    // Send directly (rather than populating the input) so we can pass the
+                    // preserveLastTurn option, which uses the continuation-aware trimmer to keep
+                    // the prior assistant message (containing the code) in chatContext. Without
+                    // this, models with small prompt budgets (e.g. Qwen3.5-9B at 1500 tokens) drop
+                    // the long code response from context and produce generic "check your code"
+                    // advice instead of actual fixes.
+                    const userMsg =
+                        `The HTML app from your previous response throws this error when I run it in the browser:\n\n` +
+                        errorContent +
+                        `\n\nLook at the actual code you provided in your previous response, identify the specific line(s) causing this error, and return the complete corrected HTML file in a single \`\`\`html block. Do NOT give generic advice — fix the real bug in YOUR code.`;
+                    window.sendMessage(userMsg, { preserveLastTurn: true });
                 });
 
                 chatHistory.appendChild(div);
