@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How the 1918 Flu Simulator Evolved</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        --ink: #17202a;
+        --muted: #617080;
+        --paper: #f7f4ee;
+        --panel: #fffdf8;
+        --line: #d9d2c4;
+        --blue: #2877a7;
+        --red: #b6463f;
+        --green: #2f7d57;
+        --amber: #c9872b;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        line-height: 1.55;
+      }
+
+      a {
+        color: #0d5d8e;
+        font-weight: 750;
+      }
+
+      header {
+        padding: clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem);
+        background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(247, 244, 238, 0.95));
+        border-bottom: 1px solid rgba(23, 32, 42, 0.12);
+      }
+
+      .wrap {
+        width: min(1120px, 100%);
+        margin: 0 auto;
+      }
+
+      .kicker {
+        margin: 0 0 0.35rem;
+        color: var(--red);
+        font-size: 0.78rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        max-width: 980px;
+        margin-bottom: 1rem;
+        font-size: clamp(2.1rem, 5vw, 4.4rem);
+        line-height: 0.98;
+      }
+
+      .lede {
+        max-width: 840px;
+        color: #314154;
+        font-size: clamp(1.05rem, 2vw, 1.28rem);
+      }
+
+      main {
+        padding: 1.25rem clamp(1rem, 4vw, 3rem) 4rem;
+      }
+
+      section {
+        width: min(1120px, 100%);
+        margin: 1.1rem auto;
+        border: 1px solid rgba(23, 32, 42, 0.12);
+        background: rgba(255, 253, 248, 0.82);
+        padding: clamp(1rem, 3vw, 1.6rem);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.8rem;
+      }
+
+      .card {
+        border-left: 4px solid var(--blue);
+        background: rgba(255, 255, 255, 0.62);
+        padding: 0.85rem;
+      }
+
+      .card h3 {
+        margin-bottom: 0.3rem;
+        font-size: 1rem;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .event {
+        display: grid;
+        grid-template-columns: 10rem minmax(0, 1fr);
+        gap: 1rem;
+        padding: 0.85rem 0;
+        border-top: 1px solid rgba(23, 32, 42, 0.1);
+      }
+
+      .event:first-child {
+        border-top: 0;
+      }
+
+      .event strong {
+        color: var(--blue);
+      }
+
+      figure {
+        margin: 1rem 0 0;
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 1px solid rgba(23, 32, 42, 0.14);
+        background: white;
+      }
+
+      figcaption {
+        margin-top: 0.45rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .two-up {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 1rem;
+        align-items: start;
+      }
+
+      .pill-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-top: 0.5rem;
+      }
+
+      .pill {
+        border: 1px solid rgba(23, 32, 42, 0.12);
+        background: rgba(255, 255, 255, 0.7);
+        padding: 0.3rem 0.48rem;
+        font-size: 0.84rem;
+        font-weight: 750;
+      }
+
+      .note {
+        border-left: 4px solid var(--amber);
+        background: rgba(201, 135, 43, 0.1);
+        padding: 0.85rem;
+      }
+
+      @media (max-width: 820px) {
+        .grid,
+        .two-up,
+        .event {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <p class="kicker">Design record</p>
+        <h1>How the 1918 Flu Simulator evolved</h1>
+        <p class="lede">
+          This page summarizes the conversation that shaped the static web app:
+          a public, classroom-friendly simulation of the 1918 influenza pandemic
+          with a global map, movement routes, counterfactual controls, historical sources,
+          graphs, and an optional OpenAI-powered question panel.
+        </p>
+        <div class="pill-list">
+          <span class="pill">Static single-page app</span>
+          <span class="pill">Public-domain map data</span>
+          <span class="pill">Historically grounded model</span>
+          <span class="pill">Ask panel with optional web search</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <h2>Original Goal</h2>
+        <p>
+          The project began with a request for a web page where the general public,
+          including high school students and younger learners, could interact with a
+          simulation of the 1918 flu. The desired experience was global, animated on
+          a world map, historically grounded, and able to compare origin hypotheses
+          and counterfactuals such as no World War I, a later war ending, and different
+          public-health policies.
+        </p>
+        <div class="grid">
+          <div class="card">
+            <h3>Map and Motion</h3>
+            <p>Show spread on a world map with ships, trains, and other movement routes.</p>
+          </div>
+          <div class="card">
+            <h3>Historical Grounding</h3>
+            <p>Use public sources, expose uncertainty, and link evidence from clickable UI elements.</p>
+          </div>
+          <div class="card">
+            <h3>Exploration</h3>
+            <p>Support play/pause, speed controls, counterfactual settings, and subpopulation graphs.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Evolution Timeline</h2>
+        <div class="timeline">
+          <div class="event">
+            <strong>1. Scope set</strong>
+            <p>
+              The first design decision was to build a static single-page app. The first version
+              used an educational network model: cities and regions as nodes, transport routes as
+              weighted links, and S/I/R/D groups for susceptible, infected, recovered, and dead.
+            </p>
+          </div>
+          <div class="event">
+            <strong>2. First prototype</strong>
+            <p>
+              The initial implementation added a canvas world map, origin selector, war and
+              public-health controls, clickable evidence panels, source links, and a graph of
+              model subpopulations.
+            </p>
+          </div>
+          <div class="event">
+            <strong>3. Scale corrected</strong>
+            <p>
+              Feedback revealed that the first graph values were too small and confusing.
+              The graph was changed to display global historical-scale estimates: the default
+              historical scenario ends near about 500 million infections and at least 50 million
+              deaths, while the local node model still drives the animation.
+            </p>
+          </div>
+          <div class="event">
+            <strong>4. Real map data</strong>
+            <p>
+              The rough hand-drawn land shapes were replaced with Natural Earth 1:110m
+              Admin 0 country boundaries, a public-domain map dataset.
+            </p>
+          </div>
+          <div class="event">
+            <strong>5. Graph refined</strong>
+            <p>
+              Susceptible was hidden by default because it overwhelmed the other series.
+              The graph gained wave bands, date labels along the x-axis, y-axis units, and
+              a deaths-per-month line so the wave pattern is easier to see.
+            </p>
+          </div>
+          <div class="event">
+            <strong>6. Animation tuned</strong>
+            <p>
+              Ship and train route markers were changed to smaller emoji vehicles. A bug
+              where vehicles appeared to jump and vanish was fixed by separating the route
+              animation clock from the timeline month-advance clock.
+            </p>
+          </div>
+          <div class="event">
+            <strong>7. Ask panel added</strong>
+            <p>
+              An optional OpenAI Responses API question panel was added. It can use a
+              user-provided API key and, when enabled, OpenAI web search to answer historical
+              data questions with citations and small SVG graphs.
+            </p>
+          </div>
+          <div class="event">
+            <strong>8. Conversation support</strong>
+            <p>
+              Follow-up questions were improved by keeping a short in-memory Ask history.
+              Markdown, citation markers, truncated SVGs, and common LaTeX formulas were
+              handled more cleanly in the answer renderer.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Current App</h2>
+        <div class="two-up">
+          <div>
+            <p>
+              The current simulator opens directly from <a href="index.html">index.html</a>.
+              It includes a global Natural Earth map, route animation, origin hypotheses,
+              war and public-health counterfactuals, clickable evidence panels, historical-scale
+              graphs, and an Ask panel.
+            </p>
+            <p>
+              The graph now grows as the simulation advances instead of revealing the entire
+              future immediately. June 1920 is treated as the end of the classroom run, not
+              a claim that influenza disappeared at that date.
+            </p>
+          </div>
+          <div class="note">
+            <strong>Important distinction:</strong>
+            The app is historically grounded, but it is not a statistical reconstruction.
+            Route weights, node populations, and counterfactuals are teaching assumptions
+            designed to make mechanisms visible.
+          </div>
+        </div>
+        <figure>
+          <img src="history-app-desktop.png" alt="Desktop screenshot of the 1918 flu simulator showing the map, controls, detail panel, graph, and Ask panel." />
+          <figcaption>Desktop screenshot of the current simulator.</figcaption>
+        </figure>
+        <figure>
+          <img src="history-app-mobile.png" alt="Mobile-width screenshot of the simulator controls and map." />
+          <figcaption>Mobile-width screenshot showing the responsive layout.</figcaption>
+        </figure>
+      </section>
+
+      <section>
+        <h2>Key Design Lessons</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Numbers need a scale story</h3>
+            <p>
+              The early node-scale counts were misleading. The current design separates
+              the internal educational model from global historical-scale display values.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Graphs need context</h3>
+            <p>
+              Showing only cumulative deaths hides wave timing. Adding monthly deaths,
+              wave bands, axis labels, and date ticks made the graph much more teachable.
+            </p>
+          </div>
+          <div class="card">
+            <h3>AI answers need good presentation</h3>
+            <p>
+              The Ask panel needed conversation memory, citation cleanup, plain-text math,
+              optional search, and safer handling of generated SVG.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Files</h2>
+        <p>The main project files are:</p>
+        <ul>
+          <li><code>index.html</code>: simulator UI</li>
+          <li><code>app.js</code>: model, rendering, interaction, and Ask logic</li>
+          <li><code>styles.css</code>: simulator styling</li>
+          <li><code>map-data.js</code>: generated Natural Earth country boundaries</li>
+          <li><code>favicon.svg</code>: app icon</li>
+          <li><code>README.md</code>: brief technical summary</li>
+          <li><code>project-history.html</code>: this design-history page</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
