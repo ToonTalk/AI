@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>1918 Influenza World Simulation</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="kicker">Historical model, not a forecast</p>
+        <h1>1918 Influenza World Simulation</h1>
+      </div>
+      <button id="sourcesButton" class="ghost-button" type="button">Sources & assumptions</button>
+    </header>
+
+    <main class="workspace">
+      <section class="controls-panel" aria-label="Simulation controls">
+        <div class="control-row primary-controls">
+          <button id="playPauseButton" class="icon-button play" type="button" aria-label="Play simulation">
+            <span id="playIcon" aria-hidden="true">▶</span>
+          </button>
+          <button id="restartButton" class="icon-button" type="button" aria-label="Restart simulation">
+            <span aria-hidden="true">↺</span>
+          </button>
+          <label class="field">
+            <span>Time</span>
+            <input id="timeSlider" type="range" min="0" max="29" value="0" />
+          </label>
+          <div class="date-readout">
+            <strong id="dateLabel">Jan 1918</strong>
+            <span id="waveLabel">Early reports and uncertainty</span>
+          </div>
+          <label class="field compact">
+            <span>Speed</span>
+            <input id="speedControl" type="range" min="0.1" max="2" value="0.5" step="0.1" />
+          </label>
+        </div>
+
+        <div class="control-grid">
+          <label class="field">
+            <span>Origin hypothesis</span>
+            <select id="originSelect">
+              <option value="kansas">Kansas / Camp Funston</option>
+              <option value="etaples">Étaples / Western Front</option>
+              <option value="china">Northern China / labor routes</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>War setting</span>
+            <select id="warSelect">
+              <option value="historical">Historical war end</option>
+              <option value="noWar">No world war</option>
+              <option value="laterWar">War continues into 1919</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Public-health timing</span>
+            <select id="policyTiming">
+              <option value="late">Late and uneven</option>
+              <option value="mixed">Earlier in some cities</option>
+              <option value="early">Early, layered response</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Policy strength</span>
+            <input id="policyStrength" type="range" min="0" max="100" value="35" />
+          </label>
+        </div>
+
+        <div class="toggle-row" aria-label="Counterfactual policy toggles">
+          <label><input id="portQuarantine" type="checkbox" /> Port quarantine</label>
+          <label><input id="schoolClosures" type="checkbox" /> Schools and gatherings</label>
+          <label><input id="maskUse" type="checkbox" /> Mask campaigns</label>
+          <label><input id="travelAdvisory" type="checkbox" /> Civilian travel advisories</label>
+        </div>
+      </section>
+
+      <section class="map-section" aria-labelledby="mapTitle">
+        <div class="section-heading">
+          <div>
+            <h2 id="mapTitle">Animated global spread</h2>
+            <p>Click a city, country marker, ship route, rail route, or the graph to inspect evidence and assumptions.</p>
+          </div>
+          <button class="ghost-button small" data-info-topic="movement" type="button">Why ships and trains?</button>
+        </div>
+        <div class="map-shell">
+          <canvas id="mapCanvas" width="1200" height="650" aria-label="World map simulation"></canvas>
+          <div class="map-legend" aria-hidden="true">
+            <span><i class="dot infected"></i> active outbreaks</span>
+            <span>🚢 ship or troopship</span>
+            <span>🚂 rail and land movement</span>
+            <span>🧳 labor and military route</span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="detail-panel" aria-live="polite">
+        <div class="detail-top">
+          <p class="kicker">Selected evidence</p>
+          <h2 id="detailTitle">Start with an origin hypothesis</h2>
+        </div>
+        <div id="detailBody" class="detail-body"></div>
+      </aside>
+
+      <section class="chart-section" aria-labelledby="chartTitle">
+        <div class="section-heading">
+          <div>
+            <h2 id="chartTitle">Subpopulations through time</h2>
+            <p>Values are global historical-scale estimates; small values appear as thousands, larger values as millions or billions.</p>
+          </div>
+          <button class="ghost-button small" data-info-topic="model" type="button">How the model works</button>
+        </div>
+        <div class="chart-controls" aria-label="Graph series controls">
+          <label><input id="showSusceptible" type="checkbox" /> Susceptible</label>
+          <label><input id="showInfected" type="checkbox" checked /> Infected</label>
+          <label><input id="showRecovered" type="checkbox" /> Recovered</label>
+          <label><input id="showDeaths" type="checkbox" checked /> Total deaths</label>
+          <label><input id="showMonthlyDeaths" type="checkbox" checked /> Deaths per month</label>
+        </div>
+        <div class="metrics-strip" id="metricsStrip"></div>
+        <svg id="chartSvg" role="img" aria-label="Line graph of susceptible, infected, recovered, and deaths"></svg>
+      </section>
+
+      <section class="ask-section" aria-labelledby="askTitle">
+        <div class="section-heading">
+          <div>
+            <h2 id="askTitle">Ask about this simulation</h2>
+            <p>Use your own OpenAI API key to ask classroom questions about the current month, settings, sources, and model assumptions.</p>
+          </div>
+        </div>
+        <div class="ask-grid">
+          <label class="field">
+            <span>OpenAI API key</span>
+            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="sk-..." />
+          </label>
+          <label class="field">
+            <span>Model</span>
+            <input id="modelInput" type="text" value="gpt-5.4-mini" />
+          </label>
+        </div>
+        <div class="ask-options">
+          <label><input id="allowWebSearch" type="checkbox" checked /> Allow web search for data and citations</label>
+        </div>
+        <p class="key-note">For a static page, the key is used only in this browser session and is never saved by the app. A hosted public version should use a small backend or ChatGPT app bridge instead of exposing a key in browser code.</p>
+        <label class="question-box">
+          <span>Your question</span>
+          <textarea id="questionInput" rows="4" placeholder="Why does the autumn wave get so severe?"></textarea>
+        </label>
+        <div class="ask-actions">
+          <button id="askButton" class="ghost-button" type="button">Ask</button>
+          <button id="clearAnswerButton" class="ghost-button" type="button">Clear</button>
+        </div>
+        <div id="answerBox" class="answer-box" aria-live="polite"></div>
+      </section>
+
+      <section class="source-section" id="sourcesPanel" aria-labelledby="sourcesTitle">
+        <div class="section-heading">
+          <div>
+            <h2 id="sourcesTitle">Sources and model assumptions</h2>
+            <p>The simulation is a historically grounded teaching model. It uses published estimates and route assumptions, not a complete reconstruction.</p>
+          </div>
+        </div>
+        <div id="sourceList" class="source-list"></div>
+      </section>
+    </main>
+
+    <script src="map-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
