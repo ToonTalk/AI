@@ -1090,6 +1090,7 @@ function renderNodeDetail(node) {
   const settings = readSettings();
   const warText = settings.war === "laterWar" ? "continued-war" : settings.war === "noWar" ? "no-war" : "historical-war";
   const policyText = `${controls.policyTiming.options[controls.policyTiming.selectedIndex].text.toLowerCase()}, ${Math.round(settings.policyStrength * 100)}% policy strength`;
+  const phaseText = describeWaveForDetail(wave);
   controls.detailTitle.textContent = `${node.name}, ${node.country}`;
   controls.detailBody.innerHTML = `
     <div class="pill-row">
@@ -1099,10 +1100,21 @@ function renderNodeDetail(node) {
     </div>
     <p>${node.historical}</p>
     <p><strong>Country data:</strong> ${node.countryData}</p>
-    <p><strong>Model role:</strong> this marker stands for a regional node centered on ${node.name}, not just the modern city limits. Its starting node population is ${formatMillions(node.population)} inside the transport-network model; the graph then rescales the whole model to global historical estimates.</p>
-    <p><strong>Wave multiplier:</strong> ${wave.name} changes transmissibility by ${wave.transmission.toFixed(2)}x and mortality pressure by ${wave.mortality.toFixed(2)}x. <strong>Scenario multipliers:</strong> the current ${warText} and public-health settings (${policyText}) adjust crowding, transport, transmission, and medical stress.</p>
+    <p><strong>What this marker means:</strong> ${node.name} represents a regional model point centered on this place, not just the modern city boundary. The model uses a starting local population of ${formatMillions(node.population)} here, then rescales the graph to historical global estimates.</p>
+    <p><strong>Current phase:</strong> ${phaseText}</p>
+    <p><strong>Scenario effects:</strong> The current ${warText} setting and public-health choices (${policyText}) change how much people move, how crowded conditions are, how much transmission is reduced, and how strained care is.</p>
+    <p><strong>Model details:</strong> for this month the simulation applies transmission ${wave.transmission.toFixed(2)}x and mortality-pressure ${wave.mortality.toFixed(2)}x compared with its baseline.</p>
     <p>${sourceLinks(node.sources)}</p>
   `;
+}
+
+function describeWaveForDetail(wave) {
+  if (wave.wave === 1) return "The model is in the first spring 1918 wave, which is shown as widespread but usually less deadly than the later autumn wave.";
+  if (wave.wave === 2) return "The model is in the autumn 1918 wave, treated here as the deadliest global wave.";
+  if (wave.wave === 3) return "The model is in the winter-spring 1919 wave, still serious but generally lower than the autumn 1918 peak in this global classroom model.";
+  if (wave.wave === 4) return "The model is showing smaller regional recurrences into 1920 rather than a single global peak.";
+  if (wave.name.includes("tail")) return "The classroom run is tapering off. June 1920 is just where this simulation stops, not a claim that influenza disappeared.";
+  return "The model is in an early or lower-pressure period before the main global waves dominate the graph.";
 }
 
 function renderCountryDetail(countryName) {
