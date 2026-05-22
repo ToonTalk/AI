@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIT AI Lab Archive Explorer: Public Project Summary & History</title>
+  <!-- Google Fonts for Retro-Modern Aesthetic -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Design Tokens matching the ITS Green Phosphor Theme */
+    :root {
+      --bg-deep: #050705;
+      --bg-dark: #0a0e0a;
+      --bg-panel: #111611;
+      --bg-panel-hover: #172017;
+      --bg-active: #1d2a1d;
+      
+      --border-dim: #1e281e;
+      --border-medium: #2d3f2d;
+      --border-bright: #39ff14;
+      
+      --text-bright: #39ff14; /* Neon green */
+      --text-primary: #d5ebd5; /* Off-white green */
+      --text-secondary: #7fa47f; /* Muted green */
+      --text-dark: #060a06;
+      
+      --amber: #ffb000;
+      --font-header: 'Outfit', 'Inter', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'Fira Code', 'Courier New', monospace;
+      
+      --shadow-glow: 0 0 20px rgba(57, 255, 20, 0.12);
+      --shadow-inset: inset 0 0 10px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Modern Theme CSS Variable Overrides */
+    body.modern {
+      --bg-deep: #f1f5f9;
+      --bg-dark: #ffffff;
+      --bg-panel: #f8fafc;
+      --bg-panel-hover: #f1f5f9;
+      --bg-active: #e2e8f0;
+      
+      --border-dim: #e2e8f0;
+      --border-medium: #cbd5e1;
+      --border-bright: #2563eb;
+      
+      --text-bright: #2563eb; /* Vibrant modern blue */
+      --text-primary: #1e293b; /* Dark slate */
+      --text-secondary: #64748b; /* Muted gray */
+      --text-dark: #ffffff;
+      
+      --amber: #d97706;
+      
+      --shadow-glow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      --shadow-inset: inset 0 0 5px rgba(0, 0, 0, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 40px 20px;
+      overflow-y: scroll;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* Subtle CRT Screen Glow Overlay (Disabled in Modern Mode) */
+    body::before {
+      content: " ";
+      display: block;
+      position: fixed;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      z-index: 1000;
+      background-size: 100% 3px, 3px 100%;
+      pointer-events: none;
+    }
+
+    body.modern::before {
+      display: none;
+    }
+
+    /* Container */
+    .container {
+      max-width: 900px;
+      width: 100%;
+      background-color: var(--bg-dark);
+      border: 2px solid var(--border-medium);
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: var(--shadow-glow);
+      position: relative;
+      transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    /* Retro Header Block */
+    .memo-header {
+      border-bottom: 2px dashed var(--border-medium);
+      padding-bottom: 30px;
+      margin-bottom: 30px;
+      font-family: var(--font-mono);
+      transition: border-color 0.3s ease;
+    }
+
+    .memo-title {
+      font-family: var(--font-header);
+      font-size: 2.2rem;
+      color: var(--text-bright);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      transition: color 0.3s ease;
+    }
+
+    .memo-title .badge {
+      font-size: 0.9rem;
+      background-color: var(--bg-active);
+      color: var(--text-bright);
+      border: 1px solid var(--border-bright);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      transition: all 0.3s ease;
+    }
+
+    .memo-meta-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px 20px;
+      font-size: 0.95rem;
+    }
+
+    .memo-label {
+      color: var(--text-secondary);
+      font-weight: bold;
+      text-transform: uppercase;
+      transition: color 0.3s ease;
+    }
+
+    .memo-value {
+      color: var(--text-primary);
+      transition: color 0.3s ease;
+    }
+
+    /* Interactive Pagination & Style Controls */
+    .page-nav {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 30px;
+      width: 100%;
+    }
+
+    .nav-btn {
+      background-color: var(--bg-panel);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-medium);
+      padding: 10px 20px;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-btn:hover {
+      background-color: var(--bg-panel-hover);
+      color: var(--text-primary);
+      border-color: var(--text-secondary);
+    }
+
+    .nav-btn.active {
+      background-color: var(--bg-active);
+      color: var(--text-bright);
+      border-color: var(--border-bright);
+      box-shadow: 0 0 10px rgba(57, 255, 20, 0.2);
+    }
+
+    body.modern .nav-btn.active {
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+    }
+
+    /* Style Toggle Button custom color */
+    .theme-toggle-btn {
+      margin-left: auto;
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    
+    .theme-toggle-btn:hover {
+      border-color: var(--text-bright);
+      color: var(--text-bright);
+    }
+
+    /* Pages Container & Animation */
+    .page-content {
+      display: none;
+      animation: fadeIn 0.4s ease-out forwards;
+    }
+
+    .page-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Sections and Content Layout */
+    h2 {
+      font-family: var(--font-header);
+      color: var(--text-bright);
+      font-size: 1.5rem;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      border-bottom: 1px solid var(--border-dim);
+      padding-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: color 0.3s ease, border-color 0.3s ease;
+    }
+
+    h3 {
+      font-family: var(--font-header);
+      color: var(--text-primary);
+      font-size: 1.15rem;
+      margin-top: 20px;
+      margin-bottom: 8px;
+      transition: color 0.3s ease;
+    }
+
+    p {
+      margin-bottom: 16px;
+      color: var(--text-primary);
+      transition: color 0.3s ease;
+    }
+
+    ul, ol {
+      margin-bottom: 20px;
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    li strong {
+      color: var(--text-bright);
+      transition: color 0.3s ease;
+    }
+
+    /* Highlight card & Alerts */
+    .highlight-card {
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-medium);
+      border-left: 4px solid var(--border-bright);
+      padding: 20px;
+      border-radius: 8px;
+      margin: 25px 0;
+      transition: all 0.3s ease;
+    }
+
+    .highlight-card p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Code Blocks */
+    code {
+      font-family: var(--font-mono);
+      background-color: var(--bg-panel);
+      color: var(--text-bright);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      border: 1px solid var(--border-dim);
+      transition: all 0.3s ease;
+    }
+
+    pre {
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 15px 0 25px 0;
+      transition: all 0.3s ease;
+    }
+
+    pre code {
+      border: none;
+      padding: 0;
+      background: none;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: var(--text-primary);
+      transition: color 0.3s ease;
+    }
+
+    pre code .keyword {
+      color: var(--amber);
+      font-weight: 500;
+    }
+
+    pre code .comment {
+      color: var(--text-secondary);
+      font-style: italic;
+    }
+
+    pre code .symbol {
+      color: var(--text-bright);
+    }
+
+    /* File List Grid */
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .file-card {
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-medium);
+      border-radius: 6px;
+      padding: 15px;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .file-card:hover {
+      border-color: var(--border-bright);
+      background-color: var(--bg-panel-hover);
+      box-shadow: 0 0 10px rgba(57, 255, 20, 0.05);
+    }
+
+    body.modern .file-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .file-card .file-name {
+      font-family: var(--font-mono);
+      color: var(--text-bright);
+      font-weight: bold;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.3s ease;
+    }
+
+    .file-card .file-desc {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      flex-grow: 1;
+      transition: color 0.3s ease;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 40px;
+      border-top: 1px solid var(--border-medium);
+      padding-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      width: 100%;
+      max-width: 900px;
+      transition: all 0.3s ease;
+    }
+
+    .footer-host {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .footer-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--text-bright);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--text-bright);
+      transition: all 0.3s ease;
+    }
+
+    /* Print styling to map to 2 distinct pages */
+    @media print {
+      body {
+        background-color: #fff;
+        color: #000;
+        padding: 0;
+      }
+      body::before {
+        display: none;
+      }
+      .container {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      .page-nav {
+        display: none;
+      }
+      .page-content {
+        display: block !important;
+        page-break-after: always;
+      }
+      .page-content:last-child {
+        page-break-after: avoid;
+      }
+      h2 {
+        color: #000;
+        border-bottom: 1px solid #ccc;
+      }
+      .highlight-card {
+        border: 1px solid #ccc;
+        background: #f9f9f9;
+        color: #333;
+      }
+      code, pre {
+        background: #f5f5f5;
+        color: #000;
+        border: 1px solid #ddd;
+      }
+      .file-card {
+        border: 1px solid #ccc;
+        background: #fff;
+      }
+      .file-card .file-name {
+        color: #000;
+      }
+      footer {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Header Block -->
+    <header class="memo-header">
+      <div class="memo-title">
+        MIT AI Lab Archive memo (Public)
+        <span class="badge">MEMO NO. 1979-P</span>
+      </div>
+      <div class="memo-meta-grid">
+        <div class="memo-label">To:</div>
+        <div class="memo-value">Ken Kahn (TOONT) & Public Readers</div>
+        <div class="memo-label">From:</div>
+        <div class="memo-value">Antigravity AI Pair Programmer</div>
+        <div class="memo-label">Date:</div>
+        <div class="memo-value">May 22, 2026</div>
+        <div class="memo-label">Subject:</div>
+        <div class="memo-value">Reincarnating the Director & Ani Lisp Archive (Public Release)</div>
+      </div>
+    </header>
+
+    <!-- Page Selector & Theme Selector Controls -->
+    <nav class="page-nav">
+      <button class="nav-btn active" id="btn-page1" onclick="showPage(1)">
+        <span>📄</span> Page 1: Reincarnated Applications
+      </button>
+      <button class="nav-btn" id="btn-page2" onclick="showPage(2)">
+        <span>🔍</span> Page 2: Historical Discoveries
+      </button>
+      <button class="nav-btn theme-toggle-btn" id="btn-theme-toggle" onclick="toggleTheme()">
+        <span>💡</span> Modern Style
+      </button>
+    </nav>
+
+    <!-- ==================== PAGE 1: REINCARNATED APPLICATIONS ==================== -->
+    <article id="page-1" class="page-content active">
+      <p>
+        This document outlines the reconstruction of Ken Kahn's <strong>MIT Artificial Intelligence Laboratory (1975–1981)</strong> Lisp directory backups.
+        The system is running as a shareable web application that acts both as a Lisp source catalog and an in-browser interpreter for the Actor languages designed at MIT.
+      </p>
+
+      <h2>🎛️ The Shareable Public Application</h2>
+      <p>
+        This version of the application (served from <code>public/index.html</code>) is connected to a stripped database (<code>public/mit_archive_public.json</code>) 
+        containing **only the 180 Lisp files and simulators**. Any personal correspondence, emails, letters, and draft papers have been removed from the files and code.
+      </p>
+
+      <h2>🎨 Refined User Interface & Features</h2>
+      <p>
+        The public application leverages the custom green phosphor ITS (Incompatible Timesharing System) terminal aesthetic:
+      </p>
+      <div class="file-grid">
+        <div class="file-card">
+          <div class="file-name">💾 Lisp Code Descriptions</div>
+          <div class="file-desc">Each file in the Lisp library is annotated with a clear 1-2 sentence description explaining its role in the system, replacing raw files or technical headers.</div>
+        </div>
+        <div class="file-card">
+          <div class="file-name">🖥️ ITS Terminal Aesthetic</div>
+          <div class="file-desc">The interface uses monospace scanlines, custom glowing indicators, and simulated logins mimicking a PDP-10 terminal console.</div>
+        </div>
+      </div>
+
+      <h2>📈 Evolution from the First Version</h2>
+      <p>
+        The application underwent a significant evolution to reach its current state, transforming from a raw data repository into a highly interactive simulator:
+      </p>
+      <ol>
+        <li>
+          <strong>Phase 1: Raw Ingestion</strong>: The first iteration focused on parsing the PDP-10 directory backups. It presented simple, raw text listings of files with various corruptions, including duplicate emails, truncated letters, and papers filled with formatting artifacts (such as lines starting with control characters and comma-delimited tokens).
+        </li>
+        <li>
+          <strong>Phase 2: Database Cleaning & Repair</strong>: We introduced custom Python extractors that resolved address and recipient inconsistencies in the letter files, de-duplicated the email corpus, and repaired line wraps and spacing in draft documents.
+        </li>
+        <li>
+          <strong>Phase 3: Restoring Simulators (Director & ANI)</strong>: The project evolved from static text viewing to dynamic execution. We wrote a Javascript interpreter for your parallel Actor-based programming language, <em>Director</em>, which animates geometric shape actors. We then integrated <em>ANI</em>, the Cinderella constraint solver, by mapping the character specifications (Cinderella, the Prince, the Stepmother, the Stepsisters) to concurrent visual animations, and corrected the actor database to include the <em>Fairy Godmother</em>.
+        </li>
+        <li>
+          <strong>Phase 4: Dual-App Splitting & Code-level Descriptions</strong>: Finally, we split the application into a private developer edition and a clean public-facing Lisp workspace. We enriched the library search by writing 1-2 sentence summaries for all 180 Lisp files, providing historical context rather than showing raw code headers.
+        </li>
+      </ol>
+
+      <h2>🎬 The Director & ANI Simulators</h2>
+      <p>
+        We built an interactive browser-based runtime that executes your 1970s parallel animation language, <strong>Director</strong>, and its constraint-based story planner, <strong>ANI</strong>:
+      </p>
+      <div class="highlight-card">
+        <h3>Director Scheduler & Graphics</h3>
+        <p>
+          Visual items are represented on canvas as solid geometric shapes: a green circle (Cinderella), a cyan triangle (Prince), a red square (Stepmother), and magenta diamonds (Stepsisters).
+          The engine interprets concurrent commands such as <code>TELL</code>, <code>ASK</code>, <code>GO</code>, <code>ROTATE</code>, <code>SCALE</code>, and <code>MOVE</code>.
+        </p>
+        <h3>ANI: Cinderella Constraint Solver</h3>
+        <p>
+          Users can select individual planned scenes (e.g., <em>Kept-Apart</em>, <em>Meeting</em>, <em>Justice</em>) or run the entire movie.
+          The cast includes the <strong>Fairy Godmother</strong> (represented by a yellow star), running concurrently alongside other actors.
+        </p>
+        <h3>Original Code Inspector</h3>
+        <p>
+          You can toggle a split-panel inside the simulator to read the original MacLisp source code files that powered these engines at MIT, including <code>panim.lisp</code>, <code>ani.lisp</code>, and <code>diagrm.lisp</code>.
+        </p>
+      </div>
+    </article>
+
+    <!-- ==================== PAGE 2: HISTORICAL DISCOVERIES ==================== -->
+    <article id="page-2" class="page-content">
+      <p>
+        In addition to system extraction, our research uncovered crucial historical details about Ken Kahn's programming activities at MIT around 1979.
+      </p>
+
+      <h2>🐢 Turtle Terminal (TT2500) Logo Code Recovery</h2>
+      <p>
+        We successfully identified and recovered the 1979 Logo drawing procedures written for Marvin Minsky's <strong>TT2500 Turtle Terminal</strong> (a vector-based graphical terminal in the AI Lab):
+      </p>
+      <ul>
+        <li>
+          <strong>File <code>2500.1</code></strong>: This file contains the Logo drawing routines written by Ken Kahn, including procedures like <code>TO PAR</code>, <code>TO MSF</code>, <code>TO FACE</code>, <code>TO LIN</code>, and <code>TO LINES</code> to control the terminal's vectors.
+        </li>
+        <li>
+          <strong>Calibration Logs</strong>: File <code>film.3</code> refers to filming procedures, discussing refresh rate flicker calibrations compared against the TT2500 screen.
+        </li>
+      </ul>
+
+      <div class="highlight-card">
+        <h3>Logo Drawing Procedures in <code>2500.1</code></h3>
+        <pre><code><span class="comment">; Sample of Ken Kahn's 1979 TT2500 Logo Procedures</span>
+(<span class="keyword">TO</span> PAR
+  (SETQ S (<span class="keyword">ASK</span> TURTLE 'STATE))
+  (<span class="keyword">ASK</span> TURTLE 'HEADING 0)
+  (LINES)
+  (<span class="keyword">ASK</span> TURTLE 'STATE S))
+
+(<span class="keyword">TO</span> LINES
+  (LIN 100. 150. -120.)
+  (LIN 100. 50. -60.)
+  (LIN 100. 150. -120.)
+  (LIN 100. 50. -60.))</code></pre>
+      </div>
+
+      <h2>🔍 The "TT3500" Mystery Solved</h2>
+      <p>
+        Our codebase research determined that <strong>no physical "TT3500" terminal or computer existed</strong> in the AI Lab.
+      </p>
+      <p>
+        Instead, the "3500" value originates from the MacLisp memory pre-allocation header in the Logo initialization files (specifically <code>llogo.(init)</code>).
+        To optimize MacLisp performance on the ITS (Incompatible Timesharing System) PDP-10, the system manually pre-allocated pages of memory:
+      </p>
+      <pre><code><span class="comment">; MacLisp page allocation config in llogo.(init)</span>
+(alloc '(list (35000 45000 .25)
+        fixnum (2000 3000 .1)
+        flonum (1000 2000 .1)
+        symbol (3000 4500 .2)
+        array (1500 2000 .1)))</code></pre>
+      <p>
+        The instruction <code>(35000 45000 .25)</code> instructed the MacLisp garbage collector to allocate 35,000 active nodes for lists (with a limit of 45,000 and 25% trigger ratio).
+        This parameter value was colloquially referred to as the "35000" allocation header, which eventually became remembered as the "TT3500".
+      </p>
+
+      <h2>🛠️ Technical Architecture Diagram</h2>
+      <pre><code>
++--------------------------------------------------------+
+|            PUBLIC MIT AI LAB ARCHIVE RECOVERY          |
++--------------------------------------------------------+
+                           |
+                           v
+            [ mit_archive_extractor.py ]
+                           |
+                           v (Filter: Lisp Only)
+             [ mit_archive_public.json ]
+                           |
+                           v
+             [ public/index.html (app.js) ]
+              (Public Shareable Explorer)
+                           |
+                           v
+      +--------------------+--------------------+
+      |                                         |
+      v                                         v
+ [ Lisp Code Catalog ]                 [ Director Canvas Sim ]
+ Browsable list of 180 files           Runs interactive ANI and
+ annotated with descriptions           Director actor animation.
+      </code></pre>
+    </article>
+
+    <!-- Footer block -->
+    <footer>
+      <span>ITS Status: EXITED CLEANLY</span>
+      <div class="footer-host">
+        <span class="footer-dot"></span>
+        <span>CONNECTED: MC.LCS.MIT.EDU</span>
+      </div>
+      <span>SYS: PDP-10 // KA10</span>
+    </footer>
+
+  </div>
+
+  <script>
+    function showPage(pageNum) {
+      // Toggle active states on buttons
+      document.getElementById('btn-page1').classList.toggle('active', pageNum === 1);
+      document.getElementById('btn-page2').classList.toggle('active', pageNum === 2);
+
+      // Toggle active states on articles
+      document.getElementById('page-1').classList.toggle('active', pageNum === 1);
+      document.getElementById('page-2').classList.toggle('active', pageNum === 2);
+    }
+
+    function toggleTheme() {
+      const isModern = document.body.classList.toggle('modern');
+      const toggleBtn = document.getElementById('btn-theme-toggle');
+      if (isModern) {
+        toggleBtn.innerHTML = '<span>📟</span> Retro Style';
+      } else {
+        toggleBtn.innerHTML = '<span>💡</span> Modern Style';
+      }
+    }
+  </script>
+</body>
+</html>
