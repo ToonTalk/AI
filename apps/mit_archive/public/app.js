@@ -1502,35 +1502,23 @@ TO FAN :T :R :I :S1 :S2 :D1 :D2
 END
 
 TO CLOCK
-FACE 12
-HOUR
-MINUTE
-SECOND
+FACE 12 30
+HAND 1 / 3600 60
+HAND 1 / 60 90
+HAND 1 100
 END
 
-TO FACE :N
+TO FACE :N :ANGLE
 10 IF :N = 0 THEN STOP
-20 RT 30 PU FD 95 PD FD 5 PU BK 100
-30 FACE :N - 1
+20 RT :ANGLE PU FD 95 PD FD 5 PU BK 100
+30 FACE :N - 1 :ANGLE
 END
 
-TO HOUR
+TO HAND :SPIN :SIZE
 HM
 PD
-SPIN 1 / 3600
-FD 60
-END
-
-TO MINUTE
-HM
-SPIN 1 / 60
-FD 90
-END
-
-TO SECOND
-HM
-SPIN 1
-FD 100
+SPIN :SPIN
+FD :SIZE
 END
 `;
  
@@ -2054,11 +2042,12 @@ class LogoVM {
 const PROC_DEFAULTS = {
   'PAR':   [ { name: ':L', min: 1, max: 200, val: 80, step: 1 }, { name: ':S', min: -10, max: 10, val: 1.5, step: 0.1 }, { name: ':ANGLE', min: -180, max: 180, val: 80, step: 1 }, { name: ':COUNT', min: 1, max: 500, val: 150, step: 1 } ],
   'MSF':   [ { name: ':MV', min: -10, max: 10, val: 0.8, step: 0.1 }, { name: ':SP', min: -10, max: 10, val: 0.4, step: 0.1 }, { name: ':FD', min: 1, max: 100, val: 15, step: 1 }, { name: ':COUNT', min: 1, max: 500, val: 120, step: 1 }, { name: ':FD.INC', min: -5, max: 5, val: 0.5, step: 0.1 } ],
-  'FACE':  [ { name: ':N', min: 1, max: 100, val: 12, step: 1 } ],
+  'FACE':  [ { name: ':N', min: 1, max: 100, val: 12, step: 1 }, { name: ':ANGLE', min: -180, max: 180, val: 30, step: 1 } ],
   'LIN':   [ { name: ':S', min: -20, max: 20, val: 4, step: 0.5 }, { name: ':S2', min: -20, max: 20, val: -4, step: 0.5 }, { name: ':D1', min: 1, max: 200, val: 60, step: 1 }, { name: ':D2', min: 1, max: 200, val: 60, step: 1 } ],
   'LINES': [ { name: ':RT', min: -180, max: 180, val: 40, step: 1 }, { name: ':I', min: -20, max: 20, val: 2, step: 0.5 }, { name: ':T', min: 1, max: 500, val: 120, step: 1 } ],
   'FOO':   [ { name: ':I', min: 1, max: 100, val: 5, step: 1 }, { name: ':INC', min: -5, max: 5, val: 1, step: 0.1 }, { name: ':SP', min: -5, max: 5, val: 0.5, step: 0.05 } ],
   'FAN':   [ { name: ':T', min: 1, max: 500, val: 45, step: 1 }, { name: ':R', min: -180, max: 180, val: 10, step: 1 }, { name: ':I', min: -20, max: 20, val: 5, step: 0.5 }, { name: ':S1', min: -20, max: 20, val: 4, step: 0.5 }, { name: ':S2', min: -20, max: 20, val: -4, step: 0.5 }, { name: ':D1', min: 1, max: 200, val: 60, step: 1 }, { name: ':D2', min: 1, max: 200, val: 60, step: 1 } ],
+  'HAND':  [ { name: ':SPIN', min: -10, max: 10, val: 1, step: 0.1 }, { name: ':SIZE', min: 1, max: 200, val: 100, step: 1 } ],
   'CLOCK': []
 };
 
@@ -2241,12 +2230,48 @@ function initLogoSimulator() {
     }
   }
 
-  function updateCodeBlock(procName) {
-    const proc = logoVM.procedures[procName];
-    if (proc) {
-      codeEditor.value = proc.rawLines.join('\n');
-      codeTitle.textContent = `PROCEDURE: ${procName}`;
+  function getProcedureDependencies(procName) {
+    const visited = new Set();
+    const queue = [procName.toUpperCase()];
+    const result = [];
+    
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (visited.has(current)) continue;
+      visited.add(current);
+      
+      const proc = logoVM.procedures[current];
+      if (!proc) continue;
+      
+      result.push(current);
+      
+      const traverse = (cmds) => {
+        for (const cmd of cmds) {
+          if (cmd.type === 'call') {
+            const callee = cmd.name.toUpperCase();
+            if (logoVM.procedures[callee] && !visited.has(callee) && !queue.includes(callee)) {
+              queue.push(callee);
+            }
+          } else if (cmd.type === 'if') {
+            traverse(cmd.thenPart || []);
+            traverse(cmd.elsePart || []);
+          }
+        }
+      };
+      traverse(proc.body);
     }
+    return result;
+  }
+
+  function updateCodeBlock(procName) {
+    const deps = getProcedureDependencies(procName);
+    const codeBlocks = deps.map(name => {
+      const proc = logoVM.procedures[name];
+      return proc ? proc.rawLines.join('\n') : '';
+    }).filter(Boolean);
+    
+    codeEditor.value = codeBlocks.join('\n\n');
+    codeTitle.textContent = `PROCEDURE: ${procName}`;
   }
 
   // Dropdown Change Handler
