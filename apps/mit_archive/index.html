@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MIT AI Lab Archive Explorer & Director Simulator</title>
+  <link rel="icon" href="favicon.png" type="image/png">
   <!-- Google Fonts for Retro-Modern Aesthetic -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -61,6 +62,9 @@
           <ul>
             <li class="nav-item" data-tab="director">
               <span class="nav-icon">🐢</span> Director Simulator
+            </li>
+            <li class="nav-item" data-tab="logo">
+              <span class="nav-icon">📟</span> TT2500 Logo Sim
             </li>
           </ul>
         </div>
@@ -245,7 +249,21 @@
               </div>
             </div>
 
-            <!-- Card 5: Project History & Summary Memo -->
+            <!-- Card 5: Turtle Terminal (TT2500) -->
+            <div class="details-section">
+              <h2>📟 Marvin Minsky's Turtle Terminal (TT2500)</h2>
+              <p>The <strong>Turtle Terminal (TT2500)</strong> was a custom vector graphics terminal designed by Marvin Minsky at the MIT AI Lab in the early 1970s. Rather than using raster scanlines, it drew using continuous vector strokes on a dedicated CRT display. Named for its target retail price of $2,500, the terminal featured a 16-bit processor built from discrete TTL logic, though limited control store memory required it to run as a remote satellite display terminal linked to host computers like the PDP-11 or PDP-10.</p>
+              <p>What makes the TT2500 ontologically distinct from standard Logo is its display model: the terminal does not deposit static ink trails. Instead, Danny Hillis wrote microcode that refreshes the CRT screen dozens of times per second by interpreting a **dynamic display list**. Commands like <code>FD</code> and <code>RT</code> deposit <em>static geometry</em> into this list. In contrast, <code>SPIN</code> (angular rotation velocity) and <code>MOVE</code> (translation velocity) define *velocities* that the hardware refresh loop continuously increments on every pass.</p>
+              <p>Because motion composes through nested coordinate frames, recursive procedures automatically stack these frames like a spinning plate mounted on another spinning plate. This allows extremely simple recursive shapes to turn into complex, articulated kinematic mechanisms—causing segments to dynamically counter-rotate, slide, and unfurl on screen.</p>
+              <p>You can read the original drawing procedures you wrote in 1979 in the Lisp Source listing, or load them directly into our vector CRT simulator to experiment with these dynamic, nested coordinate frames!</p>
+              <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button class="btn btn-primary" id="go-to-logo-btn">Launch Logo Simulator</button>
+                <a href="https://github.com/larsbrinkhoff/tt2500-raw-data" target="_blank" class="btn btn-secondary" style="text-decoration: none; display: inline-block; text-align: center;">View Hardware Repo (GitHub)</a>
+                <a href="https://gunkies.org/wiki/Turtle_Terminal" target="_blank" class="btn btn-secondary" style="text-decoration: none; display: inline-block; text-align: center;">View Gunkies Wiki Article</a>
+              </div>
+            </div>
+
+            <!-- Card 6: Project History & Summary Memo -->
             <div class="details-section">
               <h2>📄 Project Summary & Historical Report Memo</h2>
               <p>During this recovery process, we uncovered key historical facts and refined the user experience. You can read a detailed 2-page academic report outlining our findings:</p>
@@ -452,6 +470,148 @@
               </div>
             </div>
 
+          </div>
+        </section>
+
+        <!-- ==================== TT2500 LOGO SIMULATOR TAB ==================== -->
+        <section id="tab-logo" class="tab-content">
+          <div class="director-workspace">
+            
+            <!-- Visual Canvas and Controls -->
+            <div class="director-main">
+              <div class="canvas-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <button class="btn btn-secondary btn-sm btn-back-to-dashboard-logo" id="btn-back-to-dashboard-logo">⬅ Back to Dashboard</button>
+                  <h2>📟 Turtle Terminal (TT2500) Logo Simulator</h2>
+                </div>
+                <div class="canvas-status" id="logo-status">IDLE</div>
+              </div>
+              <div class="canvas-container">
+                <div class="crt-frame">
+                  <canvas id="logo-canvas" width="760" height="420"></canvas>
+                  <div class="crt-overlay"></div>
+                </div>
+              </div>
+              
+              <div class="logo-controls-grid" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; margin-top: 15px;">
+                <!-- Left: Procedure Selection & Code View -->
+                <div class="logo-control-card" style="background: var(--bg-panel); border: 1px solid var(--border-medium); padding: 15px; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; height: 260px;">
+                  <div>
+                    <h3 style="color: var(--text-bright); margin-bottom: 8px; font-family: var(--font-header); font-size: 13px; letter-spacing: 0.5px;">📂 SELECT LOGO PROCEDURE</h3>
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                      <select id="logo-proc-select" class="ani-select" style="flex: 1;">
+                        <option value="PAR">TO PAR :L :S :ANGLE :COUNT</option>
+                        <option value="MSF">TO MSF :MV :SP :FD :COUNT :FD.INC</option>
+                        <option value="FACE">TO FACE :N</option>
+                        <option value="LIN">TO LIN :S :S2 :D1 :D2</option>
+                        <option value="LINES">TO LINES :RT :I :T</option>
+                        <option value="FOO">TO FOO :I :INC :SP</option>
+                        <option value="FAN">TO FAN :T :R :I :S1 :S2 :D1 :D2</option>
+                        <option value="CLOCK">TO CLOCK</option>
+                      </select>
+                      <button class="btn btn-primary btn-sm" id="btn-logo-draw" style="padding: 4px 12px;">Draw</button>
+                      <button class="btn btn-danger btn-sm" id="btn-logo-stop" style="padding: 4px 12px;">Stop</button>
+                      <button class="btn btn-secondary btn-sm" id="btn-logo-new" style="padding: 4px 8px; font-size: 11px;">+ New</button>
+                    </div>
+                  </div>
+                  
+                  <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; margin-top: 5px;">
+                    <div class="code-panel-header" style="background: rgba(57, 255, 20, 0.05); border: 1px solid var(--border-dim); border-bottom: none; padding: 4px 10px; border-top-left-radius: 4px; border-top-right-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                      <span style="font-family: var(--font-mono); font-size: 9px; color: var(--text-bright); font-weight: bold; letter-spacing: 0.5px;" id="logo-code-title">PROCEDURE: PAR</span>
+                      <span style="font-family: var(--font-mono); font-size: 8px; color: var(--text-secondary); opacity: 0.8;">[Editable]</span>
+                    </div>
+                    <textarea id="logo-code-editor" style="background: #030503; border: 1px solid var(--border-dim); border-top: none; padding: 8px; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; color: #a8ffb2; font-family: var(--font-mono); font-size: 11px; line-height: 1.4; display: block; white-space: pre; width: 100%; box-sizing: border-box; resize: none; outline: none; flex: 1; border-radius: 0 0 4px 4px;" spellcheck="false">;; Code goes here</textarea>
+                  </div>
+                </div>
+
+                <!-- Right: Parameters & Drift Control -->
+                <div class="logo-control-card" style="background: var(--bg-panel); border: 1px solid var(--border-medium); padding: 15px; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; height: 260px;">
+                  <div style="overflow-y: auto; flex: 1; padding-right: 5px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                      <h3 style="color: var(--text-bright); font-family: var(--font-header); font-size: 13px; letter-spacing: 0.5px;">⚙️ PARAMETERS & DRIFT</h3>
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <input type="checkbox" id="logo-manual-drift-toggle" style="cursor: pointer;">
+                        <label for="logo-manual-drift-toggle" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); cursor: pointer; user-select: none;">Manual Drift</label>
+                      </div>
+                    </div>
+                    
+                    <!-- Dynamic Sliders for Procedure Parameters -->
+                    <div id="logo-parameters-container" style="display: flex; flex-direction: column; gap: 8px;">
+                      <!-- Sliders generated by JS depending on selected procedure -->
+                    </div>
+                    
+                    <!-- Manual Drift Sliders (hidden unless Manual Drift Mode is checked) -->
+                    <div id="logo-manual-drift-container" style="display: none; flex-direction: column; gap: 8px;">
+                      <div class="slider-row">
+                        <label>Drift Speed (v):</label>
+                        <div>
+                          <input type="range" id="logo-manual-move-range" min="-10" max="10" value="0" step="0.5">
+                          <span id="logo-manual-move-val" style="color: var(--text-bright); width: 35px; text-align: right; font-family: var(--font-mono);">0.0</span>
+                        </div>
+                      </div>
+                      <div class="slider-row">
+                        <label>Spin Rate (ω):</label>
+                        <div>
+                          <input type="range" id="logo-manual-spin-range" min="-15" max="15" value="0" step="0.5">
+                          <span id="logo-manual-spin-val" style="color: var(--text-bright); width: 35px; text-align: right; font-family: var(--font-mono);">0.0°</span>
+                        </div>
+                      </div>
+                      <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <button class="btn btn-secondary btn-sm" id="btn-logo-manual-pen-toggle" style="padding: 2px 8px; font-size: 10px;">Pen: DOWN</button>
+                        <button class="btn btn-danger btn-sm" id="btn-logo-manual-clear" style="padding: 2px 8px; font-size: 10px;">Clear Trails</button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style="border-top: 1px solid var(--border-dim); padding-top: 8px; margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                    <div class="speed-control" style="flex: 1; display: flex; align-items: center; justify-content: space-between; font-family: var(--font-mono); font-size: 11px;">
+                      <label for="logo-speed-range" title="Adjusts the step rate. At 1.0, steps match a standard 60Hz vector CRT refresh rate.">Emulation Speed:</label>
+                      <div style="display: flex; align-items: center; gap: 10px; width: 60%;">
+                        <input type="range" id="logo-speed-range" min="0.01" max="10" value="1.00" step="0.01" style="flex: 1;">
+                        <span id="logo-speed-val" style="color: var(--text-bright); width: 45px; text-align: right;">1.00</span>
+                      </div>
+                    </div>
+                    <button class="btn btn-danger btn-sm" id="btn-logo-reset-all" style="padding: 4px 10px; font-size: 11px;">Reset Turtle</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Sidebar: Logo Historical Context & Info -->
+            <div class="director-aside">
+              <div class="aside-box">
+                <h3>👥 Active Turtle State</h3>
+                <div id="logo-sim-stats" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 5px;">
+                  <div>Turtle X: <span id="logo-stat-x" style="color: var(--text-bright);">0.0</span></div>
+                  <div>Turtle Y: <span id="logo-stat-y" style="color: var(--text-bright);">0.0</span></div>
+                  <div>Heading: <span id="logo-stat-heading" style="color: var(--text-bright);">-90°</span></div>
+                  <div>Move Speed (v): <span id="logo-stat-v" style="color: var(--text-bright);">0.0</span></div>
+                  <div>Spin Rate (ω): <span id="logo-stat-omega" style="color: var(--text-bright);">0.0°/step</span></div>
+                  <div>Pen State: <span id="logo-stat-pen" style="color: var(--text-bright);">DOWN</span></div>
+                  <div>Stack Depth: <span id="logo-stat-stack" style="color: var(--text-bright);">0</span></div>
+                </div>
+              </div>
+              
+              <div class="aside-box cheat-sheet">
+                <h3>📖 Kinematic display lists</h3>
+                <p style="font-size: 11px; line-height: 1.35; color: var(--text-primary); margin-bottom: 6px;">
+                  The TT2500 did not draw static ink trails. Its microcode, written by <strong>Danny Hillis</strong>, interpreted a dynamic display list refreshed dozens of times a second.
+                </p>
+                <p style="font-size: 11px; line-height: 1.35; color: var(--text-secondary); margin-bottom: 6px;">
+                  <code>FD</code> and <code>RT</code> deposit static shape geometry. <code>SPIN</code> and <code>MOVE</code> carry background velocities (angular and translational) that the refresh loop continuously increments.
+                </p>
+                <p style="font-size: 11px; line-height: 1.35; color: var(--text-secondary); margin-bottom: 6px;">
+                  Recursion automatically stacks these dynamic coordinate frames (like a spinning plate mounted on another spinning plate), producing jointed kinematic mechanisms with articulated epicyclic motion.
+                </p>
+                <p style="font-size: 11px; line-height: 1.35; color: var(--text-secondary);">
+                  <strong>Refresh Rate:</strong> To maintain a flicker-free image, the original vector CRT refreshed its display list dozens of times per second (typically 30Hz–60Hz). An Emulation Speed of 1.0 steps time <em>t</em> by 1 per frame, representing a real-time ~60Hz update rate.
+                </p>
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-dim); display: flex; flex-direction: column; gap: 6px;">
+                  <a href="https://github.com/larsbrinkhoff/tt2500-raw-data" target="_blank" style="color: var(--text-bright); text-decoration: none; font-size: 10px; display: inline-flex; align-items: center; gap: 4px;">📂 Hardware Repo (GitHub)</a>
+                  <a href="https://gunkies.org/wiki/Turtle_Terminal" target="_blank" style="color: var(--text-bright); text-decoration: none; font-size: 10px; display: inline-flex; align-items: center; gap: 4px;">📄 Gunkies Wiki Article</a>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 

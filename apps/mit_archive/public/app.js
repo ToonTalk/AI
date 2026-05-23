@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initDiagramerWidget();
   initAniPlanner();
   loadArchiveData();
+  initLogoSimulator();
 });
 
 // Load Public JSON Database
@@ -124,6 +125,21 @@ function setupNavigation() {
   document.getElementById('go-to-director-btn').addEventListener('click', () => {
     switchTab('director');
   });
+
+  const backToDashboardLogoBtn = document.getElementById('btn-back-to-dashboard-logo');
+  if (backToDashboardLogoBtn) {
+    backToDashboardLogoBtn.addEventListener('click', () => {
+      switchTab('dashboard');
+    });
+  }
+
+  // Launch Logo button on dashboard
+  const goToLogoBtn = document.getElementById('go-to-logo-btn');
+  if (goToLogoBtn) {
+    goToLogoBtn.addEventListener('click', () => {
+      switchTab('logo');
+    });
+  }
 }
 
 // Setup Live Filtering for Searches
@@ -1426,4 +1442,938 @@ function initAniPlanner() {
       }, 300);
     }
   });
+}
+
+// TURTLE TERMINAL (TT2500) LOGO SIMULATOR IMPLEMENTATION
+// ===========================================================================
+const LOGO_SOURCE = `
+MAKE 'RT '2340
+ 
+TO PAR :L :S :ANGLE :COUNT
+1 IF :COUNT = 0 THEN STOP
+10 IF :COUNT \\ 2 = 0 THEN SPIN :S ELSE SPIN $-$ :S
+20 FD :L
+30 RT :ANGLE
+40 PAR :L :S :ANGLE :COUNT - 1
+END
+ 
+TO MSF :MV :SP :FD :COUNT :FD.INC
+5 IF :COUNT = 0 THEN STOP
+10 MOVE :MV
+20 SPIN :SP
+30 FD :FD
+35 MOVE *$* (-2) :MV
+37 SPIN -2 * :SP
+40 MSF :MV :SP :FD + :FD.INC :COUNT - 1 :FD.INC
+END
+ 
+TO FACE :N
+10 IF :N = 0 THEN STOP
+20 RT 30 PU FD 95 PD FD 5 PU BK 100
+30 FACE :N - 1
+END
+ 
+TO LIN :S :S2 :D1 :D2
+10 SPIN :S
+20 FD :D1
+30 SPIN :S2
+40 FD :D2
+50 HM
+END
+ 
+TO LINES :RT :I :T
+10 IF :T = 0 THEN STOP
+15 LIN 40
+20 RT :RT
+30 LINES (:RT + :I) :I (:T - 1)
+END
+ 
+TO FOO :I :INC :SP
+10 FD :I
+20 SPIN :SP
+30 FOO :I + :INC :INC :SP
+END
+ 
+TO FAN :T :R :I :S1 :S2 :D1 :D2
+10 IF :T = 0 THEN STOP
+20 RT :R
+30 LIN :S1 :S2 :D1 :D2
+40 FAN (:T - 1) (:R + :I) :I :S1 :S2 :D1 :D2
+END
+
+TO CLOCK
+FACE 12
+HOUR
+MINUTE
+SECOND
+END
+
+TO FACE :N
+10 IF :N = 0 THEN STOP
+20 RT 30 PU FD 95 PD FD 5 PU BK 100
+30 FACE :N - 1
+END
+
+TO HOUR
+HM
+PD
+SPIN 1 / 3600
+FD 60
+END
+
+TO MINUTE
+HM
+SPIN 1 / 60
+FD 90
+END
+
+TO SECOND
+HM
+SPIN 1
+FD 100
+END
+`;
+ 
+// ----------------------------------------------------------------------------
+// Tokenizer
+//   FIX vs. original: the regex now recognises the genuine MIT operator forms
+//   `$-$` (verbalised unary minus) and `$*$` (verbalised multiply), as well as
+//   the `-$-` / `*$*` variants. The old regex matched `-$-`/`*$*` but NOT
+//   `$-$`, so `SPIN $-$ :S` in PAR silently tokenised to ['$','-','$'] and the
+//   spin rate evaluated to the string "$". PAR's odd levels therefore never
+//   counter-rotated.
+// ----------------------------------------------------------------------------
+function tokenize(str) {
+  const tokenRegex = /(:[a-zA-Z_][a-zA-Z0-9_\.]*|[0-9]+(?:\.[0-9]+)?|'?[a-zA-Z_][a-zA-Z0-9_\.]*|\$-\$|\$\*\$|-\$-|\*\$\*|[-\+\*\/\(\)=\\\$'])/g;
+  let matches = str.match(tokenRegex) || [];
+  return matches.map(t => t.trim()).filter(t => t.length > 0);
+}
+ 
+// ---- Expression parser -----------------------------------------------------
+function parseExpression(tokens, state) { return parseCompare(tokens, state); }
+ 
+function parseCompare(tokens, state) {
+  let expr = parseAddSub(tokens, state);
+  while (state.index < tokens.length && tokens[state.index] === '=') {
+    state.index++;
+    expr = { type: 'binary', op: '=', left: expr, right: parseAddSub(tokens, state) };
+  }
+  return expr;
+}
+ 
+function parseAddSub(tokens, state) {
+  let expr = parseMulDivMod(tokens, state);
+  while (state.index < tokens.length && (tokens[state.index] === '+' || tokens[state.index] === '-')) {
+    const op = tokens[state.index]; state.index++;
+    expr = { type: 'binary', op, left: expr, right: parseMulDivMod(tokens, state) };
+  }
+  return expr;
+}
+ 
+function parseMulDivMod(tokens, state) {
+  let expr = parsePrefix(tokens, state);
+  while (state.index < tokens.length && (tokens[state.index] === '*' || tokens[state.index] === '/' || tokens[state.index] === '\\')) {
+    const op = tokens[state.index]; state.index++;
+    expr = { type: 'binary', op, left: expr, right: parsePrefix(tokens, state) };
+  }
+  return expr;
+}
+ 
+function parsePrefix(tokens, state) {
+  if (state.index >= tokens.length) throw new Error("Unexpected end of expression");
+  const token = tokens[state.index];
+ 
+  if (token === '$-$' || token === '-$-') {           // verbalised unary minus
+    state.index++;
+    return { type: 'unary', op: '$-$', operand: parsePrefix(tokens, state) };
+  }
+  if (token === '-') {
+    state.index++;
+    return { type: 'unary', op: '-', operand: parsePrefix(tokens, state) };
+  }
+  if (token === '$*$' || token === '*$*') {            // verbalised multiply (prefix, 2 operands)
+    state.index++;
+    const left = parsePrefix(tokens, state);
+    const right = parsePrefix(tokens, state);
+    return { type: 'binary', op: '*', left, right };
+  }
+  return parsePrimary(tokens, state);
+}
+ 
+function parsePrimary(tokens, state) {
+  if (state.index >= tokens.length) throw new Error("Unexpected end of expression");
+  const token = tokens[state.index];
+ 
+  if (token === '(') {
+    state.index++;
+    const expr = parseExpression(tokens, state);
+    if (state.index >= tokens.length || tokens[state.index] !== ')') throw new Error("Expected closing parenthesis");
+    state.index++;
+    return expr;
+  }
+  if (token.startsWith(':')) { state.index++; return { type: 'variable', name: token }; }
+  if (token.startsWith("'")) { state.index++; return { type: 'literal', value: token.substring(1) }; }
+  if (/^[0-9]+(?:\.[0-9]+)?$/.test(token)) { state.index++; return { type: 'number', value: parseFloat(token) }; }
+  state.index++;
+  return { type: 'word', value: token };
+}
+ 
+function evalExpr(expr, env) {
+  switch (expr.type) {
+    case 'number': return expr.value;
+    case 'variable': {
+      const val = env[expr.name];
+      if (val !== undefined) return val;
+      const g = env.global[expr.name.substring(1).toUpperCase()];
+      if (g !== undefined) return g;
+      return 0; // tolerate unbound (e.g. LIN's missing inputs) instead of throwing mid-build
+    }
+    case 'literal':
+    case 'word': {
+      const val = env[expr.value] !== undefined ? env[expr.value] : env.global[expr.value.toUpperCase()];
+      return val !== undefined ? val : expr.value;
+    }
+    case 'unary': {
+      const v = evalExpr(expr.operand, env);
+      if (expr.op === '-' || expr.op === '$-$') return -v;
+      throw new Error(`Unknown unary operator ${expr.op}`);
+    }
+    case 'binary': {
+      const l = evalExpr(expr.left, env), r = evalExpr(expr.right, env);
+      switch (expr.op) {
+        case '+': return l + r;
+        case '-': return l - r;
+        case '*': return l * r;
+        case '/': return l / r;
+        case '\\': return l % r;
+        case '=': return l === r ? 1 : 0;
+        default: throw new Error(`Unknown binary operator ${expr.op}`);
+      }
+    }
+  }
+  throw new Error("Unknown expression type");
+}
+ 
+// ---- Command parser --------------------------------------------------------
+function parseCommandLine(tokens) {
+  const commands = [];
+  const state = { index: 0 };
+  while (state.index < tokens.length) commands.push(parseCommand(tokens, state));
+  return commands;
+}
+ 
+function parseCommand(tokens, state) {
+  if (state.index >= tokens.length) throw new Error("Expected command");
+  const token = tokens[state.index].toUpperCase();
+ 
+  if (token === 'IF') {
+    state.index++;
+    const cond = parseExpression(tokens, state);
+    if (state.index >= tokens.length || tokens[state.index].toUpperCase() !== 'THEN') throw new Error("Expected THEN after IF");
+    state.index++;
+    const thenCommands = [];
+    while (state.index < tokens.length && tokens[state.index].toUpperCase() !== 'ELSE') thenCommands.push(parseCommand(tokens, state));
+    const elseCommands = [];
+    if (state.index < tokens.length && tokens[state.index].toUpperCase() === 'ELSE') {
+      state.index++;
+      while (state.index < tokens.length) elseCommands.push(parseCommand(tokens, state));
+    }
+    return { type: 'if', cond, thenPart: thenCommands, elsePart: elseCommands };
+  }
+  if (token === 'STOP') { state.index++; return { type: 'stop' }; }
+  if (token === 'PU' || token === 'PENUP') { state.index++; return { type: 'penup' }; }
+  if (token === 'PD' || token === 'PENDOWN') { state.index++; return { type: 'pendown' }; }
+  if (token === 'HM' || token === 'HOME') { state.index++; return { type: 'home' }; }
+ 
+  const unaryCommands = ['SPIN', 'MOVE', 'FD', 'FORWARD', 'BK', 'BACK', 'BACKWARD', 'RT', 'RIGHT', 'LT', 'LEFT'];
+  if (unaryCommands.includes(token)) {
+    state.index++;
+    return { type: token.toLowerCase(), arg: parseExpression(tokens, state) };
+  }
+  if (token === 'MAKE') {
+    state.index++;
+    const varName = parseExpression(tokens, state);
+    const value = parseExpression(tokens, state);
+    return { type: 'make', varName, value };
+  }
+ 
+  const procName = tokens[state.index]; state.index++;
+  const args = [];
+  const stoppers = ['IF', 'THEN', 'ELSE', 'STOP', 'PU', 'PD', 'HM', 'SPIN', 'MOVE', 'FD', 'BK', 'RT', 'LT', 'MAKE'];
+  while (state.index < tokens.length && !stoppers.includes(tokens[state.index].toUpperCase())) {
+    args.push(parseExpression(tokens, state));
+  }
+  return { type: 'call', name: procName, args };
+}
+ 
+// Note: parseLogoProcedures in public version is identical
+function parseLogoProcedures(source) {
+  const lines = source.split('\n');
+  const procedures = {};
+  let currentProc = null;
+ 
+  for (let rawLine of lines) {
+    let line = rawLine.trim();
+    if (!line || line.startsWith(';')) continue;
+ 
+    const lineNumMatch = line.match(/^(\d+)\s+(.*)$/);
+    if (lineNumMatch) line = lineNumMatch[2].trim();
+ 
+    if (line.toUpperCase().startsWith('TO ')) {
+      const parts = line.split(/\s+/);
+      currentProc = { name: parts[1].toUpperCase(), params: parts.slice(2), body: [], rawLines: [rawLine] };
+      procedures[currentProc.name] = currentProc;
+      continue;
+    }
+    if (line.toUpperCase() === 'END') {
+      if (currentProc) { currentProc.rawLines.push(rawLine); currentProc = null; }
+      continue;
+    }
+    if (currentProc) {
+      currentProc.rawLines.push(rawLine);
+      const tokens = tokenize(line);
+      if (tokens.length > 0) {
+        try { currentProc.body.push(...parseCommandLine(tokens)); }
+        catch (e) { console.error(`Error parsing Logo line "${line}":`, e); }
+      }
+    }
+  }
+  return procedures;
+}
+ 
+// ============================================================================
+// 2D affine matrix helpers  (canvas convention: x' = a*x + c*y + e, etc.)
+// ============================================================================
+function matIdentity() { return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; }
+ 
+// Compose m∘n  (apply n first, then m)
+function matMul(m, n) {
+  return {
+    a: m.a * n.a + m.c * n.b,
+    b: m.b * n.a + m.d * n.b,
+    c: m.a * n.c + m.c * n.d,
+    d: m.b * n.c + m.d * n.d,
+    e: m.a * n.e + m.c * n.f + m.e,
+    f: m.b * n.e + m.d * n.f + m.f,
+  };
+}
+function matApplyX(m, x, y) { return m.a * x + m.c * y + m.e; }
+function matApplyY(m, x, y) { return m.b * x + m.d * y + m.f; }
+ 
+// Rotation by `deg` about pivot (px,py)  ==  T(p)·R(deg)·T(-p)
+function matRotAbout(deg, px, py) {
+  const r = deg * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
+  return { a: cs, b: sn, c: -sn, d: cs, e: px - cs * px + sn * py, f: py - sn * px - cs * py };
+}
+function matTranslate(dx, dy) { return { a: 1, b: 0, c: 0, d: 1, e: dx, f: dy }; }
+ 
+// Per-frame, time-varying transform. `t` is virtual time in "steps".
+//   SPIN: rotate about the frame's pivot at rate deg/step
+//   MOVE: translate along the heading captured when MOVE ran, at rate units/step
+function frameTransform(frame, t) {
+  if (frame.type === 'spin') return matRotAbout(frame.rate * t, frame.pivot.x, frame.pivot.y);
+  if (frame.type === 'move') return matTranslate(frame.dir.cx * frame.rate * t, frame.dir.cy * frame.rate * t);
+  return matIdentity(); // root
+}
+ 
+const HOME_X = 380, HOME_Y = 210, HOME_HEADING = -90;
+const STOP_SIGNAL = Symbol('STOP');
+class BudgetExceeded extends Error {}
+ 
+// ============================================================================
+// LogoVM  —  builds the display-list tree (phase 1) then renders it (phase 2)
+// ============================================================================
+class LogoVM {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.procedures = parseLogoProcedures(LOGO_SOURCE);
+    // Build caps. maxSegments bounds non-terminating procedures (e.g. FOO) and
+    // keeps recursion under the JS stack limit; a RangeError backstop catches
+    // anything deeper and keeps the partial tree (children are attached before
+    // we recurse, so a truncated tree is always self-consistent).
+    this.maxSegments = 3000;
+    this.maxDepth = 3000;
+    this.reset();
+  }
+ 
+  reset() {
+    // turtle/manual-mode state (manual freehand sandbox keeps the simple model)
+    this.x = HOME_X; this.y = HOME_Y; this.heading = HOME_HEADING;
+    this.omega = 0; this.v = 0; this.penDown = true;
+    this.trails = [];
+    this.manualDrift = false;
+ 
+    // program-mode (display-list) state
+    this.scene = null;     // root frame of the built display list
+    this.t = 0;            // virtual animation time (steps)
+    this.sceneDepth = 0;
+    this.segCount = 0;
+ 
+    this.active = false;
+    this.globalEnv = { 'RT': 2340 };
+    this.onStatusChange = null;
+    this.onStatsUpdate = null;
+  }
+ 
+  stop() {
+    this.active = false;
+    if (this.onStatusChange) this.onStatusChange("STOPPED");
+  }
+ 
+  // ---- PHASE 1: build the display list ------------------------------------
+  startProcedure(name, argsMap) {
+    const proc = this.procedures[name && name.toUpperCase()];
+    if (!proc) return;
+ 
+    this.trails = [];
+    this.t = 0;
+ 
+    const root = { type: 'root', pivot: { x: HOME_X, y: HOME_Y }, rate: 0, depth: 0, segments: [], children: [] };
+    const turtle = { x: HOME_X, y: HOME_Y, heading: HOME_HEADING, penDown: true };
+    const budget = { seg: 0 };
+ 
+    const env = { global: this.globalEnv };
+    proc.params.forEach((p) => { env[p] = (argsMap && argsMap[p] !== undefined) ? argsMap[p] : 0; });
+ 
+    try {
+      this._runProc(proc, env, turtle, root, budget);
+    } catch (e) {
+      if (!(e instanceof BudgetExceeded) && !(e instanceof RangeError) && e.name !== 'RangeError') throw e;
+      // budget hit or stack exhausted: keep the partial (truncated) display list
+    }
+ 
+    this.scene = root;
+    this.segCount = budget.seg;
+    this.sceneDepth = this._treeDepth(root);
+    this.active = true;
+    if (this.onStatusChange) this.onStatusChange("RUNNING");
+  }
+ 
+  _runProc(proc, env, turtle, frame, budget) {
+    try { this._runCmds(proc.body, env, turtle, frame, budget); }
+    catch (e) { if (e === STOP_SIGNAL) return; throw e; }
+  }
+ 
+  // Runs a command sequence, threading the "current frame" (which SPIN/MOVE
+  // reassign). Returns the final current frame. Used for procedure bodies AND
+  // for IF branches, so a SPIN inside `IF ... THEN SPIN :S ELSE SPIN -:S`
+  // correctly opens a frame for the rest of the sequence.
+  _runCmds(cmds, env, turtle, frame, budget) {
+    let cur = frame;
+    for (let i = 0; i < cmds.length; i++) cur = this._exec(cmds[i], env, turtle, cur, budget);
+    return cur;
+  }
+ 
+  _exec(cmd, env, turtle, cur, budget) {
+    switch (cmd.type) {
+      case 'penup':   turtle.penDown = false; return cur;
+      case 'pendown': turtle.penDown = true;  return cur;
+      case 'home':    turtle.x = HOME_X; turtle.y = HOME_Y; turtle.heading = HOME_HEADING; return cur;
+      case 'rt': case 'right': turtle.heading += evalExpr(cmd.arg, env); return cur;
+      case 'lt': case 'left':  turtle.heading -= evalExpr(cmd.arg, env); return cur;
+ 
+      case 'fd': case 'forward': return this._draw(evalExpr(cmd.arg, env),  turtle, cur, budget);
+      case 'bk': case 'back': case 'backward': return this._draw(-evalExpr(cmd.arg, env), turtle, cur, budget);
+ 
+      case 'spin': {
+        if (cur.depth >= this.maxDepth) throw new BudgetExceeded();
+        const child = { type: 'spin', rate: evalExpr(cmd.arg, env),
+                        pivot: { x: turtle.x, y: turtle.y }, depth: cur.depth + 1, segments: [], children: [] };
+        cur.children.push(child);
+        return child; // everything after rides on this plate
+      }
+      case 'move': {
+        if (cur.depth >= this.maxDepth) throw new BudgetExceeded();
+        const r = turtle.heading * Math.PI / 180;
+        const child = { type: 'move', rate: evalExpr(cmd.arg, env),
+                        dir: { cx: Math.cos(r), cy: Math.sin(r) },
+                        pivot: { x: turtle.x, y: turtle.y }, depth: cur.depth + 1, segments: [], children: [] };
+        cur.children.push(child);
+        return child;
+      }
+ 
+      case 'make': this.globalEnv[String(evalExpr(cmd.varName, env)).toUpperCase()] = evalExpr(cmd.value, env); return cur;
+      case 'stop': throw STOP_SIGNAL;
+ 
+      case 'if': {
+        const branch = evalExpr(cmd.cond, env) !== 0 ? cmd.thenPart : cmd.elsePart;
+        return this._runCmds(branch || [], env, turtle, cur, budget);
+      }
+ 
+      case 'call': {
+        const callee = this.procedures[cmd.name.toUpperCase()];
+        if (!callee) return cur;
+        const argv = cmd.args.map(a => evalExpr(a, env));
+        const childEnv = { global: this.globalEnv };
+ 
+        if (cmd.name.toUpperCase() === 'LIN') {
+          // The 1979 source calls `LIN 40` with a single input. FD 0 would draw
+          // nothing, so the simulator supplies pragmatic defaults to keep the
+          // LINES demo visible. (Not in the original — flagged for Ken.)
+          const s = argv.length >= 1 ? argv[0] : 0;
+          childEnv[':S']  = s;
+          childEnv[':S2'] = argv.length >= 2 ? argv[1] : -s;
+          childEnv[':D1'] = argv.length >= 3 ? argv[2] : 50;
+          childEnv[':D2'] = argv.length >= 4 ? argv[3] : 50;
+        } else {
+          callee.params.forEach((p, i) => { childEnv[p] = i < argv.length ? argv[i] : 0; });
+        }
+ 
+        // Callee INHERITS the caller's current frame. Its own SPIN/MOVE nest
+        // beneath it; when it returns, the caller resumes with ITS frame
+        // unchanged. This is what makes PAR nest deeply (its recursive call is
+        // the last line, after SPIN has already opened a frame) while FAN's
+        // successive LIN calls stay siblings instead of accumulating.
+        this._runProc(callee, childEnv, turtle, cur, budget);
+        return cur;
+      }
+      default: return cur;
+    }
+  }
+ 
+  _draw(dist, turtle, cur, budget) {
+    const r = turtle.heading * Math.PI / 180;
+    const nx = turtle.x + dist * Math.cos(r);
+    const ny = turtle.y + dist * Math.sin(r);
+    if (turtle.penDown && dist !== 0) {
+      cur.segments.push({ x1: turtle.x, y1: turtle.y, x2: nx, y2: ny });
+      if (++budget.seg > this.maxSegments) { turtle.x = nx; turtle.y = ny; throw new BudgetExceeded(); }
+    }
+    turtle.x = nx; turtle.y = ny;
+    return cur;
+  }
+ 
+  _treeDepth(node) {
+    // iterative (the tree can be thousands deep for FOO)
+    let max = 0;
+    const stack = [node];
+    while (stack.length) {
+      const n = stack.pop();
+      if (n.depth > max) max = n.depth;
+      for (let i = 0; i < n.children.length; i++) stack.push(n.children[i]);
+    }
+    return max;
+  }
+
+  // ---- PHASE 2: advance virtual time + render -----------------------------
+  // The loop calls step(speed) once per frame, advancing t by speed.
+  step(dt = 1) {
+    if (this.manualDrift) { this._stepManual(dt); return; }
+    if (this.active && this.scene) {
+      this.t += dt;
+      this._emitStats({ x: this.x, y: this.y, heading: 0, v: 0, omega: 0, penDown: true, stackDepth: this.sceneDepth });
+    }
+  }
+
+  // Manual freehand sandbox: a single dynaturtle pushed by the v/omega sliders.
+  _stepManual(dt = 1) {
+    const oldX = this.x, oldY = this.y;
+    this.heading = ((this.heading + this.omega * dt + 180) % 360 + 360) % 360 - 180;
+    const r = this.heading * Math.PI / 180;
+    this.x += this.v * dt * Math.cos(r);
+    this.y += this.v * dt * Math.sin(r);
+    const w = this.canvas.width, h = this.canvas.height;
+    let wrapped = false;
+    if (this.x < 0) { this.x += w; wrapped = true; } else if (this.x > w) { this.x -= w; wrapped = true; }
+    if (this.y < 0) { this.y += h; wrapped = true; } else if (this.y > h) { this.y -= h; wrapped = true; }
+    if (this.penDown && !wrapped && (this.v !== 0 || this.omega !== 0)) {
+      this.trails.push({ x1: oldX, y1: oldY, x2: this.x, y2: this.y });
+      if (this.trails.length > 5000) this.trails.shift();
+    }
+    this._emitStats({ x: this.x, y: this.y, heading: this.heading, v: this.v, omega: this.omega, penDown: this.penDown, stackDepth: 0 });
+  }
+
+  _emitStats(s) { if (this.onStatsUpdate) this.onStatsUpdate(s); }
+ 
+  draw() {
+    const ctx = this.ctx, w = this.canvas.width, h = this.canvas.height;
+ 
+    ctx.fillStyle = '#050b06';
+    ctx.fillRect(0, 0, w, h);
+ 
+    ctx.strokeStyle = 'rgba(57, 255, 20, 0.04)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x < w; x += 40) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+    for (let y = 0; y < h; y += 40) { ctx.moveTo(0, y); ctx.lineTo(w, y); }
+    ctx.stroke();
+ 
+    if (this.manualDrift) { this._drawManual(); return; }
+    if (this.scene) this._renderScene(this.t);
+  }
+ 
+  // Iterative traversal (recursion would overflow on deep trees every frame).
+  // All segments batched into one path: one stroke for the whole figure.
+  _renderScene(t) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = '#39ff14';
+    ctx.lineWidth = 1.4;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#39ff14';
+    ctx.beginPath();
+ 
+    const stack = [{ f: this.scene, M: matIdentity() }];
+    while (stack.length) {
+      const { f, M } = stack.pop();
+      const Mf = f.type === 'root' ? M : matMul(M, frameTransform(f, t));
+      const segs = f.segments;
+      for (let i = 0; i < segs.length; i++) {
+        const s = segs[i];
+        ctx.moveTo(matApplyX(Mf, s.x1, s.y1), matApplyY(Mf, s.x1, s.y1));
+        ctx.lineTo(matApplyX(Mf, s.x2, s.y2), matApplyY(Mf, s.x2, s.y2));
+      }
+      const ch = f.children;
+      for (let i = 0; i < ch.length; i++) stack.push({ f: ch[i], M: Mf });
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+ 
+  _drawManual() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = '#39ff14'; ctx.lineWidth = 1.5; ctx.shadowBlur = 6; ctx.shadowColor = '#39ff14';
+    ctx.beginPath();
+    this.trails.forEach(tr => { ctx.moveTo(tr.x1, tr.y1); ctx.lineTo(tr.x2, tr.y2); });
+    ctx.stroke();
+    ctx.restore();
+ 
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.heading * Math.PI / 180);
+    ctx.fillStyle = '#ff6b6b'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.shadowBlur = 4; ctx.shadowColor = '#ff6b6b';
+    ctx.beginPath();
+    ctx.moveTo(12, 0); ctx.lineTo(-8, -8); ctx.lineTo(-4, 0); ctx.lineTo(-8, 8); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+}
+ 
+const PROC_DEFAULTS = {
+  'PAR':   [ { name: ':L', min: 1, max: 200, val: 80, step: 1 }, { name: ':S', min: -10, max: 10, val: 1.5, step: 0.1 }, { name: ':ANGLE', min: -180, max: 180, val: 80, step: 1 }, { name: ':COUNT', min: 1, max: 500, val: 150, step: 1 } ],
+  'MSF':   [ { name: ':MV', min: -10, max: 10, val: 0.8, step: 0.1 }, { name: ':SP', min: -10, max: 10, val: 0.4, step: 0.1 }, { name: ':FD', min: 1, max: 100, val: 15, step: 1 }, { name: ':COUNT', min: 1, max: 500, val: 120, step: 1 }, { name: ':FD.INC', min: -5, max: 5, val: 0.5, step: 0.1 } ],
+  'FACE':  [ { name: ':N', min: 1, max: 100, val: 12, step: 1 } ],
+  'LIN':   [ { name: ':S', min: -20, max: 20, val: 4, step: 0.5 }, { name: ':S2', min: -20, max: 20, val: -4, step: 0.5 }, { name: ':D1', min: 1, max: 200, val: 60, step: 1 }, { name: ':D2', min: 1, max: 200, val: 60, step: 1 } ],
+  'LINES': [ { name: ':RT', min: -180, max: 180, val: 40, step: 1 }, { name: ':I', min: -20, max: 20, val: 2, step: 0.5 }, { name: ':T', min: 1, max: 500, val: 120, step: 1 } ],
+  'FOO':   [ { name: ':I', min: 1, max: 100, val: 5, step: 1 }, { name: ':INC', min: -5, max: 5, val: 1, step: 0.1 }, { name: ':SP', min: -5, max: 5, val: 0.5, step: 0.05 } ],
+  'FAN':   [ { name: ':T', min: 1, max: 500, val: 45, step: 1 }, { name: ':R', min: -180, max: 180, val: 10, step: 1 }, { name: ':I', min: -20, max: 20, val: 5, step: 0.5 }, { name: ':S1', min: -20, max: 20, val: 4, step: 0.5 }, { name: ':S2', min: -20, max: 20, val: -4, step: 0.5 }, { name: ':D1', min: 1, max: 200, val: 60, step: 1 }, { name: ':D2', min: 1, max: 200, val: 60, step: 1 } ],
+  'CLOCK': []
+};
+
+function initLogoSimulator() {
+  const canvas = document.getElementById('logo-canvas');
+  if (!canvas) return;
+
+  const logoVM = new LogoVM(canvas);
+  window.logoVMInstance = logoVM;
+
+  const procSelect = document.getElementById('logo-proc-select');
+  const codeEditor = document.getElementById('logo-code-editor');
+  const codeTitle = document.getElementById('logo-code-title');
+  const drawBtn = document.getElementById('btn-logo-draw');
+  const stopBtn = document.getElementById('btn-logo-stop');
+  const newBtn = document.getElementById('btn-logo-new');
+  const resetBtn = document.getElementById('btn-logo-reset-all');
+  const statusEl = document.getElementById('logo-status');
+  const paramsContainer = document.getElementById('logo-parameters-container');
+  
+  const manualDriftToggle = document.getElementById('logo-manual-drift-toggle');
+  const manualDriftContainer = document.getElementById('logo-manual-drift-container');
+  const manualMoveRange = document.getElementById('logo-manual-move-range');
+  const manualSpinRange = document.getElementById('logo-manual-spin-range');
+  const manualMoveVal = document.getElementById('logo-manual-move-val');
+  const manualSpinVal = document.getElementById('logo-manual-spin-val');
+  const manualPenBtn = document.getElementById('btn-logo-manual-pen-toggle');
+  const manualClearBtn = document.getElementById('btn-logo-manual-clear');
+  
+  const speedRange = document.getElementById('logo-speed-range');
+  const speedVal = document.getElementById('logo-speed-val');
+
+  // Stats Elements
+  const statX = document.getElementById('logo-stat-x');
+  const statY = document.getElementById('logo-stat-y');
+  const statHeading = document.getElementById('logo-stat-heading');
+  const statV = document.getElementById('logo-stat-v');
+  const statOmega = document.getElementById('logo-stat-omega');
+  const statPen = document.getElementById('logo-stat-pen');
+  const statStack = document.getElementById('logo-stat-stack');
+
+  // Register VM Listeners
+  logoVM.onStatusChange = (status) => {
+    statusEl.textContent = status;
+    if (status === "RUNNING") {
+      statusEl.style.backgroundColor = "var(--text-bright)";
+      statusEl.style.color = "var(--text-dark)";
+    } else if (status.startsWith("ERR:")) {
+      statusEl.style.backgroundColor = "var(--text-bright)";
+      statusEl.style.color = "#ff6b6b";
+    } else {
+      statusEl.style.backgroundColor = "var(--border-medium)";
+      statusEl.style.color = "var(--text-primary)";
+    }
+  };
+
+  logoVM.onStatsUpdate = (stats) => {
+    if (statX) statX.textContent = stats.x.toFixed(1);
+    if (statY) statY.textContent = stats.y.toFixed(1);
+    if (statHeading) statHeading.textContent = `${Math.round(stats.heading)}°`;
+    if (statV) statV.textContent = stats.v.toFixed(1);
+    if (statOmega) statOmega.textContent = `${stats.omega.toFixed(1)}°/step`;
+    if (statPen) statPen.textContent = stats.penDown ? "DOWN" : "UP";
+    if (statStack) statStack.textContent = stats.stackDepth;
+  };
+
+  // Generate dynamic parameters
+  function renderParameters(procName) {
+    paramsContainer.innerHTML = '';
+    const proc = logoVM.procedures[procName];
+    if (!proc) return;
+
+    let defs = PROC_DEFAULTS[procName];
+    if (!defs) {
+      defs = proc.params.map(paramName => {
+        let step = 1;
+        let min = -180;
+        let max = 180;
+        let val = 10;
+        if (paramName.toUpperCase().includes('SP')) {
+          step = 0.1; min = -10; max = 10; val = 1.0;
+        } else if (paramName.toUpperCase().includes('MV') || paramName.toUpperCase().includes('INC') || paramName.toUpperCase().includes('S')) {
+          step = 0.5; min = -20; max = 20; val = 2.0;
+        } else if (paramName.toUpperCase().includes('COUNT') || paramName.toUpperCase().includes('T') || paramName.toUpperCase().includes('N')) {
+          step = 1; min = 1; max = 100; val = 20;
+        } else {
+          step = 1; min = 1; max = 200; val = 60;
+        }
+        return { name: paramName, min, max, val, step };
+      });
+      PROC_DEFAULTS[procName] = defs;
+    } else {
+      const existingNames = defs.map(d => d.name);
+      proc.params.forEach(paramName => {
+        if (!existingNames.includes(paramName)) {
+          let step = 1;
+          let min = -180;
+          let max = 180;
+          let val = 10;
+          if (paramName.toUpperCase().includes('SP')) {
+            step = 0.1; min = -10; max = 10; val = 1.0;
+          } else if (paramName.toUpperCase().includes('MV') || paramName.toUpperCase().includes('INC') || paramName.toUpperCase().includes('S')) {
+            step = 0.5; min = -20; max = 20; val = 2.0;
+          } else if (paramName.toUpperCase().includes('COUNT') || paramName.toUpperCase().includes('T') || paramName.toUpperCase().includes('N')) {
+            step = 1; min = 1; max = 100; val = 20;
+          } else {
+            step = 1; min = 1; max = 200; val = 60;
+          }
+          defs.push({ name: paramName, min, max, val, step });
+        }
+      });
+    }
+
+    defs.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'slider-row';
+      row.innerHTML = `
+        <label>${p.name}:</label>
+        <div>
+          <input type="range" min="${p.min}" max="${p.max}" value="${p.val}" step="${p.step || 1}" data-param="${p.name}">
+          <span style="color: var(--text-bright); width: 35px; text-align: right;">${p.val}</span>
+        </div>
+      `;
+      const input = row.querySelector('input');
+      const labelVal = row.querySelector('span');
+      input.addEventListener('input', (e) => {
+        labelVal.textContent = e.target.value;
+        p.val = parseFloat(e.target.value);
+      });
+      paramsContainer.appendChild(row);
+    });
+  }
+
+  function compileEditorCode() {
+    const code = codeEditor.value;
+    try {
+      const parsed = parseLogoProcedures(code);
+      const names = Object.keys(parsed);
+      if (names.length === 0) {
+        throw new Error("No procedure defined. Use TO name ... END format.");
+      }
+      
+      let activeName = null;
+      names.forEach(name => {
+        logoVM.procedures[name] = parsed[name];
+        if (activeName === null) activeName = name;
+        
+        let found = false;
+        for (let i = 0; i < procSelect.options.length; i++) {
+          if (procSelect.options[i].value === name) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = `TO ${name} ${parsed[name].params.join(' ')}`;
+          procSelect.appendChild(opt);
+        } else {
+          for (let i = 0; i < procSelect.options.length; i++) {
+            if (procSelect.options[i].value === name) {
+              procSelect.options[i].textContent = `TO ${name} ${parsed[name].params.join(' ')}`;
+              break;
+            }
+          }
+        }
+      });
+      
+      if (activeName) {
+        procSelect.value = activeName;
+        codeTitle.textContent = `PROCEDURE: ${activeName}`;
+        renderParameters(activeName);
+      }
+      return activeName;
+    } catch (err) {
+      console.error("Compilation error:", err);
+      logoVM.onStatusChange("ERR: " + err.message.substring(0, 15));
+      throw err;
+    }
+  }
+
+  function updateCodeBlock(procName) {
+    const proc = logoVM.procedures[procName];
+    if (proc) {
+      codeEditor.value = proc.rawLines.join('\n');
+      codeTitle.textContent = `PROCEDURE: ${procName}`;
+    }
+  }
+
+  // Dropdown Change Handler
+  procSelect.addEventListener('change', (e) => {
+    const procName = e.target.value;
+    renderParameters(procName);
+    updateCodeBlock(procName);
+  });
+
+  // Action: Draw
+  drawBtn.addEventListener('click', () => {
+    try {
+      compileEditorCode();
+    } catch (e) {
+      return;
+    }
+
+    const procName = procSelect.value;
+    const inputs = paramsContainer.querySelectorAll('input[data-param]');
+    const argsMap = {};
+    inputs.forEach(input => {
+      argsMap[input.getAttribute('data-param')] = parseFloat(input.value);
+    });
+
+    logoVM.trails = [];
+    logoVM.startProcedure(procName, argsMap);
+  });
+
+  // Action: Stop
+  stopBtn.addEventListener('click', () => {
+    logoVM.stop();
+  });
+
+  // Action: New
+  newBtn.addEventListener('click', () => {
+    let count = 1;
+    let newName = "MYPATTERN";
+    while (logoVM.procedures[newName]) {
+      newName = `MYPATTERN${++count}`;
+    }
+    
+    const template = `TO ${newName} :L :SP
+10 FD :L
+20 SPIN :SP
+30 ${newName} :L * 0.98 :SP
+END`;
+    
+    codeEditor.value = template;
+    codeTitle.textContent = `PROCEDURE: ${newName}`;
+    
+    compileEditorCode();
+    codeEditor.focus();
+  });
+
+  // Action: Reset
+  resetBtn.addEventListener('click', () => {
+    logoVM.reset();
+    logoVM.onStatusChange("IDLE");
+    if (manualDriftToggle.checked) {
+      logoVM.manualDrift = true;
+      logoVM.v = parseFloat(manualMoveRange.value);
+      logoVM.omega = parseFloat(manualSpinRange.value);
+    }
+    manualPenBtn.textContent = logoVM.penDown ? "Pen: DOWN" : "Pen: UP";
+  });
+
+  // Action: Manual Drift Toggle
+  manualDriftToggle.addEventListener('change', (e) => {
+    const isManual = e.target.checked;
+    logoVM.manualDrift = isManual;
+    if (isManual) {
+      paramsContainer.style.display = 'none';
+      manualDriftContainer.style.display = 'flex';
+      logoVM.v = parseFloat(manualMoveRange.value);
+      logoVM.omega = parseFloat(manualSpinRange.value);
+    } else {
+      paramsContainer.style.display = 'flex';
+      manualDriftContainer.style.display = 'none';
+      logoVM.v = 0;
+      logoVM.omega = 0;
+    }
+  });
+
+  // Manual Drift Sliders
+  manualMoveRange.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    manualMoveVal.textContent = val.toFixed(1);
+    if (logoVM.manualDrift) logoVM.v = val;
+  });
+
+  // Spin Rate range
+  manualSpinRange.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    manualSpinVal.textContent = `${val.toFixed(1)}°`;
+    if (logoVM.manualDrift) logoVM.omega = val;
+  });
+
+  // Pen toggle
+  manualPenBtn.addEventListener('click', () => {
+    logoVM.penDown = !logoVM.penDown;
+    manualPenBtn.textContent = logoVM.penDown ? "Pen: DOWN" : "Pen: UP";
+  });
+
+  // Clear trails
+  manualClearBtn.addEventListener('click', () => {
+    logoVM.trails = [];
+  });
+
+  // Speed range
+  speedRange.addEventListener('input', (e) => {
+    speedVal.textContent = parseFloat(e.target.value).toFixed(2);
+  });
+
+  // Initialize display
+  const initialProc = procSelect.value;
+  renderParameters(initialProc);
+  updateCodeBlock(initialProc);
+  logoVM.onStatusChange("IDLE");
+
+  // Start the frame loop
+  function logoLoop() {
+    if (appState.activeTab === 'logo') {
+      const speed = parseFloat(speedRange.value) || 1.0;
+      logoVM.step(speed);
+      logoVM.draw();
+    }
+    requestAnimationFrame(logoLoop);
+  }
+  requestAnimationFrame(logoLoop);
 }
