@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ZIP Frames to MP4 / WebM</title>
+  <title>ZIP Frames to WebM</title>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <style>
     :root {
@@ -12,7 +12,6 @@
       --panel2: #202642;
       --text: #eef1ff;
       --muted: #aab1d1;
-      --accent: #7dd3fc;
       --danger: #fb7185;
       --ok: #86efac;
       --line: rgba(255,255,255,.12);
@@ -78,6 +77,8 @@
     }
     button.secondary { background: var(--panel2); color: var(--text); border-color: var(--line); }
     button:disabled { opacity: .45; cursor: not-allowed; }
+    .button-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 14px; }
+    @media (max-width: 560px) { .button-row { grid-template-columns: 1fr; } }
     .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
     .stat { background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
     .stat b { display: block; font-size: 20px; margin-bottom: 3px; }
@@ -123,15 +124,14 @@
       color: var(--muted);
       font-size: 12px;
     }
-    .ok { color: var(--ok); }
     code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 6px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>ZIP Frames → MP4 / WebM</h1>
+    <h1>ZIP Frames → WebM</h1>
     <p class="sub">
-      Upload a ZIP containing numbered PNG/JPEG/WebP frames. WebM is made without FFmpeg using the browser's built-in MediaRecorder, so it works in more environments. MP4 uses FFmpeg/WASM and requires the page to be served from <code>http://</code>, <code>https://</code>, or <code>localhost</code> — not opened directly as a local <code>file://</code> page.
+      Upload a ZIP containing numbered PNG/JPEG/WebP/BMP frames. The app sorts the filenames naturally, renders the frames in order, and records a downloadable WebM video directly in your browser. No FFmpeg, no MP4 menu, no Worker/CORS mess.
     </p>
 
     <div class="grid">
@@ -150,16 +150,6 @@
             <input id="fps" type="number" min="1" max="120" value="24" />
           </div>
           <div>
-            <label for="format">Output format</label>
-            <select id="format">
-              <option value="webm">WebM / VP9 or VP8</option>
-              <option value="mp4">MP4 / H.264 via FFmpeg</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
             <label for="quality">Quality</label>
             <select id="quality">
               <option value="medium">Medium</option>
@@ -167,6 +157,9 @@
               <option value="veryhigh">Very high</option>
             </select>
           </div>
+        </div>
+
+        <div class="row">
           <div>
             <label for="scale">Resize output</label>
             <select id="scale">
@@ -176,11 +169,23 @@
               <option value="512">Fit within 512×512</option>
             </select>
           </div>
+          <div>
+            <label for="mimeChoice">WebM codec preference</label>
+            <select id="mimeChoice">
+              <option value="auto" selected>Auto</option>
+              <option value="video/webm;codecs=vp9">VP9</option>
+              <option value="video/webm;codecs=vp8">VP8</option>
+              <option value="video/webm">Generic WebM</option>
+            </select>
+          </div>
         </div>
 
-        <button id="make" disabled>Make video</button>
-        <button id="test" class="secondary">Run self-tests</button>
-        <button id="clear" class="secondary">Clear</button>
+        <div class="button-row">
+          <button id="make" disabled>Make WebM</button>
+          <button id="test" class="secondary">Run self-tests</button>
+          <button id="clear" class="secondary">Clear</button>
+        </div>
+
         <a id="download" class="download" download>Download video</a>
 
         <div class="bar"><div id="fill" class="fill"></div></div>
@@ -195,9 +200,8 @@
           <div class="stat"><b id="size">—</b><span>ZIP size</span></div>
           <div class="stat"><b id="dims">—</b><span>frame size</span></div>
         </div>
-        <p id="environment" class="warn"></p>
-        <p class="small">
-          Recommended workflow: choose WebM while testing. Use MP4 only from a served page, for example <code>python -m http.server 8000</code> and then open <code>http://localhost:8000/</code>. GitHub Pages is also fine.
+        <p class="warn">
+          This should work best in current Chrome or Edge. Firefox may work too. Safari support for WebM playback is much better than it used to be, but browser-side WebM recording support can still vary.
         </p>
         <div id="capabilities" class="small"></div>
       </aside>
@@ -208,21 +212,13 @@
 (() => {
   'use strict';
 
-  const CDN = {
-    jszip: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
-    ffmpeg: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js',
-    ffmpegWorker: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/814.ffmpeg.js',
-    ffmpegCore: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
-    ffmpegWasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
-  };
-
   const dom = {
     drop: document.getElementById('drop'),
     fileInput: document.getElementById('file'),
     fpsInput: document.getElementById('fps'),
-    formatSelect: document.getElementById('format'),
     qualitySelect: document.getElementById('quality'),
     scaleSelect: document.getElementById('scale'),
+    mimeChoice: document.getElementById('mimeChoice'),
     makeBtn: document.getElementById('make'),
     testBtn: document.getElementById('test'),
     clearBtn: document.getElementById('clear'),
@@ -234,21 +230,17 @@
     durationEl: document.getElementById('duration'),
     sizeEl: document.getElementById('size'),
     dimsEl: document.getElementById('dims'),
-    environment: document.getElementById('environment'),
     capabilities: document.getElementById('capabilities')
   };
 
   let zipFile = null;
   let frames = [];
+  let firstFrameSize = null;
   let frameURLs = [];
   let outputURL = null;
-  let ffmpeg = null;
-  let firstFrameSize = null;
 
   const imageExt = /\.(png|jpe?g|webp|bmp)$/i;
   const hiddenPath = /(^|\/)__MACOSX\//i;
-  const isFileOrigin = location.protocol === 'file:' || location.origin === 'null';
-  const isSecureEnough = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
   function log(message, cls = '') {
     const line = cls ? `[${cls}] ${message}` : message;
@@ -298,20 +290,16 @@
   function revokeURLs() {
     for (const url of frameURLs) URL.revokeObjectURL(url);
     frameURLs = [];
-    if (outputURL) URL.revokeObjectURL(outputURL);
-    outputURL = null;
+    if (outputURL) {
+      URL.revokeObjectURL(outputURL);
+      outputURL = null;
+    }
   }
 
   function qualityToVideoBitsPerSecond(quality, width, height, fps) {
     const pixels = width * height;
     const multiplier = quality === 'veryhigh' ? 0.18 : quality === 'high' ? 0.12 : 0.075;
     return Math.max(1_000_000, Math.round(pixels * fps * multiplier));
-  }
-
-  function qualityToCrf(quality) {
-    if (quality === 'veryhigh') return 18;
-    if (quality === 'high') return 22;
-    return 28;
   }
 
   function updateStats() {
@@ -332,7 +320,6 @@
       outW = Math.round(width * ratio);
       outH = Math.round(height * ratio);
     }
-    // Encoders are happier with even dimensions.
     outW = Math.max(2, outW - (outW % 2));
     outH = Math.max(2, outH - (outH % 2));
     return { width: outW, height: outH };
@@ -340,15 +327,18 @@
 
   async function decodeImage(frame) {
     const blob = new Blob([frame.data], { type: mimeForExt(frame.ext) });
+
     if ('createImageBitmap' in window) {
       try {
         return await createImageBitmap(blob);
       } catch (_) {
-        // Fall back to HTMLImageElement below.
+        // Fall through to HTMLImageElement.
       }
     }
+
     const url = URL.createObjectURL(blob);
     frameURLs.push(url);
+
     const img = new Image();
     img.decoding = 'async';
     await new Promise((resolve, reject) => {
@@ -367,206 +357,18 @@
     return { width, height };
   }
 
-  async function loadScriptOnce(src, globalCheck) {
-    if (globalCheck()) return;
-    await new Promise((resolve, reject) => {
-      const existing = [...document.scripts].find(script => script.src === src);
-      if (existing) {
-        existing.addEventListener('load', resolve, { once: true });
-        existing.addEventListener('error', () => reject(new Error(`Could not load ${src}`)), { once: true });
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.crossOrigin = 'anonymous';
-      script.onload = resolve;
-      script.onerror = () => reject(new Error(`Could not load ${src}`));
-      document.head.appendChild(script);
-    });
-  }
-
-  async function fetchAsBlobURL(url, mimeType) {
-    const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
-    if (!response.ok) throw new Error(`Failed to fetch ${url}: HTTP ${response.status}`);
-    const blob = await response.blob();
-    return URL.createObjectURL(new Blob([blob], { type: mimeType }));
-  }
-
-  async function ensureFFmpeg() {
-    if (ffmpeg?.loaded) return ffmpeg;
-    if (isFileOrigin) {
-      throw new Error('MP4 needs FFmpeg/WASM, and FFmpeg workers do not reliably load from a local file:// page. Serve this HTML with: python -m http.server 8000, then open http://localhost:8000/. WebM works without FFmpeg.');
-    }
-    if (!isSecureEnough) {
-      log('Warning: MP4 works best from https:// or localhost.', 'warn');
-    }
-
-    await loadScriptOnce(CDN.ffmpeg, () => Boolean(window.FFmpegWASM?.FFmpeg));
-    if (!window.FFmpegWASM?.FFmpeg) throw new Error('FFmpeg library did not create window.FFmpegWASM.FFmpeg.');
-
-    const { FFmpeg } = window.FFmpegWASM;
-    ffmpeg = new FFmpeg();
-
-    ffmpeg.on('log', ({ message }) => {
-      if (/frame=|error|failed|Invalid|Output|Input|Duration|libx264|libvpx/i.test(message)) log(message);
-    });
-    ffmpeg.on('progress', ({ progress }) => setProgress(40 + progress * 58));
-
-    log('Loading FFmpeg engine for MP4…');
-    log('Fetching FFmpeg worker/core as same-origin Blob URLs to avoid CDN Worker CORS errors…');
-
-    const classWorkerURL = await fetchAsBlobURL(CDN.ffmpegWorker, 'text/javascript');
-    const coreURL = await fetchAsBlobURL(CDN.ffmpegCore, 'text/javascript');
-    const wasmURL = await fetchAsBlobURL(CDN.ffmpegWasm, 'application/wasm');
-
-    try {
-      await ffmpeg.load({ classWorkerURL, coreURL, wasmURL });
-    } catch (err) {
-      throw new Error(`FFmpeg failed to load. Serve the page from localhost or GitHub Pages and try again. Original error: ${err?.message || err}`);
-    }
-
-    log('FFmpeg loaded.');
-    return ffmpeg;
-  }
-
-  async function clearFFmpegFiles(prefix = '') {
-    if (!ffmpeg?.loaded) return;
-    try {
-      const files = await ffmpeg.listDir('/');
-      for (const file of files) {
-        if (file.isDir) continue;
-        if (!prefix || file.name.startsWith(prefix) || file.name === 'output.mp4') {
-          try { await ffmpeg.deleteFile(file.name); } catch (_) {}
-        }
-      }
-    } catch (_) {}
-  }
-
-  function ffmpegSafeExt(ext) {
-    return ext === 'jpeg' ? 'jpg' : ext;
-  }
-
-  async function normalizeFramesToPNGForFFmpeg() {
-    for (let i = 0; i < frames.length; i += 1) {
-      const frame = frames[i];
-      const originalName = `src_${String(i + 1).padStart(6, '0')}.${ffmpegSafeExt(frame.ext)}`;
-      const pngName = `frame_${String(i + 1).padStart(6, '0')}.png`;
-      await ffmpeg.writeFile(originalName, frame.data);
-      await ffmpeg.exec(['-hide_banner', '-y', '-i', originalName, '-frames:v', '1', pngName]);
-      await ffmpeg.deleteFile(originalName);
-      if (i % 5 === 0 || i === frames.length - 1) setProgress(20 + ((i + 1) / frames.length) * 20);
-    }
-  }
-
-  function buildFFmpegArgs(fps, quality, scaleValue) {
-    const args = ['-hide_banner', '-framerate', String(fps), '-i', 'frame_%06d.png'];
-    const filters = [];
-    if (scaleValue !== 'original') {
-      const max = Number(scaleValue);
-      filters.push(`scale='min(${max},iw)':-2:force_original_aspect_ratio=decrease`);
-    } else {
-      filters.push('scale=trunc(iw/2)*2:trunc(ih/2)*2');
-    }
-    args.push('-vf', filters.join(','));
-    args.push(
-      '-c:v', 'libx264',
-      '-preset', 'medium',
-      '-crf', String(qualityToCrf(quality)),
-      '-pix_fmt', 'yuv420p',
-      '-movflags', '+faststart',
-      'output.mp4'
-    );
-    return args;
-  }
-
   function chooseWebMMimeType() {
-    const candidates = [
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm'
-    ];
+    const preferred = dom.mimeChoice.value;
+    const candidates = preferred === 'auto'
+      ? ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+      : [preferred, 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+
+    if (!window.MediaRecorder) return '';
+
     for (const type of candidates) {
-      if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) return type;
+      if (MediaRecorder.isTypeSupported(type)) return type;
     }
     return '';
-  }
-
-  async function makeWebM() {
-    if (!window.MediaRecorder) throw new Error('This browser does not support MediaRecorder, so it cannot make WebM without FFmpeg. Try current Chrome or Edge.');
-    const mimeType = chooseWebMMimeType();
-    if (!mimeType) throw new Error('This browser does not report support for video/webm recording. Try current Chrome or Edge.');
-
-    const fps = Math.max(1, Math.min(120, Number(dom.fpsInput.value) || 24));
-    const quality = dom.qualitySelect.value;
-    const source = firstFrameSize || await getImageDimensions(frames[0]);
-    const output = getOutputSize(source.width, source.height, dom.scaleSelect.value);
-
-    const canvas = document.createElement('canvas');
-    canvas.width = output.width;
-    canvas.height = output.height;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('Could not create a 2D canvas context.');
-
-    dom.preview.className = 'preview';
-    dom.preview.innerHTML = '';
-    dom.preview.appendChild(canvas);
-
-    const stream = canvas.captureStream(fps);
-    const bitsPerSecond = qualityToVideoBitsPerSecond(quality, output.width, output.height, fps);
-    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: bitsPerSecond });
-    const chunks = [];
-
-    recorder.ondataavailable = event => {
-      if (event.data && event.data.size > 0) chunks.push(event.data);
-    };
-
-    const stopped = new Promise((resolve, reject) => {
-      recorder.onstop = resolve;
-      recorder.onerror = event => reject(event.error || new Error('MediaRecorder failed.'));
-    });
-
-    const frameDurationMs = 1000 / fps;
-    log(`Recording WebM with ${mimeType}, ${fps} fps, ${output.width}×${output.height}…`);
-    recorder.start(1000);
-
-    for (let i = 0; i < frames.length; i += 1) {
-      const image = await decodeImage(frames[i]);
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, output.width, output.height);
-      ctx.drawImage(image, 0, 0, output.width, output.height);
-      if (typeof image.close === 'function') image.close();
-      setProgress(((i + 1) / frames.length) * 95);
-      await new Promise(resolve => setTimeout(resolve, frameDurationMs));
-    }
-
-    recorder.stop();
-    await stopped;
-    stream.getTracks().forEach(track => track.stop());
-
-    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
-    if (!blob.size) throw new Error('WebM recording produced an empty file.');
-    setProgress(100);
-    return blob;
-  }
-
-  async function makeMP4() {
-    await ensureFFmpeg();
-    await clearFFmpegFiles('');
-    log(`Preparing ${frames.length} frames for FFmpeg…`);
-    await normalizeFramesToPNGForFFmpeg();
-
-    const fps = Math.max(1, Math.min(120, Number(dom.fpsInput.value) || 24));
-    const args = buildFFmpegArgs(fps, dom.qualitySelect.value, dom.scaleSelect.value);
-    log(`Encoding MP4 at ${fps} fps…`);
-    log(`ffmpeg ${args.join(' ')}`);
-    await ffmpeg.exec(['-y', ...args]);
-
-    const out = await ffmpeg.readFile('output.mp4');
-    const blob = new Blob([out.buffer], { type: 'video/mp4' });
-    if (!blob.size) throw new Error('MP4 encoding produced an empty file.');
-    await clearFFmpegFiles('frame_');
-    return blob;
   }
 
   async function handleZip(file) {
@@ -586,16 +388,22 @@
     dom.preview.textContent = 'Loading first frame…';
 
     const inferred = inferFPSFromName(file.name);
-    if (inferred) dom.fpsInput.value = inferred;
+    if (inferred) {
+      dom.fpsInput.value = inferred;
+      log(`Inferred FPS from filename: ${inferred}`);
+    }
 
     try {
-      if (!window.JSZip) throw new Error('JSZip did not load. Check your network connection or CDN blocking.');
+      if (!window.JSZip) throw new Error('JSZip did not load. Check network access to the CDN.');
+
       const zip = await JSZip.loadAsync(file);
       const entries = Object.values(zip.files)
         .filter(entry => !entry.dir && imageExt.test(entry.name) && !hiddenPath.test(entry.name))
         .sort((a, b) => naturalCompare(a.name, b.name));
 
-      if (!entries.length) throw new Error('No image frames found in the ZIP. Expected PNG, JPEG, WebP, or BMP files.');
+      if (!entries.length) {
+        throw new Error('No image frames found in the ZIP. Expected PNG, JPEG, WebP, or BMP files.');
+      }
 
       log(`Found ${entries.length} image frames.`);
       log(`First: ${entries[0].name}`);
@@ -606,7 +414,9 @@
         const data = await entry.async('uint8array');
         const ext = entry.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg');
         frames.push({ name: entry.name, ext, data });
-        if (i % 10 === 0 || i === entries.length - 1) setProgress(((i + 1) / entries.length) * 20);
+        if (i % 10 === 0 || i === entries.length - 1) {
+          setProgress(((i + 1) / entries.length) * 20);
+        }
       }
 
       firstFrameSize = await getImageDimensions(frames[0]);
@@ -621,10 +431,7 @@
       updateStats();
       dom.makeBtn.disabled = false;
       setProgress(0);
-      log('Ready. Choose WebM or MP4 and click Make video.');
-      if (dom.formatSelect.value === 'mp4' && isFileOrigin) {
-        log('MP4 warning: this page is running from file://. WebM should work, but MP4 requires serving the page from localhost or GitHub Pages.', 'warn');
-      }
+      log('Ready. Click Make WebM.');
     } catch (err) {
       log(err?.message || String(err), 'error');
       dom.preview.className = 'preview empty';
@@ -633,23 +440,95 @@
     }
   }
 
+  async function makeWebM() {
+    if (!frames.length) throw new Error('No frames loaded.');
+    if (!window.MediaRecorder) {
+      throw new Error('This browser does not support MediaRecorder, so it cannot record WebM here. Try current Chrome or Edge.');
+    }
+
+    const mimeType = chooseWebMMimeType();
+    if (!mimeType) {
+      throw new Error('This browser does not report support for WebM recording. Try current Chrome or Edge.');
+    }
+
+    const fps = Math.max(1, Math.min(120, Number(dom.fpsInput.value) || 24));
+    const quality = dom.qualitySelect.value;
+    const source = firstFrameSize || await getImageDimensions(frames[0]);
+    const output = getOutputSize(source.width, source.height, dom.scaleSelect.value);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = output.width;
+    canvas.height = output.height;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Could not create a 2D canvas context.');
+
+    dom.preview.className = 'preview';
+    dom.preview.innerHTML = '';
+    dom.preview.appendChild(canvas);
+
+    const stream = canvas.captureStream(fps);
+    const bitsPerSecond = qualityToVideoBitsPerSecond(quality, output.width, output.height, fps);
+
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: bitsPerSecond });
+    } catch (_) {
+      throw new Error(`Failed to create MediaRecorder with ${mimeType}.`);
+    }
+
+    const chunks = [];
+    recorder.ondataavailable = event => {
+      if (event.data && event.data.size > 0) chunks.push(event.data);
+    };
+
+    const stopped = new Promise((resolve, reject) => {
+      recorder.onstop = resolve;
+      recorder.onerror = event => reject(event.error || new Error('MediaRecorder failed.'));
+    });
+
+    const frameDurationMs = 1000 / fps;
+    log(`Recording WebM with ${mimeType}, ${fps} fps, ${output.width}×${output.height}…`);
+    recorder.start(1000);
+
+    for (let i = 0; i < frames.length; i += 1) {
+      const image = await decodeImage(frames[i]);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, output.width, output.height);
+      ctx.drawImage(image, 0, 0, output.width, output.height);
+      if (typeof image.close === 'function') image.close();
+
+      setProgress(10 + ((i + 1) / frames.length) * 85);
+      await new Promise(resolve => setTimeout(resolve, frameDurationMs));
+    }
+
+    recorder.stop();
+    await stopped;
+    stream.getTracks().forEach(track => track.stop());
+
+    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
+    if (!blob.size) throw new Error('WebM recording produced an empty file.');
+
+    setProgress(100);
+    return blob;
+  }
+
   async function makeVideo() {
     if (!frames.length) return;
     dom.makeBtn.disabled = true;
     dom.downloadLink.style.display = 'none';
-    if (outputURL) URL.revokeObjectURL(outputURL);
-    outputURL = null;
+    if (outputURL) {
+      URL.revokeObjectURL(outputURL);
+      outputURL = null;
+    }
     setProgress(0);
 
-    const format = dom.formatSelect.value;
     try {
-      const blob = format === 'mp4' ? await makeMP4() : await makeWebM();
+      const blob = await makeWebM();
       outputURL = URL.createObjectURL(blob);
 
       const fps = Math.max(1, Math.min(120, Number(dom.fpsInput.value) || 24));
       const base = (zipFile?.name || 'frames.zip').replace(/\.zip$/i, '');
-      const extension = format === 'mp4' ? 'mp4' : 'webm';
-      const fileName = `${base}_${fps}fps.${extension}`;
+      const fileName = `${base}_${fps}fps.webm`;
 
       dom.downloadLink.href = outputURL;
       dom.downloadLink.download = fileName;
@@ -660,11 +539,7 @@
       dom.preview.innerHTML = `<video controls src="${outputURL}"></video>`;
       log(`Done. Output size: ${formatBytes(blob.size)}`);
     } catch (err) {
-      const msg = err?.message || String(err);
-      log(msg, 'error');
-      if (format === 'mp4') {
-        log('Fallback: choose WebM. It does not use FFmpeg and avoids the Worker/CORS problem.', 'warn');
-      }
+      log(err?.message || String(err), 'error');
       setProgress(0);
     } finally {
       dom.makeBtn.disabled = frames.length === 0;
@@ -678,32 +553,42 @@
 
   function runSelfTests() {
     log('Running self-tests…');
+
     const sorted = ['frame_1.png', 'frame_10.png', 'frame_2.png'].sort(naturalCompare);
     assertTest('natural filename sort', sorted.join(',') === 'frame_1.png,frame_2.png,frame_10.png', sorted.join(','));
     assertTest('FPS inference from 2500logo_24fps.zip', inferFPSFromName('2500logo_24fps.zip') === 24);
+    assertTest('FPS inference from animation-30FPS.zip', inferFPSFromName('animation-30FPS.zip') === 30);
     assertTest('FPS inference rejects absurd values', inferFPSFromName('thing_999fps.zip') === null);
     assertTest('PNG extension accepted', imageExt.test('folder/frame_00001.png'));
+    assertTest('JPEG extension accepted', imageExt.test('folder/frame_00001.jpeg'));
+    assertTest('WEBP extension accepted', imageExt.test('folder/frame_00001.webp'));
     assertTest('__MACOSX ignored', hiddenPath.test('__MACOSX/foo.png'));
     assertTest('byte formatting', formatBytes(1024) === '1.0 KB', formatBytes(1024));
-    assertTest('WebM support detected or cleanly reported', Boolean(window.MediaRecorder) === Boolean(window.MediaRecorder) && typeof chooseWebMMimeType() === 'string');
-    log(`Environment: protocol=${location.protocol}, origin=${location.origin}, MediaRecorder=${Boolean(window.MediaRecorder)}, WebM=${chooseWebMMimeType() || 'not supported'}`, 'test');
+
+    const scaled = getOutputSize(1920, 1080, '720');
+    assertTest('scaled width fits within requested size', scaled.width <= 720, `${scaled.width}x${scaled.height}`);
+    assertTest('scaled height fits within requested size', scaled.height <= 720, `${scaled.width}x${scaled.height}`);
+    assertTest('scaled dimensions are even', scaled.width % 2 === 0 && scaled.height % 2 === 0, `${scaled.width}x${scaled.height}`);
+
+    const mime = chooseWebMMimeType();
+    assertTest('WebM support detected or cleanly reported', typeof mime === 'string');
+
+    log(`Environment: protocol=${location.protocol}, origin=${location.origin}, MediaRecorder=${Boolean(window.MediaRecorder)}, WebM=${mime || 'not supported'}`, 'test');
     log('Self-tests finished.');
   }
 
-  function updateEnvironmentMessage() {
-    const webm = chooseWebMMimeType();
-    dom.environment.innerHTML = isFileOrigin
-      ? 'This page is running as <code>file://</code>. Use WebM here. For MP4, serve the file with <code>python -m http.server 8000</code> and open it via <code>http://localhost:8000/</code>.'
-      : `This page is served from <code>${location.origin}</code>. WebM should work${isSecureEnough ? ', and MP4 has a reasonable chance of working.' : '. MP4 is more reliable on https:// or localhost.'}`;
+  function updateCapabilities() {
+    const mime = chooseWebMMimeType();
     dom.capabilities.innerHTML = [
       `<span class="pill">MediaRecorder: ${window.MediaRecorder ? 'yes' : 'no'}</span>`,
-      `<span class="pill">WebM: ${webm || 'not supported'}</span>`,
+      `<span class="pill">WebM encoder: ${mime || 'not supported'}</span>`,
       `<span class="pill">Origin: ${location.origin}</span>`,
       `<span class="pill">Protocol: ${location.protocol}</span>`
     ].join('');
   }
 
   dom.drop.addEventListener('click', () => dom.fileInput.click());
+
   dom.fileInput.addEventListener('change', () => {
     const file = dom.fileInput.files?.[0];
     if (file) handleZip(file);
@@ -715,29 +600,28 @@
       dom.drop.classList.add('drag');
     });
   }
+
   for (const eventName of ['dragleave', 'drop']) {
     dom.drop.addEventListener(eventName, event => {
       event.preventDefault();
       dom.drop.classList.remove('drag');
     });
   }
+
   dom.drop.addEventListener('drop', event => {
     const file = event.dataTransfer.files?.[0];
     if (file) handleZip(file);
   });
 
   dom.fpsInput.addEventListener('input', updateStats);
-  dom.formatSelect.addEventListener('change', () => {
-    if (dom.formatSelect.value === 'mp4' && isFileOrigin) {
-      log('MP4 selected, but this is a local file:// page. Serve it from localhost first, or choose WebM.', 'warn');
-    }
-  });
+  dom.mimeChoice.addEventListener('change', updateCapabilities);
   dom.makeBtn.addEventListener('click', makeVideo);
   dom.testBtn.addEventListener('click', () => {
     try { runSelfTests(); }
     catch (err) { log(err?.message || String(err), 'error'); }
   });
-  dom.clearBtn.addEventListener('click', async () => {
+
+  dom.clearBtn.addEventListener('click', () => {
     zipFile = null;
     frames = [];
     firstFrameSize = null;
@@ -753,19 +637,18 @@
     dom.dimsEl.textContent = '—';
     dom.preview.className = 'preview empty';
     dom.preview.textContent = 'First frame preview will appear here.';
-    await clearFFmpegFiles('');
   });
 
   window.addEventListener('error', event => {
     log(`Global script error: ${event.message || 'Script error.'}${event.filename ? ` at ${event.filename}:${event.lineno}` : ''}`, 'error');
   });
+
   window.addEventListener('unhandledrejection', event => {
     log(`Unhandled promise rejection: ${event.reason?.message || event.reason || 'unknown'}`, 'error');
   });
 
-  updateEnvironmentMessage();
+  updateCapabilities();
   log(`Environment: protocol=${location.protocol}, origin=${location.origin}`);
-  if (isFileOrigin) log('Use WebM from a local file. Use localhost or GitHub Pages for MP4.', 'warn');
 })();
 </script>
 </body>
