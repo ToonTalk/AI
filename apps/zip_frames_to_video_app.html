@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Frames to WebM</title>
+  <title>Frames to WebM — Concatenate or Collage</title>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <style>
     :root {
@@ -16,6 +16,7 @@
       --ok: #86efac;
       --line: rgba(255,255,255,.12);
       --warn: #fde68a;
+      --accent: #7dd3fc;
     }
     * { box-sizing: border-box; }
     body {
@@ -26,11 +27,12 @@
       min-height: 100vh;
       padding: 28px;
     }
-    .wrap { max-width: 1120px; margin: 0 auto; }
+    .wrap { max-width: 1180px; margin: 0 auto; }
     h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 44px); letter-spacing: -0.04em; }
-    .sub { color: var(--muted); margin: 0 0 24px; max-width: 860px; line-height: 1.45; }
-    .grid { display: grid; grid-template-columns: 1.08fr .92fr; gap: 18px; }
-    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } body { padding: 16px; } }
+    h2 { font-size: 16px; margin: 18px 0 10px; color: var(--text); }
+    .sub { color: var(--muted); margin: 0 0 24px; max-width: 920px; line-height: 1.45; }
+    .grid { display: grid; grid-template-columns: 1.14fr .86fr; gap: 18px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } body { padding: 16px; } }
     .card {
       background: rgba(23, 27, 47, .88);
       border: 1px solid var(--line);
@@ -42,11 +44,11 @@
     .drop {
       border: 2px dashed rgba(125,211,252,.45);
       border-radius: 20px;
-      min-height: 190px;
+      min-height: 165px;
       display: grid;
       place-items: center;
       text-align: center;
-      padding: 24px;
+      padding: 22px;
       background: rgba(125,211,252,.06);
       transition: .18s ease;
       cursor: pointer;
@@ -56,7 +58,8 @@
     .drop span { color: var(--muted); display: block; line-height: 1.45; }
     input[type="file"] { display: none; }
     .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
-    @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+    .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    @media (max-width: 620px) { .row, .row3 { grid-template-columns: 1fr; } }
     label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
     input, select, button {
       width: 100%;
@@ -76,15 +79,16 @@
       margin-top: 14px;
     }
     button.secondary { background: var(--panel2); color: var(--text); border-color: var(--line); }
+    button.danger { background: rgba(251,113,133,.16); color: #fecdd3; border-color: rgba(251,113,133,.35); }
     button:disabled { opacity: .45; cursor: not-allowed; }
-    .button-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 14px; }
-    @media (max-width: 560px) { .button-row { grid-template-columns: 1fr; } }
+    .button-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
+    @media (max-width: 620px) { .button-row { grid-template-columns: 1fr; } }
     .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
     .stat { background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
     .stat b { display: block; font-size: 20px; margin-bottom: 3px; }
     .stat span { color: var(--muted); font-size: 13px; }
     .log {
-      height: 280px;
+      height: 270px;
       overflow: auto;
       background: #080a12;
       border: 1px solid var(--line);
@@ -124,6 +128,55 @@
       color: var(--muted);
       font-size: 12px;
     }
+    .source-list {
+      margin-top: 14px;
+      display: grid;
+      gap: 8px;
+      max-height: 230px;
+      overflow: auto;
+      padding-right: 3px;
+    }
+    .source-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      background: rgba(255,255,255,.055);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+    }
+    .source-title { font-weight: 750; overflow-wrap: anywhere; }
+    .source-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .source-actions { display: flex; gap: 6px; }
+    .mini {
+      width: auto;
+      margin: 0;
+      padding: 6px 9px;
+      border-radius: 10px;
+      font-size: 12px;
+      color: var(--text);
+      background: var(--panel2);
+      border: 1px solid var(--line);
+    }
+    .mini.danger { color: #fecdd3; background: rgba(251,113,133,.14); border-color: rgba(251,113,133,.35); }
+    .mode-note { color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 8px; }
+    .collage-options { display: none; }
+    .collage-options.show { display: block; }
+    .checkline {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .checkline input {
+      width: auto;
+      margin-top: 3px;
+      accent-color: var(--accent);
+    }
     code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 6px; }
   </style>
 </head>
@@ -131,31 +184,165 @@
   <div class="wrap">
     <h1>Frames → WebM</h1>
     <p class="sub">
-      Upload a ZIP containing numbered PNG/JPEG/WebP/BMP frames, or choose an unzipped folder of frames. For very large jobs, use folder mode: it avoids reading a multi-gigabyte ZIP into browser memory.
+      Add multiple ZIPs or frame folders, then either concatenate them into one longer WebM or render them concurrently as a video collage. The current encoder uses WebCodecs with explicit frame timestamps, not real-time MediaRecorder timing. For multi-GB sources, unzip first and use folder mode.
     </p>
 
     <div class="grid">
       <section class="card">
         <div id="drop" class="drop">
           <div>
-            <strong>Drop a small/medium ZIP here</strong>
-            <span>or click to choose a ZIP. For multi-GB jobs, use “Choose frame folder” below instead.</span>
+            <strong>Drop ZIP file(s) here</strong>
+            <span>or use the buttons below. Folder mode can be added repeatedly, one folder at a time.</span>
           </div>
         </div>
-        <input id="zipFile" type="file" accept=".zip,application/zip,application/x-zip-compressed" />
+        <input id="zipFile" type="file" accept=".zip,application/zip,application/x-zip-compressed" multiple />
+        <input id="directZipFile" type="file" accept=".zip,application/zip,application/x-zip-compressed" multiple />
+        <input id="sampleZipFile" type="file" accept=".zip,application/zip,application/x-zip-compressed" multiple />
         <input id="folderInput" type="file" webkitdirectory directory multiple />
 
         <div class="button-row">
-          <button id="chooseZip" class="secondary">Choose ZIP</button>
-          <button id="chooseFolder" class="secondary">Choose frame folder</button>
+          <button id="chooseZip" class="secondary">Add ZIP(s)</button>
+          <button id="directConcatZip" class="secondary">Direct concat ZIPs</button>
+          <button id="chooseFolder" class="secondary">Add frame folder</button>
           <button id="test" class="secondary">Run self-tests</button>
+        </div>
+
+        <h2>Music sample ZIP</h2>
+        <div class="row3">
+          <div>
+            <label for="overviewCount">Overview frames</label>
+            <input id="overviewCount" type="number" min="10" max="500" value="160" />
+          </div>
+          <div>
+            <label for="burstCount">Bursts</label>
+            <input id="burstCount" type="number" min="0" max="12" value="4" />
+          </div>
+          <div>
+            <label for="burstSeconds">Seconds per burst</label>
+            <input id="burstSeconds" type="number" min="0.25" max="10" step="0.25" value="2" />
+          </div>
+        </div>
+        <div class="row3">
+          <div>
+            <label for="sampleExportMode">Sample export mode</label>
+            <select id="sampleExportMode">
+              <option value="jpeg" selected>JPEG thumbnails</option>
+              <option value="original">Original frame files</option>
+            </select>
+          </div>
+          <div>
+            <label for="overviewSampleSize">Overview frame size</label>
+            <select id="overviewSampleSize">
+              <option value="256" selected>256×256</option>
+              <option value="384">384×384</option>
+            </select>
+          </div>
+          <div>
+            <label for="burstSampleSize">Burst frame size</label>
+            <select id="burstSampleSize">
+              <option value="384" selected>384×384</option>
+              <option value="256">256×256</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="burstStride">Burst frame stride</label>
+            <select id="burstStride">
+              <option value="1" selected>Every frame</option>
+              <option value="2">Every 2nd frame</option>
+              <option value="3">Every 3rd frame</option>
+              <option value="4">Every 4th frame</option>
+            </select>
+          </div>
+          <div>
+            <label for="sampleJpegQuality">JPEG quality</label>
+            <input id="sampleJpegQuality" type="number" min="80" max="90" step="1" value="85" />
+          </div>
+        </div>
+        <div class="small" style="margin-top: 8px;">
+          Creates <code>sample_frames/overview/</code> and <code>sample_frames/bursts/burstN/</code>. JPEG mode writes smaller thumbnail files while keeping frame numbers in filenames.
+        </div>
+        <div class="button-row">
+          <button id="sampleFromSources" class="secondary" disabled>Sample loaded sources</button>
+          <button id="directSampleZip" class="secondary">Direct sample ZIPs</button>
         </div>
 
         <div class="row">
           <div>
+            <label for="zipLimitGB">Max ZIP size to try, in GB</label>
+            <input id="zipLimitGB" type="number" min="0.1" max="10" step="0.1" value="1.5" />
+          </div>
+          <div class="small" style="align-self:end; padding-bottom: 8px;">
+            Higher values may fail from browser memory limits. Folder mode is still safer for large jobs.
+          </div>
+        </div>
+
+        <h2>Sources</h2>
+        <div id="sourceList" class="source-list">
+          <div class="small">No sources added yet.</div>
+        </div>
+
+        <h2>Output</h2>
+        <div class="row">
+          <div>
+            <label for="mode">Mode</label>
+            <select id="mode">
+              <option value="concat" selected>Concatenate: one after another</option>
+              <option value="collage">Collage: play concurrently</option>
+            </select>
+          </div>
+          <div>
             <label for="fps">Frames per second</label>
             <input id="fps" type="number" min="1" max="120" value="24" />
           </div>
+        </div>
+        <div id="modeNote" class="mode-note">Concatenate mode writes source 1, then source 2, etc., using the source order below.</div>
+
+        <div id="collageOptions" class="collage-options">
+          <div class="row3">
+            <div>
+              <label for="rows">Collage rows</label>
+              <input id="rows" type="number" min="1" max="12" value="2" />
+            </div>
+            <div>
+              <label for="cols">Collage columns</label>
+              <input id="cols" type="number" min="1" max="12" value="3" />
+            </div>
+            <div>
+              <label for="ratioPreset">Collage aspect ratio</label>
+              <select id="ratioPreset">
+                <option value="16:9" selected>16:9</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+                <option value="3:2">3:2</option>
+                <option value="9:16">9:16</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+          </div>
+          <div class="row3">
+            <div>
+              <label for="ratioW">Custom ratio width</label>
+              <input id="ratioW" type="number" min="1" max="1000" value="16" />
+            </div>
+            <div>
+              <label for="ratioH">Custom ratio height</label>
+              <input id="ratioH" type="number" min="1" max="1000" value="9" />
+            </div>
+            <div>
+              <label for="collageEnd">If clips differ in length</label>
+              <select id="collageEnd">
+                <option value="shortest" selected>Stop at shortest common length</option>
+                <option value="freeze">Use longest; freeze last frame</option>
+                <option value="loop">Use longest; loop shorter clips</option>
+                <option value="black">Use longest; blank finished clips</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
           <div>
             <label for="quality">Quality</label>
             <select id="quality">
@@ -164,16 +351,25 @@
               <option value="veryhigh">Very high</option>
             </select>
           </div>
+          <div>
+            <label for="scale">Output size</label>
+            <select id="scale">
+              <option value="original">Use source size / ratio base</option>
+              <option value="1080" selected>Fit within 1080×1080</option>
+              <option value="720">Fit within 720×720</option>
+              <option value="512">Fit within 512×512</option>
+              <option value="2160">Fit within 2160×2160</option>
+            </select>
+          </div>
         </div>
 
         <div class="row">
           <div>
-            <label for="scale">Resize output</label>
-            <select id="scale">
-              <option value="original">Keep original size</option>
-              <option value="1080" selected>Fit within 1080×1080</option>
-              <option value="720">Fit within 720×720</option>
-              <option value="512">Fit within 512×512</option>
+            <label for="fitMode">Frame fit inside target</label>
+            <select id="fitMode">
+              <option value="contain" selected>Contain: no cropping</option>
+              <option value="cover">Cover: fill and crop</option>
+              <option value="stretch">Stretch: distort if needed</option>
             </select>
           </div>
           <div>
@@ -187,31 +383,36 @@
           </div>
         </div>
 
+        <label class="checkline" for="fixMetadata">
+          <input id="fixMetadata" type="checkbox" disabled />
+          <span>Legacy MediaRecorder metadata fixer. The normal path now uses WebCodecs + WebM muxing with explicit timestamps, so this is not used.</span>
+        </label>
+
         <div class="button-row">
           <button id="make" disabled>Make WebM</button>
-          <button id="clear" class="secondary">Clear</button>
+          <button id="clear" class="secondary">Clear all</button>
           <button id="inspect" class="secondary" disabled>Inspect frame list</button>
         </div>
 
         <a id="download" class="download" download>Download video</a>
 
         <div class="bar"><div id="fill" class="fill"></div></div>
-        <div id="log" class="log">Waiting for frames…</div>
+        <div id="log" class="log">Waiting for sources…</div>
       </section>
 
       <aside class="card">
         <div id="preview" class="preview empty">First frame preview will appear here.</div>
         <div class="stats">
-          <div class="stat"><b id="frameCount">0</b><span>frames</span></div>
+          <div class="stat"><b id="sourceCount">0</b><span>sources</span></div>
+          <div class="stat"><b id="frameCount">0</b><span>output frames</span></div>
           <div class="stat"><b id="duration">0s</b><span>duration</span></div>
-          <div class="stat"><b id="size">—</b><span>input size</span></div>
-          <div class="stat"><b id="dims">—</b><span>frame size</span></div>
+          <div class="stat"><b id="dims">—</b><span>output size</span></div>
         </div>
         <p class="warn">
-          ZIP mode is deliberately blocked above 1 GB because browser ZIP libraries usually need too much memory. Folder mode processes each image file on demand and is the practical path for thousands of frames or multi-GB sources.
+          ZIP mode has an adjustable safety cap, defaulting to 1.5 GB per ZIP, because browser ZIP libraries usually need too much memory. Folder mode is the practical path for huge frame sets.
         </p>
         <p class="small">
-          Encoding uses MediaRecorder, so it records in roughly real time. A two-minute 24 fps sequence will take about two minutes to create. Keep the tab visible while recording.
+          Encoding uses WebCodecs with explicit timestamps. It should produce a 9,000-frame, 30 fps file as a 300-second video even if encoding takes more or less than 300 seconds.
         </p>
         <div id="capabilities" class="small"></div>
       </aside>
@@ -222,38 +423,63 @@
 (() => {
   'use strict';
 
-  const MAX_ZIP_BYTES = 1024 * 1024 * 1024; // 1 GiB. JSZip/browser memory gets risky above this.
+  const DEFAULT_MAX_ZIP_BYTES = 1.5 * 1024 * 1024 * 1024; // 1.5 GiB default. JSZip/browser memory gets risky above this.
 
   const dom = {
     drop: document.getElementById('drop'),
     zipFile: document.getElementById('zipFile'),
     folderInput: document.getElementById('folderInput'),
+    directZipFile: document.getElementById('directZipFile'),
+    sampleZipFile: document.getElementById('sampleZipFile'),
+    zipLimitGB: document.getElementById('zipLimitGB'),
+    overviewCount: document.getElementById('overviewCount'),
+    burstCount: document.getElementById('burstCount'),
+    burstSeconds: document.getElementById('burstSeconds'),
+    sampleExportMode: document.getElementById('sampleExportMode'),
+    overviewSampleSize: document.getElementById('overviewSampleSize'),
+    burstSampleSize: document.getElementById('burstSampleSize'),
+    burstStride: document.getElementById('burstStride'),
+    sampleJpegQuality: document.getElementById('sampleJpegQuality'),
     chooseZip: document.getElementById('chooseZip'),
+    directConcatZip: document.getElementById('directConcatZip'),
+    directSampleZip: document.getElementById('directSampleZip'),
+    sampleFromSources: document.getElementById('sampleFromSources'),
     chooseFolder: document.getElementById('chooseFolder'),
+    mode: document.getElementById('mode'),
+    modeNote: document.getElementById('modeNote'),
+    collageOptions: document.getElementById('collageOptions'),
+    rows: document.getElementById('rows'),
+    cols: document.getElementById('cols'),
+    ratioPreset: document.getElementById('ratioPreset'),
+    ratioW: document.getElementById('ratioW'),
+    ratioH: document.getElementById('ratioH'),
+    collageEnd: document.getElementById('collageEnd'),
     fpsInput: document.getElementById('fps'),
     qualitySelect: document.getElementById('quality'),
     scaleSelect: document.getElementById('scale'),
+    fitMode: document.getElementById('fitMode'),
     mimeChoice: document.getElementById('mimeChoice'),
+    fixMetadata: document.getElementById('fixMetadata'),
     makeBtn: document.getElementById('make'),
     testBtn: document.getElementById('test'),
     clearBtn: document.getElementById('clear'),
     inspectBtn: document.getElementById('inspect'),
+    sourceList: document.getElementById('sourceList'),
     downloadLink: document.getElementById('download'),
     logEl: document.getElementById('log'),
     fill: document.getElementById('fill'),
     preview: document.getElementById('preview'),
+    sourceCountEl: document.getElementById('sourceCount'),
     frameCountEl: document.getElementById('frameCount'),
     durationEl: document.getElementById('duration'),
-    sizeEl: document.getElementById('size'),
     dimsEl: document.getElementById('dims'),
     capabilities: document.getElementById('capabilities')
   };
 
-  let inputName = 'frames';
-  let frames = [];
-  let firstFrameSize = null;
+  let sources = [];
   let frameURLs = [];
   let outputURL = null;
+  let nextSourceId = 1;
 
   const imageExt = /\.(png|jpe?g|webp|bmp)$/i;
   const hiddenPath = /(^|\/)__MACOSX\//i;
@@ -265,7 +491,7 @@
     dom.logEl.scrollTop = dom.logEl.scrollHeight;
   }
 
-  function resetLog(message = 'Waiting for frames…') {
+  function resetLog(message = 'Waiting for sources…') {
     dom.logEl.textContent = message;
   }
 
@@ -287,6 +513,16 @@
 
   function naturalCompare(a, b) {
     return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  }
+
+  function clampInt(value, min, max, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(n)));
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   function inferFPSFromName(name) {
@@ -329,27 +565,91 @@
     return Math.max(1_000_000, Math.round(pixels * fps * multiplier));
   }
 
+  function getFPS() {
+    return clampInt(dom.fpsInput.value, 1, 120, 24);
+  }
+
+  function getMaxZipBytes() {
+    const gb = Number(dom.zipLimitGB.value);
+    if (!Number.isFinite(gb) || gb <= 0) return DEFAULT_MAX_ZIP_BYTES;
+    return gb * 1024 * 1024 * 1024;
+  }
+
+  function getTotalInputBytes() {
+    return sources.reduce((sum, source) => sum + (source.totalBytes || 0), 0);
+  }
+
+  function getConcatFrameCount() {
+    return sources.reduce((sum, source) => sum + source.frames.length, 0);
+  }
+
+  function getCollageFrameCount() {
+    if (!sources.length) return 0;
+    const lengths = sources.map(source => source.frames.length);
+    if (dom.collageEnd.value === 'shortest') return Math.min(...lengths);
+    return Math.max(...lengths);
+  }
+
+  function getOutputFrameCount() {
+    return dom.mode.value === 'collage' ? getCollageFrameCount() : getConcatFrameCount();
+  }
+
+  function getAspectRatio() {
+    const preset = dom.ratioPreset.value;
+    if (preset !== 'custom') {
+      const [w, h] = preset.split(':').map(Number);
+      return { w, h };
+    }
+    return {
+      w: clampInt(dom.ratioW.value, 1, 1000, 16),
+      h: clampInt(dom.ratioH.value, 1, 1000, 9)
+    };
+  }
+
+  function even(n) {
+    return Math.max(2, Math.round(n) - (Math.round(n) % 2));
+  }
+
+  function getOutputSize() {
+    const scale = dom.scaleSelect.value;
+    const mode = dom.mode.value;
+
+    if (mode === 'collage') {
+      const ratio = getAspectRatio();
+      const max = scale === 'original' ? 1080 : Number(scale);
+      let width, height;
+      if (ratio.w >= ratio.h) {
+        width = max;
+        height = max * ratio.h / ratio.w;
+      } else {
+        height = max;
+        width = max * ratio.w / ratio.h;
+      }
+      return { width: even(width), height: even(height) };
+    }
+
+    const first = sources[0]?.dimensions || { width: 1080, height: 1080 };
+    if (scale === 'original') return { width: even(first.width), height: even(first.height) };
+    const max = Number(scale);
+    const ratio = Math.min(max / first.width, max / first.height, 1);
+    return { width: even(first.width * ratio), height: even(first.height * ratio) };
+  }
+
   function updateStats() {
-    const fps = Math.max(1, Number(dom.fpsInput.value) || 24);
-    dom.frameCountEl.textContent = frames.length.toLocaleString();
-    const seconds = frames.length / fps;
+    const fps = getFPS();
+    const frames = getOutputFrameCount();
+    const seconds = frames / fps;
+    const output = sources.length ? getOutputSize() : null;
+
+    dom.sourceCountEl.textContent = sources.length.toLocaleString();
+    dom.frameCountEl.textContent = frames.toLocaleString();
     dom.durationEl.textContent = seconds >= 60
       ? `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
       : `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
-  }
-
-  function getOutputSize(width, height, scaleValue) {
-    let outW = width;
-    let outH = height;
-    if (scaleValue !== 'original') {
-      const max = Number(scaleValue);
-      const ratio = Math.min(max / width, max / height, 1);
-      outW = Math.round(width * ratio);
-      outH = Math.round(height * ratio);
-    }
-    outW = Math.max(2, outW - (outW % 2));
-    outH = Math.max(2, outH - (outH % 2));
-    return { width: outW, height: outH };
+    dom.dimsEl.textContent = output ? `${output.width}×${output.height}` : '—';
+    dom.makeBtn.disabled = sources.length === 0;
+    dom.inspectBtn.disabled = sources.length === 0;
+    dom.sampleFromSources.disabled = sources.length === 0;
   }
 
   async function frameToBlob(frame) {
@@ -362,9 +662,7 @@
     throw new Error(`Frame has no readable source: ${frame.name}`);
   }
 
-  async function decodeImage(frame) {
-    const blob = await frameToBlob(frame);
-
+  async function decodeBlobImage(blob, name = 'image') {
     if ('createImageBitmap' in window) {
       try {
         return await createImageBitmap(blob);
@@ -380,10 +678,15 @@
     img.decoding = 'async';
     await new Promise((resolve, reject) => {
       img.onload = resolve;
-      img.onerror = () => reject(new Error(`Could not decode image: ${frame.name}`));
+      img.onerror = () => reject(new Error(`Could not decode image: ${name}`));
       img.src = url;
     });
     return img;
+  }
+
+  async function decodeImage(frame) {
+    const blob = await frameToBlob(frame);
+    return decodeBlobImage(blob, frame.name);
   }
 
   async function getImageDimensions(frame) {
@@ -408,85 +711,684 @@
     return '';
   }
 
-  function resetForNewInput(name, totalBytes) {
-    revokeURLs();
-    inputName = name || 'frames';
-    frames = [];
-    firstFrameSize = null;
-    dom.makeBtn.disabled = true;
-    dom.inspectBtn.disabled = true;
-    dom.downloadLink.style.display = 'none';
-    setProgress(0);
-    dom.sizeEl.textContent = Number.isFinite(totalBytes) ? formatBytes(totalBytes) : '—';
-    dom.frameCountEl.textContent = '0';
-    dom.durationEl.textContent = '0s';
-    dom.dimsEl.textContent = '—';
-    dom.preview.className = 'preview empty';
-    dom.preview.textContent = 'Loading first frame…';
+  async function maybeFixWebmDuration(blob, durationMs) {
+    // Kept only for older MediaRecorder output. The WebCodecs path below should not need it.
+    if (!dom.fixMetadata?.checked) return blob;
+    if (!blob || !blob.size || !Number.isFinite(durationMs) || durationMs <= 0) return blob;
+
+    try {
+      log(`Fixing WebM duration metadata: ${(durationMs / 1000).toFixed(2)}s…`);
+      const mod = await import('https://esm.sh/@fix-webm-duration/fix@1.0.6');
+      const fixWebmDuration = mod.fixWebmDuration || mod.default;
+      if (typeof fixWebmDuration !== 'function') throw new Error('fixWebmDuration export not found.');
+      const fixed = await fixWebmDuration(blob, durationMs, { logger: false });
+      if (fixed && fixed.size) {
+        log(`Metadata fix complete. Size changed from ${formatBytes(blob.size)} to ${formatBytes(fixed.size)}.`);
+        return fixed;
+      }
+      log('Metadata fixer returned an empty result; keeping original WebM.', 'warn');
+      return blob;
+    } catch (err) {
+      log(`Could not fix WebM duration metadata: ${err?.message || err}. Keeping original WebM.`, 'warn');
+      return blob;
+    }
   }
 
-  async function finishFrameLoad(sourceLabel, totalBytes) {
-    if (!frames.length) throw new Error('No image frames found. Expected PNG, JPEG, WebP, or BMP files.');
+  let webmMuxerModulePromise = null;
 
-    frames.sort((a, b) => naturalCompare(a.name, b.name));
-    const inferred = inferFPSFromFramesOrInput(inputName, frames);
-    if (inferred) {
-      dom.fpsInput.value = inferred;
-      log(`Inferred FPS from name: ${inferred}`);
+  async function loadWebmMuxerModule() {
+    if (!webmMuxerModulePromise) {
+      log('Loading WebM muxer module…');
+      webmMuxerModulePromise = import('https://cdn.jsdelivr.net/npm/webm-muxer@5.1.4/build/webm-muxer.mjs');
+    }
+    return webmMuxerModulePromise;
+  }
+
+  async function chooseWebCodecsConfig(width, height, fps, bitrate) {
+    if (!('VideoEncoder' in window) || !('VideoFrame' in window)) {
+      throw new Error('WebCodecs VideoEncoder/VideoFrame is not available in this browser. Use current Chrome or Edge, preferably from localhost or GitHub Pages.');
     }
 
-    log(`Found ${frames.length.toLocaleString()} image frames from ${sourceLabel}.`);
-    log(`First: ${frames[0].name}`);
-    log(`Last:  ${frames[frames.length - 1].name}`);
+    const preferred = dom.mimeChoice.value;
+    const vp9 = { label: 'VP9', encoderCodec: 'vp09.00.10.08', muxerCodec: 'V_VP9' };
+    const vp8 = { label: 'VP8', encoderCodec: 'vp8', muxerCodec: 'V_VP8' };
+    let candidates;
+    if (preferred.includes('vp8')) candidates = [vp8, vp9];
+    else if (preferred.includes('vp9')) candidates = [vp9, vp8];
+    else candidates = [vp9, vp8];
 
-    firstFrameSize = await getImageDimensions(frames[0]);
-    dom.dimsEl.textContent = `${firstFrameSize.width}×${firstFrameSize.height}`;
+    for (const candidate of candidates) {
+      const config = {
+        codec: candidate.encoderCodec,
+        width,
+        height,
+        bitrate,
+        framerate: fps
+      };
+      try {
+        if (typeof VideoEncoder.isConfigSupported === 'function') {
+          const support = await VideoEncoder.isConfigSupported(config);
+          if (support.supported) return { config: support.config || config, ...candidate };
+        } else {
+          return { config, ...candidate };
+        }
+      } catch (_) {
+        // Try the next codec.
+      }
+    }
 
-    const firstBlob = await frameToBlob(frames[0]);
+    throw new Error('This browser does not support WebCodecs encoding for VP9 or VP8 WebM. Try current Chrome or Edge.');
+  }
+
+  async function waitForEncoderQueue(encoder, maxQueueSize = 6) {
+    while (encoder.encodeQueueSize > maxQueueSize) {
+      await sleep(8);
+    }
+  }
+
+  async function createWebCodecsSession({ output, fps, quality, label }) {
+    const { Muxer, ArrayBufferTarget } = await loadWebmMuxerModule();
+    const bitrate = qualityToVideoBitsPerSecond(quality, output.width, output.height, fps);
+    const chosen = await chooseWebCodecsConfig(output.width, output.height, fps, bitrate);
+    const target = new ArrayBufferTarget();
+    const muxer = new Muxer({
+      target,
+      video: {
+        codec: chosen.muxerCodec,
+        width: output.width,
+        height: output.height,
+        frameRate: fps
+      }
+    });
+
+    let encoderError = null;
+    const encoder = new VideoEncoder({
+      output: (chunk, meta) => {
+        try { muxer.addVideoChunk(chunk, meta); }
+        catch (err) { encoderError = err; }
+      },
+      error: err => { encoderError = err; }
+    });
+    encoder.configure(chosen.config);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = output.width;
+    canvas.height = output.height;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Could not create a 2D canvas context.');
+
+    const frameDurationUs = Math.round(1_000_000 / fps);
+    const keyFrameEvery = Math.max(1, Math.round(fps * 2));
+    log(`Encoding with WebCodecs ${chosen.label}, ${fps} fps, ${output.width}×${output.height}, target ${formatBytes(bitrate / 8)}/s${label ? ` (${label})` : ''}.`);
+
+    return {
+      canvas,
+      ctx,
+      async encodeCurrentCanvasFrame(frameNumber) {
+        if (encoderError) throw encoderError;
+        const timestamp = Math.round(frameNumber * 1_000_000 / fps);
+        const frame = new VideoFrame(canvas, {
+          timestamp,
+          duration: frameDurationUs
+        });
+        encoder.encode(frame, { keyFrame: frameNumber % keyFrameEvery === 0 });
+        frame.close();
+        await waitForEncoderQueue(encoder);
+        if (encoderError) throw encoderError;
+      },
+      async finish() {
+        await encoder.flush();
+        if (encoderError) throw encoderError;
+        muxer.finalize();
+        encoder.close();
+        const blob = new Blob([target.buffer], { type: 'video/webm' });
+        if (!blob.size) throw new Error('WebCodecs/WebM muxing produced an empty file.');
+        return blob;
+      }
+    };
+  }
+
+  function sanitizeBaseName(name) {
+    return (name || 'frames').replace(/\.zip$/i, '').replace(/[^a-z0-9_\- .]+/gi, '_').slice(0, 80) || 'frames';
+  }
+
+  function getFrameNumberFromName(name) {
+    const numbers = String(name || '').match(/[0-9]+/g);
+    if (!numbers || !numbers.length) return null;
+    const n = Number(numbers[numbers.length - 1]);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function getSampleSettings() {
+    return {
+      overviewCount: clampInt(dom.overviewCount.value, 10, 500, 160),
+      burstCount: clampInt(dom.burstCount.value, 0, 12, 4),
+      burstSeconds: Math.max(0.25, Math.min(10, Number(dom.burstSeconds.value) || 2)),
+      burstStride: clampInt(dom.burstStride.value, 1, 10, 1),
+      fps: getFPS()
+    };
+  }
+
+  function uniqueSortedIndices(indices, maxExclusive) {
+    return [...new Set(indices
+      .map(n => Math.round(n))
+      .filter(n => Number.isFinite(n) && n >= 0 && n < maxExclusive))]
+      .sort((a, b) => a - b);
+  }
+
+  function makeEvenSampleIndices(totalFrames, count) {
+    if (totalFrames <= 0) return [];
+    if (count >= totalFrames) return Array.from({ length: totalFrames }, (_, i) => i);
+    if (count <= 1) return [0];
+    const last = totalFrames - 1;
+    return uniqueSortedIndices(Array.from({ length: count }, (_, i) => i * last / (count - 1)), totalFrames);
+  }
+
+  function makeBurstStartIndices(totalFrames, burstCount, burstLengthFrames) {
+    if (totalFrames <= 0 || burstCount <= 0) return [];
+    const maxStart = Math.max(0, totalFrames - burstLengthFrames);
+    if (burstCount === 1) return [Math.round(maxStart / 2)];
+    return uniqueSortedIndices(Array.from({ length: burstCount }, (_, i) => i * maxStart / (burstCount - 1)), totalFrames);
+  }
+
+  function makeSamplePlan(totalFrames) {
+    const settings = getSampleSettings();
+    const overview = makeEvenSampleIndices(totalFrames, Math.min(settings.overviewCount, totalFrames));
+    const burstLengthFrames = Math.max(1, Math.round(settings.burstSeconds * settings.fps));
+    const burstStarts = makeBurstStartIndices(totalFrames, settings.burstCount, burstLengthFrames);
+    const bursts = burstStarts.map((start, burstIndex) => {
+      const indices = [];
+      const end = Math.min(totalFrames, start + burstLengthFrames);
+      for (let i = start; i < end; i += settings.burstStride) indices.push(i);
+      return { burstIndex, start, indices };
+    });
+    const wanted = new Set(overview);
+    for (const burst of bursts) for (const i of burst.indices) wanted.add(i);
+    return { settings, overview, bursts, wanted };
+  }
+
+  function zipPathSafeBase(name) {
+    return String(name || 'frame').split('/').pop().replace(new RegExp('[^a-z0-9_.-]+', 'gi'), '_') || 'frame.png';
+  }
+
+  function getSampleExportSettings() {
+    return {
+      mode: dom.sampleExportMode.value || 'jpeg',
+      overviewSize: clampInt(dom.overviewSampleSize.value, 64, 2048, 256),
+      burstSize: clampInt(dom.burstSampleSize.value, 64, 2048, 384),
+      jpegQualityPercent: clampInt(dom.sampleJpegQuality.value, 80, 90, 85)
+    };
+  }
+
+  function sampleOutputExtension(originalName, exportMode) {
+    if (exportMode === 'jpeg') return 'jpg';
+    const parts = String(originalName || '').split('.');
+    return parts.length > 1 ? parts.pop().toLowerCase() : 'png';
+  }
+
+  function numberedSampleFilename(sampleIndex, originalName, globalFrameIndex, exportMode = 'jpeg') {
+    const original = zipPathSafeBase(originalName);
+    const dot = original.lastIndexOf('.');
+    const baseOriginal = dot > 0 ? original.slice(0, dot) : original;
+    const frameNumber = getFrameNumberFromName(originalName);
+    const framePart = frameNumber === null ? `global_${String(globalFrameIndex + 1).padStart(6, '0')}` : `frame_${String(frameNumber).padStart(6, '0')}`;
+    const ext = sampleOutputExtension(originalName, exportMode);
+    return `${String(sampleIndex + 1).padStart(4, '0')}_${framePart}_${baseOriginal}.${ext}`;
+  }
+
+  async function makeSampleExportBlob(frame, squareSize, exportMode, jpegQualityPercent) {
+    if (exportMode !== 'jpeg') return await frameToBlob(frame);
+
+    const image = await decodeImage(frame);
+    const canvas = document.createElement('canvas');
+    canvas.width = squareSize;
+    canvas.height = squareSize;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Could not create 2D canvas for sample JPEG export.');
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, squareSize, squareSize);
+    drawImageInto(ctx, image, 0, 0, squareSize, squareSize, 'contain');
+    if (typeof image.close === 'function') image.close();
+
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        blob => blob ? resolve(blob) : reject(new Error('Failed to create JPEG sample blob.')),
+        'image/jpeg',
+        jpegQualityPercent / 100
+      );
+    });
+  }
+
+  function findConcatFrameByGlobalIndex(globalIndex) {
+    let offset = globalIndex;
+    for (const source of sources) {
+      if (offset < source.frames.length) return { source, frame: source.frames[offset], localIndex: offset };
+      offset -= source.frames.length;
+    }
+    return null;
+  }
+
+  function makeManifestRowsHeader() {
+    return ['section', 'sample_index', 'global_frame_index_1_based', 'time_seconds', 'source_name', 'local_frame_index_1_based', 'original_name', 'exported_path'];
+  }
+
+  function csvEscape(value) {
+    const s = String(value ?? '');
+    if (s.includes('"') || s.includes(',') || s.includes(String.fromCharCode(10))) return `"${s.replaceAll('"', '""')}"`;
+    return s;
+  }
+
+  function addReadmeToSampleZip(zip, totalFrames, plan, sourceNames, exportSettings) {
+    const lines = [
+      'Music sample frame package',
+      '',
+      `FPS: ${plan.settings.fps}`,
+      `Total source frames: ${totalFrames}`,
+      `Estimated source duration seconds: ${(totalFrames / plan.settings.fps).toFixed(3)}`,
+      `Overview frames requested: ${plan.settings.overviewCount}`,
+      `Overview frames written: ${plan.overview.length}`,
+      `Bursts requested: ${plan.settings.burstCount}`,
+      `Burst seconds: ${plan.settings.burstSeconds}`,
+      `Burst stride: ${plan.settings.burstStride}`,
+      `Sample export mode: ${exportSettings.mode}`,
+      `Overview sample size: ${exportSettings.mode === 'jpeg' ? `${exportSettings.overviewSize}x${exportSettings.overviewSize} JPEG` : 'original files'}`,
+      `Burst sample size: ${exportSettings.mode === 'jpeg' ? `${exportSettings.burstSize}x${exportSettings.burstSize} JPEG` : 'original files'}`,
+      `JPEG quality: ${exportSettings.jpegQualityPercent}`,
+      '',
+      'Sources:',
+      ...sourceNames.map((name, i) => `  ${i + 1}. ${name}`),
+      '',
+      'Structure:',
+      '  sample_frames/overview/ -- evenly sampled frames from the whole timeline',
+      '  sample_frames/bursts/burstN/ -- consecutive local motion bursts',
+      '',
+      'Original filenames are preserved at the end of each exported filename where possible.'
+    ];
+    zip.file('sample_frames/README.txt', lines.join(String.fromCharCode(10)));
+  }
+
+  function publishDownload(blob, fileName) {
+    if (outputURL) URL.revokeObjectURL(outputURL);
+    outputURL = URL.createObjectURL(blob);
+    dom.downloadLink.href = outputURL;
+    dom.downloadLink.download = fileName;
+    dom.downloadLink.textContent = `Download ${fileName} (${formatBytes(blob.size)})`;
+    dom.downloadLink.style.display = 'block';
+  }
+
+  async function makeSampleZipFromLoadedSources() {
+    if (!sources.length) return;
+    if (!window.JSZip) throw new Error('JSZip did not load. Check network access to the CDN.');
+
+    const totalFrames = getConcatFrameCount();
+    const plan = makeSamplePlan(totalFrames);
+    const exportSettings = getSampleExportSettings();
+    const zip = new JSZip();
+    const rows = [makeManifestRowsHeader()];
+    const fps = plan.settings.fps;
+    const totalToWrite = plan.overview.length + plan.bursts.reduce((sum, burst) => sum + burst.indices.length, 0);
+    let written = 0;
+
+    dom.downloadLink.style.display = 'none';
+    setProgress(0);
+    log(`Creating music sample ZIP from loaded sources: ${plan.overview.length} overview frames, ${plan.bursts.length} bursts, ${exportSettings.mode === 'jpeg' ? 'JPEG thumbnails' : 'original files'}.`);
+
+    for (let i = 0; i < plan.overview.length; i += 1) {
+      const globalIndex = plan.overview[i];
+      const item = findConcatFrameByGlobalIndex(globalIndex);
+      if (!item) continue;
+      const blob = await makeSampleExportBlob(item.frame, exportSettings.overviewSize, exportSettings.mode, exportSettings.jpegQualityPercent);
+      const fileName = numberedSampleFilename(i, item.frame.name, globalIndex, exportSettings.mode);
+      const path = `sample_frames/overview/${fileName}`;
+      zip.file(path, blob);
+      rows.push(['overview', i + 1, globalIndex + 1, (globalIndex / fps).toFixed(3), item.source.name, item.localIndex + 1, item.frame.name, path]);
+      written += 1;
+      setProgress(written / Math.max(1, totalToWrite) * 90);
+      if (written % 10 === 0) await sleep(0);
+    }
+
+    for (const burst of plan.bursts) {
+      for (let j = 0; j < burst.indices.length; j += 1) {
+        const globalIndex = burst.indices[j];
+        const item = findConcatFrameByGlobalIndex(globalIndex);
+        if (!item) continue;
+        const blob = await makeSampleExportBlob(item.frame, exportSettings.burstSize, exportSettings.mode, exportSettings.jpegQualityPercent);
+        const fileName = numberedSampleFilename(j, item.frame.name, globalIndex, exportSettings.mode);
+        const path = `sample_frames/bursts/burst${String(burst.burstIndex + 1).padStart(2, '0')}/${fileName}`;
+        zip.file(path, blob);
+        rows.push([`burst${burst.burstIndex + 1}`, j + 1, globalIndex + 1, (globalIndex / fps).toFixed(3), item.source.name, item.localIndex + 1, item.frame.name, path]);
+        written += 1;
+        setProgress(written / Math.max(1, totalToWrite) * 90);
+        if (written % 10 === 0) await sleep(0);
+      }
+    }
+
+    addReadmeToSampleZip(zip, totalFrames, plan, sources.map(s => s.name), exportSettings);
+    zip.file('sample_frames/manifest.csv', rows.map(row => row.map(csvEscape).join(',')).join(String.fromCharCode(10)));
+    const outBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
+    publishDownload(outBlob, `music_sample_${sources.length}_sources_${fps}fps.zip`);
+    log(`Created sample ZIP: ${formatBytes(outBlob.size)}.`);
+    setProgress(100);
+  }
+
+  async function makeDirectSampleZipFromZipFiles(fileList) {
+    const files = Array.from(fileList || []).sort((a, b) => naturalCompare(a.name, b.name));
+    if (!files.length) return;
+    if (!window.JSZip) throw new Error('JSZip did not load. Check network access to the CDN.');
+
+    dom.directSampleZip.disabled = true;
+    dom.sampleFromSources.disabled = true;
+    dom.downloadLink.style.display = 'none';
+    setProgress(0);
+
+    const exportSettings = getSampleExportSettings();
+    const zipInfos = [];
+    let totalFrames = 0;
+    try {
+      log(`Planning direct music sample ZIP from ${files.length} ZIP files in filename order...`);
+      for (const file of files) {
+        log(`Scanning ZIP ${file.name}...`);
+        const loaded = await loadZipEntries(file);
+        zipInfos.push({ file, start: totalFrames, count: loaded.entries.length });
+        totalFrames += loaded.entries.length;
+        log(`  ${loaded.entries.length.toLocaleString()} frames · first ${loaded.entries[0].name} · last ${loaded.entries[loaded.entries.length - 1].name}`);
+        await sleep(0);
+      }
+
+      const plan = makeSamplePlan(totalFrames);
+      const outZip = new JSZip();
+      const rows = [makeManifestRowsHeader()];
+      const fps = plan.settings.fps;
+      const sampleMap = new Map();
+
+      plan.overview.forEach((globalIndex, i) => {
+        if (!sampleMap.has(globalIndex)) sampleMap.set(globalIndex, []);
+        sampleMap.get(globalIndex).push({ section: 'overview', sampleIndex: i + 1, pathPrefix: 'sample_frames/overview', localSampleIndex: i });
+      });
+      for (const burst of plan.bursts) {
+        burst.indices.forEach((globalIndex, j) => {
+          if (!sampleMap.has(globalIndex)) sampleMap.set(globalIndex, []);
+          sampleMap.get(globalIndex).push({ section: `burst${burst.burstIndex + 1}`, sampleIndex: j + 1, pathPrefix: `sample_frames/bursts/burst${String(burst.burstIndex + 1).padStart(2, '0')}`, localSampleIndex: j });
+        });
+      }
+
+      const totalWanted = [...sampleMap.values()].reduce((sum, list) => sum + list.length, 0);
+      let written = 0;
+      for (const info of zipInfos) {
+        const end = info.start + info.count;
+        const wantedInZip = [...sampleMap.keys()].filter(globalIndex => globalIndex >= info.start && globalIndex < end).sort((a, b) => a - b);
+        if (!wantedInZip.length) continue;
+        log(`Re-reading ${info.file.name} to extract ${wantedInZip.length} sampled frame positions...`);
+        const loaded = await loadZipEntries(info.file);
+        for (const globalIndex of wantedInZip) {
+          const localIndex = globalIndex - info.start;
+          const entry = loaded.entries[localIndex];
+          const tempFrame = {
+            kind: 'zipEntry',
+            name: entry.name,
+            ext: entry.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg'),
+            entry
+          };
+          const requests = sampleMap.get(globalIndex) || [];
+          for (const request of requests) {
+            const isOverview = request.section === 'overview';
+            const targetSize = isOverview ? exportSettings.overviewSize : exportSettings.burstSize;
+            const blob = await makeSampleExportBlob(tempFrame, targetSize, exportSettings.mode, exportSettings.jpegQualityPercent);
+            const fileName = numberedSampleFilename(request.localSampleIndex, entry.name, globalIndex, exportSettings.mode);
+            const path = `${request.pathPrefix}/${fileName}`;
+            outZip.file(path, blob);
+            rows.push([request.section, request.sampleIndex, globalIndex + 1, (globalIndex / fps).toFixed(3), info.file.name, localIndex + 1, entry.name, path]);
+            written += 1;
+            setProgress(written / Math.max(1, totalWanted) * 90);
+          }
+          await sleep(0);
+        }
+      }
+
+      addReadmeToSampleZip(outZip, totalFrames, plan, files.map(f => f.name), exportSettings);
+      outZip.file('sample_frames/manifest.csv', rows.map(row => row.map(csvEscape).join(',')).join(String.fromCharCode(10)));
+      const outBlob = await outZip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
+      publishDownload(outBlob, `music_sample_${files.length}_zips_${fps}fps.zip`);
+      log(`Created direct sample ZIP with ${written.toLocaleString()} sampled files: ${formatBytes(outBlob.size)}.`);
+      setProgress(100);
+    } catch (err) {
+      log(err?.message || String(err), 'error');
+      setProgress(0);
+    } finally {
+      dom.directSampleZip.disabled = false;
+      dom.sampleFromSources.disabled = sources.length === 0;
+    }
+  }
+
+  function renderSources() {
+    if (!sources.length) {
+      dom.sourceList.innerHTML = '<div class="small">No sources added yet.</div>';
+      return;
+    }
+
+    dom.sourceList.innerHTML = sources.map((source, index) => `
+      <div class="source-item" data-source-id="${source.id}">
+        <div>
+          <div class="source-title">${index + 1}. ${escapeHtml(source.name)}</div>
+          <div class="source-meta">${source.frames.length.toLocaleString()} frames · ${source.dimensions ? `${source.dimensions.width}×${source.dimensions.height}` : 'size unknown'} · ${formatBytes(source.totalBytes)} · ${source.kind}</div>
+        </div>
+        <div class="source-actions">
+          <button class="mini" data-action="up" title="Move up">↑</button>
+          <button class="mini" data-action="down" title="Move down">↓</button>
+          <button class="mini danger" data-action="remove" title="Remove">×</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  }
+
+  async function addSourceFromFrames({ name, kind, frames, totalBytes }) {
+    if (!frames.length) throw new Error(`No image frames found in ${name}. Expected PNG, JPEG, WebP, or BMP files.`);
+
+    frames.sort((a, b) => naturalCompare(a.name, b.name));
+    const dimensions = await getImageDimensions(frames[0]);
+    const source = {
+      id: nextSourceId++,
+      name,
+      kind,
+      frames,
+      totalBytes,
+      dimensions,
+      inferredFPS: inferFPSFromFramesOrInput(name, frames)
+    };
+    sources.push(source);
+    // Default to filename order. The user's selection order from Windows/macOS file pickers is not reliable.
+    sources.sort((a, b) => naturalCompare(a.name, b.name));
+
+    if (sources.length === 1 && source.inferredFPS) {
+      dom.fpsInput.value = source.inferredFPS;
+      log(`Inferred FPS from first source name: ${source.inferredFPS}`);
+    }
+
+    log(`Added ${kind}: ${name}`);
+    log(`  ${frames.length.toLocaleString()} frames · first ${frames[0].name} · last ${frames[frames.length - 1].name} · ${dimensions.width}×${dimensions.height}`);
+
+    await updatePreview();
+    renderSources();
+    updateStats();
+  }
+
+  async function updatePreview() {
+    if (!sources.length) {
+      dom.preview.className = 'preview empty';
+      dom.preview.textContent = 'First frame preview will appear here.';
+      return;
+    }
+    const firstFrame = sources[0].frames[0];
+    const firstBlob = await frameToBlob(firstFrame);
     const firstURL = URL.createObjectURL(firstBlob);
     frameURLs.push(firstURL);
     dom.preview.className = 'preview';
     dom.preview.innerHTML = `<img alt="First frame preview" src="${firstURL}">`;
-
-    if (Number.isFinite(totalBytes)) dom.sizeEl.textContent = formatBytes(totalBytes);
-    updateStats();
-    dom.makeBtn.disabled = false;
-    dom.inspectBtn.disabled = false;
-    setProgress(0);
-    log('Ready. Click Make WebM.');
   }
 
-  async function handleZip(file) {
-    resetForNewInput(file.name, file.size);
-    resetLog(`Reading ZIP ${file.name}…`);
-
-    if (file.size > MAX_ZIP_BYTES) {
-      dom.preview.className = 'preview empty';
-      dom.preview.innerHTML = '<span class="error">ZIP too large for browser ZIP mode.</span>';
-      log(`This ZIP is ${formatBytes(file.size)}. The app blocks ZIP mode above ${formatBytes(MAX_ZIP_BYTES)}.`, 'error');
-      log('Unzip it locally, then use Choose frame folder. That mode avoids loading the whole ZIP into memory.', 'warn');
+  async function addZipFile(file) {
+    const maxZipBytes = getMaxZipBytes();
+    if (file.size > maxZipBytes) {
+      log(`Skipped ${file.name}: ${formatBytes(file.size)} exceeds current ZIP safety cap ${formatBytes(maxZipBytes)}. Raise the cap at your own risk, or unzip it and add as a folder.`, 'error');
       return;
     }
 
+    if (!window.JSZip) throw new Error('JSZip did not load. Check network access to the CDN.');
+    log(`Reading ZIP ${file.name}…`);
+    let zip;
     try {
-      if (!window.JSZip) throw new Error('JSZip did not load. Check network access to the CDN.');
+      zip = await JSZip.loadAsync(file);
+    } catch (err) {
+      log(`Initial read failed for ${file.name}; retrying once before giving up…`, 'warn');
+      await sleep(350);
+      zip = await JSZip.loadAsync(file);
+    }
+    const entries = Object.values(zip.files)
+      .filter(entry => !entry.dir && imageExt.test(entry.name) && !hiddenPath.test(entry.name) && !hiddenFile.test(entry.name));
 
-      const zip = await JSZip.loadAsync(file);
-      const entries = Object.values(zip.files)
-        .filter(entry => !entry.dir && imageExt.test(entry.name) && !hiddenPath.test(entry.name) && !hiddenFile.test(entry.name));
+    const frames = entries.map(entry => {
+      const ext = entry.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg');
+      return { kind: 'zipEntry', name: entry.name, ext, entry };
+    });
 
-      frames = entries.map(entry => {
-        const ext = entry.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg');
-        return { kind: 'zipEntry', name: entry.name, ext, entry };
-      });
+    await addSourceFromFrames({ name: file.name, kind: 'ZIP', frames, totalBytes: file.size });
+  }
 
-      await finishFrameLoad(`ZIP ${file.name}`, file.size);
+  async function handleZipFiles(fileList) {
+    // Copy immediately. Some browsers can invalidate live FileList references when the input is cleared.
+    // Sort by filename because OS file pickers do not guarantee selection order.
+    const files = Array.from(fileList || []).sort((a, b) => naturalCompare(a.name, b.name));
+    if (!files.length) return;
+    dom.downloadLink.style.display = 'none';
+    if (outputURL) URL.revokeObjectURL(outputURL);
+    outputURL = null;
+
+    for (let i = 0; i < files.length; i += 1) {
+      setProgress((i / files.length) * 100);
+      try { await addZipFile(files[i]); }
+      catch (err) { log(`${files[i].name}: ${err?.message || err}`, 'error'); }
+    }
+    setProgress(0);
+  }
+
+  async function loadZipEntries(file) {
+    const maxZipBytes = getMaxZipBytes();
+    if (file.size > maxZipBytes) {
+      throw new Error(`${file.name}: ${formatBytes(file.size)} exceeds current ZIP safety cap ${formatBytes(maxZipBytes)}.`);
+    }
+    if (!window.JSZip) throw new Error('JSZip did not load. Check network access to the CDN.');
+    let zip;
+    try {
+      zip = await JSZip.loadAsync(file);
+    } catch (err) {
+      log(`Initial read failed for ${file.name}; retrying once before giving up…`, 'warn');
+      await sleep(350);
+      zip = await JSZip.loadAsync(file);
+    }
+    const entries = Object.values(zip.files)
+      .filter(entry => !entry.dir && imageExt.test(entry.name) && !hiddenPath.test(entry.name) && !hiddenFile.test(entry.name))
+      .sort((a, b) => naturalCompare(a.name, b.name));
+    if (!entries.length) throw new Error(`${file.name}: no image frames found.`);
+    return { zip, entries };
+  }
+
+  function getOutputSizeFromDimensions(dimensions) {
+    const scale = dom.scaleSelect.value;
+    if (scale === 'original') return { width: even(dimensions.width), height: even(dimensions.height) };
+    const max = Number(scale);
+    const ratio = Math.min(max / dimensions.width, max / dimensions.height, 1);
+    return { width: even(dimensions.width * ratio), height: even(dimensions.height * ratio) };
+  }
+
+  async function makeDirectConcatFromZipFiles(fileList) {
+    const files = Array.from(fileList || []).sort((a, b) => naturalCompare(a.name, b.name));
+    if (!files.length) return;
+
+    dom.makeBtn.disabled = true;
+    dom.directConcatZip.disabled = true;
+    dom.downloadLink.style.display = 'none';
+    if (outputURL) URL.revokeObjectURL(outputURL);
+    outputURL = null;
+    setProgress(0);
+
+    log(`Direct concatenating ${files.length} ZIP files in filename order.`);
+    log('This mode reads one ZIP at a time and encodes with explicit WebCodecs timestamps, so output duration should be frameCount / fps.');
+
+    let firstLoaded = null;
+    let session = null;
+    try {
+      log(`Reading ZIP ${files[0].name}…`);
+      firstLoaded = await loadZipEntries(files[0]);
+      const firstBlob = await firstLoaded.entries[0].async('blob');
+      const firstImage = await decodeBlobImage(firstBlob, firstLoaded.entries[0].name);
+      const firstDimensions = { width: firstImage.width || firstImage.naturalWidth, height: firstImage.height || firstImage.naturalHeight };
+      if (typeof firstImage.close === 'function') firstImage.close();
+
+      const output = getOutputSizeFromDimensions(firstDimensions);
+      const fps = getFPS();
+      const quality = dom.qualitySelect.value;
+      const fitMode = dom.fitMode.value;
+
+      session = await createWebCodecsSession({ output, fps, quality, label: 'direct ZIP concat' });
+      dom.preview.className = 'preview';
+      dom.preview.innerHTML = '';
+      dom.preview.appendChild(session.canvas);
+      dom.dimsEl.textContent = `${output.width}×${output.height}`;
+
+      let totalFramesWritten = 0;
+      const encodeStart = performance.now();
+
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+        const file = files[fileIndex];
+        let loaded = fileIndex === 0 ? firstLoaded : null;
+        firstLoaded = null;
+        if (!loaded) {
+          log(`Reading ZIP ${file.name}…`);
+          loaded = await loadZipEntries(file);
+        }
+        log(`Encoding ${file.name}: ${loaded.entries.length.toLocaleString()} frames · first ${loaded.entries[0].name} · last ${loaded.entries[loaded.entries.length - 1].name}`);
+
+        for (let i = 0; i < loaded.entries.length; i += 1) {
+          const entry = loaded.entries[i];
+          const blob = await entry.async('blob');
+          const image = await decodeBlobImage(blob, entry.name);
+          session.ctx.fillStyle = '#000';
+          session.ctx.fillRect(0, 0, output.width, output.height);
+          drawImageInto(session.ctx, image, 0, 0, output.width, output.height, fitMode);
+          if (typeof image.close === 'function') image.close();
+          await session.encodeCurrentCanvasFrame(totalFramesWritten);
+          totalFramesWritten += 1;
+          setProgress(((fileIndex + (i + 1) / loaded.entries.length) / files.length) * 95);
+          if (totalFramesWritten % 10 === 0) await sleep(0);
+        }
+        loaded = null;
+        await sleep(20);
+      }
+
+      const blob = await session.finish();
+      outputURL = URL.createObjectURL(blob);
+      const fileName = `direct_concat_${files.length}_zips_${fps}fps.webm`;
+      dom.downloadLink.href = outputURL;
+      dom.downloadLink.download = fileName;
+      dom.downloadLink.textContent = `Download ${fileName} (${formatBytes(blob.size)})`;
+      dom.downloadLink.style.display = 'block';
+      dom.preview.className = 'preview';
+      dom.preview.innerHTML = `<video controls src="${outputURL}"></video>`;
+      dom.frameCountEl.textContent = totalFramesWritten.toLocaleString();
+      dom.durationEl.textContent = `${Math.round(totalFramesWritten / fps)}s`;
+      log(`Done. Wrote ${totalFramesWritten.toLocaleString()} frames. Intended duration: ${(totalFramesWritten / fps).toFixed(2)}s. Encoding wall time: ${((performance.now() - encodeStart) / 1000).toFixed(1)}s. Output size: ${formatBytes(blob.size)}`);
+      setProgress(100);
     } catch (err) {
       log(err?.message || String(err), 'error');
-      log('If this happens with a large ZIP, unzip it and use folder mode instead.', 'warn');
-      dom.preview.className = 'preview empty';
-      dom.preview.innerHTML = '<span class="error">Could not read this ZIP.</span>';
       setProgress(0);
+    } finally {
+      dom.directConcatZip.disabled = false;
+      dom.makeBtn.disabled = sources.length === 0;
     }
   }
 
@@ -497,99 +1399,150 @@
 
     const totalBytes = imageFiles.reduce((sum, file) => sum + file.size, 0);
     const folderName = imageFiles[0]?.webkitRelativePath?.split('/')[0] || 'frame_folder';
-    resetForNewInput(folderName, totalBytes);
-    resetLog(`Reading folder ${folderName}…`);
+    log(`Reading folder ${folderName}…`);
 
-    try {
-      frames = imageFiles.map(file => {
-        const path = file.webkitRelativePath || file.name;
-        const ext = file.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg');
-        return { kind: 'file', name: path, ext, file };
-      });
-      await finishFrameLoad(`folder ${folderName}`, totalBytes);
-      log('Folder mode is the recommended mode for very large jobs.', 'test');
-    } catch (err) {
-      log(err?.message || String(err), 'error');
-      dom.preview.className = 'preview empty';
-      dom.preview.innerHTML = '<span class="error">Could not read this folder.</span>';
-      setProgress(0);
+    const frames = imageFiles.map(file => {
+      const path = file.webkitRelativePath || file.name;
+      const ext = file.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg');
+      return { kind: 'file', name: path, ext, file };
+    });
+
+    await addSourceFromFrames({ name: folderName, kind: 'folder', frames, totalBytes });
+    log('Folder mode is recommended for very large jobs.', 'test');
+    setProgress(0);
+  }
+
+  function getSourceForConcatFrame(globalIndex) {
+    let offset = globalIndex;
+    for (const source of sources) {
+      if (offset < source.frames.length) return { source, frameIndex: offset };
+      offset -= source.frames.length;
+    }
+    const last = sources[sources.length - 1];
+    return { source: last, frameIndex: Math.max(0, last.frames.length - 1) };
+  }
+
+  function getCollageFrame(source, outputFrameIndex) {
+    const len = source.frames.length;
+    if (!len) return null;
+    if (outputFrameIndex < len) return source.frames[outputFrameIndex];
+
+    const policy = dom.collageEnd.value;
+    if (policy === 'loop') return source.frames[outputFrameIndex % len];
+    if (policy === 'black') return null;
+    return source.frames[len - 1]; // freeze
+  }
+
+  function drawImageInto(ctx, image, x, y, w, h, fitMode) {
+    const iw = image.width || image.naturalWidth;
+    const ih = image.height || image.naturalHeight;
+    if (!iw || !ih) return;
+
+    if (fitMode === 'stretch') {
+      ctx.drawImage(image, x, y, w, h);
+      return;
+    }
+
+    const scale = fitMode === 'cover' ? Math.max(w / iw, h / ih) : Math.min(w / iw, h / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
+    const dx = x + (w - dw) / 2;
+    const dy = y + (h - dh) / 2;
+    ctx.drawImage(image, dx, dy, dw, dh);
+  }
+
+  async function drawConcatFrame(ctx, frameIndex, output, fitMode) {
+    const item = getSourceForConcatFrame(frameIndex);
+    const image = await decodeImage(item.source.frames[item.frameIndex]);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, output.width, output.height);
+    drawImageInto(ctx, image, 0, 0, output.width, output.height, fitMode);
+    if (typeof image.close === 'function') image.close();
+  }
+
+  async function drawCollageFrame(ctx, frameIndex, output, fitMode) {
+    const rows = clampInt(dom.rows.value, 1, 12, 2);
+    const cols = clampInt(dom.cols.value, 1, 12, 3);
+    const cellW = output.width / cols;
+    const cellH = output.height / rows;
+    const maxCells = rows * cols;
+    const decoded = [];
+
+    // Decode everything first, before clearing the canvas. MediaRecorder can sample the
+    // canvas while this async function is running; clearing first caused the visible
+    // "one cell, then two cells, then three cells" black-cell artifact.
+    for (let i = 0; i < Math.min(sources.length, maxCells); i += 1) {
+      const source = sources[i];
+      const frame = getCollageFrame(source, frameIndex);
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = col * cellW;
+      const y = row * cellH;
+      if (!frame) {
+        decoded.push({ image: null, x, y, w: cellW, h: cellH });
+        continue;
+      }
+      const image = await decodeImage(frame);
+      decoded.push({ image, x, y, w: cellW, h: cellH });
+    }
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, output.width, output.height);
+
+    for (const item of decoded) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(item.x, item.y, item.w, item.h);
+      ctx.strokeStyle = 'rgba(255,255,255,.18)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(Math.round(item.x) + 0.5, Math.round(item.y) + 0.5, Math.round(item.w) - 1, Math.round(item.h) - 1);
+      if (item.image) drawImageInto(ctx, item.image, item.x, item.y, item.w, item.h, fitMode);
+      if (item.image && typeof item.image.close === 'function') item.image.close();
     }
   }
 
   async function makeWebM() {
-    if (!frames.length) throw new Error('No frames loaded.');
-    if (!window.MediaRecorder) {
-      throw new Error('This browser does not support MediaRecorder, so it cannot record WebM here. Try current Chrome or Edge.');
-    }
+    if (!sources.length) throw new Error('No sources loaded.');
 
-    const mimeType = chooseWebMMimeType();
-    if (!mimeType) {
-      throw new Error('This browser does not report support for WebM recording. Try current Chrome or Edge.');
-    }
-
-    const fps = Math.max(1, Math.min(120, Number(dom.fpsInput.value) || 24));
+    const mode = dom.mode.value;
+    const fps = getFPS();
     const quality = dom.qualitySelect.value;
-    const source = firstFrameSize || await getImageDimensions(frames[0]);
-    const output = getOutputSize(source.width, source.height, dom.scaleSelect.value);
+    const output = getOutputSize();
+    const totalFrames = getOutputFrameCount();
+    const fitMode = dom.fitMode.value;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = output.width;
-    canvas.height = output.height;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('Could not create a 2D canvas context.');
+    if (mode === 'collage') {
+      const rows = clampInt(dom.rows.value, 1, 12, 2);
+      const cols = clampInt(dom.cols.value, 1, 12, 3);
+      if (sources.length > rows * cols) {
+        log(`Collage has ${rows * cols} cells but ${sources.length} sources. Extra sources are ignored.`, 'warn');
+      }
+    }
 
+    const session = await createWebCodecsSession({ output, fps, quality, label: mode === 'collage' ? 'collage' : 'source concat' });
     dom.preview.className = 'preview';
     dom.preview.innerHTML = '';
-    dom.preview.appendChild(canvas);
+    dom.preview.appendChild(session.canvas);
 
-    const stream = canvas.captureStream(fps);
-    const bitsPerSecond = qualityToVideoBitsPerSecond(quality, output.width, output.height, fps);
+    const encodeStart = performance.now();
+    log(`Rendering ${mode === 'collage' ? 'collage' : 'concatenation'} WebM, ${fps} fps, ${output.width}×${output.height}, ${totalFrames.toLocaleString()} timestamped frames…`);
 
-    let recorder;
-    try {
-      recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: bitsPerSecond });
-    } catch (_) {
-      throw new Error(`Failed to create MediaRecorder with ${mimeType}.`);
+    for (let i = 0; i < totalFrames; i += 1) {
+      if (mode === 'collage') await drawCollageFrame(session.ctx, i, output, fitMode);
+      else await drawConcatFrame(session.ctx, i, output, fitMode);
+
+      await session.encodeCurrentCanvasFrame(i);
+      setProgress(10 + ((i + 1) / totalFrames) * 85);
+      if (i % 10 === 0) await sleep(0);
     }
 
-    const chunks = [];
-    recorder.ondataavailable = event => {
-      if (event.data && event.data.size > 0) chunks.push(event.data);
-    };
-
-    const stopped = new Promise((resolve, reject) => {
-      recorder.onstop = resolve;
-      recorder.onerror = event => reject(event.error || new Error('MediaRecorder failed.'));
-    });
-
-    const frameDurationMs = 1000 / fps;
-    log(`Recording WebM with ${mimeType}, ${fps} fps, ${output.width}×${output.height}, ${formatBytes(bitsPerSecond / 8)}/s target…`);
-    recorder.start(1000);
-
-    for (let i = 0; i < frames.length; i += 1) {
-      const image = await decodeImage(frames[i]);
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, output.width, output.height);
-      ctx.drawImage(image, 0, 0, output.width, output.height);
-      if (typeof image.close === 'function') image.close();
-
-      setProgress(10 + ((i + 1) / frames.length) * 85);
-      await new Promise(resolve => setTimeout(resolve, frameDurationMs));
-    }
-
-    recorder.stop();
-    await stopped;
-    stream.getTracks().forEach(track => track.stop());
-
-    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
-    if (!blob.size) throw new Error('WebM recording produced an empty file.');
-
+    const blob = await session.finish();
+    log(`Intended duration: ${(totalFrames / fps).toFixed(2)}s. Encoding wall time: ${((performance.now() - encodeStart) / 1000).toFixed(1)}s.`);
     setProgress(100);
     return blob;
   }
 
   async function makeVideo() {
-    if (!frames.length) return;
+    if (!sources.length) return;
     dom.makeBtn.disabled = true;
     dom.downloadLink.style.display = 'none';
     if (outputURL) {
@@ -602,8 +1555,9 @@
       const blob = await makeWebM();
       outputURL = URL.createObjectURL(blob);
 
-      const fps = Math.max(1, Math.min(120, Number(dom.fpsInput.value) || 24));
-      const base = (inputName || 'frames').replace(/\.zip$/i, '').replace(/[^a-z0-9_\- .]+/gi, '_');
+      const fps = getFPS();
+      const mode = dom.mode.value;
+      const base = sources.length === 1 ? sanitizeBaseName(sources[0].name) : `${mode}_${sources.length}_sources`;
       const fileName = `${base}_${fps}fps.webm`;
 
       dom.downloadLink.href = outputURL;
@@ -618,18 +1572,58 @@
       log(err?.message || String(err), 'error');
       setProgress(0);
     } finally {
-      dom.makeBtn.disabled = frames.length === 0;
+      dom.makeBtn.disabled = sources.length === 0;
     }
   }
 
   function inspectFrameList() {
-    if (!frames.length) return;
-    const first = frames.slice(0, 10).map((frame, index) => `${String(index + 1).padStart(4, '0')}: ${frame.name}`).join('\n');
-    const last = frames.length > 10
-      ? frames.slice(-10).map((frame, offset) => `${String(frames.length - 9 + offset).padStart(4, '0')}: ${frame.name}`).join('\n')
-      : '';
-    log('Frame list preview:');
-    log(first + (last ? `\n...\n${last}` : ''));
+    if (!sources.length) return;
+    log('Source/frame list preview:');
+    for (const [sourceIndex, source] of sources.entries()) {
+      log(`${sourceIndex + 1}. ${source.name} — ${source.frames.length.toLocaleString()} frames`);
+      const first = source.frames.slice(0, 5).map((frame, index) => `  ${String(index + 1).padStart(4, '0')}: ${frame.name}`).join('\n');
+      const last = source.frames.length > 5
+        ? source.frames.slice(-5).map((frame, offset) => `  ${String(source.frames.length - 4 + offset).padStart(4, '0')}: ${frame.name}`).join('\n')
+        : '';
+      log(first + (last ? `\n  ...\n${last}` : ''));
+    }
+  }
+
+  function moveSource(id, delta) {
+    const index = sources.findIndex(source => source.id === id);
+    if (index < 0) return;
+    const next = index + delta;
+    if (next < 0 || next >= sources.length) return;
+    const [source] = sources.splice(index, 1);
+    sources.splice(next, 0, source);
+    renderSources();
+    updateStats();
+  }
+
+  function removeSource(id) {
+    sources = sources.filter(source => source.id !== id);
+    renderSources();
+    updateStats();
+    updatePreview().catch(err => log(err?.message || err, 'error'));
+  }
+
+  function clearAll() {
+    sources = [];
+    revokeURLs();
+    dom.zipFile.value = '';
+    dom.directZipFile.value = '';
+    dom.sampleZipFile.value = '';
+    dom.folderInput.value = '';
+    dom.makeBtn.disabled = true;
+    dom.inspectBtn.disabled = true;
+    dom.sampleFromSources.disabled = true;
+    dom.downloadLink.style.display = 'none';
+    setProgress(0);
+    resetLog();
+    renderSources();
+    updateStats();
+    dom.preview.className = 'preview empty';
+    dom.preview.textContent = 'First frame preview will appear here.';
   }
 
   function assertTest(name, condition, details = '') {
@@ -651,40 +1645,100 @@
     assertTest('__MACOSX ignored', hiddenPath.test('__MACOSX/foo.png'));
     assertTest('hidden dotfile ignored', hiddenFile.test('frames/.DS_Store'));
     assertTest('byte formatting', formatBytes(1024) === '1.0 KB', formatBytes(1024));
+    const zipOrder = [{ name: 'part10.zip' }, { name: 'part02.zip' }, { name: 'part01.zip' }].sort((a, b) => naturalCompare(a.name, b.name)).map(f => f.name).join(',');
+    assertTest('ZIP filename sort ignores picker order', zipOrder === 'part01.zip,part02.zip,part10.zip', zipOrder);
+    const samplePlan = makeSamplePlan(9000);
+    assertTest('music sample overview plan non-empty', samplePlan.overview.length > 0);
+    assertTest('music sample burst plan count follows setting', samplePlan.bursts.length === clampInt(dom.burstCount.value, 0, 12, 4));
+    assertTest('frame number extraction works', getFrameNumberFromName('frame_001740.png') === 1740);
+    const exportSettings = getSampleExportSettings();
+    assertTest('sample export mode exists', ['jpeg', 'original'].includes(exportSettings.mode));
+    assertTest('sample JPEG quality is in range', exportSettings.jpegQualityPercent >= 80 && exportSettings.jpegQualityPercent <= 90);
+    assertTest('JPEG sample filename ends in jpg', numberedSampleFilename(0, 'frame_001740.png', 1739, 'jpeg').endsWith('.jpg'));
+    assertTest('default ZIP cap is 1.5 GiB', Math.round(DEFAULT_MAX_ZIP_BYTES / (1024 * 1024 * 1024) * 10) / 10 === 1.5);
 
-    const scaled = getOutputSize(1920, 1080, '720');
-    assertTest('scaled width fits within requested size', scaled.width <= 720, `${scaled.width}x${scaled.height}`);
-    assertTest('scaled height fits within requested size', scaled.height <= 720, `${scaled.width}x${scaled.height}`);
-    assertTest('scaled dimensions are even', scaled.width % 2 === 0 && scaled.height % 2 === 0, `${scaled.width}x${scaled.height}`);
+    const oldMode = dom.mode.value;
+    const oldScale = dom.scaleSelect.value;
+    const oldRatio = dom.ratioPreset.value;
+    dom.mode.value = 'collage';
+    dom.scaleSelect.value = '1080';
+    dom.ratioPreset.value = '16:9';
+    const output = getOutputSize();
+    assertTest('16:9 collage output width', output.width === 1080, `${output.width}x${output.height}`);
+    assertTest('16:9 collage output height is even and plausible', output.height === 606 || output.height === 608, `${output.width}x${output.height}`);
+    dom.mode.value = oldMode;
+    dom.scaleSelect.value = oldScale;
+    dom.ratioPreset.value = oldRatio;
 
     const mime = chooseWebMMimeType();
     assertTest('WebM support detected or cleanly reported', typeof mime === 'string');
+    assertTest('legacy metadata fixer checkbox exists', Boolean(dom.fixMetadata));
+    assertTest('WebCodecs availability is boolean', typeof Boolean(window.VideoEncoder && window.VideoFrame) === 'boolean');
 
     log(`Environment: protocol=${location.protocol}, origin=${location.origin}, MediaRecorder=${Boolean(window.MediaRecorder)}, WebM=${mime || 'not supported'}`, 'test');
     log('Self-tests finished.');
+    updateModeUI();
+    updateStats();
   }
 
   function updateCapabilities() {
     const mime = chooseWebMMimeType();
     dom.capabilities.innerHTML = [
       `<span class="pill">MediaRecorder: ${window.MediaRecorder ? 'yes' : 'no'}</span>`,
-      `<span class="pill">WebM encoder: ${mime || 'not supported'}</span>`,
-      `<span class="pill">ZIP safety cap: ${formatBytes(MAX_ZIP_BYTES)}</span>`,
+      `<span class="pill">MediaRecorder WebM: ${mime || 'not supported'}</span>`,
+      `<span class="pill">WebCodecs: ${window.VideoEncoder && window.VideoFrame ? 'yes' : 'no'}</span>`,
+      `<span class="pill">ZIP safety cap: ${formatBytes(getMaxZipBytes())}</span>`,
+      `<span class="pill">Input bytes: ${formatBytes(getTotalInputBytes())}</span>`,
       `<span class="pill">Origin: ${location.origin}</span>`
     ].join('');
   }
 
+  function updateModeUI() {
+    const collage = dom.mode.value === 'collage';
+    dom.collageOptions.classList.toggle('show', collage);
+    dom.modeNote.textContent = collage
+      ? 'Collage mode maps source 1 to cell 1, source 2 to cell 2, etc. Default length is the shortest common frame count; change the length policy below if needed.'
+      : 'Concatenate mode writes source 1, then source 2, etc., using the source order below.';
+    updateStats();
+  }
+
   dom.drop.addEventListener('click', () => dom.zipFile.click());
   dom.chooseZip.addEventListener('click', () => dom.zipFile.click());
+  dom.directConcatZip.addEventListener('click', () => dom.directZipFile.click());
+  dom.directSampleZip.addEventListener('click', () => dom.sampleZipFile.click());
+  dom.sampleFromSources.addEventListener('click', () => {
+    makeSampleZipFromLoadedSources().catch(err => {
+      log(err?.message || String(err), 'error');
+      setProgress(0);
+    });
+  });
   dom.chooseFolder.addEventListener('click', () => dom.folderInput.click());
 
-  dom.zipFile.addEventListener('change', () => {
-    const file = dom.zipFile.files?.[0];
-    if (file) handleZip(file);
+  dom.zipFile.addEventListener('change', async () => {
+    const files = Array.from(dom.zipFile.files || []);
+    if (files.length) await handleZipFiles(files);
+    dom.zipFile.value = '';
   });
 
-  dom.folderInput.addEventListener('change', () => {
-    if (dom.folderInput.files?.length) handleFolder(dom.folderInput.files);
+  dom.directZipFile.addEventListener('change', async () => {
+    const files = Array.from(dom.directZipFile.files || []);
+    if (files.length) await makeDirectConcatFromZipFiles(files);
+    dom.directZipFile.value = '';
+  });
+
+  dom.sampleZipFile.addEventListener('change', async () => {
+    const files = Array.from(dom.sampleZipFile.files || []);
+    if (files.length) await makeDirectSampleZipFromZipFiles(files);
+    dom.sampleZipFile.value = '';
+  });
+
+  dom.folderInput.addEventListener('change', async () => {
+    const files = Array.from(dom.folderInput.files || []);
+    if (files.length) {
+      try { await handleFolder(files); }
+      catch (err) { log(err?.message || err, 'error'); }
+    }
+    dom.folderInput.value = '';
   });
 
   for (const eventName of ['dragenter', 'dragover']) {
@@ -702,11 +1756,27 @@
   }
 
   dom.drop.addEventListener('drop', event => {
-    const file = event.dataTransfer.files?.[0];
-    if (file) handleZip(file);
+    const files = Array.from(event.dataTransfer.files || []).filter(file => /\.zip$/i.test(file.name));
+    if (files.length) handleZipFiles(files);
   });
 
-  dom.fpsInput.addEventListener('input', updateStats);
+  dom.sourceList.addEventListener('click', event => {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const item = button.closest('.source-item');
+    const id = Number(item?.dataset?.sourceId);
+    if (!Number.isFinite(id)) return;
+    const action = button.dataset.action;
+    if (action === 'up') moveSource(id, -1);
+    if (action === 'down') moveSource(id, 1);
+    if (action === 'remove') removeSource(id);
+  });
+
+  for (const el of [dom.fpsInput, dom.rows, dom.cols, dom.ratioPreset, dom.ratioW, dom.ratioH, dom.collageEnd, dom.scaleSelect, dom.zipLimitGB, dom.overviewCount, dom.burstCount, dom.burstSeconds, dom.burstStride, dom.sampleExportMode, dom.overviewSampleSize, dom.burstSampleSize, dom.sampleJpegQuality]) {
+    el.addEventListener('input', updateStats);
+    el.addEventListener('change', updateStats);
+  }
+  dom.mode.addEventListener('change', updateModeUI);
   dom.mimeChoice.addEventListener('change', updateCapabilities);
   dom.makeBtn.addEventListener('click', makeVideo);
   dom.inspectBtn.addEventListener('click', inspectFrameList);
@@ -714,26 +1784,7 @@
     try { runSelfTests(); }
     catch (err) { log(err?.message || String(err), 'error'); }
   });
-
-  dom.clearBtn.addEventListener('click', () => {
-    frames = [];
-    firstFrameSize = null;
-    inputName = 'frames';
-    revokeURLs();
-    dom.zipFile.value = '';
-    dom.folderInput.value = '';
-    dom.makeBtn.disabled = true;
-    dom.inspectBtn.disabled = true;
-    dom.downloadLink.style.display = 'none';
-    setProgress(0);
-    resetLog();
-    dom.frameCountEl.textContent = '0';
-    dom.durationEl.textContent = '0s';
-    dom.sizeEl.textContent = '—';
-    dom.dimsEl.textContent = '—';
-    dom.preview.className = 'preview empty';
-    dom.preview.textContent = 'First frame preview will appear here.';
-  });
+  dom.clearBtn.addEventListener('click', clearAll);
 
   window.addEventListener('error', event => {
     log(`Global script error: ${event.message || 'Script error.'}${event.filename ? ` at ${event.filename}:${event.lineno}` : ''}`, 'error');
@@ -743,6 +1794,8 @@
     log(`Unhandled promise rejection: ${event.reason?.message || event.reason || 'unknown'}`, 'error');
   });
 
+  renderSources();
+  updateModeUI();
   updateCapabilities();
   log(`Environment: protocol=${location.protocol}, origin=${location.origin}`);
 })();
