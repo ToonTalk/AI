@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2500 Logo — a dynamic-turtle Logo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2064%2064%22%3E%3Crect%20width=%2264%22%20height=%2264%22%20rx=%2214%22%20fill=%22%2315120d%22/%3E%3Ccircle%20cx=%2232%22%20cy=%2232%22%20r=%2221%22%20fill=%22none%22%20stroke=%22%23e9a23b%22%20stroke-width=%223.5%22/%3E%3Ccircle%20cx=%2232%22%20cy=%2232%22%20r=%2211.5%22%20fill=%22none%22%20stroke=%22%2379d2b4%22%20stroke-width=%223%22/%3E%3Cline%20x1=%2232%22%20y1=%2232%22%20x2=%2232%22%20y2=%228%22%20stroke=%22%23e9a23b%22%20stroke-width=%223.5%22%20stroke-linecap=%22round%22/%3E%3Ccircle%20cx=%2232%22%20cy=%2232%22%20r=%223.6%22%20fill=%22%23e98bc0%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#161310; --bg2:#1d1813; --panel:#221c15; --panel2:#2a2219;
+  --ink:#ece3d2; --dim:#9c8f78; --faint:#6b6151; --line:#3a3026;
+  --amber:#e9a23b; --amber2:#f3c47a; --phos:#79d2b4; --red:#e06a52; --cmt:#8a9a6e;
+  --display:'Fraunces',Georgia,serif; --mono:'IBM Plex Mono',ui-monospace,monospace; --sans:'IBM Plex Sans',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:
+    radial-gradient(1200px 700px at 70% -10%, rgba(233,162,59,.07), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(121,210,180,.06), transparent 60%),
+    var(--bg);
+  color:var(--ink); font-family:var(--sans); line-height:1.5;
+  -webkit-font-smoothing:antialiased; min-height:100vh;
+}
+.app{max-width:1240px; margin:0 auto; padding:32px 28px 56px}
+
+header{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:18px; margin-bottom:24px}
+h1{font-family:var(--display); font-weight:600; font-size:clamp(34px,5vw,52px); letter-spacing:-.02em; margin:0; line-height:.95}
+h1 em{font-style:italic; font-weight:500; color:var(--amber)}
+.tag{font-family:var(--mono); font-size:11.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim)}
+.tag b{color:var(--phos); font-weight:500}
+
+.grid{display:grid; grid-template-columns:minmax(0,1fr) 432px; gap:22px; align-items:start}
+@media(max-width:920px){ .grid{grid-template-columns:1fr} }
+
+/* ----- the scope (canvas) ----- */
+.scope-wrap{display:flex; flex-direction:column; gap:14px}
+.scope{
+  position:relative; aspect-ratio:1/1; width:100%;
+  background:radial-gradient(120% 120% at 50% 38%, #211c16 0%, #18140f 70%, #120f0b 100%);
+  border:1px solid var(--line); border-radius:14px; overflow:hidden;
+  box-shadow:inset 0 0 80px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.02), 0 24px 60px rgba(0,0,0,.4);
+}
+.scope::after{ /* vignette + faint scanline texture */
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px),
+    radial-gradient(130% 130% at 50% 50%, transparent 58%, rgba(0,0,0,.5) 100%);
+  mix-blend-mode:screen;
+}
+#screen{display:block; width:100%; height:100%}
+.scope .corner{position:absolute; font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:var(--faint); text-transform:uppercase}
+.scope .corner.tl{top:11px; left:13px}
+.scope .corner.tr{top:11px; right:13px; color:var(--amber); opacity:.0; transition:opacity .25s}
+.scope.live .corner.tr{opacity:.9}
+
+/* ----- controls ----- */
+.controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+button{font-family:var(--mono); font-size:13px; letter-spacing:.04em; color:var(--ink);
+  background:var(--panel); border:1px solid var(--line); padding:9px 16px; border-radius:8px; cursor:pointer;
+  transition:.15s border-color,.15s background,.15s color,.15s transform}
+button:hover{border-color:var(--amber); color:var(--amber2)}
+button:active{transform:translateY(1px)}
+button.primary{background:linear-gradient(180deg,#f0ad48,#d98f2c); color:#1d1206; border-color:#f0ad48; font-weight:600}
+button.primary:hover{color:#1d1206; filter:brightness(1.06)}
+.spacer{flex:1 1 auto}
+.speed{display:flex; align-items:center; gap:9px; font-family:var(--mono); font-size:12px; color:var(--dim)}
+.speed input[type=range]{accent-color:var(--amber); width:120px}
+#speedval{color:var(--amber2); min-width:34px; text-align:right}
+.toggle{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px; color:var(--dim); cursor:pointer; user-select:none}
+.toggle input{accent-color:var(--phos); cursor:pointer}
+.fsbtn{position:absolute; bottom:11px; right:13px; padding:4px 9px; font-size:14px; line-height:1; background:rgba(34,28,21,.6); border-color:rgba(255,255,255,.08); color:var(--dim)}
+.fsbtn:hover{color:var(--amber2)}
+.export{font-family:var(--mono); font-size:12px}
+.export .dim{color:var(--faint)}
+.export button.on{background:linear-gradient(180deg,#e06a52,#c4503a); color:#1d0a06; border-color:#e06a52; font-weight:600}
+.export #dur,.export #ew,.export #eh{width:48px; font-family:var(--mono); font-size:12px; color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:6px 7px}
+.export #ew,.export #eh{width:56px}
+.export select{padding:6px 8px}
+select{font-family:var(--mono); font-size:13px; color:var(--ink); background:var(--panel); border:1px solid var(--line);
+  padding:9px 12px; border-radius:8px; cursor:pointer}
+select:hover{border-color:var(--phos)}
+
+.status{font-family:var(--mono); font-size:12px; letter-spacing:.03em; color:var(--dim); min-height:18px}
+.status.run{color:var(--phos)} .status.err{color:var(--red)}
+
+/* ----- editor column ----- */
+.col{display:flex; flex-direction:column; gap:14px}
+.blurb{font-family:var(--display); font-size:16.5px; font-style:italic; color:var(--amber2); line-height:1.45; min-height:46px;
+  border-left:2px solid var(--amber); padding:2px 0 2px 14px}
+.label{font-family:var(--mono); font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint)}
+.editwrap{ position:relative; }
+textarea#code, #hl{
+  font-family:var(--mono); font-size:13.5px; line-height:1.65; letter-spacing:0;
+  padding:16px; width:100%; min-height:360px; margin:0; box-sizing:border-box;
+  border:1px solid var(--line); border-radius:10px;
+  white-space:pre; tab-size:2; overflow:auto;
+}
+#hl{
+  position:absolute; inset:0; z-index:0; pointer-events:none;
+  color:var(--ink); background:var(--bg2); border-color:transparent; overflow:hidden;
+}
+#hl .cmt{ font-style:italic; color:var(--cmt); }
+textarea#code{
+  position:relative; z-index:1; resize:vertical; outline:none;
+  color:transparent; background:transparent; caret-color:var(--ink);
+}
+textarea#code:focus{border-color:var(--amber); box-shadow:0 0 0 3px rgba(233,162,59,.1)}
+
+.ref{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px}
+.ref h3{font-family:var(--mono); font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--amber); margin:0 0 10px}
+.ref h3:not(:first-child){margin-top:16px}
+.ref dl{display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:0}
+.ref dt{font-family:var(--mono); font-size:12.5px; color:var(--phos); white-space:nowrap}
+.ref dd{margin:0; font-size:12.5px; color:var(--dim)}
+.ref .note{margin-top:12px; font-size:12px; color:var(--faint); line-height:1.5}
+.ref .note b{color:var(--dim); font-weight:500}
+kbd{font-family:var(--mono); font-size:11px; background:var(--panel2); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--ink)}
+a{color:var(--phos)}
+.links{max-width:920px; margin:30px auto 0; padding-top:18px; border-top:1px solid var(--line); font-size:13px; color:var(--dim); line-height:1.7}
+.links a{color:var(--amber2); text-decoration:none; border-bottom:1px solid rgba(243,196,122,.3)}
+.links a:hover{border-bottom-color:var(--amber2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>2500&thinsp;<em>Logo</em></h1>
+    <div class="tag">a dynamic-turtle logo, after the <b>TT2500</b> &nbsp;·&nbsp; plates that spin, move &amp; grow</div>
+  </header>
+
+  <div class="grid">
+    <!-- canvas -->
+    <div class="scope-wrap">
+      <div class="scope" id="scope">
+        <canvas id="screen"></canvas>
+        <div class="corner tl">origin · heading ↑</div>
+        <div class="corner tr">● live</div>
+        <button id="fs" class="fsbtn" title="Full screen (for screen capture)">⛶</button>
+      </div>
+      <div class="controls">
+        <button class="primary" id="run">▶ Run</button>
+        <button id="stop">❚❚ Pause</button>
+        <button id="reset">↺ Reset</button>
+        <div class="spacer"></div>
+        <label class="speed">speed
+          <input type="range" id="speed" min="-4" max="3" step="0.1" value="0">
+          <span id="speedval">1.0×</span>
+        </label>
+        <label class="toggle"><input type="checkbox" id="trails"> trails</label>
+        <label class="toggle"><input type="checkbox" id="plates"> plates</label>
+      </div>
+      <div class="status" id="status">&nbsp;</div>
+      <div class="controls export">
+        <span class="label">save</span>
+        <button id="rec">⏺ Record .webm</button>
+        <span class="dim">or exact frames</span>
+        <input type="number" id="dur" value="8" min="1" max="600" step="1" title="seconds">
+        <span class="dim">s @</span>
+        <select id="fps"><option>24</option><option>30</option><option selected>60</option></select>
+        <span class="dim">fps,</span>
+        <input type="number" id="ew" value="1080" min="64" max="4096" step="2" title="frame width (px)">
+        <span class="dim">×</span>
+        <input type="number" id="eh" value="1080" min="64" max="4096" step="2" title="frame height (px)">
+        <span class="dim">px →</span>
+        <button id="frames">⬇ .zip</button>
+      </div>
+      <div class="status" id="expstatus">&nbsp;</div>
+    </div>
+
+    <!-- editor + reference -->
+    <div class="col">
+      <div class="controls" style="gap:12px">
+        <span class="label">example</span>
+        <select id="examples"><option value="" disabled>load an example…</option></select>
+        <button id="new">＋ New</button>
+      </div>
+      <div class="blurb" id="blurb"></div>
+      <div>
+        <div class="label" style="margin-bottom:7px">program &nbsp;·&nbsp; the first procedure runs (or top-level commands, if any)</div>
+        <div class="editwrap">
+          <textarea id="code" spellcheck="false"></textarea>
+          <div id="hl" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="ref">
+        <h3>move the turtle</h3>
+        <dl>
+          <dt>FD / BK n</dt><dd>forward / back n steps (draws a vector)</dd>
+          <dt>RT / LT n</dt><dd>turn right / left n degrees</dd>
+          <dt>PU / PD</dt><dd>pen up / pen down</dd>
+          <dt>HM</dt><dd>home — back to origin, facing up</dd>
+          <dt>PEN hue</dt><dd>pen colour by hue 0–360° — wraps (e.g. 400 → 40); ~120 green, ~210 blue, ~300 magenta</dd>
+          <dt>PEN hue sat light</dt><dd>full HSL: hue 0–360° (wraps), saturation &amp; lightness 0–100 (clamped)</dd>
+          <dt>WIDTH n</dt><dd>pen width in steps (min 0.2)</dd>
+        </dl>
+        <h3>open a moving plate (these nest)</h3>
+        <dl>
+          <dt>SPIN r</dt><dd>rotate the plate, r°/sec</dd>
+          <dt>MOVE r</dt><dd>slide it forward, r steps/sec (unbounded)</dd>
+          <dt>GROW f</dt><dd>scale ×f every second (1 none, &gt;1 grow, &lt;1 shrink; compounds)</dd>
+          <dt>WAG a p</dt><dd>rock rotation ±a° every p sec</dd>
+          <dt>BOB a p</dt><dd>slide forward ±a every p sec</dd>
+          <dt>PULSE a p</dt><dd>breathe scale ±a every p sec</dd>
+          <dt>HUESHIFT r</dt><dd>rotate hue r°/sec; optional <span style="color:var(--phos)">HUESHIFT r sat light</span> drifts saturation &amp; lightness /sec</dd>
+        </dl>
+        <h3>structure</h3>
+        <dl>
+          <dt>TO … END</dt><dd>define a procedure (<span style="color:var(--phos)">:name</span> for inputs)</dd>
+          <dt>REPEAT n […]</dt><dd>repeat a block n times</dd>
+          <dt>IF c THEN …</dt><dd>conditional (optional <span style="color:var(--phos)">ELSE</span>; <span style="color:var(--phos)">[…]</span> for blocks). Compare with <span style="color:var(--phos)">= &lt; &gt;</span></dd>
+          <dt>STOP</dt><dd>leave the current procedure</dd>
+          <dt>; …</dt><dd>a comment, to the end of the line (anywhere)</dd>
+        </dl>
+        <p class="note">The <b>first procedure</b> runs automatically. Or, like classic Logo, put a call <b>below the last END</b> (e.g. <span style="color:var(--phos)">FOO 5 1 .5</span>) and that runs instead — handy for procedures that take inputs. A recursive procedure needs a base case (an <span style="color:var(--phos)">IF … THEN STOP</span>) or it runs until the vector cap.</p>
+        <p class="note">Everything drawn <b>after</b> you open a plate rides that plate, and plates nest — a plate on a plate gives epicyclic motion. Static <b>FD/RT</b> lay down rigid geometry; the program runs <b>once</b> to build a display list, then it is re-drawn every frame at the current time. <b>⌘/Ctrl + Enter</b> runs.</p>
+        <p class="note"><b>＋ New</b> starts a blank program (examples stay in the menu). <b>Trails</b> stops clearing the screen so moving parts paint their paths. <b>Plates</b> overlays a disc on every moving frame, coloured by kind:
+        <span style="color:#e9a23b">spin</span> · <span style="color:#7fa8e0">move/bob</span> · <span style="color:#79d2b4">grow/pulse</span> · <span style="color:#c79bf0">wag</span> · <span style="color:#e98bc0">hueshift</span> — the tick marks each plate's current heading.</p>
+        <p class="note">Arithmetic is plain infix. A minus with spaces on <b>both</b> sides is subtraction (<span style="color:var(--phos)">:N - 1</span>); a minus tucked against a number is negative (<span style="color:var(--phos)">HUESHIFT 0 -40 0</span> passes −40). No parentheses needed for negative arguments.</p>
+        <p class="note"><b>⏺ Record</b> grabs a .webm in real time, so under heavy load (e.g. FOO) it drops frames. <b>⬇ .zip</b> renders every frame at exactly t = frame ÷ fps regardless of how long that takes — a perfectly even frame rate — then ffmpeg assembles them.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="links">
+    <p>There is <a href="https://youtu.be/7XSFf-xS6Nc?si=EQ06S14k_tzKsHMI&amp;t=241" target="_blank" rel="noopener">a demo of the TT2500 by Marvin Minsky and Seymour Papert from circa 1980</a>. Here is <a href="https://retrocomputingforum.com/t/marvin-minskys-2500-computer/3404/31" target="_blank" rel="noopener">a long discussion of the machine</a>. Here is <a href="https://docs.google.com/document/d/1ZJgHxoQjhaVmRO3v14f-1MZKVfpivQtuWOOqaFIFndk/edit?usp=sharing" target="_blank" rel="noopener">a blog post by Ken Kahn on the making of this app</a>.</p>
+  </footer>
+</div>
+
+<script>
+/* === 2500 LOGO ENGINE (injected, identical to the headless-tested module) === */
+// ============================================================================
+// SPINLOGO ENGINE  —  a modern dynamic-turtle Logo
+// ----------------------------------------------------------------------------
+// Static commands build rigid geometry (FD/BK/RT/LT/PU/PD/HM + PEN/WIDTH).
+// Dynamic commands open a nested "plate" that transforms continuously in time;
+// everything drawn afterwards rides the plate, and plates nest (epicycles).
+//
+//   drift (phase = rate * t)          oscillate (phase = amp*sin(2π t/period))
+//   ------------------------          --------------------------------------
+//   SPIN  rate        rotate          WAG   amp period     rotate
+//   MOVE  rate        translate fwd   BOB   amp period     translate fwd
+//   GROW  rate        scale           PULSE amp period     scale
+//   HUESHIFT rate     rotate color    --
+//
+// Two phases: build() runs the program once into a tree of frames; render()
+// re-traverses that tree every animation frame, composing each frame's
+// time-varying transform. t is in seconds.
+// ============================================================================
+
+// ---- tokenizer -------------------------------------------------------------
+// A "-" is treated as unary negation (emitted as $-$) when it has no left
+// operand, or when it is spaced-before but glued to its operand (e.g. "6 -150"
+// means 6 and -150, while "6 - 150" stays subtraction). This lets negative
+// arguments be written without parentheses.
+function tokenize(str) {
+  const re = /(:[A-Za-z_][\w.]*|\d+(?:\.\d+)?|'?[A-Za-z_][\w.]*|\$-\$|\$\*\$|[-+*/()=<>\\\[\]'])/g;
+  const NOLEFT = ['(', '[', '+', '-', '*', '/', '=', '\\', '$-$', '$*$'];
+  const out = []; let m, prev = null;
+  while ((m = re.exec(str)) !== null) {
+    let tok = m[0];
+    if (tok === '-') {
+      const before = str[m.index - 1], after = str[m.index + 1];
+      const spaceBefore = m.index === 0 || /\s/.test(before);
+      const gluedAfter = after !== undefined && /[\d.:(]/.test(after);
+      if (prev === null || NOLEFT.indexOf(prev) >= 0 || (spaceBefore && gluedAfter)) tok = '$-$';
+    }
+    out.push(tok); prev = tok;
+  }
+  return out;
+}
+
+// ---- expression parser -----------------------------------------------------
+function parseExpression(tk, s) { return parseCompare(tk, s); }
+function parseCompare(tk, s) {
+  let e = parseAdd(tk, s);
+  while (s.i < tk.length && (tk[s.i] === '=' || tk[s.i] === '<' || tk[s.i] === '>')) { const op = tk[s.i++]; e = { t: 'bin', op, l: e, r: parseAdd(tk, s) }; }
+  return e;
+}
+function parseAdd(tk, s) {
+  let e = parseMul(tk, s);
+  while (s.i < tk.length && (tk[s.i] === '+' || tk[s.i] === '-')) { const op = tk[s.i++]; e = { t: 'bin', op, l: e, r: parseMul(tk, s) }; }
+  return e;
+}
+function parseMul(tk, s) {
+  let e = parsePre(tk, s);
+  while (s.i < tk.length && (tk[s.i] === '*' || tk[s.i] === '/' || tk[s.i] === '\\')) { const op = tk[s.i++]; e = { t: 'bin', op, l: e, r: parsePre(tk, s) }; }
+  return e;
+}
+function parsePre(tk, s) {
+  const t = tk[s.i];
+  if (t === '-' || t === '$-$') { s.i++; return { t: 'neg', x: parsePre(tk, s) }; }
+  if (t === '$*$') { s.i++; const l = parsePre(tk, s), r = parsePre(tk, s); return { t: 'bin', op: '*', l, r }; }
+  return parsePrim(tk, s);
+}
+function parsePrim(tk, s) {
+  const t = tk[s.i];
+  if (t === '(') { s.i++; const e = parseExpression(tk, s); if (tk[s.i] === ')') s.i++; return e; }
+  if (t && t[0] === ':') { s.i++; return { t: 'var', name: t.toUpperCase() }; }
+  if (t && /^\d/.test(t)) { s.i++; return { t: 'num', v: parseFloat(t) }; }
+  if (t && t[0] === "'") { s.i++; return { t: 'num', v: parseFloat(t.slice(1)) || 0 }; }
+  s.i++; return { t: 'num', v: 0 };
+}
+function canStartExpr(t) { return t !== undefined && (t === '(' || t === '-' || t === '$-$' || t[0] === ':' || t[0] === "'" || /^\d/.test(t)); }
+
+function evalExpr(e, env) {
+  switch (e.t) {
+    case 'num': return e.v;
+    case 'var': { const v = env[e.name]; return v !== undefined ? v : 0; }
+    case 'neg': return -evalExpr(e.x, env);
+    case 'bin': {
+      const l = evalExpr(e.l, env), r = evalExpr(e.r, env);
+      switch (e.op) { case '+': return l + r; case '-': return l - r; case '*': return l * r;
+        case '/': return l / r; case '\\': return ((l % r) + r) % r; case '=': return l === r ? 1 : 0;
+        case '<': return l < r ? 1 : 0; case '>': return l > r ? 1 : 0; }
+    }
+  }
+  return 0;
+}
+
+// ---- command parser --------------------------------------------------------
+const ARGS1 = { FD: 1, FORWARD: 1, BK: 1, BACK: 1, RT: 1, RIGHT: 1, LT: 1, LEFT: 1,
+  SPIN: 1, MOVE: 1, GROW: 1, WIDTH: 1 };
+const ARGS2 = { WAG: 1, BOB: 1, PULSE: 1 };
+// alias -> canonical interpreter type (the interpreter switch uses the canonical names)
+const ZERO = { PU: 'penup', PENUP: 'penup', PD: 'pendown', PENDOWN: 'pendown', HM: 'home', HOME: 'home', STOP: 'stop' };
+
+function parseBlock(tk, s) { // expects current token '[', returns command list, consumes matching ']'
+  s.i++; // [
+  const cmds = [];
+  while (s.i < tk.length && tk[s.i] !== ']') cmds.push(parseCommand(tk, s));
+  if (tk[s.i] === ']') s.i++;
+  return cmds;
+}
+function parseThenItem(tk, s) { return tk[s.i] === '[' ? parseBlock(tk, s) : [parseCommand(tk, s)]; }
+
+function parseCommand(tk, s) {
+  const raw = tk[s.i];
+  const t = raw.toUpperCase();
+
+  if (t === 'IF') {
+    s.i++;
+    const cond = parseExpression(tk, s);
+    if ((tk[s.i] || '').toUpperCase() === 'THEN') s.i++;
+    const thenPart = parseThenItem(tk, s);
+    let elsePart = [];
+    if ((tk[s.i] || '').toUpperCase() === 'ELSE') { s.i++; elsePart = parseThenItem(tk, s); }
+    else if (tk[s.i] === '[') { elsePart = parseBlock(tk, s); }
+    return { type: 'if', cond, thenPart, elsePart };
+  }
+  if (t === 'REPEAT') { s.i++; const count = parseExpression(tk, s); const body = parseBlock(tk, s); return { type: 'repeat', count, body }; }
+  if (ZERO[t]) { s.i++; return { type: ZERO[t] }; }
+  if (t === 'PEN' || t === 'SETPEN' || t === 'HUESHIFT') {
+    s.i++; const args = [parseExpression(tk, s)];
+    while (args.length < 3 && canStartExpr(tk[s.i])) args.push(parseExpression(tk, s));
+    return { type: t === 'HUESHIFT' ? 'hueshift' : 'pen', args };
+  }
+  if (ARGS2[t]) { s.i++; const a = parseExpression(tk, s), b = parseExpression(tk, s); return { type: t.toLowerCase(), a, b }; }
+  if (ARGS1[t]) { s.i++; return { type: t.toLowerCase(), arg: parseExpression(tk, s) }; }
+  if (t === 'MAKE') { s.i++; const nameTok = tk[s.i++]; const val = parseExpression(tk, s); return { type: 'make', name: (nameTok || '').replace(/^[':]/, '').toUpperCase(), val }; }
+
+  // procedure call
+  s.i++;
+  const args = [];
+  while (s.i < tk.length && tk[s.i] !== ']' && canStartExpr(tk[s.i])) args.push(parseExpression(tk, s));
+  return { type: 'call', name: raw.toUpperCase(), args };
+}
+
+function parseProcedures(source) {
+  const lines = source.split('\n');
+  const procs = {};
+  let cur = null, bodyLines = [];
+  const topLines = [];
+  const parseBody = (arr) => { const tk = tokenize(arr.join(' ')); const s = { i: 0 }; const body = []; while (s.i < tk.length) body.push(parseCommand(tk, s)); return body; };
+  const flush = () => {
+    if (!cur) return;
+    cur.body = parseBody(bodyLines); procs[cur.name] = cur; cur = null; bodyLines = [];
+  };
+  for (let raw of lines) {
+    let line = raw.trim();
+    const m = line.match(/^\d+\s+(.*)$/); if (m) line = m[1].trim();
+    const ci = line.indexOf(';'); if (ci >= 0) line = line.slice(0, ci).trim();   // ; starts a comment (whole-line or trailing)
+    if (!line) continue;
+    const up = line.toUpperCase();
+    if (up.startsWith('TO ')) { flush(); const p = line.split(/\s+/); cur = { name: p[1].toUpperCase(), params: p.slice(2).map(x => x.toUpperCase()), body: [] }; continue; }
+    if (up === 'END') { flush(); continue; }
+    if (cur) bodyLines.push(line); else topLines.push(line);   // outside any TO…END = top-level
+  }
+  flush();
+  if (topLines.length) procs['__MAIN__'] = { name: '__MAIN__', params: [], body: parseBody(topLines) };
+  return procs;
+}
+
+// ---- affine matrices (a,b,c,d,e,f): x'=a*x+c*y+e, y'=b*x+d*y+f --------------
+const I = () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+function mul(m, n) {
+  return { a: m.a * n.a + m.c * n.b, b: m.b * n.a + m.d * n.b, c: m.a * n.c + m.c * n.d,
+    d: m.b * n.c + m.d * n.d, e: m.a * n.e + m.c * n.f + m.e, f: m.b * n.e + m.d * n.f + m.f };
+}
+const AX = (m, x, y) => m.a * x + m.c * y + m.e;
+const AY = (m, x, y) => m.b * x + m.d * y + m.f;
+function rot(deg, px, py) { const r = deg * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
+  return { a: cs, b: sn, c: -sn, d: cs, e: px - cs * px + sn * py, f: py - sn * px - cs * py }; }
+function scl(k, px, py) { return { a: k, b: 0, c: 0, d: k, e: px - k * px, f: py - k * py }; }
+const tr = (dx, dy) => ({ a: 1, b: 0, c: 0, d: 1, e: dx, f: dy });
+
+function frameMatrix(f, t) {
+  const TAU = Math.PI * 2;
+  switch (f.type) {
+    case 'spin':  return rot(f.rate * t, f.px, f.py);
+    case 'wag':   return rot(f.amp * Math.sin(TAU * t / f.period), f.px, f.py);
+    case 'move':  return tr(f.dx * f.rate * t, f.dy * f.rate * t);
+    case 'bob':   { const d = f.amp * Math.sin(TAU * t / f.period); return tr(f.dx * d, f.dy * d); }
+    case 'grow':  return scl(Math.max(0.0001, Math.pow(Math.max(1e-6, f.rate), t)), f.px, f.py);
+    case 'pulse': return scl(Math.max(0.02, 1 + f.amp * Math.sin(TAU * t / f.period)), f.px, f.py);
+    default:      return I(); // root, hue
+  }
+}
+
+// ---- engine ----------------------------------------------------------------
+const HOME = { x: 0, y: 0, heading: -90 };
+const STOP = Symbol('stop');
+class Budget extends Error {}
+
+class Logo2500 {
+  constructor() { this.procs = {}; this.scene = null; this.maxSegments = 8000; this.maxDepth = 4000; this.segCount = 0; this.plateCount = 0; this.errors = []; }
+  load(source) {
+    this.procs = parseProcedures(source);
+    const userKeys = Object.keys(this.procs).filter(k => k !== '__MAIN__');
+    this.entry = this.procs['__MAIN__'] ? '__MAIN__' : (userKeys[0] || null);
+    return userKeys;
+  }
+
+  build(name, argsMap) {
+    const proc = this.procs[(name || '').toUpperCase()];
+    const root = { type: 'root', depth: 0, px: 0, py: 0, segments: [], children: [] };
+    this.scene = root; this.segCount = 0; this.plateCount = 0;
+    this.errors = []; this._numErr = false;
+    if (!proc) return root;
+    const turtle = { x: HOME.x, y: HOME.y, heading: HOME.heading, pen: true, h: 35, s: 90, l: 60, w: 2 };
+    const env = {};
+    proc.params.forEach(p => { env[p] = (argsMap && argsMap[p] !== undefined) ? argsMap[p] : 0; });
+    const b = { seg: 0 };
+    try { this.runProc(proc, env, turtle, root, b); }
+    catch (e) { if (!(e instanceof Budget) && e.name !== 'RangeError') throw e; }
+    this.segCount = b.seg;
+    const msgs = [];
+    if (this.errors.length) msgs.push('unknown command' + (this.errors.length > 1 ? 's' : '') + ': ' + this.errors.join(', '));
+    if (this._numErr) msgs.push('a number was infinite or undefined (e.g. divide by zero)');
+    this.errors = msgs;
+    return root;
+  }
+
+  runProc(proc, env, turtle, frame, b) { try { this.runCmds(proc.body, env, turtle, frame, b); } catch (e) { if (e === STOP) return; throw e; } }
+  runCmds(cmds, env, turtle, frame, b) { let cur = frame; for (const c of cmds) cur = this.exec(c, env, turtle, cur, b); return cur; }
+
+  openFrame(cur, node) { if (cur.depth >= this.maxDepth) throw new Budget(); node.depth = cur.depth + 1; node.segments = []; node.children = []; cur.children.push(node); this.plateCount++; return node; }
+
+  exec(cmd, env, turtle, cur, b) {
+    const E = a => { const v = evalExpr(a, env); if (v !== v || v === Infinity || v === -Infinity) this._numErr = true; return v; };
+    const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+    switch (cmd.type) {
+      case 'penup': turtle.pen = false; return cur;
+      case 'pendown': turtle.pen = true; return cur;
+      case 'home': turtle.x = HOME.x; turtle.y = HOME.y; turtle.heading = HOME.heading; return cur;
+      case 'rt': case 'right': turtle.heading += E(cmd.arg); return cur;
+      case 'lt': case 'left': turtle.heading -= E(cmd.arg); return cur;
+      case 'fd': case 'forward': return this.draw(E(cmd.arg), turtle, cur, b);
+      case 'bk': case 'back': return this.draw(-E(cmd.arg), turtle, cur, b);
+      case 'width': turtle.w = Math.max(0.2, E(cmd.arg)); return cur;
+      case 'pen': { const a = cmd.args.map(E);                       // PEN hue [saturation lightness]
+        if (a[0] !== undefined) turtle.h = ((a[0] % 360) + 360) % 360;
+        if (a[1] !== undefined) turtle.s = clamp(a[1], 0, 100);
+        if (a[2] !== undefined) turtle.l = clamp(a[2], 0, 100);
+        return cur; }
+      case 'spin': { const r = E(cmd.arg); return this.openFrame(cur, { type: 'spin', rate: r, px: turtle.x, py: turtle.y }); }
+      case 'grow': { const r = E(cmd.arg); return this.openFrame(cur, { type: 'grow', rate: r, px: turtle.x, py: turtle.y }); }
+      case 'pulse': { const amp = E(cmd.a), per = E(cmd.b) || 1; return this.openFrame(cur, { type: 'pulse', amp, period: per, px: turtle.x, py: turtle.y }); }
+      case 'wag': { const amp = E(cmd.a), per = E(cmd.b) || 1; return this.openFrame(cur, { type: 'wag', amp, period: per, px: turtle.x, py: turtle.y }); }
+      case 'move': { const r = E(cmd.arg); const rad = turtle.heading * Math.PI / 180; return this.openFrame(cur, { type: 'move', rate: r, dx: Math.cos(rad), dy: Math.sin(rad) }); }
+      case 'bob': { const amp = E(cmd.a), per = E(cmd.b) || 1; const rad = turtle.heading * Math.PI / 180; return this.openFrame(cur, { type: 'bob', amp, period: per, dx: Math.cos(rad), dy: Math.sin(rad) }); }
+      case 'hueshift': { const a = cmd.args.map(E); return this.openFrame(cur, { type: 'hue', rate: a[0] || 0, srate: a[1] || 0, lrate: a[2] || 0 }); }
+      case 'make': env[':' + cmd.name] = E(cmd.val); return cur;
+      case 'stop': throw STOP;
+      case 'if': return this.runCmds(E(cmd.cond) !== 0 ? cmd.thenPart : cmd.elsePart, env, turtle, cur, b);
+      case 'repeat': { const n = Math.round(E(cmd.count)); for (let k = 0; k < n; k++) cur = this.runCmds(cmd.body, env, turtle, cur, b); return cur; }
+      case 'call': {
+        const callee = this.procs[cmd.name];
+        if (!callee) { if (this.errors.indexOf(cmd.name) < 0) this.errors.push(cmd.name); return cur; }
+        const av = cmd.args.map(E); const ce = {};
+        callee.params.forEach((p, k) => { ce[p] = k < av.length ? av[k] : 0; });
+        this.runProc(callee, ce, turtle, cur, b);
+        return cur;
+      }
+    }
+    return cur;
+  }
+
+  draw(dist, turtle, cur, b) {
+    const r = turtle.heading * Math.PI / 180;
+    const nx = turtle.x + dist * Math.cos(r), ny = turtle.y + dist * Math.sin(r);
+    if (turtle.pen && dist !== 0) {
+      cur.segments.push({ x1: turtle.x, y1: turtle.y, x2: nx, y2: ny, h: turtle.h, s: turtle.s, l: turtle.l, w: turtle.w });
+      if (++b.seg > this.maxSegments) { turtle.x = nx; turtle.y = ny; throw new Budget(); }
+    }
+    turtle.x = nx; turtle.y = ny;
+    return cur;
+  }
+
+  // render the display list at time t (seconds) into a 2D context already
+  // translated so (0,0) is the drawing origin. Segments are grouped by stroke
+  // style so each style is drawn with a single stroke() — a deeply nested
+  // program of N segments costs a handful of draw calls, not N of them.
+  render(ctx, t) {
+    if (!this.scene) return;
+    const groups = new Map();
+    const stack = [{ f: this.scene, M: I(), hue: 0, sad: 0, lad: 0 }];
+    while (stack.length) {
+      const { f, M, hue, sad, lad } = stack.pop();
+      const Mf = f.type === 'root' ? M : mul(M, frameMatrix(f, t));
+      const isHue = f.type === 'hue';
+      const hf = hue + (isHue ? f.rate * t : 0);
+      const sf = sad + (isHue ? (f.srate || 0) * t : 0);
+      const lf = lad + (isHue ? (f.lrate || 0) * t : 0);
+      const sc = Math.sqrt(Math.abs(Mf.a * Mf.d - Mf.b * Mf.c)) || 1;
+      const segs = f.segments;
+      for (let i = 0; i < segs.length; i++) {
+        const sg = segs[i];
+        const w = Math.max(0.4, sg.w * sc);
+        const h = (((sg.h + hf) % 360) + 360) % 360;
+        const sv = sg.s + sf < 0 ? 0 : sg.s + sf > 100 ? 100 : sg.s + sf;
+        const lv = sg.l + lf < 0 ? 0 : sg.l + lf > 100 ? 100 : sg.l + lf;
+        const key = (h | 0) + '|' + (sv | 0) + '|' + (lv | 0) + '|' + w.toFixed(2);
+        let g = groups.get(key);
+        if (!g) { g = { style: `hsl(${h} ${sv}% ${lv}%)`, width: w, pts: [] }; groups.set(key, g); }
+        g.pts.push(AX(Mf, sg.x1, sg.y1), AY(Mf, sg.x1, sg.y1), AX(Mf, sg.x2, sg.y2), AY(Mf, sg.x2, sg.y2));
+      }
+      const ch = f.children;
+      for (let i = 0; i < ch.length; i++) stack.push({ f: ch[i], M: Mf, hue: hf, sad: sf, lad: lf });
+    }
+    for (const g of groups.values()) {
+      ctx.lineWidth = g.width; ctx.strokeStyle = g.style;
+      ctx.beginPath();
+      const p = g.pts;
+      for (let i = 0; i < p.length; i += 4) { ctx.moveTo(p[i], p[i + 1]); ctx.lineTo(p[i + 2], p[i + 3]); }
+      ctx.stroke();
+    }
+  }
+
+  // optional overlay: draw a glyph for every moving plate so the nested
+  // coordinate frames become visible. ctx is already translated to origin.
+  // Co-located plates are drawn as concentric rings of increasing radius, and
+  // each plate kind has a distinct glyph (tick = rotation, arrow = translation,
+  // double ring = scaling).
+  renderPlates(ctx, t) {
+    if (!this.scene) return;
+    const COL = { spin: '#e9a23b', grow: '#79d2b4', pulse: '#79d2b4', wag: '#c79bf0', move: '#7fa8e0', bob: '#7fa8e0', hue: '#e98bc0' };
+    const stack = [{ f: this.scene, M: I() }];
+    const bucket = new Map();
+    this._plates = [];
+    let drawn = 0;
+    while (stack.length && drawn < 1200) {
+      const { f, M } = stack.pop();
+      const Mf = f.type === 'root' ? M : mul(M, frameMatrix(f, t));
+      if (f.type !== 'root') {
+        const px = f.px || 0, py = f.py || 0;
+        const cx = AX(Mf, px, py), cy = AY(Mf, px, py);
+        const bkey = Math.round(cx / 3) + ',' + Math.round(cy / 3);   // only near-coincident plates fan out
+        const ring = bucket.get(bkey) || 0; bucket.set(bkey, ring + 1);
+        const sc = Math.sqrt(Math.abs(Mf.a * Mf.d - Mf.b * Mf.c)) || 1;
+        const R = (11 + Math.min(ring, 6) * 8) * Math.min(Math.max(sc, 0.3), 3);
+        this._plates.push({ type: f.type, x: cx, y: cy, R: R, ring: ring });
+        const col = COL[f.type] || '#ffffff';
+        const isTrans = f.type === 'move' || f.type === 'bob';
+        const isScale = f.type === 'grow' || f.type === 'pulse';
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.lineWidth = 1.1; ctx.strokeStyle = col; ctx.fillStyle = col;
+        ctx.globalAlpha = 0.09; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.85;
+        if (isTrans) ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        if (isScale) { ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(0, 0, R * 0.55, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 0.85; }
+        if (isTrans) {                                   // arrow along the (transformed) slide direction
+          const dx = Mf.a * f.dx + Mf.c * f.dy, dy = Mf.b * f.dx + Mf.d * f.dy, L = Math.hypot(dx, dy) || 1;
+          const ux = dx / L, uy = dy / L, a = Math.atan2(uy, ux);
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(ux * R, uy * R);
+          ctx.lineTo(ux * R - 6 * Math.cos(a - 0.4), uy * R - 6 * Math.sin(a - 0.4));
+          ctx.moveTo(ux * R, uy * R);
+          ctx.lineTo(ux * R - 6 * Math.cos(a + 0.4), uy * R - 6 * Math.sin(a + 0.4));
+          ctx.stroke();
+        } else {                                          // orientation tick (current heading of the plate)
+          ctx.rotate(Math.atan2(Mf.b, Mf.a));
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -R); ctx.stroke();
+          ctx.rotate(-Math.atan2(Mf.b, Mf.a));
+        }
+        ctx.beginPath(); ctx.arc(0, 0, 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        drawn++;
+      }
+      const ch = f.children;
+      for (let i = 0; i < ch.length; i++) stack.push({ f: ch[i], M: Mf });
+    }
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { Logo2500, parseProcedures, tokenize };
+
+</script>
+<script>
+/* === EXAMPLE LIBRARY (injected) === */
+// Example programs. Convention: the FIRST procedure defined is the entry point
+// (unless the program has top-level commands below the last END, which run instead).
+const EXAMPLES = {
+  PINWHEEL: {
+    blurb: "Six vanes radiating from the hub. SPIN pivots on the turtle's spot when it runs — here that spot is the centre, so the whole pinwheel turns in place.",
+    code: `TO PINWHEEL
+  SPIN 70          ; the whole figure turns; SPIN pivots on the turtle's spot = the centre
+  PEN 45
+  WIDTH 3
+  VANES 6
+END
+
+TO VANES :K
+  IF :K = 0 THEN STOP
+  HM               ; re-home to the centre so every vane starts from the hub
+  RT :K * 60       ; ...then fan this vane out by its own angle
+  VANE
+  VANES :K - 1
+END
+
+TO VANE
+  FD 50
+  RT 25
+  FD 55
+  RT 25
+  FD 40
+  RT 150
+  FD 130
+END`
+  },
+
+  SPIRAL: {
+    blurb: "A logarithmic spiral that turns (SPIN) and zooms (GROW) — the SPIN+GROW group.",
+    code: `TO SPIRAL
+  SPIN 16
+  GROW 1.08
+  ARM 70 3
+END
+
+TO ARM :N :LEN
+  IF :N = 0 THEN STOP
+  PEN :N * 5
+  WIDTH 2
+  FD :LEN
+  RT 22
+  ARM :N - 1  :LEN * 1.05   ; each segment a touch longer than the last = log spiral
+END`
+  },
+
+  GALAXY: {
+    blurb: "Six curved arms rotating together while the whole palette cycles (HUESHIFT).",
+    code: `TO GALAXY
+  HUESHIFT 30      ; rotate every colour 30 deg/s
+  SPIN 10
+  ARMS 6
+END
+
+TO ARMS :K
+  IF :K = 0 THEN STOP
+  HM               ; each arm starts from the centre...
+  RT :K * 60       ; ...spaced 60 deg apart
+  ARM 50 4
+  ARMS :K - 1
+END
+
+TO ARM :N :LEN
+  IF :N = 0 THEN STOP
+  PEN 210
+  WIDTH 2
+  FD :LEN
+  RT 11
+  ARM :N - 1  :LEN * 1.04
+END`
+  },
+
+  ORBITS: {
+    blurb: "Sun, planet, moon. Nested SPIN plates make a moon orbit a planet that orbits the sun. Turn on Trails to watch the moon trace its looping path.",
+    code: `TO ORBITS
+  DOT 7 45         ; the sun, at the centre
+  SPIN 22          ; open a turning frame; everything below now rides it
+  PU FD 95 PD      ; step out to the planet's distance
+  DOT 5 200        ; the planet
+  SPIN 130         ; a SECOND frame, nested in the first = the moon's orbit
+  PU FD 28 PD
+  DOT 3 0          ; the moon
+END
+
+TO DOT :R :HUE     ; a little 12-gon of radius :R
+  PEN :HUE
+  WIDTH 3
+  REPEAT 12 [ FD :R  RT 30 ]
+END`
+  },
+
+  COMET: {
+    blurb: "SPIN + MOVE on one plate. MOVE adds a constant forward speed; SPIN keeps turning it, so a steady velocity becomes an ever-widening spiral. (MOVE drifts without bound — its bounded cousin is BOB.)",
+    code: `TO COMET
+  SPIN 55
+  MOVE 22          ; a constant forward drift; SPIN curls it into a spiral
+  HUESHIFT 90
+  PEN 30
+  WIDTH 3
+  REPEAT 9 [ FD 9  RT 40 ]
+END`
+  },
+
+  FIREWORK: {
+    blurb: "A radial burst that expands forever (GROW) as its colours wheel (HUESHIFT). Swap GROW for PULSE to make it throb.",
+    code: `TO FIREWORK
+  GROW 1.25        ; scale up 1.25x every second
+  HUESHIFT 80
+  BURST 24
+END
+
+TO BURST :K
+  IF :K = 0 THEN STOP
+  HM               ; each ray starts at the centre...
+  RT :K * 15       ; ...15 deg apart, all the way round
+  RAY 12
+  BURST :K - 1
+END
+
+TO RAY :N
+  IF :N = 0 THEN STOP
+  PEN :N * 20      ; hue shifts along the ray
+  WIDTH 2
+  FD 6
+  RAY :N - 1
+END`
+  },
+
+  BLOOM: {
+    blurb: "A ring of petals that breathes open and shut. PULSE oscillates the plate's scale.",
+    code: `TO BLOOM
+  PULSE 0.28 2.4   ; scale wobbles +/-28%, once every 2.4s = the breathing
+  RING 12
+END
+
+TO RING :N
+  IF :N = 0 THEN STOP
+  PEN 300 + :N * 4
+  WIDTH 3
+  PETAL
+  RT 30            ; next petal, 30 deg round (no HM: petals chain into a ring)
+  RING :N - 1
+END
+
+TO PETAL             ; a rhombus drawn as two passes
+  REPEAT 2 [ FD 70  RT 60  FD 70  RT 120 ]
+END`
+  },
+
+  MANDALA: {
+    blurb: "Pure dynamics. At rest it is only a growing ray, but every segment rides its own slow SPIN, nested by the recursion, so it winds into a turning mandala once it plays. It has no base case, so it builds until the vector cap.",
+    code: `TO MANDALA :I :INC :SP
+FD :I
+SPIN :SP
+PEN :I 80 85
+MANDALA :I + :INC :INC :SP
+END
+MANDALA 1 .5 .01
+`
+  },
+
+  AQUARIUM: {
+    blurb: "The whole scene: kelp, coral, fish and jellyfish, each placed with GOTO and animated its own way — WAG fronds, orbiting fish (facing their direction of travel), bobbing bells, swaying tentacles. Everything grows slowly, so over a long run it gradually outgrows the frame.",
+    code: `TO AQUARIUM
+  ; place seaweed, coral, fish, and jellyfish at different places, sizes, and colors
+  ; they all have some animated aspects
+  SEAWEED 20 8 -135 138
+  SEAWEED 12 9 175 158
+  SEAWEED 15 8 100 122
+  FISH 35 175 16 9 50 25
+  FISH 48 101 -26 7 -50 100
+  CORAL 25 8 90 -250 -300
+  CORAL 30 7 20 0 -303 ; the bottom of the sea is not perfectly flat
+  CORAL 15 5 300 260 -298
+  JELLY 50 5 222 190 10
+  JELLY 85 5 12 -80 80
+END
+
+TO SEAWEED :FRONDS :SIZE :OFFSET :HUE
+  GOTO :OFFSET -275
+  GROW 1.012
+  FAN :FRONDS :SIZE :OFFSET :HUE :FRONDS
+END
+
+TO FAN :N :SIZE :OFFSET :HUE :TOTAL
+  IF :N = 0 THEN STOP
+  GOTO :OFFSET -285
+  RT (:N - (:TOTAL + 1) / 2) * 96 / :TOTAL
+  PEN :HUE + :N * 3
+  WIDTH 3
+  FROND :SIZE
+  FAN :N - 1 :SIZE :OFFSET :HUE :TOTAL
+END
+
+TO FROND :N
+  IF :N = 0 THEN STOP
+  WAG 7 2
+  FD 9
+  FROND :N - 1
+END
+
+TO FISH :HUE :RADIUS :SPEED :SIZE :HORIZONTAL :VERTICAL
+  GOTO :HORIZONTAL :VERTICAL
+  GROW 1.01
+  SPIN :SPEED
+  PU FD :RADIUS PD
+ ; Without the following the fish will swim backwards when going counterclockwise
+  IF :SPEED < 0 THEN LT 90 ELSE RT 90
+  PEN :HUE
+  WIDTH 3
+  LT 42
+  LENS :SIZE
+  RT 42
+  WAG 16 0.4
+  TAIL :SIZE
+END
+
+TO LENS :S
+  REPEAT 6 [ FD :S RT 14 ]
+  RT 96
+  REPEAT 6 [ FD :S RT 14 ]
+  RT 96
+END
+
+TO TAIL :S
+  RT 180
+  LT 24 FD :S
+  BK :S
+  RT 48 FD :S
+  BK :S
+  LT 24
+END
+
+TO CORAL :SIZE :DEPTH :HUE :HORIZONTAL :VERTICAL
+  GOTO :HORIZONTAL  :VERTICAL
+  GROW 1.008
+  LT 24
+  BRANCH :SIZE :DEPTH :HUE
+  RT 48
+  BRANCH :SIZE :DEPTH-1 :HUE
+  LT 24
+END
+
+TO BRANCH :LENGTH :DEPTH :HUE
+  IF :DEPTH = 0 THEN STOP
+  WIDTH :DEPTH
+  PEN :HUE - :DEPTH * 10
+  FD :LENGTH
+  LT 24
+  BRANCH :LENGTH * 0.75  :DEPTH - 1 :HUE
+  RT 48
+  BRANCH :LENGTH * 0.75  :DEPTH - 1 :HUE
+  LT 24
+  BK :LENGTH
+END
+
+TO JELLY :SIZE :COUNT :HUE :HORIZONTAL :VERTICAL
+  GOTO :HORIZONTAL :VERTICAL
+  GROW 1.02
+  BOB 20 3
+  PEN :HUE
+  BELL :SIZE
+  GOTO :HORIZONTAL :VERTICAL
+  TENTACLES :SIZE * 4 :COUNT :COUNT :HORIZONTAL - (:SIZE / 2) :VERTICAL (:SIZE  * 3) / (:COUNT * 4)
+END
+
+TO BELL :SIZE
+  WIDTH 4
+  PU
+  LT 90
+  FD :SIZE / 2
+  RT 90
+  PD
+  REPEAT 18 [ FD :SIZE / 18  RT 10 ]
+END
+
+TO TENTACLES :SIZE :COUNT :N :HORIZONTAL :VERTICAL :GAP
+  IF :N = 0 THEN STOP
+  GOTO :HORIZONTAL :VERTICAL
+  PU
+  RT 90
+  FD (:N - 1) * :GAP
+  LT 90
+  PD
+  RT 180
+  TENTACLE 12 :SIZE / (:COUNT * 12)
+  TENTACLES :SIZE :COUNT :N - 1 :HORIZONTAL :VERTICAL :GAP
+END
+
+TO TENTACLE :N :SIZE
+  IF :N = 0 THEN STOP
+  WAG 11 :SIZE
+  WIDTH 2
+  FD :SIZE
+  TENTACLE :N - 1 :SIZE
+END
+
+TO GOTO :HORIZONTAL :VERTICAL
+  HM
+  PU
+  RT 90
+  FD :HORIZONTAL
+  LT 90
+  FD :VERTICAL
+  PD
+END
+`
+  }
+};
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { EXAMPLES };
+
+</script>
+<script>
+/* === APP GLUE === */
+(function(){
+  const $ = s => document.querySelector(s);
+  const editor=$('#code'), hl=$('#hl'), scope=$('#scope'), canvas=$('#screen'),
+        statusEl=$('#status'), blurbEl=$('#blurb'), sel=$('#examples'),
+        speedEl=$('#speed'), speedVal=$('#speedval'),
+        trailsEl=$('#trails'), platesEl=$('#plates'),
+        fsBtn=$('#fs'), recBtn=$('#rec'), framesBtn=$('#frames'),
+        durEl=$('#dur'), fpsEl=$('#fps'), ewEl=$('#ew'), ehEl=$('#eh'), expEl=$('#expstatus');
+  const ctx=canvas.getContext('2d');
+  // syntax highlight overlay: mirror the editor text, italicise/tint comments (; to EOL)
+  const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  function highlight(){
+    hl.innerHTML = esc(editor.value).replace(/(;[^\n]*)/g, '<span class="cmt">$1</span>') + '\n';
+    hl.scrollTop = editor.scrollTop; hl.scrollLeft = editor.scrollLeft;
+  }
+  const vm=new Logo2500();
+  const BG='#15120d';
+  let raf=null, animT=0, lastNow=0, running=false, dpr=1, W=0, H=0, lastT=0, recordingBG=false;
+  const speed =()=>Math.pow(2, parseFloat(speedEl.value));      // log-mapped: 0.06× … 8×
+  const trails=()=>trailsEl.checked;
+  const plates=()=>platesEl.checked;
+
+  function fit(){
+    const r=scope.getBoundingClientRect();
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=r.width; H=r.height;
+    canvas.width=Math.round(W*dpr); canvas.height=Math.round(H*dpr);
+    canvas.style.width=W+'px'; canvas.style.height=H+'px';
+    draw(lastT,false);
+  }
+  function drawGrid(){
+    const cx=W/2, cy=H/2;
+    ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(233,162,59,.055)';
+    for(let r=70;r<Math.max(W,H);r+=70){ ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke(); }
+    ctx.strokeStyle='rgba(236,227,210,.045)';
+    ctx.beginPath(); ctx.moveTo(0,cy+.5); ctx.lineTo(W,cy+.5); ctx.moveTo(cx+.5,0); ctx.lineTo(cx+.5,H); ctx.stroke();
+  }
+  function clearBG(useFade){
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if(useFade && trails()){ ctx.fillStyle='rgba(22,19,16,.12)'; ctx.fillRect(0,0,W,H); }
+    else if(recordingBG){ ctx.fillStyle=BG; ctx.fillRect(0,0,W,H); }   // recordings stay clean: no scope grid baked in
+    else { ctx.clearRect(0,0,W,H); if(!trails()) drawGrid(); }
+  }
+  // useFade=true accumulates trails (animation loop); false wipes (paused / reset / fit)
+  function draw(t, useFade){
+    lastT=t; clearBG(useFade);
+    ctx.save(); ctx.translate(W/2,H/2); ctx.lineCap='round'; ctx.lineJoin='round';
+    try{ vm.render(ctx,t); if(plates()) vm.renderPlates(ctx,t); }catch(e){}
+    ctx.restore();
+  }
+  function loop(now){
+    if(!running) return;
+    const dt=Math.min(0.1,(now-lastNow)/1000);   // clamp so a backgrounded tab can't jump the clock
+    animT += dt*speed(); lastNow=now;
+    draw(animT, true); raf=requestAnimationFrame(loop);
+  }
+  function setStatus(m,k){ statusEl.textContent=m; statusEl.className='status '+(k||''); }
+  function halt(){ running=false; scope.classList.remove('live'); if(raf){ cancelAnimationFrame(raf); raf=null; } }
+  const entryLabel = e => e==='__MAIN__' ? 'top level' : e;
+
+  function build(){
+    try{ vm.load(editor.value); }
+    catch(e){ setStatus('parse error — '+e.message,'err'); return null; }
+    if(!vm.entry){ setStatus('nothing to run — define a procedure with  TO … END,  or add a command','err'); return null; }
+    try{ vm.build(vm.entry); }
+    catch(e){ setStatus('build error — '+e.message,'err'); return null; }
+    return vm.entry;
+  }
+  const counts = () => vm.segCount+' vectors · '+vm.plateCount+' plates';
+  function run(){
+    const entry=build();
+    if(!entry){ halt(); clearBG(false); return; }   // failed build must stop the previous animation
+    animT=0; lastNow=performance.now(); running=true; scope.classList.add('live');
+    clearBG(false);
+    if(raf) cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(loop);
+    if(vm.errors.length) setStatus('⚠ '+vm.errors.join('  ·  ')+'   ('+counts()+')','err');
+    else setStatus('● running   '+entryLabel(entry)+'   ·   '+counts(),'run');
+  }
+  function pause(){
+    if(!running) return;
+    halt();
+    setStatus('paused at t = '+lastT.toFixed(1)+' s   ·   '+counts(),'');
+  }
+  function reset(){
+    halt();
+    const entry=build(); animT=0; draw(0,false);
+    if(!entry) return;
+    if(vm.errors.length) setStatus('⚠ '+vm.errors.join('  ·  '),'err');
+    else setStatus('reset to t = 0   ·   '+entryLabel(entry)+'   ·   '+counts(),'');
+  }
+  function newProgram(){
+    halt();
+    editor.value='TO DRAWING\n  \n  \nEND'; highlight();
+    blurbEl.textContent='Your own program. The first procedure (DRAWING here) runs — rename it freely, or add a call below the last END.';
+    sel.value='';
+    build(); draw(0,false);
+    setStatus('new program — write inside TO … END, then Run','');
+    editor.focus();
+  }
+  function loadExample(name){
+    const ex=EXAMPLES[name]; if(!ex) return;
+    editor.value=ex.code; highlight(); blurbEl.textContent=ex.blurb; run();
+  }
+
+  // ---- helpers: download + minimal store-only ZIP (CRC32) -----------------
+  function download(blob, name){
+    const u=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u), 8000);
+  }
+  const CRCT=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+  function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRCT[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+  function zipStore(files){ // files: [{name, data:Uint8Array}] -> Blob (no compression)
+    const enc=new TextEncoder(); const parts=[]; const central=[]; let offset=0;
+    const u16=v=>[v&255,(v>>8)&255]; const u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>24)&255];
+    for(const f of files){
+      const name=enc.encode(f.name), crc=crc32(f.data), sz=f.data.length;
+      const lh=[0x50,0x4b,0x03,0x04, ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(crc), ...u32(sz), ...u32(sz), ...u16(name.length), ...u16(0)];
+      parts.push(new Uint8Array(lh), name, f.data);
+      central.push([0x50,0x4b,0x01,0x02, ...u16(20), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(crc), ...u32(sz), ...u32(sz), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)].concat([...name]));
+      offset += lh.length + name.length + sz;
+    }
+    const cd=[]; central.forEach(c=>c.forEach(b=>cd.push(b))); const cdArr=new Uint8Array(cd);
+    const eocd=new Uint8Array([0x50,0x4b,0x05,0x06, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cdArr.length), ...u32(offset), ...u16(0)]);
+    return new Blob([...parts, cdArr, eocd], {type:'application/zip'});
+  }
+
+  // ---- full screen (for OS screen capture) --------------------------------
+  function toggleFS(){
+    if(!document.fullscreenElement){ (scope.requestFullscreen?scope.requestFullscreen():Promise.reject()).catch(()=>{}); }
+    else document.exitFullscreen();
+  }
+  document.addEventListener('fullscreenchange', ()=>{ setTimeout(fit,60); });
+
+  // ---- record a .webm in real time (quick, frame rate follows wall clock) --
+  let rec=null, recChunks=[];
+  function pickMime(){ const cands=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']; for(const m of cands) if(window.MediaRecorder&&MediaRecorder.isTypeSupported(m)) return m; return ''; }
+  function toggleRec(){
+    if(rec){ rec.stop(); return; }
+    if(!window.MediaRecorder || !canvas.captureStream){ setExp('this browser cannot record — use ⬇ .zip frames or full screen capture','err'); return; }
+    if(!running) run();
+    recordingBG=true;
+    const stream=canvas.captureStream(60); const mime=pickMime();
+    try{ rec=new MediaRecorder(stream, mime?{mimeType:mime}:undefined); }
+    catch(e){ recordingBG=false; setExp('recording unsupported here — use ⬇ .zip frames','err'); return; }
+    recChunks=[];
+    rec.ondataavailable=e=>{ if(e.data&&e.data.size) recChunks.push(e.data); };
+    rec.onstop=()=>{ recordingBG=false; recBtn.textContent='⏺ Record .webm'; recBtn.classList.remove('on');
+      download(new Blob(recChunks,{type:rec.mimeType||'video/webm'}), '2500logo.webm'); rec=null;
+      setExp('saved 2500logo.webm'); };
+    rec.start();
+    recBtn.textContent='⏹ Stop & save'; recBtn.classList.add('on');
+    setExp('recording in real time… click Stop to save');
+  }
+  function setExp(m,k){ expEl.textContent=m; expEl.className='status '+(k||''); }
+
+  // ---- export exact frames as PNGs in a .zip (perfect frame rate) ----------
+  const toBlob = c => new Promise(res=>c.toBlob(res,'image/png'));
+  let exporting=false, exportCancel=false;
+  async function exportFrames(){
+    if(exporting){ exportCancel=true; setExp('cancelling…'); return; }   // second click cancels
+    const entry=build(); if(!entry){ return; }
+    const fps=parseInt(fpsEl.value)||60, secs=Math.max(0.2,Math.min(600,parseFloat(durEl.value)||8));
+    const total=Math.round(secs*fps);
+    const ev=n=>Math.max(64,Math.min(4096,Math.round(n/2)*2));    // clamp + force even (mp4-friendly)
+    const Sx=ev(parseInt(ewEl.value)||1080), Sy=ev(parseInt(ehEl.value)||1080);
+    const view=(W||600);                                          // the live scope is square: ±view/2 is the field
+    const k=Math.min(Sx,Sy)/view;                                 // fit that field, centred (letterbox the long axis)
+    const oc=document.createElement('canvas'); oc.width=Sx; oc.height=Sy; const ox=oc.getContext('2d');
+    const wasRunning=running; halt();
+    exporting=true; exportCancel=false; framesBtn.textContent='✕ Cancel'; framesBtn.classList.add('on');
+    ox.setTransform(1,0,0,1,0,0); ox.fillStyle=BG; ox.fillRect(0,0,Sx,Sy);   // base for trails
+    const PART_BYTES = 1024*1024*1024;   // ~1 GB per zip: well under the 4 GB / Windows limit, and bounds memory
+    const PART_FILES = 50000;            // and under the 65535-entry zip limit
+    const pad=n=>('000000'+n).slice(-6);
+    let chunk=[], chunkBytes=0, part=0, saved=0;
+    const part2=n=>('0'+n).slice(-2);
+    async function flushPart(){
+      if(!chunk.length) return;
+      part++;
+      setExp('packing part '+part+' ('+chunk.length+' frames)…'); await new Promise(r=>setTimeout(r,0));
+      download(zipStore(chunk), '2500logo_'+Sx+'x'+Sy+'_'+fps+'fps_part'+part2(part)+'.zip');
+      saved+=chunk.length; chunk=[]; chunkBytes=0;
+      await new Promise(r=>setTimeout(r,900));   // gap so the browser accepts the next download
+    }
+    try{
+      for(let i=0;i<total;i++){
+        if(exportCancel) break;
+        const t=i/fps;
+        ox.setTransform(1,0,0,1,0,0);
+        if(trails()){ ox.fillStyle='rgba(21,18,13,.12)'; ox.fillRect(0,0,Sx,Sy); }
+        else { ox.fillStyle=BG; ox.fillRect(0,0,Sx,Sy); }
+        ox.save(); ox.translate(Sx/2,Sy/2); ox.scale(k,k); ox.lineCap='round'; ox.lineJoin='round';
+        vm.render(ox,t); if(plates()) vm.renderPlates(ox,t);
+        ox.restore();
+        const blob=await toBlob(oc); const buf=new Uint8Array(await blob.arrayBuffer());
+        chunk.push({name:'frame_'+pad(i+1)+'.png', data:buf}); chunkBytes+=buf.length;
+        if(i%5===0){ setExp('part '+(part+1)+' · frame '+(i+1)+' / '+total+'  ('+Math.round(100*(i+1)/total)+'%)'); await new Promise(r=>setTimeout(r,0)); }
+        if(chunkBytes>=PART_BYTES || chunk.length>=PART_FILES) await flushPart();
+      }
+      await flushPart();
+      const cmd='ffmpeg -framerate '+fps+' -i frame_%06d.png -pix_fmt yuv420p out.mp4';
+      if(exportCancel) setExp('cancelled — saved '+saved+' frame'+(saved===1?'':'s')+(part?' in '+part+' part'+(part===1?'':'s'):'')+'.');
+      else if(part<=1) setExp('saved '+saved+' frames —  '+cmd);
+      else setExp('saved '+saved+' frames in '+part+' zips — extract ALL into one folder, then:  '+cmd);
+    } catch(e){ setExp('export failed — '+e.message,'err'); }
+    finally{ exporting=false; exportCancel=false; framesBtn.textContent='⬇ .zip'; framesBtn.classList.remove('on'); if(wasRunning) run(); else draw(lastT,false); }
+  }
+
+  Object.keys(EXAMPLES).forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+  sel.addEventListener('change',()=>loadExample(sel.value));
+  $('#run').addEventListener('click',run);
+  $('#stop').addEventListener('click',pause);
+  $('#reset').addEventListener('click',reset);
+  $('#new').addEventListener('click',newProgram);
+  fsBtn.addEventListener('click',toggleFS);
+  if(!(document.fullscreenEnabled && scope.requestFullscreen)) fsBtn.style.display='none';
+  recBtn.addEventListener('click',toggleRec);
+  framesBtn.addEventListener('click',exportFrames);
+  speedEl.addEventListener('input',()=>{ const s=speed(); speedVal.textContent=(s>=1?s.toFixed(1):s.toFixed(2))+'×'; });
+  trailsEl.addEventListener('change',()=>{ if(!running) draw(lastT,false); });
+  platesEl.addEventListener('change',()=>{ if(!running) draw(lastT,false); });
+  editor.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); run(); }});
+  editor.addEventListener('input',highlight);
+  editor.addEventListener('scroll',()=>{ hl.scrollTop=editor.scrollTop; hl.scrollLeft=editor.scrollLeft; });
+  window.addEventListener('resize',fit);
+  window.addEventListener('load',()=>{ fit(); const first='AQUARIUM'; sel.value=first; loadExample(first); });
+  fit();
+})();
+</script>
+</body>
+</html>
