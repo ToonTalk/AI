@@ -152,6 +152,7 @@ a{color:var(--phos)}
         </label>
         <label class="toggle"><input type="checkbox" id="trails"> trails</label>
         <label class="toggle"><input type="checkbox" id="plates"> plates</label>
+        <label class="toggle" title="execute a procedure's final call by looping instead of recursing — lets deep tail-recursion (e.g. MANDALA) build to the vector/depth cap deterministically"><input type="checkbox" id="tco"> tail calls</label>
       </div>
       <div class="status" id="status">&nbsp;</div>
       <div class="controls export">
@@ -165,7 +166,10 @@ a{color:var(--phos)}
         <input type="number" id="ew" value="1080" min="64" max="4096" step="2" title="frame width (px)">
         <span class="dim">×</span>
         <input type="number" id="eh" value="1080" min="64" max="4096" step="2" title="frame height (px)">
-        <span class="dim">px →</span>
+        <span class="dim">px,</span>
+        <span class="dim">ss</span>
+        <select id="ss" title="supersample: render this many times larger, then downscale, for smoother lines"><option value="1">1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+        <span class="dim">→</span>
         <button id="frames">⬇ .zip</button>
       </div>
       <div class="status" id="expstatus">&nbsp;</div>
@@ -427,7 +431,7 @@ const STOP = Symbol('stop');
 class Budget extends Error {}
 
 class Logo2500 {
-  constructor() { this.procs = {}; this.scene = null; this.maxSegments = 8000; this.maxDepth = 4000; this.segCount = 0; this.plateCount = 0; this.errors = []; }
+  constructor() { this.procs = {}; this.scene = null; this.maxSegments = 8000; this.maxDepth = 4000; this.segCount = 0; this.plateCount = 0; this.errors = []; this.tco = false; }
   load(source) {
     this.procs = parseProcedures(source);
     const userKeys = Object.keys(this.procs).filter(k => k !== '__MAIN__');
@@ -455,7 +459,30 @@ class Logo2500 {
     return root;
   }
 
-  runProc(proc, env, turtle, frame, b) { try { this.runCmds(proc.body, env, turtle, frame, b); } catch (e) { if (e === STOP) return; throw e; } }
+  // When this.tco is on, a procedure's final command, if it is a direct call,
+  // is executed by looping (rebinding proc+env) instead of recursing — so deep
+  // tail-recursion (e.g. MANDALA) builds the same frame tree without growing the
+  // JS call stack, stopping deterministically at the segment/depth caps instead.
+  runProc(proc, env, turtle, frame, b) {
+    let cur = frame;
+    trampoline: while (true) {
+      try {
+        const body = proc.body, n = body.length;
+        for (let i = 0; i < n; i++) {
+          const c = body[i];
+          if (this.tco && i === n - 1 && c.type === 'call' && this.procs[c.name]) {
+            const callee = this.procs[c.name];
+            const av = c.args.map(a => { const v = evalExpr(a, env); if (v !== v || v === Infinity || v === -Infinity) this._numErr = true; return v; });
+            const ce = {}; callee.params.forEach((p, k) => { ce[p] = k < av.length ? av[k] : 0; });
+            proc = callee; env = ce;
+            continue trampoline;
+          }
+          cur = this.exec(c, env, turtle, cur, b);
+        }
+        return cur;
+      } catch (e) { if (e === STOP) return cur; throw e; }
+    }
+  }
   runCmds(cmds, env, turtle, frame, b) { let cur = frame; for (const c of cmds) cur = this.exec(c, env, turtle, cur, b); return cur; }
 
   openFrame(cur, node) { if (cur.depth >= this.maxDepth) throw new Budget(); node.depth = cur.depth + 1; node.segments = []; node.children = []; cur.children.push(node); this.plateCount++; return node; }
@@ -937,14 +964,20 @@ if (typeof module !== 'undefined' && module.exports) module.exports = { EXAMPLES
   const editor=$('#code'), hl=$('#hl'), scope=$('#scope'), canvas=$('#screen'),
         statusEl=$('#status'), blurbEl=$('#blurb'), sel=$('#examples'),
         speedEl=$('#speed'), speedVal=$('#speedval'),
-        trailsEl=$('#trails'), platesEl=$('#plates'),
+        trailsEl=$('#trails'), platesEl=$('#plates'), tcoEl=$('#tco'),
         fsBtn=$('#fs'), recBtn=$('#rec'), framesBtn=$('#frames'),
-        durEl=$('#dur'), fpsEl=$('#fps'), ewEl=$('#ew'), ehEl=$('#eh'), expEl=$('#expstatus');
+        durEl=$('#dur'), fpsEl=$('#fps'), ewEl=$('#ew'), ehEl=$('#eh'), ssEl=$('#ss'), expEl=$('#expstatus');
   const ctx=canvas.getContext('2d');
   // syntax highlight overlay: mirror the editor text, italicise/tint comments (; to EOL)
   const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   function highlight(){
-    hl.innerHTML = esc(editor.value).replace(/(;[^\n]*)/g, '<span class="cmt">$1</span>') + '\n';
+    // split each line at the real ';' BEFORE escaping, so the ';' inside &lt; / &gt; isn't seen as a comment
+    const out = editor.value.split('\n').map(line => {
+      const i = line.indexOf(';');
+      return i < 0 ? esc(line)
+                   : esc(line.slice(0, i)) + '<span class="cmt">' + esc(line.slice(i)) + '</span>';
+    }).join('\n');
+    hl.innerHTML = out + '\n';
     hl.scrollTop = editor.scrollTop; hl.scrollLeft = editor.scrollLeft;
   }
   const vm=new Logo2500();
@@ -997,6 +1030,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = { EXAMPLES
     try{ vm.load(editor.value); }
     catch(e){ setStatus('parse error — '+e.message,'err'); return null; }
     if(!vm.entry){ setStatus('nothing to run — define a procedure with  TO … END,  or add a command','err'); return null; }
+    vm.tco = tcoEl.checked;
     try{ vm.build(vm.entry); }
     catch(e){ setStatus('build error — '+e.message,'err'); return null; }
     return vm.entry;
@@ -1100,23 +1134,45 @@ if (typeof module !== 'undefined' && module.exports) module.exports = { EXAMPLES
     const total=Math.round(secs*fps);
     const ev=n=>Math.max(64,Math.min(4096,Math.round(n/2)*2));    // clamp + force even (mp4-friendly)
     const Sx=ev(parseInt(ewEl.value)||1080), Sy=ev(parseInt(ehEl.value)||1080);
+    const ss=Math.max(1,Math.min(2,parseFloat(ssEl.value)||1));   // requested supersample factor
+    const MAXB=4000;                                              // keep the big canvas within browser area limits (Safari ~4096^2)
+    let bw=Math.round(Sx*ss), bh=Math.round(Sy*ss);               // big (supersampled) canvas
+    if(bw>MAXB || bh>MAXB){ const f=MAXB/Math.max(bw,bh); bw=Math.round(bw*f); bh=Math.round(bh*f); }
+    const ssEff=(bw/Sx);                                          // effective factor after the cap
     const view=(W||600);                                          // the live scope is square: ±view/2 is the field
-    const k=Math.min(Sx,Sy)/view;                                 // fit that field, centred (letterbox the long axis)
-    const oc=document.createElement('canvas'); oc.width=Sx; oc.height=Sy; const ox=oc.getContext('2d');
+    const k=Math.min(bw,bh)/view;                                 // fit that field on the big canvas, centred
+    const oc=document.createElement('canvas'); oc.width=bw; oc.height=bh; const ox=oc.getContext('2d');
+    const tc=document.createElement('canvas'); tc.width=Sx; tc.height=Sy; const tx=tc.getContext('2d');
+    tx.imageSmoothingEnabled=true; tx.imageSmoothingQuality='high';
     const wasRunning=running; halt();
     exporting=true; exportCancel=false; framesBtn.textContent='✕ Cancel'; framesBtn.classList.add('on');
-    ox.setTransform(1,0,0,1,0,0); ox.fillStyle=BG; ox.fillRect(0,0,Sx,Sy);   // base for trails
+    ox.setTransform(1,0,0,1,0,0); ox.fillStyle=BG; ox.fillRect(0,0,bw,bh);   // base for trails
     const PART_BYTES = 1024*1024*1024;   // ~1 GB per zip: well under the 4 GB / Windows limit, and bounds memory
     const PART_FILES = 50000;            // and under the 65535-entry zip limit
     const pad=n=>('000000'+n).slice(-6);
+    const manifest =
+      '2500 Logo — exact-frame export\n'+
+      'program entry : '+entryLabel(entry)+'\n'+
+      'output size   : '+Sx+' x '+Sy+' px\n'+
+      'supersample   : '+ssEff.toFixed(2)+'x'+(ssEff<ss?' (capped from '+ss+'x)':'')+'  (rendered at '+bw+' x '+bh+', downscaled)\n'+
+      'view size     : '+Math.round(view)+' turtle units across (the field the scope shows)\n'+
+      'frame rate    : '+fps+' fps\n'+
+      'duration      : '+secs+' s  ('+total+' frames)\n'+
+      'trails        : '+(trails()?'on':'off')+'\n'+
+      'plates overlay: '+(plates()?'on':'off')+'\n'+
+      'tail calls    : '+(tcoEl.checked?'on':'off')+'\n'+
+      'caps          : '+vm.maxSegments+' vectors, '+vm.maxDepth+' nesting depth   (this run: '+vm.segCount+' vectors, '+vm.plateCount+' plates)\n'+
+      'assemble      : ffmpeg -framerate '+fps+' -i frame_%06d.png -pix_fmt yuv420p out.mp4\n';
+    const manifestBytes = new TextEncoder().encode(manifest);
     let chunk=[], chunkBytes=0, part=0, saved=0;
     const part2=n=>('0'+n).slice(-2);
     async function flushPart(){
       if(!chunk.length) return;
       part++;
-      setExp('packing part '+part+' ('+chunk.length+' frames)…'); await new Promise(r=>setTimeout(r,0));
+      chunk.unshift({name:'info.txt', data:manifestBytes});   // self-documenting: settings travel with the frames
+      setExp('packing part '+part+' ('+(chunk.length-1)+' frames)…'); await new Promise(r=>setTimeout(r,0));
       download(zipStore(chunk), '2500logo_'+Sx+'x'+Sy+'_'+fps+'fps_part'+part2(part)+'.zip');
-      saved+=chunk.length; chunk=[]; chunkBytes=0;
+      saved+=chunk.length-1; chunk=[]; chunkBytes=0;
       await new Promise(r=>setTimeout(r,900));   // gap so the browser accepts the next download
     }
     try{
@@ -1124,12 +1180,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = { EXAMPLES
         if(exportCancel) break;
         const t=i/fps;
         ox.setTransform(1,0,0,1,0,0);
-        if(trails()){ ox.fillStyle='rgba(21,18,13,.12)'; ox.fillRect(0,0,Sx,Sy); }
-        else { ox.fillStyle=BG; ox.fillRect(0,0,Sx,Sy); }
-        ox.save(); ox.translate(Sx/2,Sy/2); ox.scale(k,k); ox.lineCap='round'; ox.lineJoin='round';
+        if(trails()){ ox.fillStyle='rgba(21,18,13,.12)'; ox.fillRect(0,0,bw,bh); }
+        else { ox.fillStyle=BG; ox.fillRect(0,0,bw,bh); }
+        ox.save(); ox.translate(bw/2,bh/2); ox.scale(k,k); ox.lineCap='round'; ox.lineJoin='round';
         vm.render(ox,t); if(plates()) vm.renderPlates(ox,t);
         ox.restore();
-        const blob=await toBlob(oc); const buf=new Uint8Array(await blob.arrayBuffer());
+        let src=oc;
+        if(bw!==Sx || bh!==Sy){ tx.clearRect(0,0,Sx,Sy); tx.drawImage(oc,0,0,bw,bh,0,0,Sx,Sy); src=tc; }   // resample to target
+        const blob=await toBlob(src); const buf=new Uint8Array(await blob.arrayBuffer());
         chunk.push({name:'frame_'+pad(i+1)+'.png', data:buf}); chunkBytes+=buf.length;
         if(i%5===0){ setExp('part '+(part+1)+' · frame '+(i+1)+' / '+total+'  ('+Math.round(100*(i+1)/total)+'%)'); await new Promise(r=>setTimeout(r,0)); }
         if(chunkBytes>=PART_BYTES || chunk.length>=PART_FILES) await flushPart();
@@ -1156,6 +1214,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = { EXAMPLES
   speedEl.addEventListener('input',()=>{ const s=speed(); speedVal.textContent=(s>=1?s.toFixed(1):s.toFixed(2))+'×'; });
   trailsEl.addEventListener('change',()=>{ if(!running) draw(lastT,false); });
   platesEl.addEventListener('change',()=>{ if(!running) draw(lastT,false); });
+  tcoEl.addEventListener('change',()=>{ const wasRunning=running; build(); if(wasRunning) run(); else { animT=0; draw(0,false); } });
   editor.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); run(); }});
   editor.addEventListener('input',highlight);
   editor.addEventListener('scroll',()=>{ hl.scrollTop=editor.scrollTop; hl.scrollLeft=editor.scrollLeft; });
