@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Specimens — A Field Guide to Evolved Drawings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --parchment: #f0e7cf;
+    --parchment-warm: #e9dfc1;
+    --parchment-dark: #d9cca7;
+    --ink: #2e1f13;
+    --ink-mid: #4a3520;
+    --ink-faded: #8b7654;
+    --ink-ghost: #b8a47e;
+    --accent: #8a2f24;
+    --accent-ink: #6b1d14;
+    --shadow: rgba(46, 31, 19, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100vh; }
+  body {
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 0%, rgba(46,31,19,0.04), transparent),
+      radial-gradient(ellipse 80% 60% at 90% 100%, rgba(46,31,19,0.05), transparent),
+      var(--parchment);
+    color: var(--ink);
+    font-family: 'Cormorant Garamond', 'Garamond', serif;
+    font-size: 17px;
+    line-height: 1.5;
+    padding: 40px 24px 80px;
+  }
+  /* Subtle paper grain via SVG noise */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.4;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.12 0 0 0 0 0.07 0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+  /* Vignette */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(46,31,19,0.12) 100%);
+  }
+
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  header.masthead {
+    text-align: center;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--ink-ghost);
+    margin-bottom: 36px;
+    position: relative;
+  }
+  .eyebrow {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--ink-faded);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  h1.title {
+    font-family: 'IM Fell English', serif;
+    font-weight: 400;
+    font-size: clamp(40px, 6vw, 64px);
+    line-height: 1;
+    letter-spacing: 0.01em;
+  }
+  h1.title .ornament {
+    color: var(--accent);
+    font-style: italic;
+  }
+  .subtitle {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--ink-mid);
+    font-size: clamp(15px, 1.6vw, 19px);
+    margin-top: 14px;
+  }
+  .gen-banner {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 22px;
+    padding: 4px 18px;
+    border: 1px solid var(--ink-faded);
+    border-radius: 2px;
+    background: var(--parchment-warm);
+  }
+  .gen-banner .label {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--ink-faded);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 11px;
+  }
+  .gen-banner .roman {
+    font-family: 'IM Fell English', serif;
+    font-size: 22px;
+    color: var(--ink);
+  }
+
+  /* Specimen grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+  @media (max-width: 880px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 540px) { .grid { grid-template-columns: 1fr; } }
+
+  .specimen {
+    background: var(--parchment-warm);
+    border: 1px solid var(--ink-faded);
+    padding: 18px 18px 14px;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+    box-shadow: 0 1px 0 var(--parchment-dark), 0 6px 16px var(--shadow);
+    /* Slight rotation gives the pinned-specimen feel */
+  }
+  .specimen:nth-child(1) { transform: rotate(-0.4deg); }
+  .specimen:nth-child(2) { transform: rotate(0.3deg); }
+  .specimen:nth-child(3) { transform: rotate(-0.2deg); }
+  .specimen:nth-child(4) { transform: rotate(0.4deg); }
+  .specimen:nth-child(5) { transform: rotate(-0.3deg); }
+  .specimen:nth-child(6) { transform: rotate(0.2deg); }
+  .specimen:hover {
+    background: #f4ecd6;
+    box-shadow: 0 1px 0 var(--parchment-dark), 0 10px 24px rgba(46,31,19,0.25);
+    transform: translateY(-3px) rotate(0deg);
+    z-index: 2;
+  }
+  .specimen.parent-flash {
+    background: #fff2cc;
+    box-shadow: 0 0 0 2px var(--accent) inset, 0 10px 24px rgba(46,31,19,0.3);
+  }
+  .specimen-frame {
+    background: var(--parchment);
+    border: 1px solid var(--ink-faded);
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .specimen-frame canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .specimen-frame::before,
+  .specimen-frame::after {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--ink-faded);
+  }
+  .specimen-frame::before { top: 4px; left: 4px; border-right: none; border-bottom: none; }
+  .specimen-frame::after { bottom: 4px; right: 4px; border-left: none; border-top: none; }
+  .specimen-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 12px;
+    margin-bottom: 8px;
+    font-family: 'IM Fell English', serif;
+    color: var(--ink-mid);
+  }
+  .specimen-label .number {
+    font-style: italic;
+    letter-spacing: 0.05em;
+  }
+  .specimen-label .edit-link {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+  .specimen-label .edit-link:hover { color: var(--accent-ink); }
+
+  .genome {
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    font-size: 11px;
+    color: var(--ink-mid);
+    line-height: 1.65;
+    background: var(--parchment);
+    border: 1px dashed var(--ink-ghost);
+    padding: 8px 10px;
+    white-space: pre;
+    overflow-x: auto;
+    user-select: text;
+  }
+  .genome .repeat-header {
+    color: var(--accent);
+    display: block;
+    margin-bottom: 4px;
+    letter-spacing: 0.04em;
+  }
+
+  /* Footer / controls */
+  footer.controls {
+    margin-top: 50px;
+    text-align: center;
+    border-top: 1px solid var(--ink-ghost);
+    padding-top: 28px;
+  }
+  .control-bar {
+    display: inline-flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .btn {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 16px;
+    color: var(--ink);
+    background: var(--parchment-warm);
+    border: 1px solid var(--ink-faded);
+    padding: 8px 22px;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: all 0.2s ease;
+  }
+  .btn:hover {
+    background: var(--ink);
+    color: var(--parchment);
+  }
+  .btn.primary {
+    background: var(--accent);
+    color: var(--parchment);
+    border-color: var(--accent-ink);
+  }
+  .btn.primary:hover {
+    background: var(--accent-ink);
+  }
+  .footer-note {
+    margin-top: 24px;
+    font-style: italic;
+    color: var(--ink-faded);
+    font-size: 14px;
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(46,31,19,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--parchment);
+    border: 1px solid var(--ink);
+    padding: 32px 36px;
+    max-width: 560px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    position: relative;
+  }
+  .modal h2 {
+    font-family: 'IM Fell English', serif;
+    font-weight: 400;
+    font-size: 28px;
+    margin-bottom: 12px;
+    color: var(--ink);
+  }
+  .modal p { margin-bottom: 14px; }
+  .modal .close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-family: 'IM Fell English', serif;
+    font-size: 26px;
+    color: var(--ink-faded);
+    cursor: pointer;
+    line-height: 1;
+  }
+  .modal .close:hover { color: var(--accent); }
+  .modal .legend {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    font-size: 15px;
+    margin: 14px 0;
+    padding: 14px;
+    background: var(--parchment-warm);
+    border-left: 3px solid var(--accent);
+  }
+  .modal .legend code {
+    font-family: 'Special Elite', monospace;
+    font-size: 13px;
+    color: var(--accent-ink);
+  }
+
+  .editor {
+    width: 100%;
+    min-height: 180px;
+    font-family: 'Special Elite', monospace;
+    font-size: 13px;
+    background: var(--parchment-warm);
+    color: var(--ink);
+    border: 1px solid var(--ink-faded);
+    padding: 12px;
+    resize: vertical;
+    line-height: 1.7;
+  }
+  .editor:focus { outline: 1px solid var(--accent); }
+  .editor-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    justify-content: flex-end;
+  }
+  .editor-error {
+    color: var(--accent-ink);
+    font-style: italic;
+    font-size: 14px;
+    margin-top: 8px;
+    min-height: 1.2em;
+  }
+  .editor-hint {
+    font-size: 14px;
+    color: var(--ink-faded);
+    font-style: italic;
+    margin-top: 10px;
+  }
+
+  /* Subtle entrance animation for new specimens */
+  @keyframes appear {
+    from { opacity: 0; transform: translateY(10px) rotate(0deg); }
+    to   { opacity: 1; }
+  }
+  .specimen { animation: appear 0.4s ease both; }
+  .specimen:nth-child(1) { animation-delay: 0.00s; }
+  .specimen:nth-child(2) { animation-delay: 0.06s; }
+  .specimen:nth-child(3) { animation-delay: 0.12s; }
+  .specimen:nth-child(4) { animation-delay: 0.18s; }
+  .specimen:nth-child(5) { animation-delay: 0.24s; }
+  .specimen:nth-child(6) { animation-delay: 0.30s; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">A Field Guide to Evolved Drawings</div>
+    <h1 class="title">Specimens <span class="ornament">&amp;</span> Their Descendants</h1>
+    <div class="subtitle">Choose the specimen you find most beautiful. Six children will be born from it.</div>
+    <div class="gen-banner">
+      <span class="label">Generation</span>
+      <span class="roman" id="gen-roman">I</span>
+    </div>
+  </header>
+
+  <main class="grid" id="grid" aria-label="Specimen population"></main>
+
+  <footer class="controls">
+    <div class="control-bar">
+      <button class="btn primary" id="btn-restart">Begin Anew</button>
+      <button class="btn" id="btn-help">What is this?</button>
+    </div>
+    <div class="footer-note">Each specimen is grown from a tiny program. Pick a favourite to see what its children look like.</div>
+  </footer>
+
+</div>
+
+<!-- Help modal -->
+<div class="modal-backdrop" id="help-modal" role="dialog" aria-labelledby="help-title">
+  <div class="modal">
+    <button class="close" aria-label="Close">&times;</button>
+    <h2 id="help-title">What is happening here?</h2>
+    <p>Each specimen is a drawing made by a tiny <em>program</em>, shown below the picture. A turtle holds a pen and follows the instructions — forward, turn right, turn left, pen up, pen down. The program runs twelve times over.</p>
+    <p>When you pick a specimen you like, six <em>children</em> are born from it. Each child has the same program as the parent, but with small random changes. Some children look almost the same. Some look quite different. A few might surprise you.</p>
+    <p>This is how evolution works. Things that are chosen leave descendants. Tiny changes accumulate. Over many generations, beautiful and strange forms emerge — not because anyone designed them, but because of which ones got picked.</p>
+    <div class="legend">
+      <code>FD 20</code><span>move forward 20 steps</span>
+      <code>RT 90</code><span>turn right 90 degrees</span>
+      <code>LT 45</code><span>turn left 45 degrees</span>
+      <code>PD</code><span>put the pen down</span>
+      <code>PU</code><span>lift the pen up</span>
+    </div>
+    <p>If you click <em>edit</em> below any specimen, you can change its program yourself and see what happens. This is a different kind of evolution — by hand, not by chance.</p>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal-backdrop" id="edit-modal" role="dialog" aria-labelledby="edit-title">
+  <div class="modal">
+    <button class="close" aria-label="Close">&times;</button>
+    <h2 id="edit-title">Edit Specimen <span id="edit-num"></span></h2>
+    <p style="margin-bottom:10px">Change the program below. The drawing will update when you press <em>Render</em>. To breed this specimen, close this and click on the card.</p>
+    <textarea class="editor" id="editor-area" spellcheck="false"></textarea>
+    <div class="editor-hint">Each line can hold one or two commands. Numbers can be anything. Unknown words are ignored.</div>
+    <div class="editor-error" id="editor-error"></div>
+    <div class="editor-row">
+      <button class="btn" id="editor-cancel">Cancel</button>
+      <button class="btn primary" id="editor-render">Render</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* =================================================================
+ * SPECIMENS — A tiny evolving Logo-program prototype.
+ * Single file, no dependencies. About 250 lines of JS.
+ * ================================================================= */
+
+const POP_SIZE = 6;
+const GENOME_LEN = 12;
+const REPEATS = 12;
+const CANVAS_SIZE = 280; // internal pixel size, scaled by CSS
+const MUTATION_RATE = 0.15;      // per-position chance of mutating
+const NUMERIC_VS_REPLACE = 0.7;  // 70% small-numeric, 30% replace
+const HUE_MUTATION_RATE = 0.15;
+const HUE_MUTATION_DELTA = 25;   // ±25° on average
+
+// Angles that tend to produce visually interesting figures
+// (irrational-ish, golden-ish, near-orthogonal)
+const INTERESTING_ANGLES = [17, 23, 31, 47, 67, 89, 91, 109, 127, 137, 144, 163];
+
+/* ---------- The genome and the Logo interpreter ---------- */
+
+function randomCommand() {
+  const r = Math.random();
+  if (r < 0.55) return { cmd: 'FD', arg: 5 + Math.floor(Math.random() * 32) };
+  if (r < 0.75) return { cmd: 'RT', arg: INTERESTING_ANGLES[Math.floor(Math.random() * INTERESTING_ANGLES.length)] };
+  if (r < 0.93) return { cmd: 'LT', arg: INTERESTING_ANGLES[Math.floor(Math.random() * INTERESTING_ANGLES.length)] };
+  if (r < 0.97) return { cmd: 'PD' };
+  return { cmd: 'PU' };
+}
+
+function randomGenome() {
+  return Array.from({ length: GENOME_LEN }, randomCommand);
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function computeBoundingBox(commands) {
+  // Trace the turtle without drawing; return the visited bounds (in turtle units,
+  // relative to the turtle's starting position at origin).
+  let x = 0, y = 0;
+  let heading = -90;
+  let penDown = true;
+  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+
+  for (let r = 0; r < REPEATS; r++) {
+    for (const c of commands) {
+      switch (c.cmd) {
+        case 'FD': {
+          const rad = heading * Math.PI / 180;
+          x += Math.cos(rad) * c.arg;
+          y += Math.sin(rad) * c.arg;
+          if (penDown) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+          break;
+        }
+        case 'RT': heading += c.arg; break;
+        case 'LT': heading -= c.arg; break;
+        case 'PD': penDown = true; break;
+        case 'PU': penDown = false; break;
+      }
+    }
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function runProgram(commands, hue, ctx) {
+  const W = ctx.canvas.width;
+  const H = ctx.canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Center the drawing's bounding box on the canvas.
+  const bb = computeBoundingBox(commands);
+  const bbCx = (bb.minX + bb.maxX) / 2;
+  const bbCy = (bb.minY + bb.maxY) / 2;
+  let x = W / 2 - bbCx;
+  let y = H / 2 - bbCy;
+  let heading = -90;
+  let penDown = true;
+
+  ctx.strokeStyle = `hsl(${hue}, 58%, 30%)`;
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = 0.82;
+
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+
+  for (let r = 0; r < REPEATS; r++) {
+    for (const c of commands) {
+      switch (c.cmd) {
+        case 'FD': {
+          const rad = heading * Math.PI / 180;
+          x += Math.cos(rad) * c.arg;
+          y += Math.sin(rad) * c.arg;
+          if (penDown) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+          break;
+        }
+        case 'RT': heading += c.arg; break;
+        case 'LT': heading -= c.arg; break;
+        case 'PD': penDown = true; break;
+        case 'PU': penDown = false; break;
+      }
+    }
+  }
+  ctx.stroke();
+}
+
+/* ---------- Seed bias: generate visually interesting starters ---------- */
+
+function inkCoverage(commands, hue) {
+  // Render at display size and count drawn pixels (those with alpha > 0).
+  const tmp = document.createElement('canvas');
+  tmp.width = CANVAS_SIZE; tmp.height = CANVAS_SIZE;
+  const ctx = tmp.getContext('2d');
+  runProgram(commands, hue, ctx);
+  const data = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE).data;
+  let inkPixels = 0;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] > 0) inkPixels++;
+  }
+  return inkPixels / (CANVAS_SIZE * CANVAS_SIZE);
+}
+
+function generateInterestingGenome() {
+  for (let i = 0; i < 40; i++) {
+    const commands = randomGenome();
+    const hue = Math.floor(Math.random() * 360);
+    const cov = inkCoverage(commands, hue);
+    if (cov > 0.04 && cov < 0.7) return { commands, hue };
+  }
+  return { commands: randomGenome(), hue: Math.floor(Math.random() * 360) };
+}
+
+/* ---------- Mutation: produce a child genome ---------- */
+
+function mutateCommand(c) {
+  if (Math.random() < NUMERIC_VS_REPLACE && (c.cmd === 'FD' || c.cmd === 'RT' || c.cmd === 'LT')) {
+    // Small numeric change: ±20% with floor of ±2
+    const sign = Math.random() < 0.5 ? -1 : 1;
+    const delta = sign * Math.max(2, Math.round(Math.abs(c.arg) * 0.25 * Math.random() + 1));
+    let newArg = c.arg + delta;
+    if (c.cmd === 'FD') newArg = clamp(newArg, 3, 60);
+    else newArg = ((newArg % 360) + 360) % 360 || 1;
+    return { cmd: c.cmd, arg: newArg };
+  }
+  return randomCommand();
+}
+
+function breed(parent) {
+  const childCommands = parent.commands.map(c =>
+    Math.random() < MUTATION_RATE ? mutateCommand(c) : { ...c }
+  );
+  let childHue = parent.hue;
+  if (Math.random() < HUE_MUTATION_RATE) {
+    const sign = Math.random() < 0.5 ? -1 : 1;
+    childHue = ((parent.hue + sign * Math.floor(Math.random() * HUE_MUTATION_DELTA * 2)) % 360 + 360) % 360;
+  }
+  return { commands: childCommands, hue: childHue };
+}
+
+/* ---------- Format genome for human reading ---------- */
+
+function formatCommand(c) {
+  if (c.cmd === 'PD' || c.cmd === 'PU') return c.cmd.padEnd(6);
+  return `${c.cmd} ${c.arg}`.padEnd(6);
+}
+
+function formatGenomeForDisplay(commands) {
+  const lines = ['<span class="repeat-header">REPEAT ' + REPEATS + ' [</span>'];
+  for (let i = 0; i < commands.length; i += 2) {
+    const pair = commands.slice(i, i + 2).map(formatCommand).join('  ');
+    lines.push('  ' + pair);
+  }
+  lines.push('<span class="repeat-header">]</span>');
+  return lines.join('\n');
+}
+
+function formatGenomeForEdit(commands) {
+  const lines = ['REPEAT ' + REPEATS + ' ['];
+  for (let i = 0; i < commands.length; i += 2) {
+    const pair = commands.slice(i, i + 2).map(formatCommand).join('  ');
+    lines.push('  ' + pair.trimEnd());
+  }
+  lines.push(']');
+  return lines.join('\n');
+}
+
+/* ---------- Parse edited genome ---------- */
+
+function parseGenome(text) {
+  // Strip REPEAT N [ and ] wrappers; collect FD/RT/LT/PD/PU tokens.
+  const tokens = text
+    .toUpperCase()
+    .replace(/REPEAT\s+\d+\s*\[/g, '')
+    .replace(/[\[\]]/g, '')
+    .split(/[\s,]+/)
+    .filter(Boolean);
+
+  const out = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t === 'PD' || t === 'PU') {
+      out.push({ cmd: t });
+    } else if (t === 'FD' || t === 'RT' || t === 'LT') {
+      const arg = parseFloat(tokens[i + 1]);
+      if (Number.isFinite(arg)) {
+        out.push({ cmd: t, arg: Math.round(arg) });
+        i++;
+      }
+    }
+    // unknown tokens silently ignored
+  }
+  if (out.length === 0) throw new Error('No valid commands found.');
+  // Pad / trim to GENOME_LEN to keep the genome a fixed size
+  while (out.length < GENOME_LEN) out.push({ cmd: 'FD', arg: 10 });
+  return out.slice(0, GENOME_LEN);
+}
+
+/* ---------- Roman numerals for generation label ---------- */
+
+function toRoman(n) {
+  if (n <= 0 || n > 3999) return String(n);
+  const map = [
+    [1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],
+    [50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']
+  ];
+  let s = '';
+  for (const [v, sym] of map) { while (n >= v) { s += sym; n -= v; } }
+  return s;
+}
+
+/* ---------- State and rendering ---------- */
+
+const state = {
+  population: [],   // [{ commands, hue }] of length POP_SIZE
+  generation: 1,
+  editingIndex: -1
+};
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  state.population.forEach((org, idx) => {
+    const card = document.createElement('div');
+    card.className = 'specimen';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `Specimen number ${toRoman(idx+1)}. Press to breed.`);
+
+    const frame = document.createElement('div');
+    frame.className = 'specimen-frame';
+    const canvas = document.createElement('canvas');
+    canvas.width = CANVAS_SIZE;
+    canvas.height = CANVAS_SIZE;
+    frame.appendChild(canvas);
+
+    const label = document.createElement('div');
+    label.className = 'specimen-label';
+    label.innerHTML = `
+      <span class="number">№ ${toRoman(idx+1)}</span>
+      <button class="edit-link" type="button" data-idx="${idx}">edit</button>
+    `;
+
+    const genome = document.createElement('pre');
+    genome.className = 'genome';
+    genome.innerHTML = formatGenomeForDisplay(org.commands);
+
+    card.appendChild(frame);
+    card.appendChild(label);
+    card.appendChild(genome);
+    grid.appendChild(card);
+
+    // Draw the specimen
+    runProgram(org.commands, org.hue, canvas.getContext('2d'));
+
+    // Click to breed (but not when clicking the edit link)
+    card.addEventListener('click', (e) => {
+      if (e.target.classList.contains('edit-link')) return;
+      breedFrom(idx, card);
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        breedFrom(idx, card);
+      }
+    });
+
+    // Edit link
+    label.querySelector('.edit-link').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditor(idx);
+    });
+  });
+
+  document.getElementById('gen-roman').textContent = toRoman(state.generation);
+}
+
+function breedFrom(idx, cardEl) {
+  const parent = state.population[idx];
+  cardEl.classList.add('parent-flash');
+  setTimeout(() => {
+    const offspring = [];
+    for (let i = 0; i < POP_SIZE; i++) offspring.push(breed(parent));
+    state.population = offspring;
+    state.generation += 1;
+    renderGrid();
+    // Smooth scroll the grid back into view in case it shifted
+    document.getElementById('grid').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 220);
+}
+
+function seedFreshPopulation() {
+  state.population = Array.from({ length: POP_SIZE }, generateInterestingGenome);
+  state.generation = 1;
+  renderGrid();
+}
+
+/* ---------- Editor modal ---------- */
+
+function openEditor(idx) {
+  state.editingIndex = idx;
+  const org = state.population[idx];
+  document.getElementById('edit-num').textContent = toRoman(idx + 1);
+  document.getElementById('editor-area').value = formatGenomeForEdit(org.commands);
+  document.getElementById('editor-error').textContent = '';
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEditor() {
+  document.getElementById('edit-modal').classList.remove('open');
+  state.editingIndex = -1;
+}
+
+function applyEdit() {
+  const text = document.getElementById('editor-area').value;
+  try {
+    const commands = parseGenome(text);
+    const idx = state.editingIndex;
+    state.population[idx] = { commands, hue: state.population[idx].hue };
+    closeEditor();
+    renderGrid();
+  } catch (err) {
+    document.getElementById('editor-error').textContent = err.message;
+  }
+}
+
+/* ---------- Wire up controls ---------- */
+
+document.getElementById('btn-restart').addEventListener('click', seedFreshPopulation);
+
+const helpModal = document.getElementById('help-modal');
+document.getElementById('btn-help').addEventListener('click', () => helpModal.classList.add('open'));
+helpModal.querySelector('.close').addEventListener('click', () => helpModal.classList.remove('open'));
+helpModal.addEventListener('click', (e) => { if (e.target === helpModal) helpModal.classList.remove('open'); });
+
+const editModal = document.getElementById('edit-modal');
+editModal.querySelector('.close').addEventListener('click', closeEditor);
+editModal.addEventListener('click', (e) => { if (e.target === editModal) closeEditor(); });
+document.getElementById('editor-cancel').addEventListener('click', closeEditor);
+document.getElementById('editor-render').addEventListener('click', applyEdit);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    helpModal.classList.remove('open');
+    closeEditor();
+  }
+});
+
+/* ---------- Go ---------- */
+
+seedFreshPopulation();
+</script>
+</body>
+</html>
