@@ -424,6 +424,7 @@
       <span class="field" id="ai-key-field"><label for="ai-key" data-tip="Your API key. For Claude inside Claude.ai you can leave this blank.">Key</label>
         <input id="ai-key" type="password" class="ai-input" autocomplete="off" placeholder="paste key" size="16">
       </span>
+      <span class="field" id="ai-remember-field"><label for="ai-remember" data-tip="Save each provider's key in this browser so you needn't paste it again. Stored only on this device. Leave off on shared computers."><input id="ai-remember" type="checkbox"> remember key</label></span>
     </div>
     <div class="ai-row">
       <label for="ai-niche" class="ai-niche-label" data-tip="Describe the habitat in your own words. The judge scores each specimen by how well it fits.">The <span class="gloss" data-tip="The particular place and way of living a creature is suited to — what a habitat asks of it.">niche</span> the judge selects for:</label>
@@ -1104,7 +1105,7 @@ function rouletteIndex(weights) {
 
 const state = { population: [], lineage: [], editingIndex: -1, nestDepth: 1, theme: 'naturalist',
   mode: 'choose', env: ENVIRONMENTS[0].key, fitness: null, fittest: -1, busy: false, breeding: 'proportional',
-  ai: { provider: 'claude', model: '', key: '', niche: 'A pollinator that prefers specimens looking like big, colourful flowers.' } };
+  ai: { provider: 'claude', model: '', key: '', remember: false, niche: 'A pollinator that prefers specimens looking like big, colourful flowers.' } };
 function currentGeneration() { return state.lineage.length + 1; }
 function isWild() { return state.mode === 'wild'; }
 function activeEnv() { return envByKey(state.env); }
@@ -1132,6 +1133,35 @@ function glossy(text) {
   return text.replace(/\b([A-Za-z]+)\b/g, (m) => {
     const def = GLOSSARY[m.toLowerCase()];
     return def ? `<span class="gloss" data-tip="${def.replace(/"/g, '&quot;')}">${m}</span>` : m;
+  });
+}
+
+// Wrap glossary terms inside an existing element's text nodes, without disturbing tags or links.
+function glossElement(root) {
+  if (!root || typeof NodeFilter === 'undefined' || !document.createTreeWalker) return;
+  const rx = new RegExp('\\b(' + Object.keys(GLOSSARY).join('|') + ')\\b', 'gi');
+  const skip = '.gloss, a, code, pre, button, select, textarea, input, .label-action';
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) {
+    if (n.parentElement && n.parentElement.closest(skip)) continue;
+    rx.lastIndex = 0;
+    if (rx.test(n.nodeValue)) nodes.push(n);
+  }
+  nodes.forEach((node) => {
+    const s = node.nodeValue; const frag = document.createDocumentFragment();
+    let last = 0, m; rx.lastIndex = 0;
+    while ((m = rx.exec(s))) {
+      const term = m[0], lc = term.toLowerCase(), def = GLOSSARY[lc];
+      if (root.__glossed && root.__glossed.has(lc)) continue;        // first occurrence only
+      if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
+      const span = document.createElement('span'); span.className = 'gloss'; span.setAttribute('data-tip', def); span.textContent = term;
+      frag.appendChild(span); last = m.index + term.length;
+      (root.__glossed = root.__glossed || new Set()).add(lc);
+    }
+    if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+    if (frag.childNodes.length) node.parentNode.replaceChild(frag, node);
   });
 }
 
@@ -1367,7 +1397,7 @@ async function letSeasonPass() {
 /* ---------- AI judge (Claude / Gemini / ChatGPT vision) ---------- */
 
 function defaultModel(p) {
-  return p === 'claude' ? 'claude-sonnet-4-20250514' : p === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash';
+  return p === 'claude' ? 'claude-haiku-4-5-20251001' : p === 'openai' ? 'gpt-5.4-mini' : 'gemini-2.5-flash';
 }
 
 function specimenImage(g) {
@@ -1552,7 +1582,7 @@ async function callOpenAI(model, prompt, imgs) {
   imgs.forEach((im) => { content.push({ type: 'image_url', image_url: { url: im.dataURL } }); });
   const res = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
     method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
-    body: JSON.stringify({ model, max_tokens: 300, messages: [{ role: 'user', content }] })
+    body: JSON.stringify({ model, max_completion_tokens: 2000, messages: [{ role: 'user', content }] })
   }, 90000);
   if (!res.ok) throw new Error(`ChatGPT error ${res.status}` + (await errDetail(res)));
   const data = await res.json();
@@ -1774,19 +1804,61 @@ const aiProvider = document.getElementById('ai-provider');
 const aiModel = document.getElementById('ai-model');
 const aiKey = document.getElementById('ai-key');
 const aiNiche = document.getElementById('ai-niche');
+const aiRemember = document.getElementById('ai-remember');
 function syncModelPlaceholder() {
   aiModel.placeholder = defaultModel(state.ai.provider);
 }
+
+// Optional, opt-in caching of keys & model names per provider — only on this device.
+const STORE_KEY = 'specimens.ai.v1';
+function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) { return {}; } }
+function saveStore(o) { try { localStorage.setItem(STORE_KEY, JSON.stringify(o)); } catch (e) {} }
+function persistAi() {
+  if (!state.ai.remember) return;
+  const store = loadStore();
+  store.remember = true;
+  store.keys = store.keys || {}; store.models = store.models || {};
+  store.keys[state.ai.provider] = state.ai.key;
+  store.models[state.ai.provider] = state.ai.model;
+  saveStore(store);
+}
+function loadProviderCreds() {                 // fill key/model for the current provider from the cache
+  const store = loadStore();
+  if (!store.remember) return;
+  state.ai.key = (store.keys && store.keys[state.ai.provider]) || '';
+  state.ai.model = (store.models && store.models[state.ai.provider]) || '';
+  aiKey.value = state.ai.key; aiModel.value = state.ai.model;
+}
+
+// Restore on load
+(function () {
+  const store = loadStore();
+  if (store.remember) {
+    state.ai.remember = true; aiRemember.checked = true;
+    loadProviderCreds();
+  }
+})();
+
 aiProvider.value = state.ai.provider;
 aiModel.value = state.ai.model;
 syncModelPlaceholder();
 aiKey.value = state.ai.key;
 aiNiche.value = state.ai.niche;
 adaptAiPanelForRuntime();
-aiProvider.addEventListener('change', (e) => { state.ai.provider = e.target.value; state.ai.model = ''; aiModel.value = ''; syncModelPlaceholder(); document.getElementById('ai-status').textContent = ''; });
-aiModel.addEventListener('input', (e) => { state.ai.model = e.target.value; });
-aiKey.addEventListener('input', (e) => { state.ai.key = e.target.value; });
+aiProvider.addEventListener('change', (e) => {
+  state.ai.provider = e.target.value; state.ai.model = ''; state.ai.key = '';
+  aiModel.value = ''; aiKey.value = '';
+  loadProviderCreds();                          // bring back this provider's saved key/model, if any
+  syncModelPlaceholder(); document.getElementById('ai-status').textContent = '';
+});
+aiModel.addEventListener('input', (e) => { state.ai.model = e.target.value; persistAi(); });
+aiKey.addEventListener('input', (e) => { state.ai.key = e.target.value; persistAi(); });
 aiNiche.addEventListener('input', (e) => { state.ai.niche = e.target.value; });
+aiRemember.addEventListener('change', (e) => {
+  state.ai.remember = e.target.checked;
+  if (state.ai.remember) persistAi();
+  else { try { localStorage.removeItem(STORE_KEY); } catch (err) {} }   // forget everything when unchecked
+});
 document.getElementById('btn-ai-test').addEventListener('click', testJudge);
 document.getElementById('btn-cancel-judge').addEventListener('click', cancelJudging);
 
@@ -1807,6 +1879,8 @@ document.getElementById('editor-render').addEventListener('click', applyEdit);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { helpModal.classList.remove('open'); closeEditor(); closeViewer(); } });
 
 buildSwatches();
+glossElement(document.querySelector('.masthead .subtitle'));
+glossElement(document.querySelector('#help-modal .modal'));
 
 /* ---------- Hover help (floating tooltip on any [data-tip]) ---------- */
 const tipEl = document.getElementById('tip');
