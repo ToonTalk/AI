@@ -495,6 +495,7 @@
     <p>You can also invent your own habitat with <em>＋ New habitat</em>: slide each trait toward what it should reward. And the <em>Ask a question</em> button opens a friendly guide you can ask about evolution, about your own line of descent, or about how this field guide works and was made.</p>
     <p>The <strong>Line of Descent</strong> keeps every ancestor you have chosen, so you can watch tiny changes pile up over generations. Tap an old ancestor to go back and breed down a different path. Click <em>edit</em> under any specimen to change its program by hand. Use <em>Save…</em> above the strip to keep the whole lineage as a web page — one expandable card per generation, with its habitat (and, for the A.I. judge, the niche) recorded.</p>
     <p>This little world owes its idea to Richard Dawkins's <em>biomorphs</em> from <em>The Blind Watchmaker</em> (1986): a program in which you breed branching figures by repeatedly selecting among randomly mutated offspring, watching "cumulative selection" build up surprising forms from almost nothing. Specimens replaces his branching trees with turtle-graphics programs, but the lesson is the same. <a href="https://en.wikipedia.org/wiki/The_Blind_Watchmaker" target="_blank" rel="noopener">Read about The Blind Watchmaker and biomorphs</a>.</p>
+    <p><a href="https://docs.google.com/document/d/1YhoQsO2BmrH65w_jmwblJue53pvuOvfMsDIaeSvfGgs/edit?usp=sharing" target="_blank" rel="noopener">Here is a description of how this app was made.</a></p>
   </div>
 </div>
 
@@ -1551,7 +1552,7 @@ async function fetchWithTimeout(url, opts, ms) {
   } catch (e) {
     if (e && e.message === '__timeout__')
       throw new Error(`No reply after ${Math.round(limit / 1000)}s. The judge may be unreachable from here — check the model name and key, or try a different provider.`);
-    throw new Error('Could not reach the judge (often a CORS or key problem when running outside Claude.ai).');
+    throw new Error('Could not reach the A.I. (often a CORS or key problem when running outside Claude.ai).');
   } finally {
     clearTimeout(timer);
   }
@@ -1889,6 +1890,11 @@ async function sendAsk(text) {
   const inp = document.getElementById('ask-input');
   const q = (text != null ? text : inp.value).trim();
   if (!q || state.asking) return;
+  // Standalone with no key: there is nothing for the guide to use — surface the A.I. settings instead.
+  if (!inArtifact() && !state.ai.key.trim()) {
+    openAiSettings('The guide needs an A.I. key when running as a downloaded file. Choose a provider and paste your key here, then reopen \u201cAsk a question\u201d.');
+    return;
+  }
   state.asking = true;
   document.getElementById('ask-send').disabled = true;
   document.getElementById('ask-note').textContent = 'Thinking…';
@@ -1898,13 +1904,27 @@ async function sendAsk(text) {
     const a = await askAI(q);
     entry.a = (a && a.trim()) ? a.trim() : '(The guide had nothing to say — try rephrasing.)';
   } catch (err) {
-    entry.a = (err && err.message) ? err.message : String(err);
+    entry.a = ((err && err.message) ? err.message : String(err)) + (inArtifact() ? '' : '\n\nYou can check your provider and key in The Wild \u2192 A Naturalist\u2019s Eye.');
   } finally {
     entry.pending = false; state.asking = false;
     document.getElementById('ask-send').disabled = false;
     document.getElementById('ask-note').textContent = inArtifact() ? '' : 'Uses your A.I. settings from The Wild \u2192 A Naturalist\u2019s Eye (provider + key).';
     renderAskLog();
   }
+}
+
+// Reveal the A.I. settings panel (switch to The Wild → A Naturalist's Eye) and prompt for a key.
+function openAiSettings(msg) {
+  document.getElementById('ask-modal').classList.remove('open');
+  state.mode = 'wild'; state.env = 'ai';
+  document.getElementById('mode-select').value = 'wild';
+  state.fitness = null; state.fittest = -1;
+  applyMode();
+  const sel = document.getElementById('env-select'); sel.value = 'ai';
+  refreshHabitat();
+  document.getElementById('ai-status').textContent = msg || 'Enter your A.I. key here to enable the guide.';
+  document.getElementById('ai-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => { const k = document.getElementById('ai-key'); if (k && k.focus) k.focus(); }, 350);
 }
 const ASK_CHIPS = ['How is this like real evolution?', 'Why do my drawings keep changing?', 'What is natural selection?', 'How was this app made?'];
 function openAsk() {
