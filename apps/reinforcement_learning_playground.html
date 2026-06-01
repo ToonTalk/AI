@@ -1,0 +1,1523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>The Learning Machine — Reinforcement Learning Playground</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Crect%20width%3D'64'%20height%3D'64'%20rx%3D'14'%20fill%3D'%231b1e27'%2F%3E%3Cpath%20d%3D'M24%2030%20L40%2018%20L52%2034'%20fill%3D'none'%20stroke%3D'%2354e0a0'%20stroke-opacity%3D'.45'%20stroke-width%3D'2.5'%20stroke-dasharray%3D'3%204'%2F%3E%3Ccircle%20cx%3D'24'%20cy%3D'30'%20r%3D'6'%20fill%3D'%23f5f7fa'%2F%3E%3Crect%20x%3D'50'%20y%3D'24'%20width%3D'6'%20height%3D'20'%20rx%3D'3'%20fill%3D'%2354e0a0'%2F%3E%3C%2Fsvg%3E"/>
+<style>html,body{height:100%;margin:0;background:#13151b;}#root{min-height:100%;}#boot{color:#9aa3b5;font-family:system-ui,sans-serif;padding:28px;}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.20.0/tf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+</head>
+<body>
+<div id="root"><div id="boot">Loading the playground… (first load fetches a few libraries; give it a moment)</div></div>
+<script type="text/babel" data-presets="react">
+const {useState,useRef,useEffect,useCallback}=React;
+const {LineChart,Line,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,Legend}=Recharts;
+function _mkIcon(children){ return function(props){ var size=props&&props.size||24; var color=(props&&props.color)||"currentColor"; var rest={}; if(props){for(var k in props){ if(k!=="size"&&k!=="color")rest[k]=props[k]; }} return React.createElement("svg",Object.assign({width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"},rest), children.map(function(c,i){return React.createElement(c[0],Object.assign({key:i},c[1]));})); }; }
+const Play=_mkIcon([["polygon",{points:"6 3 20 12 6 21 6 3"}]]);
+const Pause=_mkIcon([["rect",{x:6,y:4,width:4,height:16}],["rect",{x:14,y:4,width:4,height:16}]]);
+const RotateCcw=_mkIcon([["polyline",{points:"1 4 1 10 7 10"}],["path",{d:"M3.51 15a9 9 0 1 0 2.13-9.36L1 10"}]]);
+const RefreshCw=_mkIcon([["polyline",{points:"23 4 23 10 17 10"}],["polyline",{points:"1 20 1 14 7 14"}],["path",{d:"M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"}]]);
+const Brain=_mkIcon([["circle",{cx:9,cy:12,r:5}],["circle",{cx:15,cy:12,r:5}]]);
+const Gamepad2=_mkIcon([["line",{x1:6,y1:11,x2:10,y2:11}],["line",{x1:8,y1:9,x2:8,y2:13}],["line",{x1:15,y1:12,x2:15.01,y2:12}],["line",{x1:18,y1:10,x2:18.01,y2:10}],["rect",{x:2,y:6,width:20,height:12,rx:2}]]);
+const BookOpen=_mkIcon([["path",{d:"M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"}],["path",{d:"M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"}]]);
+const Globe=_mkIcon([["circle",{cx:12,cy:12,r:10}],["line",{x1:2,y1:12,x2:22,y2:12}],["path",{d:"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"}]]);
+const MessageCircle=_mkIcon([["path",{d:"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"}]]);
+const Send=_mkIcon([["line",{x1:22,y1:2,x2:11,y2:13}],["polygon",{points:"22 2 15 22 11 13 2 9 22 2"}]]);
+const Sparkles=_mkIcon([["path",{d:"M12 3l1.9 5.8L20 10.7l-5.1 2.9L13 20l-1-6.4L6 10.7l6.1-1.9z"}]]);
+const Zap=_mkIcon([["polygon",{points:"13 2 3 14 12 14 11 22 21 10 12 10 13 2"}]]);
+const Trophy=_mkIcon([["path",{d:"M6 9H4.5a2.5 2.5 0 0 1 0-5H6"}],["path",{d:"M18 9h1.5a2.5 2.5 0 0 0 0-5H18"}],["path",{d:"M4 22h16"}],["path",{d:"M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"}],["path",{d:"M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"}],["path",{d:"M18 2H6v7a6 6 0 0 0 12 0V2z"}]]);
+const ExternalLink=_mkIcon([["path",{d:"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"}],["polyline",{points:"15 3 21 3 21 9"}],["line",{x1:10,y1:14,x2:21,y2:3}]]);
+const Cpu=_mkIcon([["rect",{x:4,y:4,width:16,height:16,rx:2}],["rect",{x:9,y:9,width:6,height:6}],["line",{x1:9,y1:1,x2:9,y2:4}],["line",{x1:15,y1:1,x2:15,y2:4}],["line",{x1:9,y1:20,x2:9,y2:23}],["line",{x1:15,y1:20,x2:15,y2:23}],["line",{x1:20,y1:9,x2:23,y2:9}],["line",{x1:20,y1:14,x2:23,y2:14}],["line",{x1:1,y1:9,x2:4,y2:9}],["line",{x1:1,y1:14,x2:4,y2:14}]]);
+const Grid3x3=_mkIcon([["rect",{x:3,y:3,width:18,height:18,rx:2}],["line",{x1:9,y1:3,x2:9,y2:21}],["line",{x1:15,y1:3,x2:15,y2:21}],["line",{x1:3,y1:9,x2:21,y2:9}],["line",{x1:3,y1:15,x2:21,y2:15}]]);
+
+
+
+/* =======================================================================
+   Shared live status — a plain mutable object the labs write to and the
+   Ask-Claude tab reads when composing a question (no re-renders needed).
+   ======================================================================= */
+const APP_STATUS = {
+  game: "Tic-Tac-Toe",
+  ttt: { trained: 0, curiosity: 0.2, learningSpeed: 0.2 },
+  c4: { trained: 0, curiosity: 0.25, learningSpeed: 0.001 },
+  pong: { frames: 0, curiosity: 0.3 },
+};
+
+/* =======================================================================
+   GAME 1 — TIC-TAC-TOE   (tabular afterstate value, verified in Node:
+   loss-vs-random -> 0%, draws-vs-perfect -> 100%)
+   Value table: boardKey -> outcome FROM X's VIEW (+1 X win, -1 O, 0 draw).
+   X maximises, O minimises, they share one table. TD(0), no discount.
+   ======================================================================= */
+const T_LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const tWinner = (b) => { for (const [a,c,d] of T_LINES) if (b[a] && b[a]===b[c] && b[c]===b[d]) return b[a]===1?"X":"O"; return null; };
+const tFull = (b) => b.every((v)=>v!==0);
+const tLegal = (b) => { const m=[]; for (let i=0;i<9;i++) if (b[i]===0) m.push(i); return m; };
+const tKey = (b) => b.join("");
+const tReward = (b) => { const w=tWinner(b); if (w==="X") return 1; if (w==="O") return -1; if (tFull(b)) return 0; return null; };
+const tGet = (V,k)=> (V.has(k)?V.get(k):0);
+
+function tChoose(V, b, player, curiosity) {
+  const moves = tLegal(b);
+  if (Math.random() < curiosity) return moves[(Math.random()*moves.length)|0];
+  for (let i=moves.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[moves[i],moves[j]]=[moves[j],moves[i]];}
+  let best=null,bv=null;
+  for (const m of moves) {
+    const nb=b.slice(); nb[m]=player===1?1:2;
+    const tr=tReward(nb); const val=tr!==null?tr:tGet(V,tKey(nb));
+    if (bv===null || (player===1?val>bv:val<bv)){bv=val;best=m;}
+  }
+  return best;
+}
+function tSelfPlay(V, lr, cur) {
+  let b=new Array(9).fill(0), player=1; const traj=[tKey(b)]; let reward=0;
+  // exploring start: force a uniformly-random first move so every opening gets evaluated
+  const fm=(Math.random()*9)|0; b[fm]=1; traj.push(tKey(b)); player=-1;
+  while (true) {
+    const m=tChoose(V,b,player,cur); b[m]=player===1?1:2; traj.push(tKey(b));
+    const tr=tReward(b); if (tr!==null){reward=tr;break;} player=player===1?-1:1;
+  }
+  for (let t=0;t<traj.length-1;t++){
+    const s=traj[t]; const target=(t+1===traj.length-1)?reward:tGet(V,traj[t+1]);
+    V.set(s, tGet(V,s)+lr*(target-tGet(V,s)));
+  }
+}
+const tMM = new Map();
+function tMinimax(b,player){
+  const tr=tReward(b); if (tr!==null) return tr;
+  const k=tKey(b)+player; if (tMM.has(k)) return tMM.get(k);
+  let best=player===1?-2:2;
+  for (const m of tLegal(b)){ const nb=b.slice(); nb[m]=player===1?1:2; const v=tMinimax(nb,player===1?-1:1); best=player===1?Math.max(best,v):Math.min(best,v); }
+  tMM.set(k,best); return best;
+}
+function tPerfect(b,player){ let best=null,bv=player===1?-2:2; for (const m of tLegal(b)){ const nb=b.slice(); nb[m]=player===1?1:2; const v=tMinimax(nb,player===1?-1:1); if (player===1?v>bv:v<bv){bv=v;best=m;} } return best; }
+const tRand=(b)=>{const m=tLegal(b);return m[(Math.random()*m.length)|0];};
+function tEvaluate(V, opp, games){
+  let w=0,d=0,l=0;
+  for (let g=0;g<games;g++){
+    const ax=g%2===0; let b=new Array(9).fill(0),player=1;
+    while(true){ const at=(player===1)===ax; const m=at?tChoose(V,b,player,0):opp(b,player); b[m]=player===1?1:2;
+      const tr=tReward(b); if (tr!==null){const s=ax?tr:-tr; if(s>0)w++;else if(s<0)l++;else d++;break;} player=player===1?-1:1; }
+  }
+  return {w,d,l,games};
+}
+
+/* =======================================================================
+   GAME 2 — CONNECT FOUR  (neural-net afterstate value, validated in Node:
+   win-vs-random ~63% -> ~94% within ~3k self-play games)
+   ======================================================================= */
+const C_ROWS=6, C_COLS=7, C_N=42;
+const cIdx=(r,c)=>r*C_COLS+c;
+const cLegal=(b)=>{const m=[];for(let c=0;c<C_COLS;c++) if(b[cIdx(0,c)]===0) m.push(c); return m;};
+function cDrop(b,col,player){ for(let r=C_ROWS-1;r>=0;r--){ if(b[cIdx(r,col)]===0){ const nb=b.slice(); nb[cIdx(r,col)]=player; return nb; } } return null; }
+function cWins(b,p){
+  for(let r=0;r<C_ROWS;r++)for(let c=0;c<C_COLS;c++){ if(b[cIdx(r,c)]!==p) continue;
+    if(c+3<C_COLS && b[cIdx(r,c+1)]===p&&b[cIdx(r,c+2)]===p&&b[cIdx(r,c+3)]===p) return true;
+    if(r+3<C_ROWS && b[cIdx(r+1,c)]===p&&b[cIdx(r+2,c)]===p&&b[cIdx(r+3,c)]===p) return true;
+    if(r+3<C_ROWS&&c+3<C_COLS && b[cIdx(r+1,c+1)]===p&&b[cIdx(r+2,c+2)]===p&&b[cIdx(r+3,c+3)]===p) return true;
+    if(r+3<C_ROWS&&c-3>=0 && b[cIdx(r+1,c-1)]===p&&b[cIdx(r+2,c-2)]===p&&b[cIdx(r+3,c-3)]===p) return true; }
+  return false;
+}
+const cReward=(b)=>{ if(cWins(b,1))return 1; if(cWins(b,2))return -1; if(cLegal(b).length===0)return 0; return null; };
+function cEncode(b){ const a=new Float32Array(2*C_N); for(let i=0;i<C_N;i++){ if(b[i]===1)a[i]=1; else if(b[i]===2)a[C_N+i]=1; } return a; }
+function cBuildModel(){
+  const m=tf.sequential();
+  m.add(tf.layers.dense({inputShape:[2*C_N],units:64,activation:"relu"}));
+  m.add(tf.layers.dense({units:64,activation:"relu"}));
+  m.add(tf.layers.dense({units:1,activation:"tanh"}));
+  return m;
+}
+function cValues(model, boards){ return tf.tidy(()=>{ const xs=tf.tensor2d(boards.map(cEncode)); return Array.from(model.predict(xs).dataSync()); }); }
+function cChoose(model, b, player, cur){
+  const cols=cLegal(b);
+  if (Math.random()<cur) return cols[(Math.random()*cols.length)|0];
+  const after=cols.map(c=>cDrop(b,c,player));
+  const vals=new Array(cols.length); const need=[],ni=[];
+  after.forEach((nb,i)=>{const tr=cReward(nb); if(tr!==null)vals[i]=tr; else{need.push(nb);ni.push(i);}});
+  if(need.length){const nv=cValues(model,need); ni.forEach((i,k)=>vals[i]=nv[k]);}
+  let best=0,bv=vals[0]; for(let i=1;i<cols.length;i++){ if(player===1?vals[i]>bv:vals[i]<bv){bv=vals[i];best=i;} }
+  return cols[best];
+}
+const cRand=(b)=>{const c=cLegal(b);return c[(Math.random()*c.length)|0];};
+function cEvaluate(model, games){
+  let w=0,d=0,l=0;
+  for(let g=0;g<games;g++){ const ax=g%2===0; let b=new Array(C_N).fill(0),player=1;
+    while(true){ const at=(player===1)===ax; const c=at?cChoose(model,b,player,0):cRand(b); b=cDrop(b,c,player);
+      const tr=cReward(b); if(tr!==null){const s=ax?tr:-tr; if(s>0)w++;else if(s<0)l++;else d++;break;} player=player===1?2:1; } }
+  return {w,d,l,games};
+}
+function cSnapshot(model){ return model.getWeights().map((w)=>({data:w.arraySync(), shape:w.shape})); }
+function cLoadSnapshot(model, snap){ const ws=snap.map((s)=>tf.tensor(s.data,s.shape)); model.setWeights(ws); }
+
+/* =======================================================================
+   GAME 3 — PONG  (deep-Q paddle, validated in Node: greedy return-rate
+   reaches ~96-100% from random weights within ~30k frames)
+   State = [ballX, ballY, ballVX, ballVY, paddleY]; actions = up/stay/down.
+   ======================================================================= */
+const P_PH=0.13, P_STEP=0.045, P_SPEED=0.026, P_GAMMA=0.97, P_SPIN=0.7;
+const pClamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function pServe(dir, sp){ const ang=(Math.random()*0.8-0.4); return {bx:0.5,by:0.5,vx:dir*sp,vy:sp*Math.tan(ang)}; }
+// single-paddle training env (paddle on right, ball bounces off the left wall)
+function pTrainReset(sp){ return {...pServe(1,sp), py:0.5}; }
+function pTrainStep(s,a,sp,spin){
+  let {bx,by,vx,vy,py}=s; let r=0,done=false;
+  if(a===0)py-=P_STEP; else if(a===2)py+=P_STEP; py=pClamp(py,P_PH,1-P_PH);
+  bx+=vx; by+=vy;
+  if(by<0){by=-by;vy=-vy;} if(by>1){by=2-by;vy=-vy;}
+  if(bx<0){bx=-bx;vx=-vx;}
+  if(bx>=1){ if(Math.abs(by-py)<=P_PH){ const off=(by-py)/P_PH; vx=-Math.abs(vx); vy+=off*sp*0.6;
+      if(spin){ const pv=a===0?-1:a===2?1:0; vy+=pv*sp*P_SPIN; } const m=Math.hypot(vx,vy); vx*=sp*1.3/m; vy*=sp*1.3/m; bx=1-(bx-1); r=1; }
+    else { r=-1; done=true; } }
+  return {s:{bx,by,vx,vy,py}, r, done};
+}
+// two-paddle play env (human left, agent right)
+function pPlayReset(dir, sp){ return {...pServe(dir,sp), ly:0.5, ry:0.5, sl:0, sr:0}; }
+function pPlayStep(s, ly, aAct, sp, spin){
+  let {bx,by,vx,vy,ry,sl,sr}=s; let event=null;
+  const humanVel=pClamp(ly-s.ly,-P_STEP*1.5,P_STEP*1.5);
+  if(aAct===0)ry-=P_STEP; else if(aAct===2)ry+=P_STEP; ry=pClamp(ry,P_PH,1-P_PH);
+  ly=pClamp(ly,P_PH,1-P_PH);
+  bx+=vx; by+=vy;
+  if(by<0){by=-by;vy=-vy;} if(by>1){by=2-by;vy=-vy;}
+  if(bx>=1){ if(Math.abs(by-ry)<=P_PH){ const off=(by-ry)/P_PH; vx=-Math.abs(vx); vy+=off*sp*0.6;
+      if(spin){ const pv=aAct===0?-1:aAct===2?1:0; vy+=pv*sp*P_SPIN; } const m=Math.hypot(vx,vy); vx*=sp*1.3/m; vy*=sp*1.3/m; bx=1-(bx-1); event="agentHit"; }
+    else { sl++; event="leftScores"; } }
+  else if(bx<=0){ if(Math.abs(by-ly)<=P_PH){ const off=(by-ly)/P_PH; vx=Math.abs(vx); vy+=off*sp*0.6;
+      if(spin){ vy+=(humanVel/P_STEP)*sp*P_SPIN; } const m=Math.hypot(vx,vy); vx*=sp*1.3/m; vy*=sp*1.3/m; bx=-bx; event="humanHit"; }
+    else { sr++; event="rightScores"; } }
+  return {s:{bx,by,vx,vy,ly,ry,sl,sr}, event};
+}
+const pEnc=(bx,by,vx,vy,py)=>[bx,by,vx/P_SPEED/2,vy/P_SPEED/2,py];
+function pBuildNet(){ const m=tf.sequential();
+  m.add(tf.layers.dense({inputShape:[5],units:48,activation:"relu"}));
+  m.add(tf.layers.dense({units:48,activation:"relu"}));
+  m.add(tf.layers.dense({units:3})); return m; }
+function pQ(model, enc){ return tf.tidy(()=>Array.from(model.predict(tf.tensor2d([enc])).dataSync())); }
+function pAct(model, enc, eps){ if(Math.random()<eps) return (Math.random()*3)|0; const q=pQ(model,enc); let b=0; for(let i=1;i<3;i++) if(q[i]>q[b])b=i; return b; }
+function pTrainStepNet(eng, batch){ if(eng.buf.length<batch) return;
+  const idx=[]; for(let i=0;i<batch;i++) idx.push((Math.random()*eng.buf.length)|0);
+  const S=idx.map((i)=>eng.buf[i].s), A=idx.map((i)=>eng.buf[i].a), R=idx.map((i)=>eng.buf[i].r), S2=idx.map((i)=>eng.buf[i].s2), D=idx.map((i)=>eng.buf[i].d);
+  tf.tidy(()=>{
+    const maxq2=eng.tgt.predict(tf.tensor2d(S2)).max(1).arraySync();
+    const target=eng.q.predict(tf.tensor2d(S)).arraySync();
+    for(let i=0;i<batch;i++) target[i][A[i]]=R[i]+(D[i]?0:P_GAMMA*maxq2[i]);
+    eng.opt.minimize(()=>tf.losses.meanSquaredError(tf.tensor2d(target), eng.q.predict(tf.tensor2d(S))));
+  });
+}
+// bounce-aware path prediction to a paddle plane (validated against closed form)
+function pPredictPath(b, targetX){
+  let {bx,by,vx,vy}=b;
+  if((targetX===1&&vx<=0)||(targetX===0&&vx>=0)) return null;
+  const pts=[{x:bx,y:by}]; let guard=0;
+  while(guard++<200){
+    const dtx=(targetX-bx)/vx; let dty=Infinity;
+    if(vy>0) dty=(1-by)/vy; else if(vy<0) dty=(0-by)/vy;
+    if(dtx<=dty){ by=by+vy*dtx; bx=targetX; pts.push({x:bx,y:by}); break; }
+    bx=bx+vx*dty; by=(vy>0?1:0); pts.push({x:bx,y:by}); vy=-vy;
+  }
+  return {points:pts, y:by};
+}
+// policy snapshot: argmax action over (ball-y, paddle-y) for a fixed ball direction
+function pPolicyMap(model, vyDir, sp, n){
+  const states=[];
+  for(let r=0;r<n;r++){ const by=(r+0.5)/n;
+    for(let c=0;c<n;c++){ const py=P_PH+((c+0.5)/n)*(1-2*P_PH); states.push(pEnc(0.15, by, sp, vyDir*sp*0.5, py)); } }
+  return tf.tidy(()=>Array.from(model.predict(tf.tensor2d(states)).argMax(1).dataSync()));
+}
+function pEvalReturnRate(model, frames, sp, spin){
+  let hit=0,miss=0; let s=pTrainReset(sp);
+  for(let i=0;i<frames;i++){ const a=pAct(model,pEnc(s.bx,s.by,s.vx,s.vy,s.py),0); const r=pTrainStep(s,a,sp,spin); s=r.s;
+    if(r.r===1)hit++; if(r.r===-1){miss++; s=pTrainReset(sp);} }
+  return hit+miss>0? hit/(hit+miss) : 0;
+}
+
+/* ===== shared colour helper: value in [-1,1] -> diverging blue/orange ===== */
+function valueColor(v){
+  const t=Math.max(-1,Math.min(1,v));
+  if (t>=0){ const a=t; return `rgb(${Math.round(0x23+(0x4c-0x23)*(1-a))},${Math.round(0x27+(0xc8-0x27)*a)},${Math.round(0x32+(0xff-0x32)*a)})`; }
+  const a=-t; return `rgb(${Math.round(0x23+(0xff-0x23)*a)},${Math.round(0x27+(0x8a-0x27)*a)},${Math.round(0x32+(0x4c-0x32)*a)})`;
+}
+
+const T_CHECKPOINTS=[
+  {at:0,label:"Brand new (0 games)"},
+  {at:200,label:"Total beginner (200)"},
+  {at:2000,label:"Getting the hang of it (2k)"},
+  {at:10000,label:"Pretty sharp (10k)"},
+  {at:50000,label:"Basically unbeatable (50k)"},
+];
+const C_CHECKPOINTS=[
+  {at:0,label:"Brand new (0 games)"},
+  {at:300,label:"Total beginner (300)"},
+  {at:1500,label:"Getting the hang of it (1.5k)"},
+  {at:4000,label:"Pretty sharp (4k)"},
+  {at:10000,label:"Strong (10k)"},
+];
+const P_CHECKPOINTS=[
+  {at:0,label:"Brand new (0 frames)"},
+  {at:5000,label:"Flailing (5k frames)"},
+  {at:15000,label:"Getting the hang of it (15k)"},
+  {at:30000,label:"Pretty sharp (30k)"},
+  {at:60000,label:"Hard to beat (60k)"},
+];
+
+/* ================================ APP ================================== */
+function App(){
+  const [tab,setTab]=useState("lab");
+  const [game,setGame]=useState("ttt");
+  const panel=(id)=>({ display: tab===id ? "block" : "none" });
+  return (
+    <div style={{ background:"var(--bg)", color:"var(--ink)", minHeight:"100%", fontFamily:"var(--body)" }}>
+      <FontsAndVars/>
+      <div className="mx-auto" style={{ maxWidth:1120, padding:"28px 20px 64px" }}>
+        <Header/>
+        <Tabs tab={tab} setTab={setTab}/>
+        <div style={{ marginTop:22 }}>
+          <div style={panel("lab")}><TrainPlay active={tab==="lab"} game={game} setGame={setGame}/></div>
+          <div style={panel("how")}><HowItWorks game={game}/></div>
+          <div style={panel("examples")}><Examples/></div>
+          <div style={panel("ask")}><AskClaude active={tab==="ask"}/></div>
+        </div>
+        <Footer/>
+      </div>
+    </div>
+  );
+}
+
+function FontsAndVars(){
+  return (
+    <style dangerouslySetInnerHTML={{ __html:`
+      @import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+      :root{ --bg:#13151b; --panel:#1b1e27; --panel2:#232733; --ink:#eef1f6; --muted:#9aa3b5;
+        --line:rgba(255,255,255,.08); --accent:#54e0a0; --amber:#f2b347; --xcol:#5cc8ff; --ocol:#ff8a5c;
+        --body:'Sora',system-ui,sans-serif; --pixel:'Pixelify Sans',monospace; --mono:'JetBrains Mono',monospace; }
+      *{box-sizing:border-box;}
+      ::selection{background:var(--accent);color:#0a0d10;}
+      .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;}
+      .btn{font-family:var(--body);font-weight:600;color:var(--ink);border-radius:10px;border:1px solid var(--line);cursor:pointer;transition:transform .08s,background .15s,border-color .15s;}
+      .btn:hover{transform:translateY(-1px);} .btn:active{transform:translateY(0);}
+      input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;background:var(--panel2);outline:none;}
+      input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid #0e1014;}
+      input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid #0e1014;}
+      .pixel{font-family:var(--pixel);} .mono{font-family:var(--mono);}
+      .glow{text-shadow:0 0 18px rgba(84,224,160,.45);}
+      .fade-in{animation:fade .5s ease both;} @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+      @keyframes creditflash{0%{opacity:0;transform:scale(.75)}5%{opacity:var(--pk);transform:scale(1.25)}22%{opacity:0;transform:scale(.85)}100%{opacity:0}}
+      a{color:var(--accent);}
+    `}}/>
+  );
+}
+
+function Header(){
+  return (
+    <div className="fade-in" style={{ display:"flex", alignItems:"flex-end", gap:14, flexWrap:"wrap" }}>
+      <div style={{ width:46,height:46,borderRadius:12,background:"var(--panel2)",border:"1px solid var(--line)",display:"grid",placeItems:"center",boxShadow:"0 0 28px rgba(84,224,160,.25)" }}>
+        <Brain size={26} color="var(--accent)"/>
+      </div>
+      <div>
+        <div className="pixel glow" style={{ fontSize:30, lineHeight:1, color:"var(--accent)" }}>THE LEARNING MACHINE</div>
+        <div style={{ color:"var(--muted)", marginTop:6, fontSize:14.5 }}>
+          A hands-on playground for <b style={{ color:"var(--ink)" }}>reinforcement learning</b> — how a computer gets good at a game with nobody teaching it.
+        </div>
+      </div>
+    </div>
+  );
+}
+function Tabs({tab,setTab}){
+  const items=[{id:"lab",label:"Train & Play",icon:Gamepad2},{id:"how",label:"How it works",icon:BookOpen},{id:"examples",label:"Real games & uses",icon:Globe},{id:"ask",label:"Ask AI",icon:MessageCircle}];
+  return (
+    <div style={{ display:"flex", gap:8, marginTop:22, flexWrap:"wrap" }}>
+      {items.map(({id,label,icon:Icon})=>{ const on=tab===id; return (
+        <button key={id} className="btn" onClick={()=>setTab(id)}
+          style={{ padding:"9px 14px", display:"flex", alignItems:"center", gap:8, fontSize:14,
+            background:on?"var(--accent)":"var(--panel)", color:on?"#0a0d10":"var(--ink)", borderColor:on?"var(--accent)":"var(--line)" }}>
+          <Icon size={16}/> {label}
+        </button>
+      );})}
+    </div>
+  );
+}
+
+/* ===================== TRAIN & PLAY (game selector) ==================== */
+function TrainPlay({active,game,setGame}){
+  useEffect(()=>{ APP_STATUS.game = game==="ttt"?"Tic-Tac-Toe":game==="c4"?"Connect Four":"Pong"; },[game]);
+  return (
+    <div className="fade-in">
+      <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
+        {[{id:"ttt",label:"Game 1 · Tic-Tac-Toe",icon:Grid3x3},{id:"c4",label:"Game 2 · Connect Four",icon:Cpu},{id:"pong",label:"Game 3 · Pong",icon:Zap}].map(({id,label,icon:Icon})=>{
+          const on=game===id; return (
+            <button key={id} className="btn" onClick={()=>setGame(id)}
+              style={{ padding:"10px 14px", display:"flex", gap:8, alignItems:"center", fontSize:13.5,
+                background:on?"var(--panel2)":"var(--panel)", color:"var(--ink)",
+                borderColor:on?"var(--accent)":"var(--line)" }}>
+              <Icon size={15} color={on?"var(--accent)":"var(--muted)"}/> {label}
+            </button>
+          );})}
+      </div>
+      <div style={{ display: game==="ttt"?"block":"none" }}><TicTacToeLab active={active && game==="ttt"}/></div>
+      <div style={{ display: game==="c4"?"block":"none" }}><ConnectFourLab active={active && game==="c4"}/></div>
+      <div style={{ display: game==="pong"?"block":"none" }}><PongLab active={active && game==="pong"}/></div>
+    </div>
+  );
+}
+
+/* ============================ TTT LAB ================================= */
+function TicTacToeLab({active}){
+  const eng=useRef({V:new Map(),trained:0,checkpoints:{},lastEvalTime:0});
+  const rafRef=useRef(null);
+  const [running,setRunning]=useState(false);
+  const [trained,setTrained]=useState(0);
+  const [curiosity,setCuriosity]=useState(0.2);
+  const [learningSpeed,setLearningSpeed]=useState(0.2);
+  const [speed,setSpeed]=useState(300);
+  const [series,setSeries]=useState([]);
+  const [opening,setOpening]=useState(new Array(9).fill(0));
+  const [perfNow,setPerfNow]=useState({random:null,perfect:null});
+  const runningRef=useRef(running),curRef=useRef(curiosity),lrRef=useRef(learningSpeed),spRef=useRef(speed);
+  useEffect(()=>{runningRef.current=running;},[running]);
+  useEffect(()=>{curRef.current=curiosity; APP_STATUS.ttt.curiosity=curiosity;},[curiosity]);
+  useEffect(()=>{lrRef.current=learningSpeed; APP_STATUS.ttt.learningSpeed=learningSpeed;},[learningSpeed]);
+  useEffect(()=>{spRef.current=speed;},[speed]);
+
+  const snap=(e)=>{ for(const c of T_CHECKPOINTS) if(e.trained>=c.at && !e.checkpoints[c.at]) e.checkpoints[c.at]=new Map(e.V); };
+  const doEval=(e)=>{
+    const r=tEvaluate(e.V,tRand,300), p=tEvaluate(e.V,tPerfect,200);
+    const pct=(x,k)=>+(100*x[k]/x.games).toFixed(1);
+    setSeries((s)=>[...s.slice(-200),{games:e.trained,winRandom:pct(r,"w"),lossRandom:pct(r,"l"),lossPerfect:pct(p,"l")}]);
+    setPerfNow({random:r,perfect:p});
+    const empty=new Array(9).fill(0);
+    setOpening(empty.map((_,i)=>{const nb=empty.slice();nb[i]=1;return tGet(e.V,tKey(nb));}));
+  };
+  useEffect(()=>{snap(eng.current);doEval(eng.current);},[]);
+  const loop=useCallback(()=>{
+    if(!runningRef.current) return;
+    const e=eng.current,batch=spRef.current;
+    for(let i=0;i<batch;i++) tSelfPlay(e.V,lrRef.current,curRef.current);
+    e.trained+=batch; APP_STATUS.ttt.trained=e.trained; snap(e); setTrained(e.trained);
+    const now=performance.now(); if(now-e.lastEvalTime>400){ e.lastEvalTime=now; doEval(e); }
+    rafRef.current=requestAnimationFrame(loop);
+  },[]);
+  useEffect(()=>{ if(running) rafRef.current=requestAnimationFrame(loop); return ()=>cancelAnimationFrame(rafRef.current); },[running,loop]);
+  const reset=()=>{ setRunning(false); cancelAnimationFrame(rafRef.current);
+    eng.current={V:new Map(),trained:0,checkpoints:{},lastEvalTime:0}; snap(eng.current); APP_STATUS.ttt.trained=0;
+    setTrained(0); setSeries([]); setOpening(new Array(9).fill(0)); doEval(eng.current); };
+
+  const lossR=perfNow.random?(100*perfNow.random.l/perfNow.random.games).toFixed(0):"–";
+  const lossP=perfNow.perfect?(100*perfNow.perfect.l/perfNow.perfect.games).toFixed(0):"–";
+
+  return (
+    <div style={{ display:"grid", gap:16 }}>
+      <TrainControls title="Step 1 — Tic-Tac-Toe: a lookup table of opinions" icon={Zap}
+        blurb={<>Press <b style={{color:"var(--ink)"}}>Train</b>. The computer plays itself thousands of times, nudging its opinion of each board after every game: did this path lead to a win or a loss? Nobody teaches it good play — it works it out. Watch its losses melt away.</>}
+        running={running} setRunning={setRunning} reset={reset} trained={trained}
+        curiosity={curiosity} setCuriosity={setCuriosity} learningSpeed={learningSpeed} setLearningSpeed={setLearningSpeed}
+        speed={speed} setSpeed={setSpeed} speedMin={1} speedMax={2000}
+        lrMin={0.01} lrMax={0.6} lrStep={0.01} lrDisplay={learningSpeed.toFixed(2)}/>
+
+      <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.55fr) minmax(0,1fr)", gap:16 }}>
+        <div className="card" style={{ padding:16, minWidth:0 }}>
+          <SectionTitle icon={Trophy} text="Is it getting better?"/>
+          <div style={{ display:"flex", gap:16, flexWrap:"wrap", margin:"10px 0 6px" }}>
+            <Stat label="Loses to a random player" value={`${lossR}%`} good={lossR!=="–"&&+lossR===0}/>
+            <Stat label="Loses to a flawless player" value={`${lossP}%`} good={lossP!=="–"&&+lossP===0}/>
+          </div>
+          <ChartBox active={active} data={series} lines={[
+            {key:"winRandom",name:"Wins vs random",color:"#54e0a0"},
+            {key:"lossRandom",name:"Losses vs random",color:"#ff8a5c"},
+            {key:"lossPerfect",name:"Losses vs perfect",color:"#f2b347",dash:"4 3"},
+          ]}/>
+          <p style={{ color:"var(--muted)", fontSize:12.5, marginTop:8 }}>
+            The dashed line is the hard test: against a <i>perfect</i> opponent the best you can ever do at tic-tac-toe is draw — so "losses vs perfect → 0%" means it has essentially solved the game.
+          </p>
+        </div>
+        <div className="card" style={{ padding:16, minWidth:0 }}>
+          <SectionTitle icon={Brain} text="What it thinks of each opening"/>
+          <p style={{ color:"var(--muted)", fontSize:12.5, margin:"8px 0 12px" }}>
+            Its opinion of each first move (for player X), shown on a relative scale. Early on every square stays pale — the reward hasn't had time to travel all the way back to move one yet (that's the credit-assignment problem; see <b>How it works</b>). After a few thousand games the centre and corners warm up as it learns they beat the edges.
+          </p>
+          <OpeningHeat values={opening} cols={3}/>
+          <ColorKey/>
+        </div>
+      </div>
+
+      <TTTPlay eng={eng} liveTrained={trained}/>
+
+      <div className="card" style={{ padding:16, borderStyle:"dashed" }}>
+        <SectionTitle icon={Sparkles} text="Why this trick eventually breaks"/>
+        <p style={{ color:"var(--muted)", fontSize:14.5, margin:"8px 0 12px", maxWidth:820 }}>
+          This works because tic-tac-toe has only a few thousand possible boards, so the computer can store an opinion about <i>every single one</i>. Connect Four has more than <b className="mono" style={{color:"var(--amber)"}}>4,500,000,000,000</b> boards — no list can hold that. Switch to <b style={{color:"var(--accent)"}}>Game 2</b> above to watch a neural network solve that problem by <i>guessing</i> the value of boards it has never seen.
+        </p>
+        <Collapsible title="More detail: how guessing replaces the list">
+          <p>A lookup list can only have an opinion about a board it has <i>already seen</i>. With trillions of boards, almost every position in a real game is one it has never encountered — so the list is useless.</p>
+          <p>A neural network learns <b>patterns</b> instead of memorising boards: "three of my pieces in a row with an open end is good," "letting you build an open row is bad." Because those patterns transfer, it can score a brand-new board sensibly on the very first sight. The price is that it only <i>approximates</i> the right answer, which is why our Connect Four net is strong but not flawless — and why the biggest systems add lookahead search (see the "thinking ahead" note in <b>How it works</b>) to cover the gaps.</p>
+        </Collapsible>
+      </div>
+    </div>
+  );
+}
+
+function TTTPlay({eng,liveTrained}){
+  const [cpAt,setCpAt]=useState(0);
+  const [humanMark,setHumanMark]=useState(1);
+  const [board,setBoard]=useState(new Array(9).fill(0));
+  const [over,setOver]=useState(null);
+  const [thinking,setThinking]=useState(new Array(9).fill(null));
+  const tableFor=()=> cpAt===-1?eng.current.V:(eng.current.checkpoints[cpAt]||eng.current.V);
+  const agentMark=humanMark===1?2:1, agentPlayer=agentMark===1?1:-1;
+
+  const computeThinking=(b)=>{ const V=tableFor(); return b.map((c,i)=>{ if(c!==0) return null;
+    const nb=b.slice(); nb[i]=agentMark; const tr=tReward(nb); const vx=tr!==null?tr:tGet(V,tKey(nb));
+    return agentPlayer===1?vx:-vx; }); };
+  const newGame=(hf=humanMark)=>{ let b=new Array(9).fill(0); setOver(null);
+    if(hf!==1){ const m=tChoose(tableFor(),b,1,0); b=b.slice(); b[m]=1; } setBoard(b); };
+  useEffect(()=>{ newGame(humanMark); /* eslint-disable-next-line */ },[humanMark,cpAt]);
+  useEffect(()=>{ setThinking(over?new Array(9).fill(null):computeThinking(board)); /* eslint-disable-next-line */ },[board,over,cpAt,humanMark]);
+
+  const click=(i)=>{ if(over||board[i]!==0) return;
+    let b=board.slice(); b[i]=humanMark; let tr=tReward(b);
+    if(tr!==null){ setBoard(b); finish(tr); return; }
+    const m=tChoose(tableFor(),b,agentPlayer,0); b=b.slice(); b[m]=agentMark; setBoard(b);
+    tr=tReward(b); if(tr!==null) finish(tr);
+  };
+  const finish=(rx)=>{ const hs=humanMark===1?rx:-rx; setOver(hs>0?"you":hs<0?"agent":"draw"); };
+
+  return (
+    <div className="card" style={{ padding:16 }}>
+      <SectionTitle icon={Gamepad2} text="Play it yourself — at any skill level"/>
+      <p style={{ color:"var(--muted)", fontSize:13.5, margin:"8px 0 14px" }}>
+        Pick how much training the opponent has had, then try to beat it — the same machine frozen at different moments. The faint tints inside empty squares show how good the machine rates each move for itself right now.
+      </p>
+      <div style={{ display:"flex", gap:22, flexWrap:"wrap", alignItems:"flex-start" }}>
+        <div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,84px)", gridTemplateRows:"repeat(3,84px)", gap:8 }}>
+            {board.map((cell,i)=>{ const tv=thinking?thinking[i]:null; const tint=(tv!==null&&tv!==undefined)?valueColor(tv):null;
+              let wl=null; for(const ln of T_LINES){const[a,c,d]=ln; if(board[a]&&board[a]===board[c]&&board[c]===board[d]) wl=ln;}
+              const inWin=wl&&wl.includes(i);
+              return (<button key={i} className="btn" onClick={()=>click(i)}
+                style={{ width:84,height:84,display:"grid",placeItems:"center",fontSize:38,fontWeight:700,fontFamily:"var(--mono)",
+                  background:tint||"var(--panel2)", opacity:tint?0.92:1, borderColor:inWin?"var(--accent)":"var(--line)",
+                  boxShadow:inWin?"0 0 18px rgba(84,224,160,.5)":"none",
+                  color:cell===1?"var(--xcol)":cell===2?"var(--ocol)":"var(--ink)", cursor:cell===0&&!over?"pointer":"default" }}>
+                {cell===1?"X":cell===2?"O":""}</button>);
+            })}
+          </div>
+          <div style={{ marginTop:12, minHeight:26 }}>
+            {over==="you"&&<Banner color="var(--accent)" text="You win! (Don't get used to it.)"/>}
+            {over==="agent"&&<Banner color="var(--ocol)" text="The machine wins."/>}
+            {over==="draw"&&<Banner color="var(--amber)" text="A draw — the perfect result here."/>}
+          </div>
+          <button className="btn" onClick={()=>newGame()} style={{ marginTop:6, padding:"9px 14px", background:"var(--panel2)", display:"flex", gap:8, alignItems:"center" }}><RefreshCw size={15}/> New game</button>
+        </div>
+        <PlayControls cpAt={cpAt} setCpAt={setCpAt} checkpoints={T_CHECKPOINTS} available={eng.current.checkpoints}
+          liveTrained={liveTrained} humanMark={humanMark} setHumanMark={setHumanMark} firstLabel="X (go first)" secondLabel="O (go second)"
+          moveHeat={<MoveHeat values={thinking} cols={3} title="What it's thinking now"/>}/>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ C4 LAB ================================= */
+function ConnectFourLab({active}){
+  const eng=useRef(null); // {model, optimizer, buf, trained, checkpoints, playModel}
+  const rafRef=useRef(null);
+  const [ready,setReady]=useState(false);
+  const [running,setRunning]=useState(false);
+  const [trained,setTrained]=useState(0);
+  const [curiosity,setCuriosity]=useState(0.25);
+  const [learningSpeed,setLearningSpeed]=useState(0.001);
+  const [speed,setSpeed]=useState(20);
+  const [series,setSeries]=useState([]);
+  const [opening,setOpening]=useState(new Array(7).fill(0));
+  const [winNow,setWinNow]=useState(null);
+  const runningRef=useRef(running),curRef=useRef(curiosity),spRef=useRef(speed);
+  useEffect(()=>{runningRef.current=running;},[running]);
+  useEffect(()=>{curRef.current=curiosity; APP_STATUS.c4.curiosity=curiosity;},[curiosity]);
+  useEffect(()=>{spRef.current=speed;},[speed]);
+  useEffect(()=>{ APP_STATUS.c4.learningSpeed=learningSpeed;
+    if(eng.current&&eng.current.optimizer){ try{ eng.current.optimizer.learningRate=learningSpeed; }catch(e){} } },[learningSpeed]);
+
+  // lazy init the tf model on first mount
+  useEffect(()=>{
+    const model=cBuildModel(); const playModel=cBuildModel();
+    eng.current={model, playModel, optimizer:tf.train.adam(learningSpeed), buf:[], trained:0, checkpoints:{}, lastEvalTime:0};
+    eng.current.checkpoints[0]=cSnapshot(model);
+    cLoadSnapshot(playModel, eng.current.checkpoints[0]);
+    setReady(true); doEval();
+    return ()=>{ cancelAnimationFrame(rafRef.current); };
+    // eslint-disable-next-line
+  },[]);
+
+  const pushSample=(e,s,t)=>{ if(e.buf.length>=20000) e.buf[(Math.random()*20000)|0]=[s,t]; else e.buf.push([s,t]); };
+  const selfPlay=(e)=>{
+    let b=new Array(C_N).fill(0),player=1; const boards=[b.slice()]; let reward=0;
+    while(true){ const c=cChoose(e.model,b,player,curRef.current); b=cDrop(b,c,player); boards.push(b.slice());
+      const tr=cReward(b); if(tr!==null){reward=tr;break;} player=player===1?2:1; }
+    const nv=cValues(e.model,boards);
+    for(let t=0;t<boards.length-1;t++){ const target=(t+1===boards.length-1)?reward:nv[t+1]; pushSample(e,cEncode(boards[t]),target); }
+  };
+  const trainStep=(e,batch)=>{ if(e.buf.length<batch) return; const xs=[],ys=[];
+    for(let i=0;i<batch;i++){const s=e.buf[(Math.random()*e.buf.length)|0]; xs.push(s[0]); ys.push([s[1]]);}
+    tf.tidy(()=>{ const X=tf.tensor2d(xs), Y=tf.tensor2d(ys); e.optimizer.minimize(()=>tf.losses.meanSquaredError(Y,e.model.predict(X))); });
+  };
+  const snap=(e)=>{ for(const c of C_CHECKPOINTS) if(e.trained>=c.at && !e.checkpoints[c.at]) e.checkpoints[c.at]=cSnapshot(e.model); };
+  const doEval=()=>{ const e=eng.current; if(!e) return;
+    const r=cEvaluate(e.model,60); const pct=(k)=>+(100*r[k]/r.games).toFixed(1);
+    setSeries((s)=>[...s.slice(-200),{games:e.trained,winRandom:pct("w"),lossRandom:pct("l")}]); setWinNow(r);
+    const empty=new Array(C_N).fill(0); const after=Array.from({length:7},(_,c)=>cDrop(empty,c,1));
+    const vals=cValues(e.model,after); setOpening(vals);
+  };
+  const loop=useCallback(()=>{
+    if(!runningRef.current) return; const e=eng.current; const batch=spRef.current;
+    for(let i=0;i<batch;i++){ selfPlay(e); trainStep(e,64); }
+    e.trained+=batch; APP_STATUS.c4.trained=e.trained; snap(e); setTrained(e.trained);
+    const now=performance.now(); if(now-e.lastEvalTime>700){ e.lastEvalTime=now; doEval(); }
+    rafRef.current=requestAnimationFrame(loop);
+    // eslint-disable-next-line
+  },[]);
+  useEffect(()=>{ if(running&&ready) rafRef.current=requestAnimationFrame(loop); return ()=>cancelAnimationFrame(rafRef.current); },[running,ready,loop]);
+  const reset=()=>{ setRunning(false); cancelAnimationFrame(rafRef.current); const e=eng.current;
+    e.model.getWeights().forEach(()=>{}); // weights replaced below
+    const fresh=cBuildModel(); e.model.setWeights(fresh.getWeights().map(w=>w.clone())); fresh.dispose();
+    e.buf=[]; e.trained=0; e.checkpoints={0:cSnapshot(e.model)}; e.lastEvalTime=0; APP_STATUS.c4.trained=0;
+    setTrained(0); setSeries([]); setOpening(new Array(7).fill(0)); doEval(); };
+
+  const winR=winNow?(100*winNow.w/winNow.games).toFixed(0):"–";
+  const lossR=winNow?(100*winNow.l/winNow.games).toFixed(0):"–";
+
+  return (
+    <div style={{ display:"grid", gap:16 }}>
+      <TrainControls title="Step 2 — Connect Four: a neural network instead of a table" icon={Cpu}
+        blurb={<>There are too many Connect Four boards to keep an opinion about each one, so this time a small <b style={{color:"var(--accent)"}}>neural network</b> learns to <i>guess</i> a board's value from patterns it has seen. Same self-play idea, same reward — just a brain that generalises. It starts from <b style={{color:"var(--ink)"}}>random</b> guesses; press Train and watch it figure the game out.</>}
+        running={running} setRunning={setRunning} reset={reset} trained={trained}
+        curiosity={curiosity} setCuriosity={setCuriosity}
+        learningSpeed={learningSpeed} setLearningSpeed={setLearningSpeed}
+        speed={speed} setSpeed={setSpeed} speedMin={1} speedMax={200}
+        lrMin={0.0002} lrMax={0.005} lrStep={0.0002} lrDisplay={learningSpeed.toFixed(4)} lrNote="(applies live; very high = unstable)"
+        disabled={!ready}/>
+      {!ready && <div className="card" style={{padding:16,color:"var(--muted)"}}>Spinning up the neural network in your browser…</div>}
+
+      <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.55fr) minmax(0,1fr)", gap:16 }}>
+        <div className="card" style={{ padding:16, minWidth:0 }}>
+          <SectionTitle icon={Trophy} text="Is it getting better?"/>
+          <div style={{ display:"flex", gap:16, flexWrap:"wrap", margin:"10px 0 6px" }}>
+            <Stat label="Wins vs a random player" value={`${winR}%`} good={winR!=="–"&&+winR>=85}/>
+            <Stat label="Loses to a random player" value={`${lossR}%`} good={lossR!=="–"&&+lossR<=10}/>
+          </div>
+          <ChartBox active={active} data={series} lines={[
+            {key:"winRandom",name:"Wins vs random",color:"#54e0a0"},
+            {key:"lossRandom",name:"Losses vs random",color:"#ff8a5c"},
+          ]}/>
+          <p style={{ color:"var(--muted)", fontSize:12.5, marginTop:8 }}>
+            Connect Four is far too big to solve perfectly in a browser, so we measure it against a random player. Without any lookahead search it tops out around 90%+ wins — strong, but it shows why the biggest systems add search on top (a thread for Game 3).
+          </p>
+        </div>
+        <div className="card" style={{ padding:16, minWidth:0 }}>
+          <SectionTitle icon={Brain} text="What it thinks of each opening column"/>
+          <p style={{ color:"var(--muted)", fontSize:12.5, margin:"8px 0 12px" }}>
+            The network's opinion of dropping the first piece in each of the 7 columns. The middle column should warm up — it touches the most ways to make four in a row.
+          </p>
+          <OpeningHeat values={opening} cols={7}/>
+          <ColorKey/>
+        </div>
+      </div>
+
+      <C4Play eng={eng} ready={ready} liveTrained={trained}/>
+    </div>
+  );
+}
+
+function C4Play({eng,ready,liveTrained}){
+  const [cpAt,setCpAt]=useState(0);
+  const [humanMark,setHumanMark]=useState(1);
+  const [board,setBoard]=useState(new Array(C_N).fill(0));
+  const [over,setOver]=useState(null);
+  const [thinking,setThinking]=useState(new Array(7).fill(null));
+  const agentMark=humanMark===1?2:1;
+
+  const useModel=()=>{ const e=eng.current; if(!e) return null; if(cpAt===-1) return e.model;
+    cLoadSnapshot(e.playModel, e.checkpoints[cpAt]||e.checkpoints[0]); return e.playModel; };
+  const computeThinking=(b)=>{ const e=eng.current; if(!e) return new Array(7).fill(null);
+    const model=useModel(); const out=new Array(7).fill(null); const legal=cLegal(b); const after=legal.map(c=>cDrop(b,c,agentMark));
+    const need=[],ni=[]; const vals={};
+    after.forEach((nb,k)=>{ const tr=cReward(nb); if(tr!==null) vals[legal[k]]=tr; else {need.push(nb); ni.push(legal[k]);} });
+    if(need.length){ const nv=cValues(model,need); ni.forEach((col,k)=>vals[col]=nv[k]); }
+    legal.forEach((c)=>{ out[c]=agentMark===1?vals[c]:-vals[c]; }); return out; };
+  const newGame=(hf=humanMark)=>{ const e=eng.current; if(!e) return; let b=new Array(C_N).fill(0); setOver(null);
+    if(hf!==1){ const c=cChoose(useModel(),b,1,0); b=cDrop(b,c,1); } setBoard(b); };
+  useEffect(()=>{ if(ready) newGame(humanMark); /* eslint-disable-next-line */ },[humanMark,cpAt,ready]);
+  useEffect(()=>{ if(!ready) return; setThinking(over?new Array(7).fill(null):computeThinking(board)); /* eslint-disable-next-line */ },[board,over,cpAt,humanMark,ready]);
+
+  const drop=(col)=>{ if(over) return; const e=eng.current; if(!e) return; if(board[cIdx(0,col)]!==0) return;
+    let b=cDrop(board,col,humanMark); let tr=cReward(b);
+    if(tr!==null){ setBoard(b); finish(tr); return; }
+    const c=cChoose(useModel(),b,agentMark,0); b=cDrop(b,c,agentMark); setBoard(b);
+    tr=cReward(b); if(tr!==null) finish(tr);
+  };
+  const finish=(rx)=>{ const hs=humanMark===1?rx:-rx; setOver(hs>0?"you":hs<0?"agent":"draw"); };
+
+  const cell=22, gap=6;
+  return (
+    <div className="card" style={{ padding:16 }}>
+      <SectionTitle icon={Gamepad2} text="Play it yourself — at any skill level"/>
+      <p style={{ color:"var(--muted)", fontSize:13.5, margin:"8px 0 14px" }}>
+        Click a column to drop your piece. The coloured bar above each column shows how good the machine rates that drop for itself right now.
+      </p>
+      <div style={{ display:"flex", gap:22, flexWrap:"wrap", alignItems:"flex-start" }}>
+        <div>
+          {/* thinking bar */}
+          <div style={{ display:"grid", gridTemplateColumns:`repeat(7,${cell}px)`, gap, marginBottom:6 }}>
+            {Array.from({length:7},(_,c)=>{ const tv=thinking?thinking[c]:null; const tint=(tv!==null&&tv!==undefined)?valueColor(tv):"var(--panel2)";
+              return <div key={c} style={{ height:6, borderRadius:3, background:tint, opacity:tv==null?0.3:1 }}/>; })}
+          </div>
+          <div style={{ background:"var(--panel2)", padding:gap, borderRadius:10, border:"1px solid var(--line)" }}>
+            <div style={{ display:"grid", gridTemplateColumns:`repeat(7,${cell}px)`, gridTemplateRows:`repeat(6,${cell}px)`, gap }}>
+              {Array.from({length:C_N},(_,i)=>{ const v=board[i]; const col=i%C_COLS;
+                return <button key={i} className="btn" onClick={()=>drop(col)}
+                  style={{ width:cell,height:cell,borderRadius:"50%",padding:0,border:"1px solid var(--line)",
+                    background:v===1?"#f5c542":v===2?"#ef5b5b":"#0e1014", cursor:over?"default":"pointer" }}/>; })}
+            </div>
+          </div>
+          <div style={{ marginTop:12, minHeight:26 }}>
+            {over==="you"&&<Banner color="var(--accent)" text="You win!"/>}
+            {over==="agent"&&<Banner color="var(--ocol)" text="The machine wins."/>}
+            {over==="draw"&&<Banner color="var(--amber)" text="A draw — the board filled up."/>}
+          </div>
+          <button className="btn" onClick={()=>newGame()} style={{ marginTop:6, padding:"9px 14px", background:"var(--panel2)", display:"flex", gap:8, alignItems:"center" }}><RefreshCw size={15}/> New game</button>
+        </div>
+        <PlayControls cpAt={cpAt} setCpAt={setCpAt} checkpoints={C_CHECKPOINTS} available={eng.current?eng.current.checkpoints:{}}
+          liveTrained={liveTrained} humanMark={humanMark} setHumanMark={setHumanMark} firstLabel="Yellow (first)" secondLabel="Red (second)"
+          moveHeat={<MoveHeat values={thinking} cols={7} title="What it's thinking now"/>}/>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ PONG LAB ================================= */
+const PONG_W=320, PONG_H=200;
+function PongLab({active}){
+  const eng=useRef(null);
+  const trainRaf=useRef(null), watchRaf=useRef(null);
+  const watchEnv=useRef(pTrainReset(P_SPEED));
+  const [ready,setReady]=useState(false);
+  const [running,setRunning]=useState(false);
+  const [frames,setFrames]=useState(0);
+  const [curiosity,setCuriosity]=useState(0.3);
+  const [learningSpeed,setLearningSpeed]=useState(0.0008);
+  const [speed,setSpeed]=useState(120);
+  const [ballMult,setBallMult]=useState(1.0);
+  const [spin,setSpin]=useState(false);
+  const [series,setSeries]=useState([]);
+  const [rateNow,setRateNow]=useState(null);
+  const [watchScene,setWatchScene]=useState(null);
+  const [vyDir,setVyDir]=useState(1);
+  const [policy,setPolicy]=useState(null);
+  const [watchPaused,setWatchPaused]=useState(false);
+  const runningRef=useRef(running),curRef=useRef(curiosity),spRef=useRef(speed),activeRef=useRef(active);
+  const ballRef=useRef(P_SPEED),spinRef=useRef(spin),vyRef=useRef(vyDir),watchPausedRef=useRef(watchPaused);
+  useEffect(()=>{watchPausedRef.current=watchPaused;},[watchPaused]);
+  useEffect(()=>{runningRef.current=running;},[running]);
+  useEffect(()=>{curRef.current=curiosity; APP_STATUS.pong=APP_STATUS.pong||{}; APP_STATUS.pong.curiosity=curiosity;},[curiosity]);
+  useEffect(()=>{spRef.current=speed;},[speed]);
+  useEffect(()=>{ballRef.current=P_SPEED*ballMult;},[ballMult]);
+  useEffect(()=>{spinRef.current=spin;},[spin]);
+  useEffect(()=>{activeRef.current=active;},[active]);
+  useEffect(()=>{ if(eng.current&&eng.current.opt){ try{eng.current.opt.learningRate=learningSpeed;}catch(e){} } },[learningSpeed]);
+
+  useEffect(()=>{
+    const q=pBuildNet(), tgt=pBuildNet(); tgt.setWeights(q.getWeights().map((w)=>w.clone()));
+    const playModel=pBuildNet();
+    eng.current={q,tgt,playModel,opt:tf.train.adam(learningSpeed),buf:[],frames:0,checkpoints:{},lastEvalTime:0,lastSync:0,lastPolicyTime:0,_tstate:null};
+    eng.current.checkpoints[0]=cSnapshot(q); cLoadSnapshot(playModel,eng.current.checkpoints[0]);
+    APP_STATUS.pong=APP_STATUS.pong||{}; setReady(true); computePolicy();
+    return ()=>{ cancelAnimationFrame(trainRaf.current); cancelAnimationFrame(watchRaf.current); };
+    // eslint-disable-next-line
+  },[]);
+
+  const snap=(e)=>{ for(const c of P_CHECKPOINTS) if(e.frames>=c.at && !e.checkpoints[c.at]) e.checkpoints[c.at]=cSnapshot(e.q); };
+  const computePolicy=()=>{ const e=eng.current; if(!e) return; setPolicy(pPolicyMap(e.q, vyRef.current, ballRef.current, 12)); };
+  const doEval=()=>{ const e=eng.current; if(!e) return; const rate=pEvalReturnRate(e.q, 1200, ballRef.current, spinRef.current);
+    setSeries((s)=>[...s.slice(-200),{frames:e.frames, rate:+(100*rate).toFixed(1)}]); setRateNow(rate); };
+  useEffect(()=>{ vyRef.current=vyDir; computePolicy(); /* eslint-disable-next-line */ },[vyDir]);
+
+  const trainLoop=useCallback(()=>{
+    if(!runningRef.current){ return; } const e=eng.current; const batch=spRef.current; const sp=ballRef.current, sn=spinRef.current;
+    let s=e._tstate||pTrainReset(sp);
+    for(let i=0;i<batch;i++){
+      const enc=pEnc(s.bx,s.by,s.vx,s.vy,s.py); const a=pAct(e.q,enc,curRef.current);
+      const {s:s2,r,done}=pTrainStep(s,a,sp,sn);
+      e.buf.push({s:enc,a,r,s2:pEnc(s2.bx,s2.by,s2.vx,s2.vy,s2.py),d:done}); if(e.buf.length>12000) e.buf.shift();
+      s = done? pTrainReset(sp): s2; e.frames++;
+      if(e.frames>600 && e.frames%3===0) pTrainStepNet(e,32);
+      if(++e.lastSync>=600){ e.lastSync=0; e.tgt.setWeights(e.q.getWeights().map((w)=>w.clone())); }
+    }
+    e._tstate=s; APP_STATUS.pong.frames=e.frames; snap(e); setFrames(e.frames);
+    const now=performance.now();
+    if(now-e.lastEvalTime>700){ e.lastEvalTime=now; doEval(); }
+    if(now-e.lastPolicyTime>2000){ e.lastPolicyTime=now; computePolicy(); } // slower so the map doesn't flicker
+    trainRaf.current=requestAnimationFrame(trainLoop);
+    // eslint-disable-next-line
+  },[]);
+  useEffect(()=>{ if(running&&ready) trainRaf.current=requestAnimationFrame(trainLoop); return ()=>cancelAnimationFrame(trainRaf.current); },[running,ready,trainLoop]);
+
+  const watchLoop=useCallback(()=>{
+    const e=eng.current;
+    if(e && activeRef.current && !watchPausedRef.current){
+      const sp=ballRef.current, sn=spinRef.current;
+      let s=watchEnv.current; const enc=pEnc(s.bx,s.by,s.vx,s.vy,s.py); const q=pQ(e.q,enc);
+      let a=0; for(let i=1;i<3;i++) if(q[i]>q[a])a=i;
+      const {s:s2,done}=pTrainStep(s,a,sp,sn); watchEnv.current = done? pTrainReset(sp): s2;
+      const pred=pPredictPath(s2,1);
+      setWatchScene({ball:{x:s2.bx,y:s2.by}, right:s2.py, left:null, pred, q, act:a});
+    }
+    watchRaf.current=requestAnimationFrame(watchLoop);
+    // eslint-disable-next-line
+  },[]);
+  useEffect(()=>{ watchRaf.current=requestAnimationFrame(watchLoop); return ()=>cancelAnimationFrame(watchRaf.current); },[watchLoop]);
+
+  const reset=()=>{ setRunning(false); cancelAnimationFrame(trainRaf.current); const e=eng.current;
+    const fresh=pBuildNet(); e.q.setWeights(fresh.getWeights().map((w)=>w.clone())); e.tgt.setWeights(e.q.getWeights().map((w)=>w.clone())); fresh.dispose();
+    e.buf=[]; e.frames=0; e.checkpoints={0:cSnapshot(e.q)}; e.lastEvalTime=0; e.lastSync=0; e.lastPolicyTime=0; e._tstate=null;
+    APP_STATUS.pong.frames=0; setFrames(0); setSeries([]); doEval(); computePolicy(); };
+
+  const rate=rateNow!==null?(100*rateNow).toFixed(0):"–";
+  const actColor=(a)=>a===0?"#5cc8ff":a===2?"#ff8a5c":"#3a4150";
+
+  return (
+    <div style={{ display:"grid", gap:16 }}>
+      <TrainControls title="Step 3 — Pong: reacting frame by frame" icon={Zap}
+        blurb={<>The first two games took turns; Pong never stops. The paddle must choose <b style={{color:"var(--ink)"}}>up, down, or stay</b> every single frame, and reward arrives <i>during</i> play — <b style={{color:"var(--accent)"}}>+1 each time it returns the ball, −1 when it misses</b>. The ball and paddle positions and speeds are continuous, so there's no table at all — a small network learns to read the ball and, crucially, to anticipate where it will be <i>after</i> it bounces. From random weights; press Train.</>}
+        running={running} setRunning={setRunning} reset={reset} trained={frames}
+        curiosity={curiosity} setCuriosity={setCuriosity}
+        curiosityHint="How often it tries a random move instead of its best guess. Some randomness is how it first discovers that moving toward the ball pays off."
+        learningSpeed={learningSpeed} setLearningSpeed={setLearningSpeed}
+        speed={speed} setSpeed={setSpeed} speedMin={1} speedMax={1500}
+        lrMin={0.0002} lrMax={0.003} lrStep={0.0002} lrDisplay={learningSpeed.toFixed(4)} lrNote="(applies live)"
+        countLabel="frames trained" speedLabel="Frames per tick"
+        speedHint="Slide to 1 to watch it inch along, or crank it up to learn in seconds."
+        disabled={!ready}/>
+
+      <div className="card" style={{ padding:16 }}>
+        <SectionTitle icon={Sparkles} text="Court rules — and a test of how general its skill is"/>
+        <p style={{ color:"var(--muted)", fontSize:13.5, margin:"8px 0 14px", maxWidth:820 }}>
+          Train the agent under one set of rules, then <b style={{color:"var(--ink)"}}>change the rules and watch/play</b> without retraining. Does its skill carry over, or does it fall apart? That's the question of how <i>general</i> what it learned really is. (Keep training and it will adapt to the new rules.)
+        </p>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))", gap:18 }}>
+          <Slider label="Ball speed" hint="Faster balls give less time to react (past about ×2 the paddle physically can't always reach in time). Speed it up after training to test whether the skill still holds."
+            value={ballMult} min={0.5} max={3} step={0.1} display={`×${ballMult.toFixed(1)}`} onChange={(v)=>setBallMult(+v.toFixed(1))}/>
+          <div>
+            <FieldLabel>Paddle spin</FieldLabel>
+            <div style={{ display:"flex", gap:8, marginTop:6 }}>
+              {[{v:false,t:"Off"},{v:true,t:"On"}].map(({v,t})=>(
+                <button key={String(v)} className="btn" onClick={()=>setSpin(v)}
+                  style={{ padding:"8px 14px", flex:1, fontSize:13, background:spin===v?"var(--accent)":"var(--panel2)",
+                    color:spin===v?"#0a0d10":"var(--ink)", borderColor:spin===v?"var(--accent)":"var(--line)" }}>{t}</button>
+              ))}
+            </div>
+            <div style={{ color:"var(--muted)", fontSize:11.5, marginTop:6, lineHeight:1.4 }}>When on, a paddle that's moving as it hits the ball adds spin, bending the ball's path — a new rule the agent must cope with.</div>
+          </div>
+        </div>
+      </div>
+      {!ready && <div className="card" style={{padding:16,color:"var(--muted)"}}>Spinning up the neural network in your browser…</div>}
+
+      <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.3fr) minmax(0,1fr)", gap:16 }}>
+        <div className="card" style={{ padding:16, minWidth:0 }}>
+          <SectionTitle icon={Trophy} text="Is it getting better?"/>
+          <div style={{ display:"flex", gap:16, flexWrap:"wrap", margin:"10px 0 6px" }}>
+            <Stat label="Balls it returns (at its best)" value={`${rate}%`} good={rate!=="–"&&+rate>=85}/>
+          </div>
+          <div style={{ height:200 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={series} margin={{ top:8, right:8, left:-18, bottom:0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,.06)"/>
+                <XAxis dataKey="frames" tick={{ fill:"#9aa3b5", fontSize:11 }} stroke="rgba(255,255,255,.12)"/>
+                <YAxis domain={[0,100]} tick={{ fill:"#9aa3b5", fontSize:11 }} stroke="rgba(255,255,255,.12)" unit="%"/>
+                <Tooltip contentStyle={{ background:"#1b1e27", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, fontSize:12 }} labelStyle={{ color:"#9aa3b5" }}/>
+                <Line type="monotone" dataKey="rate" name="Return rate" stroke="#54e0a0" dot={false} strokeWidth={2} isAnimationActive={false}/>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <p style={{ color:"var(--muted)", fontSize:12.5, marginTop:8 }}>
+            How often it returns the ball when playing its best (under the current court rules). Change the ball speed or spin and watch this dip, then recover if you keep training.
+          </p>
+        </div>
+        <div className="card" style={{ padding:16, minWidth:0 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <SectionTitle icon={Brain} text="Watch it practise"/>
+            <button className="btn" onClick={()=>setWatchPaused((p)=>!p)}
+              style={{ padding:"6px 12px", background:"var(--panel2)", borderColor:"rgba(255,255,255,.28)", display:"flex", gap:6, alignItems:"center", fontSize:12.5 }}>
+              {watchPaused?<Play size={14}/>:<Pause size={14}/>}{watchPaused?"Resume":"Pause"}
+            </button>
+          </div>
+          <p style={{ color:"var(--muted)", fontSize:12.5, margin:"8px 0 10px" }}>
+            The agent playing right now with what it knows so far. The dotted line is where the ball will actually arrive <i>after its bounces</i> — watch the paddle aim for that spot, not for the ball itself. Pause to study a single frame.
+          </p>
+          <PongCourt scene={watchScene} showLeft={false}/>
+          <ActionPref scene={watchScene}/>
+        </div>
+      </div>
+
+      <PongPlay eng={eng} ready={ready} liveFrames={frames} ballSpeed={P_SPEED*ballMult} spin={spin}/>
+
+      <div className="card" style={{ padding:16 }}>
+        <Collapsible title="Go deeper: a map of what it learned">
+          <p>This grid shows the move the agent picks across every combination of <b>ball height</b> (top→bottom) and <b>its own paddle height</b> (left→right), for a ball heading toward it from far away. Blue = move up, orange = move down, grey = stay.</p>
+          <div style={{ display:"flex", gap:8, alignItems:"center", margin:"4px 0 10px", flexWrap:"wrap" }}>
+            <span style={{ fontSize:12.5, color:"var(--muted)" }}>Ball is drifting:</span>
+            {[{v:-1,t:"upward"},{v:1,t:"downward"}].map(({v,t})=>(
+              <button key={v} className="btn" onClick={()=>setVyDir(v)}
+                style={{ padding:"6px 12px", fontSize:12.5, background:vyDir===v?"var(--accent)":"var(--panel2)", color:vyDir===v?"#0a0d10":"var(--ink)", borderColor:vyDir===v?"var(--accent)":"var(--line)" }}>{t}</button>
+            ))}
+            <span style={{ marginLeft:"auto", display:"flex", gap:10, fontSize:11.5, color:"var(--muted)" }}>
+              <span><span style={{color:"#5cc8ff"}}>■</span> up</span><span><span style={{color:"#3a4150"}}>■</span> stay</span><span><span style={{color:"#ff8a5c"}}>■</span> down</span>
+            </span>
+          </div>
+          <div style={{ display:"flex", gap:10, alignItems:"stretch" }}>
+            <div style={{ writingMode:"vertical-rl", transform:"rotate(180deg)", fontSize:11, color:"var(--muted)", textAlign:"center" }}>ball height (top → bottom)</div>
+            <div style={{ flex:1 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(12,1fr)", gridTemplateRows:"repeat(12,1fr)", gap:2, aspectRatio:"1/1", maxWidth:360 }}>
+                {policy ? policy.map((a,i)=>(<div key={i} style={{ background:actColor(a), borderRadius:2 }}/>)) : <div style={{gridColumn:"1 / -1", color:"var(--muted)", fontSize:12}}>train a little to see the map form…</div>}
+              </div>
+              <div style={{ fontSize:11, color:"var(--muted)", textAlign:"center", marginTop:4, maxWidth:360 }}>paddle height (top → bottom)</div>
+            </div>
+          </div>
+          <p>If the agent simply chased the ball, the boundary between "up" and "down" would be a straight diagonal (move up whenever the ball is above the paddle). Instead — especially with the ball drifting toward a wall — the boundary <b>bends</b>, because the agent is steering toward where the ball will be <i>after it bounces</i>, not where it is now. That bend is the bounce-anticipation it taught itself.</p>
+        </Collapsible>
+      </div>
+
+      <div className="card" style={{ padding:16, borderStyle:"dashed" }}>
+        <SectionTitle icon={Sparkles} text="What's different here"/>
+        <p style={{ color:"var(--muted)", fontSize:14.5, margin:"8px 0 0", maxWidth:820 }}>
+          Same reward-and-learn idea as before, with two new twists: decisions happen <b>every frame</b> instead of once per turn, and the ball <b>bounces</b> — so "move toward the ball" is a trap. The smart move is to head for where the ball <i>will be</i> when it arrives, which the network has to learn to predict. And it can't be a lookup table: the ball's position and speed are smooth numbers with endless possible values, so guessing-from-patterns (a network) isn't just convenient here, it's the only option.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PongCourt({scene, showLeft, onPointer, interactive}){
+  const W=PONG_W,H=PONG_H, pw=7, ph=P_PH*H;
+  const ball=scene&&scene.ball, right=scene&&scene.right, left=scene&&scene.left, pred=scene&&scene.pred;
+  const endPt = pred&&pred.points&&pred.points.length?pred.points[pred.points.length-1]:null;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", height:"auto", background:"#0e1014", borderRadius:12, border:"1px solid var(--line)", touchAction:"none", cursor:interactive?"none":"default", display:"block" }}
+      onPointerMove={onPointer} onPointerDown={onPointer}>
+      <line x1={W/2} y1={6} x2={W/2} y2={H-6} stroke="rgba(255,255,255,.1)" strokeDasharray="4 6"/>
+      {pred && pred.points && pred.points.length>1 && (
+        <polyline points={pred.points.map((p)=>`${p.x*W},${p.y*H}`).join(" ")} fill="none" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 4"/>
+      )}
+      {endPt && <circle cx={endPt.x*W} cy={endPt.y*H} r={4} fill="none" stroke="var(--accent)" strokeWidth="1.5"/>}
+      {showLeft && left!==null && left!==undefined && <rect x={4} y={left*H-ph} width={pw} height={ph*2} rx={3} fill="#5cc8ff"/>}
+      {right!==null && right!==undefined && <rect x={W-4-pw} y={right*H-ph} width={pw} height={ph*2} rx={3} fill="#54e0a0"/>}
+      {ball && <circle cx={ball.x*W} cy={ball.y*H} r={5} fill="#f5f7fa"/>}
+      {!scene && <text x={W/2} y={H/2} fill="#9aa3b5" fontSize="11" textAnchor="middle">warming up…</text>}
+    </svg>
+  );
+}
+function ActionPref({scene}){
+  const q=scene&&scene.q, act=scene&&scene.act;
+  const labels=["▲ up","■ stay","▼ down"];
+  let norm=[0,0,0];
+  if(q){ const mn=Math.min(...q), mx=Math.max(...q); const range=mx-mn||1; norm=q.map((v)=>(v-mn)/range); }
+  return (
+    <div style={{ marginTop:12 }}>
+      <FieldLabel>Its move right now</FieldLabel>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6, marginTop:6 }}>
+        {labels.map((lab,i)=>{ const on=q&&act===i; return (
+          <div key={i} style={{ borderRadius:9, border:`1px solid ${on?"var(--accent)":"var(--line)"}`, background:"var(--panel2)", padding:"8px 6px", textAlign:"center" }}>
+            <div style={{ fontSize:12, color:on?"var(--accent)":"var(--muted)", fontWeight:on?700:500 }}>{lab}</div>
+            <div style={{ height:5, marginTop:5, borderRadius:3, background:`linear-gradient(90deg, var(--accent) ${Math.round(norm[i]*100)}%, var(--panel) ${Math.round(norm[i]*100)}%)` }}/>
+          </div>
+        );})}
+      </div>
+    </div>
+  );
+}
+
+function PongPlay({eng,ready,liveFrames,ballSpeed,spin}){
+  const [cpAt,setCpAt]=useState(0);
+  const [scene,setScene]=useState(null);
+  const [score,setScore]=useState({you:0,agent:0});
+  const [playing,setPlaying]=useState(false);
+  const [paused,setPaused]=useState(false);
+  const envRef=useRef(null), rafRef=useRef(null), humanYRef=useRef(0.5), cpRef=useRef(0), pausedRef=useRef(false);
+  const ballRef=useRef(ballSpeed), spinRef=useRef(spin);
+  useEffect(()=>{cpRef.current=cpAt;},[cpAt]);
+  useEffect(()=>{pausedRef.current=paused;},[paused]);
+  useEffect(()=>{ballRef.current=ballSpeed;},[ballSpeed]);
+  useEffect(()=>{spinRef.current=spin;},[spin]);
+  const loadModel=()=>{ const e=eng.current; if(!e) return null; const snap = cpRef.current===-1 ? cSnapshot(e.q) : (e.checkpoints[cpRef.current]||e.checkpoints[0]); cLoadSnapshot(e.playModel, snap); return e.playModel; };
+
+  const loop=useCallback(()=>{
+    const e=eng.current; if(!e) return;
+    if(pausedRef.current){ rafRef.current=requestAnimationFrame(loop); return; }
+    const model=e.playModel; const sp=ballRef.current, sn=spinRef.current;
+    let s=envRef.current; if(!s){ rafRef.current=requestAnimationFrame(loop); return; }
+    const enc=pEnc(s.bx,s.by,s.vx,s.vy,s.ry); const q=pQ(model,enc); let a=0; for(let i=1;i<3;i++) if(q[i]>q[a])a=i;
+    const {s:s2,event}=pPlayStep(s, humanYRef.current, a, sp, sn);
+    let ns=s2;
+    if(event==="leftScores"){ setScore((p)=>({...p,you:p.you+1})); const f=pPlayReset(1,sp); ns={...f, ly:s2.ly, ry:s2.ry}; }
+    if(event==="rightScores"){ setScore((p)=>({...p,agent:p.agent+1})); const f=pPlayReset(-1,sp); ns={...f, ly:s2.ly, ry:s2.ry}; }
+    envRef.current=ns;
+    const target = ns.vx>0?1:0; const pred=pPredictPath(ns,target);
+    setScene({ball:{x:ns.bx,y:ns.by}, left:ns.ly, right:ns.ry, pred, q, act:a});
+    rafRef.current=requestAnimationFrame(loop);
+    // eslint-disable-next-line
+  },[]);
+
+  const start=()=>{ if(!ready) return; loadModel(); envRef.current=pPlayReset(Math.random()<0.5?1:-1, ballRef.current); setScore({you:0,agent:0}); setPaused(false); setPlaying(true);
+    cancelAnimationFrame(rafRef.current); rafRef.current=requestAnimationFrame(loop); };
+  useEffect(()=>()=>cancelAnimationFrame(rafRef.current),[]);
+  useEffect(()=>{ if(playing) loadModel(); /* eslint-disable-next-line */ },[cpAt]);
+
+  const onPointer=(ev)=>{ const r=ev.currentTarget.getBoundingClientRect(); const y=(ev.clientY-r.top)/r.height; humanYRef.current=pClamp(y,P_PH,1-P_PH); };
+
+  return (
+    <div className="card" style={{ padding:16 }}>
+      <SectionTitle icon={Gamepad2} text="Play it yourself — at any skill level"/>
+      <p style={{ color:"var(--muted)", fontSize:13.5, margin:"8px 0 14px" }}>
+        You're the <b style={{color:"#5cc8ff"}}>blue</b> paddle on the left — move your mouse (or finger) up and down over the court. The <b style={{color:"var(--accent)"}}>green</b> agent on the right defends at whatever skill level you choose. The dotted line shows where the ball will land after bouncing.
+      </p>
+      <div style={{ display:"flex", gap:22, flexWrap:"wrap", alignItems:"flex-start" }}>
+        <div style={{ flex:"1 1 360px", minWidth:300 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6, fontFamily:"var(--mono)", fontSize:14 }}>
+            <span style={{ color:"#5cc8ff" }}>You {score.you}</span>
+            <span style={{ color:"var(--accent)" }}>{score.agent} Agent</span>
+          </div>
+          <PongCourt scene={scene} showLeft={true} onPointer={onPointer} interactive={playing}/>
+          <div style={{ marginTop:10, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+            <button className="btn" onClick={start} disabled={!ready}
+              style={{ padding:"9px 16px", background:"var(--accent)", color:"#0a0d10", borderColor:"var(--accent)", display:"flex", gap:8, alignItems:"center", opacity:ready?1:0.5 }}>
+              {playing?<RefreshCw size={15}/>:<Play size={15}/>}{playing?"Restart":"Start volley"}
+            </button>
+            {playing && <button className="btn" onClick={()=>setPaused((p)=>!p)}
+              style={{ padding:"9px 14px", background:"var(--panel2)", borderColor:"rgba(255,255,255,.28)", display:"flex", gap:6, alignItems:"center" }}>
+              {paused?<Play size={15}/>:<Pause size={15}/>}{paused?"Resume":"Pause"}
+            </button>}
+            {playing && !paused && <span style={{ color:"var(--muted)", fontSize:12.5 }}>move your mouse over the court to play</span>}
+            {playing && paused && <span style={{ color:"var(--amber)", fontSize:12.5 }}>paused</span>}
+          </div>
+        </div>
+        <div style={{ minWidth:240, flex:1 }}>
+          <FieldLabel>Opponent's experience</FieldLabel>
+          <select value={cpAt} onChange={(e)=>setCpAt(+e.target.value)} style={selStyle}>
+            {P_CHECKPOINTS.filter((c)=>eng.current&&eng.current.checkpoints[c.at]).map((c)=>(<option key={c.at} value={c.at}>{c.label}</option>))}
+            <option value={-1}>Live (still training): {liveFrames.toLocaleString()} frames</option>
+          </select>
+          <ActionPref scene={scene}/>
+          <div className="card" style={{ marginTop:16, padding:12, background:"var(--panel2)" }}>
+            <div style={{ fontSize:12.5, color:"var(--muted)" }}>Try the brand-new agent first (it barely moves), then a well-trained one — the gap is exactly the learning you watched happen.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== SHARED LAB UI PIECES ========================== */
+function TrainControls(props){
+  const {title,icon,blurb,running,setRunning,reset,trained,curiosity,setCuriosity,learningSpeed,setLearningSpeed,
+    speed,setSpeed,speedMin,speedMax,lrMin,lrMax,lrStep,lrDisplay,lrNote,disabled,
+    countLabel="games played",speedLabel="Games per tick",speedHint="Slide to 1 for true slow motion, or crank it up to converge in seconds.",
+    curiosityHint="How often it tries a random move instead of its current favourite. Too low and it gets stuck in a rut; too high and it never settles."}=props;
+  return (
+    <div className="card" style={{ padding:16 }}>
+      <SectionTitle icon={icon} text={title}/>
+      <p style={{ color:"var(--muted)", fontSize:14.5, margin:"8px 0 16px", maxWidth:780 }}>{blurb}</p>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+        <button className="btn" disabled={disabled} onClick={()=>setRunning((r)=>!r)}
+          style={{ padding:"11px 18px", background:"var(--accent)", color:"#0a0d10", borderColor:"var(--accent)", display:"flex", gap:8, alignItems:"center", fontSize:15, opacity:disabled?0.5:1 }}>
+          {running?<Pause size={17}/>:<Play size={17}/>}{running?"Pause":"Train"}
+        </button>
+        <button className="btn" onClick={reset} style={{ padding:"11px 16px", background:"var(--panel2)", borderColor:"rgba(255,255,255,.28)", display:"flex", gap:8, alignItems:"center" }}><RotateCcw size={16}/> Reset to zero</button>
+        <div className="mono" style={{ marginLeft:"auto", fontSize:13.5, color:"var(--muted)" }}>{countLabel}: <span style={{ color:"var(--accent)", fontWeight:600, fontSize:16 }}>{trained.toLocaleString()}</span></div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))", gap:18, marginTop:18 }}>
+        <Slider label="Curiosity" hint={curiosityHint}
+          value={curiosity} min={0} max={1} step={0.01} display={`${Math.round(curiosity*100)}%`} onChange={setCuriosity}/>
+        <Slider label="Learning speed" hint={`How strongly each game tugs its opinions toward the latest result. ${lrNote||""}`}
+          value={learningSpeed} min={lrMin} max={lrMax} step={lrStep} display={lrDisplay} onChange={setLearningSpeed}/>
+        <Slider label={speedLabel} hint={speedHint}
+          value={speed} min={speedMin} max={speedMax} step={1} display={speed.toLocaleString()} onChange={(v)=>setSpeed(Math.round(v))}/>
+      </div>
+    </div>
+  );
+}
+function PlayControls({cpAt,setCpAt,checkpoints,available,liveTrained,humanMark,setHumanMark,firstLabel,secondLabel,moveHeat}){
+  return (
+    <div style={{ minWidth:240, flex:1 }}>
+      <FieldLabel>Opponent's experience</FieldLabel>
+      <select value={cpAt} onChange={(e)=>setCpAt(+e.target.value)} style={selStyle}>
+        {checkpoints.filter((c)=>available&&available[c.at]).map((c)=>(<option key={c.at} value={c.at}>{c.label}</option>))}
+        <option value={-1}>Live (still training): {liveTrained.toLocaleString()} games</option>
+      </select>
+      <div style={{ height:14 }}/>
+      <FieldLabel>You play as</FieldLabel>
+      <div style={{ display:"flex", gap:8 }}>
+        {[{v:1,t:firstLabel},{v:2,t:secondLabel}].map(({v,t})=>(
+          <button key={v} className="btn" onClick={()=>setHumanMark(v)}
+            style={{ padding:"8px 12px", flex:1, fontSize:13, background:humanMark===v?"var(--accent)":"var(--panel2)",
+              color:humanMark===v?"#0a0d10":"var(--ink)", borderColor:humanMark===v?"var(--accent)":"var(--line)" }}>{t}</button>
+        ))}
+      </div>
+      {moveHeat}
+      <div className="card" style={{ marginTop:16, padding:12, background:"var(--panel2)" }}>
+        <div style={{ fontSize:12.5, color:"var(--muted)" }}>Pick an earlier checkpoint and the machine plays the way it did after only that many self-play games — a window onto its growing skill.</div>
+      </div>
+    </div>
+  );
+}
+function MoveHeat({values,cols,title}){
+  const any=values&&values.some((v)=>v!==null&&v!==undefined);
+  return (
+    <div style={{ marginTop:16 }}>
+      <FieldLabel>{title}</FieldLabel>
+      <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`, gap:6, marginTop:6, maxWidth:cols===3?186:undefined }}>
+        {values.map((v,i)=> (v===null||v===undefined)
+          ? <div key={i} style={{ aspectRatio:"1/1", borderRadius:9, border:"1px solid var(--line)", background:"var(--panel2)", opacity:.35 }}/>
+          : <HeatCell key={i} v={v} small/>)}
+      </div>
+      <div style={{ color:"var(--muted)", fontSize:11, marginTop:6 }}>
+        {any ? "The machine's score for each move it could make from the board as it stands — updates every move." : "Make a move to see the machine's live read of each option."}
+      </div>
+    </div>
+  );
+}
+function ChartBox({active,data,lines}){
+  if(!active) return <div style={{ height:240, display:"grid", placeItems:"center", color:"var(--muted)", fontSize:12.5 }}>chart paused while hidden</div>;
+  return (
+    <div style={{ height:240 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top:8, right:8, left:-18, bottom:0 }}>
+          <CartesianGrid stroke="rgba(255,255,255,.06)"/>
+          <XAxis dataKey="games" tick={{ fill:"#9aa3b5", fontSize:11 }} stroke="rgba(255,255,255,.12)"/>
+          <YAxis domain={[0,100]} tick={{ fill:"#9aa3b5", fontSize:11 }} stroke="rgba(255,255,255,.12)" unit="%"/>
+          <Tooltip contentStyle={{ background:"#1b1e27", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, fontSize:12 }} labelStyle={{ color:"#9aa3b5" }}/>
+          <Legend wrapperStyle={{ fontSize:12 }}/>
+          {lines.map((l)=>(<Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} dot={false} strokeWidth={2} strokeDasharray={l.dash} isAnimationActive={false}/>))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+function HeatCell({v,small,colorValue}){
+  const cv=colorValue!==undefined?colorValue:v;
+  return (<div style={{ aspectRatio:"1/1", borderRadius:small?9:12, border:"1px solid var(--line)", background:valueColor(cv),
+    display:"grid", placeItems:"center", fontFamily:"var(--mono)", fontSize:small?10:13, fontWeight:600,
+    color:Math.abs(cv)>0.45?"#0a0d10":"var(--ink)" }}>{v>=0?"+":""}{v.toFixed(2)}</div>);
+}
+function OpeningHeat({values,cols}){
+  // colour on a RELATIVE scale so small differences near a drawn game are still visible
+  const m=Math.max(0.12,...values.map((x)=>Math.abs(x)));
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`, gap:cols===3?8:5 }}>
+      {values.map((v,i)=>(<HeatCell key={i} v={v} small={cols!==3} colorValue={v/m}/>))}
+    </div>
+  );
+}
+function TTTMini({cells, winLine}){
+  const C=44, g=C/3;
+  return (
+    <svg viewBox={`0 0 ${C} ${C}`} style={{ width:C, height:C, background:"var(--panel2)", borderRadius:7, border:"1px solid var(--line)" }}>
+      <line x1={g} y1="3" x2={g} y2={C-3} stroke="rgba(255,255,255,.14)"/>
+      <line x1={2*g} y1="3" x2={2*g} y2={C-3} stroke="rgba(255,255,255,.14)"/>
+      <line x1="3" y1={g} x2={C-3} y2={g} stroke="rgba(255,255,255,.14)"/>
+      <line x1="3" y1={2*g} x2={C-3} y2={2*g} stroke="rgba(255,255,255,.14)"/>
+      {winLine && <line x1={g*(winLine[0]%3)+g/2} y1={g*Math.floor(winLine[0]/3)+g/2} x2={g*(winLine[2]%3)+g/2} y2={g*Math.floor(winLine[2]/3)+g/2} stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" opacity=".9"/>}
+      {cells.map((v,i)=>{ if(!v) return null; const cx=g*(i%3)+g/2, cy=g*Math.floor(i/3)+g/2; const col=v==="X"?"var(--xcol)":"var(--ocol)";
+        return v==="X"
+          ? <g key={i} stroke={col} strokeWidth="2.4" strokeLinecap="round"><line x1={cx-5} y1={cy-5} x2={cx+5} y2={cy+5}/><line x1={cx+5} y1={cy-5} x2={cx-5} y2={cy+5}/></g>
+          : <circle key={i} cx={cx} cy={cy} r="6" fill="none" stroke={col} strokeWidth="2.4"/>;
+      })}
+    </svg>
+  );
+}
+function CreditFlow({outcome="win"}){
+  const win=outcome==="win";
+  // a fixed example game (X is the agent we're crediting)
+  const moves = win
+    ? [{p:"X",c:0},{p:"O",c:4},{p:"X",c:1},{p:"O",c:5},{p:"X",c:2}]   // X completes the top row 0-1-2
+    : [{p:"X",c:1},{p:"O",c:0},{p:"X",c:3},{p:"O",c:4},{p:"X",c:6},{p:"O",c:8}]; // O completes diagonal 0-4-8
+  const winLine = win ? [0,1,2] : [0,4,8];
+  // build cumulative boards
+  const boards=[]; const cur=Array(9).fill(null);
+  moves.forEach((m)=>{ cur[m.c]=m.p; boards.push(cur.slice()); });
+  // credit only on the agent's (X's) afterstates, decaying back from the last X move
+  const xIdx=moves.map((m,i)=>m.p==="X"?i:-1).filter((i)=>i>=0);
+  const decay=0.6; const creditFor={}; xIdx.forEach((bi,k)=>{ const back=(xIdx.length-1)-k; creditFor[bi]=Math.pow(decay,back); });
+  const glow=win?"var(--accent)":"var(--ocol)"; const sign=win?"+":"−";
+  const stepDelay=0.36, period=moves.length*stepDelay+1.1;
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", gap:4, flexWrap:"wrap", padding:"8px 0 2px" }}>
+        {boards.map((b,i)=>{ const isLast=i===boards.length-1; const credit=creditFor[i]; const dist=(boards.length-1)-i;
+          return (
+            <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:4 }}>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:5, width:50 }}>
+                <div style={{ position:"relative", width:44, height:44 }}>
+                  <TTTMini cells={b} winLine={isLast?winLine:null}/>
+                  {credit!==undefined && <div style={{ position:"absolute", inset:-5, borderRadius:9, pointerEvents:"none",
+                    background:`radial-gradient(circle, ${glow} 0%, transparent 70%)`,
+                    "--pk":credit, animation:`creditflash ${period}s ease-out infinite`, animationDelay:`${dist*stepDelay}s` }}/>}
+                </div>
+                {credit!==undefined
+                  ? <div className="mono" style={{ fontSize:10.5, color:glow }}>{sign}{credit.toFixed(2)}</div>
+                  : <div className="mono" style={{ fontSize:10.5, color:"var(--muted)", opacity:.5 }}>·</div>}
+              </div>
+              {i<boards.length-1 && <div style={{ color:"var(--muted)", fontSize:15, opacity:.4, marginTop:14 }}>←</div>}
+            </div>
+          );})}
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", marginLeft:6, marginTop:6 }}>
+          <div style={{ padding:"5px 9px", borderRadius:8, background:glow, color:"#0a0d10", fontWeight:700, fontSize:12 }}>{win?"WIN":"LOSS"} {sign}1</div>
+        </div>
+      </div>
+      <div style={{ color:"var(--muted)", fontSize:12, textAlign:"center", marginTop:4, maxWidth:560, marginLeft:"auto", marginRight:"auto" }}>
+        {win
+          ? "A real game: X's move that completes the top row gets the most credit; its earlier moves get a little less, fading the further back they are. (The 0–1 values are how much each X position is nudged upward.)"
+          : "The same game from the losing side: X's moves on the path to the loss each get nudged down — most for the last, less for earlier ones — so X is less likely to repeat them."}
+      </div>
+      <div style={{ color:"var(--muted)", fontSize:11.5, textAlign:"center", marginTop:6, fontStyle:"italic" }}>
+        This backing-up works exactly the same whether the values live in a lookup table (Tic-Tac-Toe) or are guessed by a neural network (Connect Four and Pong).
+      </div>
+    </div>
+  );
+}
+function Slider({label,hint,value,min,max,step,display,onChange}){
+  return (<div>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+      <FieldLabel>{label}</FieldLabel><span className="mono" style={{ color:"var(--accent)", fontWeight:600, fontSize:13 }}>{display}</span>
+    </div>
+    <input type="range" min={min} max={max} step={step} value={value} onChange={(e)=>onChange(+e.target.value)} style={{ width:"100%", marginTop:6 }}/>
+    <div style={{ color:"var(--muted)", fontSize:11.5, marginTop:6, lineHeight:1.4 }}>{hint}</div>
+  </div>);
+}
+function SectionTitle({icon:Icon,text}){ return (<div style={{ display:"flex", alignItems:"center", gap:9 }}><Icon size={18} color="var(--accent)"/><h3 style={{ margin:0, fontSize:16.5, fontWeight:700, letterSpacing:.2 }}>{text}</h3></div>); }
+function FieldLabel({children}){ return <div style={{ fontSize:11.5, textTransform:"uppercase", letterSpacing:1, color:"var(--muted)", fontWeight:600 }}>{children}</div>; }
+function Stat({label,value,good}){ return (<div style={{ background:"var(--panel2)", borderRadius:12, padding:"10px 14px", border:"1px solid var(--line)" }}><div style={{ fontSize:11.5, color:"var(--muted)" }}>{label}</div><div className="mono" style={{ fontSize:22, fontWeight:600, color:good?"var(--accent)":"var(--ink)" }}>{value}</div></div>); }
+function Banner({color,text}){ return <div style={{ display:"inline-block", padding:"6px 12px", borderRadius:9, background:"var(--panel2)", border:`1px solid ${color}`, color, fontWeight:600, fontSize:13.5 }}>{text}</div>; }
+function ColorKey(){ return (<div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12, fontSize:11.5, color:"var(--muted)" }}><span style={{ color:"var(--ocol)" }}>bad</span><div style={{ flex:1, height:8, borderRadius:6, background:"linear-gradient(90deg,#ff8a5c,#232733,#5cc8ff)" }}/><span style={{ color:"var(--xcol)" }}>good</span></div>); }
+const selStyle={ width:"100%", background:"var(--panel2)", color:"var(--ink)", border:"1px solid var(--line)", borderRadius:10, padding:"10px 12px", fontFamily:"var(--body)", fontSize:13.5, marginTop:6 };
+
+/* ========================== HOW IT WORKS ============================ */
+function HowItWorks({game="ttt"}){
+  const cards=[
+    {t:"The goal is a reward",b:"The machine's only feedback is a score: in the board games, one number at the end (+1 win, 0 draw, −1 loss); in Pong, +1 every time it returns the ball and −1 when it misses. No coach and no rulebook of good moves — just that reward."},
+    {t:"It keeps an opinion of positions",b:"For each situation it has seen, it stores a guess: how well does this tend to turn out? Better situations get higher numbers — that's what the heatmaps in the lab show. Tic-tac-toe stores one opinion per board; the other two use a neural net to do the guessing."},
+    {t:"The credit-assignment puzzle",b:"If you win after many moves, which move deserved the credit? The machine spreads a little credit backwards along the path it took, game after game, until the genuinely good moves rise to the top. Pong has this puzzle too: the decision to start gliding toward a bounce (or to hold still in readiness) pays off only many frames later, so that credit still has to travel back — the difference is the reward comes regularly, every rally, instead of once at the very end."},
+    {t:"Explore vs. exploit",b:"If it only ever plays its current favourite, it never finds a better one. So sometimes it tries something random — that's the Curiosity slider. Too little and it gets stuck; too much and it never commits. Balancing the two is the heart of the field."},
+    {t:"Learning with no teacher",b:"In the board games it plays itself, sharing one set of opinions, so each game makes the winner's path look a bit better and the loser's a bit worse. In Pong it practises solo against the wall. Either way, no human shows it the answers — it bootstraps from its own experience."},
+    {t:"When a table becomes a network",b:"A lookup list works for tiny games but breaks for big ones — too many positions. A neural network fixes this by learning to GUESS the value of a brand-new situation from patterns it has seen. Connect Four needs this; Pong needs it even more, because its state is continuous."},
+  ];
+  const intro = game==="ttt"
+    ? {t:"You're on: Tic-Tac-Toe", b:"The simplest case. Few enough boards that the machine can keep an opinion about every single one in a lookup table, learning by playing itself until it never loses. Watch the credit-assignment idea below to see why its very first move is the slowest thing to figure out."}
+    : game==="c4"
+    ? {t:"You're on: Connect Four", b:"Too many boards to list, so a neural network learns to judge positions it has never seen by spotting patterns. It gets strong but not perfect — with no thinking-ahead it occasionally misses a trap, which is what the 'thinking ahead (search)' note below is about."}
+    : {t:"You're on: Pong", b:"A different beast: continuous motion, a decision every frame, and reward during play instead of only at the end. There's no possible lookup table, and the real skill is anticipating the ball's bounce. The Pong note below digs into what makes it different."};
+  return (
+    <div className="fade-in">
+      <div className="card" style={{ padding:18, marginBottom:16 }}>
+        <SectionTitle icon={BookOpen} text="The whole idea in one breath"/>
+        <p style={{ fontSize:15.5, lineHeight:1.6, margin:"10px 0 0", maxWidth:820 }}>
+          <b style={{ color:"var(--accent)" }}>Reinforcement learning</b> is learning by trial, error, and reward. You aren't shown the right answer — you try things, see how they turn out, and gradually do more of what worked. It's how you learned to ride a bike, and it's how a computer can teach itself a game starting from total ignorance.
+        </p>
+      </div>
+      <div className="card" style={{ padding:16, marginBottom:16, borderColor:"var(--accent)", borderLeftWidth:3 }}>
+        <div style={{ fontWeight:700, fontSize:15, color:"var(--accent)", marginBottom:5 }}>{intro.t}</div>
+        <div style={{ color:"var(--muted)", fontSize:14, lineHeight:1.55, maxWidth:820 }}>{intro.b}</div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:14 }}>
+        {cards.map((c,i)=>(
+          <div key={i} className="card" style={{ padding:16 }}>
+            <div style={{ fontFamily:"var(--pixel)", color:"var(--accent)", fontSize:16, marginBottom:8 }}>{String(i+1).padStart(2,"0")}</div>
+            <div style={{ fontWeight:700, fontSize:15.5, marginBottom:6 }}>{c.t}</div>
+            <div style={{ color:"var(--muted)", fontSize:14, lineHeight:1.55 }}>{c.b}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop:18 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:10 }}>
+          <Sparkles size={18} color="var(--amber)"/>
+          <h3 style={{ margin:0, fontSize:16.5, fontWeight:700 }}>Go deeper (optional)</h3>
+        </div>
+        <Collapsible title="How does it know which move mattered? (credit assignment)">
+          <p>When the feedback is just a win or a loss at the very end, how does the machine know which of its many moves actually earned that result? Its trick: after each game it passes a little credit back along the path it played — the move right before the end gets the biggest nudge, and each earlier move gets a slightly smaller one. A win nudges those moves <i>up</i> (do more of that); a loss nudges them <i>down</i> (avoid that). Repeat over thousands of games and the genuinely good moves float to the top on their own.</p>
+          <div style={{ fontSize:12.5, color:"var(--ink)", fontWeight:600, marginTop:4 }}>Learning from a win</div>
+          <CreditFlow outcome="win"/>
+          <div style={{ fontSize:12.5, color:"var(--ink)", fontWeight:600, marginTop:8 }}>Learning from a loss</div>
+          <CreditFlow outcome="loss"/>
+          <p>The catch you can watch live: the <i>first</i> move is the farthest from the result, so it's the slowest square to form an opinion — which is exactly why the opening heatmap in Game 1 stays pale for a while before the centre and corners sharpen. Pong has the same puzzle on a shorter timescale: a paddle commits to moving toward a bounce point (or chooses to stay put in preparation) many frames before the ball actually arrives, so the credit for a successful return still has to travel back across all those frames — the discounting (future reward counting a little less than immediate reward) is what carries it.</p>
+        </Collapsible>
+        <Collapsible title="Pong: a different kind of game">
+          <p>Tic-tac-toe and Connect Four take turns, end in a win or loss, and have a countable list of boards. Pong breaks all three: the paddle decides <b>every frame</b>, reward arrives <b>during</b> play (+1 per return), and the state — ball and paddle positions and speeds — is <b>continuous</b>, with endless possible values. There's no table that could ever hold it, so a network is the only option.</p>
+          <p>The subtle skill isn't "move toward the ball" — that fails the instant the ball will bounce off a wall first. The right move is toward where the ball <i>will arrive</i> after its bounces, so the network has to learn a little physics-prediction on its own. The dotted line in the Pong lab shows that true landing spot; the policy-map expander there shows the agent's decision boundary <i>bending</i> to match it.</p>
+          <p>Pong also makes a great test of <b>generalisation</b>: train it under one set of court rules, then change the ball speed or switch paddle-spin on and see whether its skill survives a situation it never trained on. Speeding the ball up tends to hurt a lot (less reaction time, unfamiliar inputs); adding spin hurts less (it just changes the ball's motion, which the agent already reads). How well skills transfer to new conditions is one of the big open questions in the field.</p>
+        </Collapsible>
+        <Collapsible title="Two ways to learn: values vs. a playbook">
+          <p>This app learns <b>values</b>: for every situation it keeps a guess of "how well does this turn out for me?", then plays the move that leads to the best-rated next situation. That's the colour you see in the heatmaps.</p>
+          <p>There's another family that skips the rating and learns a <b>playbook</b> directly — "in this kind of situation, how often should I make each move?" — nudging those odds up after good games and down after bad ones. For small games like ours the value approach is usually steadier and learns at least as fast; a pure playbook tends to be noisier from scratch. The strongest systems actually keep <i>both</i> — a value guess and a playbook hint — and then add the ingredient below.</p>
+        </Collapsible>
+        <Collapsible title="The real superpower: thinking ahead (search)">
+          <p>The huge leaps — beating world champions at Go and chess — didn't come from a cleverer learner alone. They came from adding <b>search</b>: before each move the program imagines many possible continuations a few moves deep, guided by its value and playbook guesses, and plays whatever looks best after all that imagining.</p>
+          <p>Our Connect Four network has <i>no</i> search — it judges each move by a single gut-feeling glance. That's exactly why it tops out around 90% versus a random player and sometimes walks into a trap it could have seen coming. Bolting even a little "think a few moves ahead" onto it would lift its play noticeably.</p>
+        </Collapsible>
+        <Collapsible title="Why losing is the whole point">
+          <p>A poor result is the only signal the machine gets, so losses (or missed balls) are not failures to avoid during training — they're <i>information</i>. Each one quietly lowers its opinion of the moves on that path, and each success raises them. Strip the failures out (say, by never exploring) and it would simply repeat its first lucky idea forever. The Curiosity slider is there to guarantee enough mistakes to keep learning.</p>
+        </Collapsible>
+      </div>
+    </div>
+  );
+}
+function Collapsible({title,children}){
+  return (
+    <details style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:12, padding:"2px 14px", marginBottom:10 }}>
+      <summary style={{ cursor:"pointer", padding:"12px 0", fontWeight:600, fontSize:14.5, listStyle:"none", display:"flex", alignItems:"center", gap:8 }}>
+        <span style={{ color:"var(--accent)" }}>▸</span>{title}
+      </summary>
+      <div style={{ color:"var(--muted)", fontSize:14, lineHeight:1.6, paddingBottom:12, display:"grid", gap:8 }}>{children}</div>
+    </details>
+  );
+}
+
+/* ============================ EXAMPLES ============================== */
+function Examples(){
+  const games=[
+    {y:"1992",t:"TD-Gammon",d:"Learned backgammon purely by playing itself a million-plus times, reaching expert strength — and discovering opening moves that human champions then started copying. The original proof that self-play can invent real strategy.",u:"https://en.wikipedia.org/wiki/TD-Gammon"},
+    {y:"2013",t:"Atari from pixels",d:"One program learned dozens of Atari arcade games using nothing but the raw screen and the score. Same code, many games — no game-specific instructions.",u:"https://arxiv.org/abs/1312.5602"},
+    {y:"2017",t:"AlphaGo → AlphaZero",d:"After beating the world's best Go player, a successor threw away all human games and learned Go, chess, and shogi from scratch by self-play alone — surpassing every previous program in hours.",u:"https://en.wikipedia.org/wiki/AlphaZero"},
+    {y:"2019",t:"AlphaStar (StarCraft II)",d:"Reached Grandmaster level at a real-time strategy game with hidden information and thousands of possible actions per second — ranked above 99.8% of human players.",u:"https://en.wikipedia.org/wiki/AlphaStar_(software)"},
+    {y:"2019",t:"OpenAI Five (Dota 2)",d:"A team of five cooperating agents beat the reigning human world champions at one of the most complex team video games ever made.",u:"https://en.wikipedia.org/wiki/OpenAI_Five"},
+    {y:"2022",t:"Gran Turismo Sophy",d:"A racing AI beat the world's best human drivers in the Gran Turismo simulator, with racecraft that the pros called genuinely creative.",u:"https://www.nature.com/articles/s41586-021-04357-7"},
+  ];
+  const real=[
+    {t:"Robots that learn to move",d:"Walking, running, and grasping are taught by reward instead of being hand-coded — the robot practises millions of times in simulation, falling over until it doesn't.",u:"https://en.wikipedia.org/wiki/Robot_learning"},
+    {t:"Cooling giant data centres",d:"RL has managed the cooling of warehouse-sized computer buildings, cutting the energy spent on cooling by roughly 40%.",u:"https://deepmind.google/blog/deepmind-ai-reduces-google-data-centre-cooling-bill-by-40/"},
+    {t:"Designing computer chips",d:"The physical layout of real microchips — where each block goes — has been arranged by RL faster and tighter than human engineers, and used in shipping chips.",u:"https://deepmind.google/discover/blog/how-alphachip-transformed-computer-chip-design/"},
+    {t:"Controlling fusion plasma",d:"RL has held superheated plasma in shape inside an experimental fusion reactor, steering the magnets many times a second.",u:"https://deepmind.google/blog/accelerating-fusion-science-through-learned-plasma-control/"},
+    {t:"The chatbots you already use",d:"Assistants like this one were polished with 'RL from human feedback' — people rate answers and the model learns to give more of the helpful kind. You're talking to a product of RL right now.",u:"https://en.wikipedia.org/wiki/Reinforcement_learning_from_human_feedback"},
+  ];
+  const Link=({u})=>(<a href={u} target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:12.5, marginTop:4 }}>Learn more <ExternalLink size={12}/></a>);
+  return (
+    <div className="fade-in">
+      <div className="card" style={{ padding:16, marginBottom:16 }}>
+        <SectionTitle icon={Gamepad2} text="Games it has conquered"/>
+        <div style={{ display:"grid", gap:10, marginTop:12 }}>
+          {games.map((g,i)=>(
+            <div key={i} style={{ display:"flex", gap:14, alignItems:"flex-start", padding:"10px 0", borderTop:i?"1px solid var(--line)":"none" }}>
+              <div className="mono" style={{ minWidth:54, color:"var(--amber)", fontSize:13, paddingTop:2 }}>{g.y}</div>
+              <div><div style={{ fontWeight:700, fontSize:15 }}>{g.t}</div>
+                <div style={{ color:"var(--muted)", fontSize:14, lineHeight:1.5, marginTop:2 }}>{g.d}</div><Link u={g.u}/></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="card" style={{ padding:16 }}>
+        <SectionTitle icon={Globe} text="Out in the real world"/>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:12, marginTop:12 }}>
+          {real.map((r,i)=>(
+            <div key={i} style={{ background:"var(--panel2)", borderRadius:12, padding:14, border:"1px solid var(--line)" }}>
+              <div style={{ fontWeight:700, fontSize:14.5, marginBottom:5 }}>{r.t}</div>
+              <div style={{ color:"var(--muted)", fontSize:13.5, lineHeight:1.5 }}>{r.d}</div><Link u={r.u}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================== ASK CLAUDE ============================= */
+/* lightweight Markdown renderer (bold/italic/code/links + lists/headings/code blocks) */
+function mdInline(text){
+  const out=[]; let key=0; let last=0; let m;
+  const re=/(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*]+)\*|_([^_]+)_|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\))/g;
+  while((m=re.exec(text))){
+    if(m.index>last) out.push(text.slice(last,m.index));
+    if(m[2]!==undefined||m[3]!==undefined) out.push(React.createElement("strong",{key:key++},m[2]||m[3]));
+    else if(m[4]!==undefined||m[5]!==undefined) out.push(React.createElement("em",{key:key++},m[4]||m[5]));
+    else if(m[6]!==undefined) out.push(React.createElement("code",{key:key++,style:{background:"var(--panel)",padding:"1px 5px",borderRadius:5,fontFamily:"var(--mono)",fontSize:"0.88em"}},m[6]));
+    else if(m[7]!==undefined) out.push(React.createElement("a",{key:key++,href:m[8],target:"_blank",rel:"noreferrer",style:{color:"var(--accent)"}},m[7]));
+    last=re.lastIndex;
+  }
+  if(last<text.length) out.push(text.slice(last));
+  return out;
+}
+function Markdown({text}){
+  const lines=String(text||"").replace(/\r/g,"").split("\n"); const blocks=[]; let i=0;
+  while(i<lines.length){
+    const line=lines[i];
+    if(/^```/.test(line)){ const buf=[]; i++; while(i<lines.length&&!/^```/.test(lines[i])){buf.push(lines[i]);i++;} i++; blocks.push({type:"code",text:buf.join("\n")}); continue; }
+    if(/^\s*#{1,6}\s/.test(line)){ const lvl=line.match(/^\s*(#{1,6})/)[1].length; blocks.push({type:"h",lvl,text:line.replace(/^\s*#{1,6}\s/,"")}); i++; continue; }
+    if(/^\s*[-*+]\s+/.test(line)){ const items=[]; while(i<lines.length&&/^\s*[-*+]\s+/.test(lines[i])){items.push(lines[i].replace(/^\s*[-*+]\s+/,""));i++;} blocks.push({type:"ul",items}); continue; }
+    if(/^\s*\d+\.\s+/.test(line)){ const items=[]; while(i<lines.length&&/^\s*\d+\.\s+/.test(lines[i])){items.push(lines[i].replace(/^\s*\d+\.\s+/,""));i++;} blocks.push({type:"ol",items}); continue; }
+    if(/^\s*$/.test(line)){ i++; continue; }
+    const buf=[line]; i++;
+    while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^```/.test(lines[i])&&!/^\s*#{1,6}\s/.test(lines[i])&&!/^\s*[-*+]\s+/.test(lines[i])&&!/^\s*\d+\.\s+/.test(lines[i])){buf.push(lines[i]);i++;}
+    blocks.push({type:"p",text:buf.join(" ")});
+  }
+  return React.createElement(React.Fragment,null, blocks.map((b,bi)=>{
+    if(b.type==="code") return React.createElement("pre",{key:bi,style:{background:"var(--panel)",border:"1px solid var(--line)",borderRadius:8,padding:"10px 12px",overflowX:"auto",fontFamily:"var(--mono)",fontSize:12.5,margin:"6px 0",whiteSpace:"pre"}},b.text);
+    if(b.type==="h") return React.createElement("div",{key:bi,style:{margin:"8px 0 4px",fontSize:b.lvl<=2?15.5:14.5,fontWeight:700}},mdInline(b.text));
+    if(b.type==="ul") return React.createElement("ul",{key:bi,style:{margin:"4px 0",paddingLeft:20}},b.items.map((it,ii)=>React.createElement("li",{key:ii,style:{margin:"2px 0"}},mdInline(it))));
+    if(b.type==="ol") return React.createElement("ol",{key:bi,style:{margin:"4px 0",paddingLeft:22}},b.items.map((it,ii)=>React.createElement("li",{key:ii,style:{margin:"2px 0"}},mdInline(it))));
+    return React.createElement("p",{key:bi,style:{margin:"6px 0",lineHeight:1.55}},mdInline(b.text));
+  }));
+}
+
+function buildSystemPrompt(){
+  const g=APP_STATUS;
+  const live=`Right now the student is on the "${g.game}" game. Tic-Tac-Toe has been trained for ${g.ttt.trained.toLocaleString()} self-play games (Curiosity ${Math.round(g.ttt.curiosity*100)}%). Connect Four has been trained for ${g.c4.trained.toLocaleString()} games. Pong has been trained for ${(g.pong?g.pong.frames:0).toLocaleString()} frames.`;
+  return `You are a warm, encouraging tutor inside an interactive web app that teaches reinforcement learning to a middle- or high-school student. Assume they understand basic probability but NOT calculus or matrix math. Never use equations or Greek letters; explain with plain words and vivid everyday analogies. Keep answers short — 2 to 4 short paragraphs. You may use light Markdown (bold, bullet lists) and it will render.
+
+STAY ON TOPIC. You only discuss this app and the ideas behind it (reinforcement learning and machine learning). If the student asks about something unrelated — sports scores, celebrities, the news, homework in other subjects — gently say that's outside what you're here for and steer them back with a concrete suggestion of something to try in the app. Do not answer the off-topic question.
+
+THE APP HAS THESE PARTS:
+TABS: "Train & Play" (the lab), "How it works", "Real games & uses", and you ("Ask AI").
+In "Train & Play" the student picks a game: Game 1 Tic-Tac-Toe, Game 2 Connect Four, or Game 3 Pong.
+Controls (all spelled out, no Greek symbols): a Train/Pause button, a "Reset to zero" button, and three sliders — "Curiosity" (how often the machine tries a random move instead of its current favourite), "Learning speed" (how strongly each game updates what it has learned), and a speed slider ("Games per tick", or "Frames per tick" in Pong; set to 1 for slow motion).
+
+HOW BIG ARE THE MODELS (answer size/architecture questions from this):
+- Tic-Tac-Toe uses NO neural network. It is a lookup table holding one stored value per board position it has met (only a few thousand boards exist), so it can simply memorise them all.
+- Connect Four uses a small neural network: 84 inputs (the 6x7 board encoded as two grids — the machine's pieces and the opponent's) → two hidden layers of 64 units each → 1 output rating the position. That's about 9,700 adjustable numbers (weights) across 3 layers.
+- Pong uses a small neural network: 5 inputs (ball x, ball y, ball horizontal speed, ball vertical speed, paddle height) → two hidden layers of 48 units each → 3 outputs (the value of moving up, staying, or moving down). That's about 2,800 weights across 3 layers.
+- Training details if asked: Pong keeps a replay memory of its last 12,000 frames, learns in small batches of 32, and keeps a slowly-updated copy of its network as a stable target; reward that is many steps away is discounted (counts a little less than immediate reward). Connect Four keeps a replay memory of 20,000 positions. Everything trains in the browser.
+
+VISUALS in the board games (Tic-Tac-Toe, Connect Four):
+ (1) "What it thinks of each opening" — a small heatmap on an EMPTY board rating each possible first move (3x3 for Tic-Tac-Toe, a row of 7 for Connect Four), on a relative colour scale; it fills in as training proceeds.
+ (2) During "Play it yourself": faint colour cues on the board plus a small "What it's thinking now" heatmap, showing for the CURRENT position how good it rates each available move for itself. Bluish = good, orangeish = bad.
+
+PONG (Game 3) is different — continuous, never takes turns. The paddle picks up/stay/down every frame and earns +1 each time it RETURNS the ball and −1 when it MISSES. Its state is continuous, so it CANNOT use a lookup table — only a neural network. Pong shows: a "Watch it practise" court with a dotted line predicting where the ball will land AFTER its bounces (it learns to aim there, not at the ball's current spot); an "Its move right now" panel; a return-rate chart; a "policy map" expander whose up/down decision boundary BENDS because the agent anticipates bounces; Pause buttons on "Watch it practise" and on the play game; and a 2-player "Play it yourself" where the student is the blue left paddle against the green agent at a chosen checkpoint.
+
+PONG "COURT RULES" — there are two extra controls many students miss:
+- "Ball speed" slider — makes the ball faster or slower.
+- "Paddle spin" toggle — when ON, a paddle that is MOVING as it strikes the ball bends the ball's path, like brushing spin/english onto it.
+VERY IMPORTANT and often misunderstood: the agent is rewarded ONLY for returning the ball, never for placing tricky shots. It does NOT aim the ball away from its opponent and does NOT use spin as a weapon. Ball speed and spin are RULES OF THE COURT that the agent must learn to cope with. Their real purpose is a GENERALISATION test: train under one set of rules, then change the speed or turn spin on WITHOUT retraining, and see whether the skill still holds. (In practice a faster ball hurts a lot — less time to react and unfamiliar inputs — while spin hurts less, because spin only changes the ball's motion, which the agent already reads each frame.)
+
+The chart "Is it getting better?" plots skill as training grows: for the board games, wins (green, rising) and losses (orange, falling) versus a random player, plus for Tic-Tac-Toe a dashed losses-versus-PERFECT line (0% = solved). For Pong it is the percentage of balls returned, climbing toward ~100%.
+
+The big lesson across the three games: Tic-Tac-Toe is small enough to keep one stored opinion per board (a lookup table). Connect Four has trillions of boards, so a neural network must GUESS a board's value from patterns. Pong's state is continuous (endless possible values), so a network is the only option, and it must also react every frame and anticipate bounces.
+
+${live}
+
+Be excited and curious. When it fits, invite the student to go try something specific in the app.`;
+}
+function AskClaude({active}){
+  const DEFAULT_MODEL={anthropic:"claude-haiku-4-5-20251001", openai:"gpt-5.4-mini", google:"gemini-3.5-flash"};
+  const PROV_LABEL={anthropic:"Claude (Anthropic)", openai:"ChatGPT (OpenAI)", google:"Gemini (Google)"};
+  const KEY_HELP={anthropic:"console.anthropic.com", openai:"platform.openai.com", google:"aistudio.google.com"};
+  const ls=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  const [provider,setProvider]=useState(()=>ls("rl_provider","anthropic"));
+  const [model,setModel]=useState(()=>ls("rl_model", DEFAULT_MODEL[ls("rl_provider","anthropic")]));
+  const [apiKey,setApiKey]=useState(()=>ls("rl_key",""));
+  const [remember,setRemember]=useState(()=>ls("rl_remember","0")==="1");
+  const [shareSource,setShareSource]=useState(()=>ls("rl_src","0")==="1");
+  const [showSettings,setShowSettings]=useState(()=>!ls("rl_key",""));
+  const [msgs,setMsgs]=useState([{role:"assistant",content:"Hi! I'm here to help you make sense of reinforcement learning. Open **Settings** to pick a provider and paste an API key, then ask me anything — like *\"how many layers does the Pong model have?\"* or *\"what does the spin toggle do?\"*"}]);
+  const [input,setInput]=useState(""); const [busy,setBusy]=useState(false); const [err,setErr]=useState(null);
+  const endRef=useRef(null);
+  useEffect(()=>{ if(active && endRef.current) endRef.current.scrollIntoView({behavior:"smooth"}); },[msgs,busy,active]);
+
+  const pickProvider=(p)=>{ setProvider(p); setModel(DEFAULT_MODEL[p]); };
+  const saveSettings=()=>{ try{
+      localStorage.setItem("rl_provider",provider); localStorage.setItem("rl_model",model); localStorage.setItem("rl_src",shareSource?"1":"0");
+      if(remember){ localStorage.setItem("rl_key",apiKey); localStorage.setItem("rl_remember","1"); }
+      else { localStorage.removeItem("rl_key"); localStorage.setItem("rl_remember","0"); }
+    }catch(e){} setShowSettings(false); setErr(null); };
+
+  const getSource=()=>{ try{ const el=document.querySelector('script[type="text/babel"]'); return el?el.textContent:""; }catch(e){ return ""; } };
+  const fullSystem=()=>{ let sys=buildSystemPrompt();
+    if(shareSource){ const src=getSource(); if(src) sys+="\n\nThe COMPLETE source code of this single-file app follows between the markers. Use it to answer technical/implementation questions precisely (architecture, exact numbers, how a feature works). Do not paste large chunks back; explain in plain words.\n<<<APP_SOURCE>>>\n"+src+"\n<<<END_APP_SOURCE>>>"; }
+    return sys; };
+
+  const callLLM=async(history)=>{
+    const system=fullSystem();
+    if(provider==="anthropic"){
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model,max_tokens:1000,system,messages:history})});
+      if(!res.ok) throw {status:res.status};
+      const d=await res.json(); return (d.content||[]).filter((b)=>b.type==="text").map((b)=>b.text).join("\n").trim();
+    } else if(provider==="openai"){
+      const res=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+apiKey},body:JSON.stringify({model,max_completion_tokens:1000,messages:[{role:"system",content:system}].concat(history)})});
+      if(!res.ok) throw {status:res.status};
+      const d=await res.json(); return ((d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||"").trim();
+    } else {
+      const url="https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent?key="+encodeURIComponent(apiKey);
+      const contents=history.map((m)=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]}));
+      const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents,generationConfig:{maxOutputTokens:1000}})});
+      if(!res.ok) throw {status:res.status};
+      const d=await res.json(); const c=d.candidates&&d.candidates[0]; return (((c&&c.content&&c.content.parts)||[]).map((p)=>p.text).join("\n")).trim();
+    }
+  };
+  const send=async()=>{ const q=input.trim(); if(!q||busy) return;
+    if(!apiKey){ setErr("Add your API key under Settings first."); setShowSettings(true); return; }
+    setErr(null); const next=[...msgs,{role:"user",content:q}]; setMsgs(next); setInput(""); setBusy(true);
+    try{ const text=await callLLM(next); setMsgs((m)=>[...m,{role:"assistant",content:text||"I didn't get a complete answer back — try again?"}]); }
+    catch(e){ const s=e&&e.status; setErr(s===401||s===403?("Your API key was rejected ("+s+"). Check it under Settings."):s===404?("Model \""+model+"\" wasn't found for this provider — check the model name under Settings."):s===429?"Rate limited (429) — wait a moment and try again.":("Request failed"+(s?" ("+s+")":"")+". Check your key, model name, and provider. (Some keys/networks also block direct browser calls.)")); }
+    finally{ setBusy(false); }
+  };
+
+  return (
+    <div className="fade-in card" style={{ padding:16, display:"flex", flexDirection:"column", height:600 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <SectionTitle icon={MessageCircle} text="Ask AI about anything here"/>
+        <button className="btn" onClick={()=>setShowSettings((v)=>!v)} style={{ padding:"6px 12px", background:"var(--panel2)", borderColor:"rgba(255,255,255,.28)", fontSize:12.5 }}>{showSettings?"Close settings":"Settings"}</button>
+      </div>
+      {showSettings && (
+        <div className="card" style={{ padding:14, marginTop:12, background:"var(--panel2)" }}>
+          <FieldLabel>Provider</FieldLabel>
+          <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
+            {["anthropic","openai","google"].map((p)=>(
+              <button key={p} className="btn" onClick={()=>pickProvider(p)} style={{ padding:"7px 12px", fontSize:12.5, background:provider===p?"var(--accent)":"var(--panel)", color:provider===p?"#0a0d10":"var(--ink)", borderColor:provider===p?"var(--accent)":"rgba(255,255,255,.18)" }}>{PROV_LABEL[p]}</button>
+            ))}
+          </div>
+          <div style={{ height:10 }}/>
+          <FieldLabel>Model name</FieldLabel>
+          <input value={model} onChange={(e)=>setModel(e.target.value)} style={selStyle}/>
+          <div style={{ color:"var(--muted)", fontSize:11.5, marginTop:4 }}>Defaults to a small, fast, low-cost model. Change it to any model your key can access.</div>
+          <div style={{ height:10 }}/>
+          <FieldLabel>API key</FieldLabel>
+          <input type="password" value={apiKey} onChange={(e)=>setApiKey(e.target.value)} placeholder={"Your "+PROV_LABEL[provider]+" key"} style={selStyle}/>
+          <div style={{ color:"var(--muted)", fontSize:11.5, marginTop:4 }}>Get one at {KEY_HELP[provider]}. Your key goes straight from this page to the provider — it isn't sent anywhere else.</div>
+          <label style={{ display:"flex", gap:8, alignItems:"center", marginTop:10, fontSize:13, cursor:"pointer" }}>
+            <input type="checkbox" checked={remember} onChange={(e)=>setRemember(e.target.checked)}/>
+            Remember my key in this browser (stored locally on this device only)
+          </label>
+          <label style={{ display:"flex", gap:8, alignItems:"flex-start", marginTop:8, fontSize:13, cursor:"pointer" }}>
+            <input type="checkbox" checked={shareSource} onChange={(e)=>setShareSource(e.target.checked)} style={{ marginTop:3 }}/>
+            <span>Let the AI read this app's full source code, for precise technical answers <span style={{ color:"var(--muted)" }}>(sends the whole app with every question, so it costs more tokens)</span></span>
+          </label>
+          <button className="btn" onClick={saveSettings} style={{ marginTop:10, padding:"8px 16px", background:"var(--accent)", color:"#0a0d10", borderColor:"var(--accent)" }}>Save</button>
+        </div>
+      )}
+      <div style={{ flex:1, overflowY:"auto", marginTop:14, paddingRight:6, display:"flex", flexDirection:"column", gap:12 }}>
+        {msgs.map((m,i)=>(
+          <div key={i} style={{ display:"flex", justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
+            <div style={{ maxWidth:"82%", padding:"11px 14px", borderRadius:14, fontSize:14.5, lineHeight:1.55, whiteSpace:m.role==="user"?"pre-wrap":"normal", background:m.role==="user"?"var(--accent)":"var(--panel2)", color:m.role==="user"?"#0a0d10":"var(--ink)", border:m.role==="user"?"none":"1px solid var(--line)" }}>{m.role==="user"?m.content:<Markdown text={m.content}/>}</div>
+          </div>
+        ))}
+        {busy&&<div style={{ color:"var(--muted)", fontSize:13.5, fontStyle:"italic" }}>Thinking…</div>}
+        {err&&<div style={{ color:"var(--ocol)", fontSize:13.5 }}>{err}</div>}
+        <div ref={endRef}/>
+      </div>
+      <div style={{ display:"flex", gap:8, marginTop:12 }}>
+        <input value={input} onChange={(e)=>setInput(e.target.value)} onKeyDown={(e)=>{if(e.key==="Enter")send();}} placeholder="Type a question…" style={{ flex:1, background:"var(--panel2)", color:"var(--ink)", border:"1px solid var(--line)", borderRadius:10, padding:"12px 14px", fontFamily:"var(--body)", fontSize:14.5 }}/>
+        <button className="btn" onClick={send} disabled={busy} style={{ padding:"0 16px", background:"var(--accent)", color:"#0a0d10", borderColor:"var(--accent)", display:"grid", placeItems:"center", opacity:busy?0.6:1 }}><Send size={18}/></button>
+      </div>
+      <div style={{ color:"var(--muted)", fontSize:11.5, marginTop:8 }}>Runs on your own API key, sent directly to {PROV_LABEL[provider]}. It can see which game you're on and how much you've trained it{shareSource?", plus the app's source code":""}.</div>
+    </div>
+  );
+}
+function Footer(){
+  return (<div style={{ marginTop:34, paddingTop:16, borderTop:"1px solid var(--line)", color:"var(--muted)", fontSize:12.5 }}>
+    Game 1 · Tic-Tac-Toe (lookup table) → Game 2 · Connect Four (neural network) → Game 3 · Pong (frame-by-frame control). Everything trains right here in your browser.
+  </div>);
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
