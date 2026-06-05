@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>First Day at the Game Studio — Rescue + Lunar Lander Prototype</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='35%25' cy='25%25' r='70%25'%3E%3Cstop stop-color='%237bdff2'/%3E%3Cstop offset='0.48' stop-color='%23172a55'/%3E%3Cstop offset='1' stop-color='%23070b18'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Cpath d='M11 46c12-3 24-3 42 0' stroke='%23f7d774' stroke-width='4' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='24' cy='24' r='9' fill='%23fff'/%3E%3Ccircle cx='24' cy='24' r='5' fill='%239cf6b2'/%3E%3Cpath d='M41 10l9 9-9 9-5-5 4-4-4-4z' fill='%23ff9cae'/%3E%3Cpath d='M33 31l7-8M31 36l-6 7' stroke='%23eef4ff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #081020;
+      --panel: #111b35;
+      --panel2: #17264a;
+      --panel3: #203461;
+      --ink: #eef4ff;
+      --muted: #aebee4;
+      --line: rgba(255,255,255,.14);
+      --accent: #7bdff2;
+      --accent2: #f7d774;
+      --good: #9cf6b2;
+      --bad: #ff9cae;
+      --warn: #ffd08a;
+      --shadow: 0 18px 50px rgba(0,0,0,.34);
+      --radius: 18px;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 16% 0%, rgba(123,223,242,.16), transparent 32%),
+        radial-gradient(circle at 76% 12%, rgba(247,215,116,.12), transparent 30%),
+        var(--bg);
+      color: var(--ink);
+    }
+    button, input, textarea, select { font: inherit; }
+    button {
+      border: 1px solid rgba(255,255,255,.18);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 9px 12px;
+      cursor: pointer;
+      transition: transform .08s ease, border-color .12s ease, background .12s ease;
+    }
+    button:hover { transform: translateY(-1px); border-color: rgba(123,223,242,.55); }
+    button:active { transform: translateY(0); }
+    button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    button.primary { color:#06101c; background: linear-gradient(180deg, #a9f3ff, #66d3e9); border-color: rgba(255,255,255,.55); font-weight: 800; }
+    button.gold { color:#211800; background: linear-gradient(180deg, #fff0a6, #efc64c); border-color: rgba(255,255,255,.55); font-weight: 800; }
+    button.danger { background: linear-gradient(180deg, rgba(255,94,128,.28), rgba(255,94,128,.14)); border-color: rgba(255,156,174,.45); }
+    button.ghost { background: rgba(255,255,255,.035); }
+    input, textarea, select {
+      width: 100%;
+      color: var(--ink);
+      background: rgba(0,0,0,.24);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+    textarea { min-height: 108px; resize: vertical; line-height:1.35; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .app { max-width: 1540px; margin: 0 auto; padding: 16px; }
+    header { display:grid; grid-template-columns: 1fr auto; gap: 16px; align-items:start; margin-bottom: 14px; }
+    h1 { margin: 0; font-size: clamp(24px, 3.2vw, 42px); line-height: 1.04; letter-spacing: -.035em; }
+    .subtitle { margin-top: 8px; max-width: 940px; color: var(--muted); line-height:1.45; }
+    .top-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .layout { display:grid; grid-template-columns: minmax(310px, 410px) minmax(500px, 1fr) minmax(320px, 440px); gap: 14px; align-items:start; }
+    .layout.prestudio { grid-template-columns: minmax(330px, 520px) 1fr; }
+    .panel { background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.04)); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow:hidden; }
+    .panel-head { padding: 14px 16px; background: rgba(0,0,0,.16); border-bottom: 1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .panel h2, .panel h3 { margin:0; letter-spacing:-.015em; }
+    .panel-body { padding: 14px; }
+    .tabs { display:flex; gap:8px; padding:8px; background: rgba(0,0,0,.18); border-bottom: 1px solid var(--line); }
+    .tabs button { flex:1; padding: 8px 10px; font-size: 13px; border-radius:11px; }
+    .tabs button.active { color:#06111f; background: var(--accent); font-weight: 900; }
+    .small { color: var(--muted); font-size: 13px; line-height: 1.42; }
+    .tiny { color: var(--muted); font-size: 12px; line-height:1.35; }
+    .note-card, .resource-card, .behavior-card, .feedback-card, .team-card, .dialog-card, .empty-state {
+      background: rgba(255,255,255,.055);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px;
+      padding: 12px;
+    }
+    .empty-state { color: var(--muted); text-align:center; padding: 18px; }
+    .team-grid, .resource-list, .behavior-list, .feedback-list, .milestones, .dialog-options { display:grid; gap:10px; }
+    .team-card { display:grid; grid-template-columns: 48px 1fr; gap: 10px; align-items:start; }
+    .team-card.active { border-color: rgba(247,215,116,.55); background: rgba(247,215,116,.08); }
+    .team-avatar { width:48px; height:48px; border-radius:15px; display:grid; place-items:center; background: rgba(123,223,242,.12); font-size:25px; border: 1px solid rgba(123,223,242,.22); }
+    .team-card h3 { font-size:15px; margin-bottom:3px; }
+    .team-card p { margin: 0 0 8px; color: var(--muted); font-size: 13px; line-height:1.35; }
+    .dialog-card { border-color: rgba(123,223,242,.24); margin-top: 12px; }
+    .dialog-head { display:flex; align-items:center; gap:10px; margin-bottom: 8px; }
+    .dialog-avatar { width: 38px; height: 38px; display:grid; place-items:center; border-radius:12px; background: rgba(123,223,242,.14); font-size: 22px; }
+    .dialog-text { white-space: pre-wrap; color: var(--ink); line-height: 1.45; }
+    .dialog-options button { text-align: left; }
+    .log { max-height: 220px; overflow:auto; padding-right:4px; }
+    .log-entry { border-left:3px solid rgba(123,223,242,.55); padding:8px 10px; margin:0 0 8px; background:rgba(0,0,0,.18); border-radius:0 12px 12px 0; font-size:13px; line-height:1.38; }
+    .log-entry strong { color: var(--accent2); }
+    .stage-wrap { padding: 10px; }
+    .stage-toolbar { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+    .stage-toolbar .group { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .stat-pill, .tag { border:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.22); border-radius:999px; padding:6px 9px; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .stat-pill strong { color: var(--ink); }
+    .tag.green { color:#061510; background: var(--good); border-color:rgba(255,255,255,.5); font-weight:800; }
+    .tag.red { color:#2d0710; background: var(--bad); border-color:rgba(255,255,255,.45); font-weight:800; }
+    .tag.blue { color:#06111f; background: var(--accent); border-color:rgba(255,255,255,.5); font-weight:800; }
+    .tag.gold { color:#211800; background: var(--accent2); border-color:rgba(255,255,255,.45); font-weight:800; }
+    canvas { width:100%; aspect-ratio: 5 / 3; display:block; border-radius:18px; background:#060a16; border: 1px solid rgba(255,255,255,.16); cursor: crosshair; }
+    .hint-row { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:12px; line-height:1.35; margin-top:8px; }
+    .prestage { min-height: 560px; display:grid; place-items:center; text-align:center; padding: 30px; }
+    .prestage .big { font-size: 72px; margin-bottom: 8px; }
+    .button-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .object-buttons { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+    .object-buttons button.active { background: var(--accent); color:#06111f; font-weight:900; }
+    .resource-title, .behavior-title { display:flex; justify-content:space-between; gap:8px; align-items:start; margin-bottom:6px; }
+    .resource-title span:first-child, .behavior-title span:first-child { font-weight:800; }
+    .behavior-card.locked, .resource-card.locked { opacity: .66; background: rgba(0,0,0,.15); }
+    .behavior-card.warn { border-color: rgba(255,208,138,.45); }
+    .row { display:grid; gap:6px; margin-top:10px; }
+    .row label { color: var(--muted); font-size: 12px; }
+    .side-toggle { display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin: 10px 0 12px; }
+    .side-toggle button.active { background: var(--accent2); color:#211800; font-weight:900; }
+    .code-label { display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:12px; margin-top: 12px; margin-bottom: 5px; }
+    .milestone { display:grid; grid-template-columns: 24px 1fr; gap:8px; color: var(--muted); font-size:13px; line-height:1.35; }
+    .milestone.done { color: var(--ink); }
+    .check { width:22px; height:22px; display:grid; place-items:center; border-radius:50%; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color:transparent; }
+    .milestone.done .check { background: var(--good); color:#061510; font-weight:900; border-color: rgba(255,255,255,.5); }
+    .project-switch { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .project-switch button.active { background: var(--accent2); color:#211800; font-weight:900; }
+    .nudge { border-color: rgba(247,215,116,.4); background: rgba(247,215,116,.08); }
+    .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%) translateY(20px); opacity:0; pointer-events:none; background:#0d1730; color:var(--ink); border:1px solid rgba(123,223,242,.45); border-radius:999px; padding:10px 14px; box-shadow: var(--shadow); transition:.18s ease; z-index:30; max-width:min(680px, calc(100vw - 32px)); }
+    .toast.show { opacity:1; transform: translateX(-50%) translateY(0); }
+    .modal { position:fixed; inset:0; background:rgba(0,0,0,.62); display:none; place-items:center; z-index:20; padding:18px; }
+    .modal.show { display:grid; }
+    .modal-card { max-width: 760px; width:min(760px, 100%); background: #101a34; border:1px solid rgba(255,255,255,.16); border-radius:20px; box-shadow: var(--shadow); padding:18px; }
+    .modal-card p, .modal-card li { color:var(--muted); line-height:1.45; }
+    @media (max-width: 1100px) { .layout, .layout.prestudio { grid-template-columns:1fr; } header { grid-template-columns:1fr; } .top-actions { justify-content:flex-start; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>First Day at the Game Studio</h1>
+        <div class="subtitle">Talk to an AI-shaped team, collect ideas, ask the programmer to turn those ideas into transparent behaviour cards, then attach behaviours to the backsides of game objects. The second project is now a playable Lunar Lander.</div>
+      </div>
+      <div class="top-actions">
+        <button id="helpBtn">How it works</button>
+        <button id="exportBtn">Export JSON</button>
+        <button id="lunarShortcutBtn" class="ghost">Jump to Lunar test</button>
+        <button id="resetAllBtn" class="danger">Reset</button>
+      </div>
+    </header>
+
+    <main id="layout" class="layout">
+      <section class="panel">
+        <div class="tabs">
+          <button id="tabTeam" class="active">Team room</button>
+          <button id="tabBrief">Brief</button>
+        </div>
+        <div id="leftContent" class="panel-body"></div>
+      </section>
+
+      <section id="stagePanel" class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 id="stageTitle">Story first</h2>
+            <div id="projectTag" class="tiny">Project 1</div>
+          </div>
+          <div class="group"><span id="selectedHint" class="tag">Selected: none</span></div>
+        </div>
+        <div id="stageContent" class="stage-wrap"></div>
+      </section>
+
+      <section id="rightPanel" class="panel">
+        <div class="tabs">
+          <button id="tabResources" class="active">Resources</button>
+          <button id="tabInspector">Inspector</button>
+        </div>
+        <div id="rightContent" class="panel-body"></div>
+      </section>
+    </main>
+
+    <section id="feedbackPanel" style="margin-top:14px"></section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <div id="helpModal" class="modal">
+    <div class="modal-card">
+      <h2>How this prototype works</h2>
+      <p>The team does not just dump resources into your inventory. Specialists give ideas. The programmer converts sufficiently clear ideas into behaviour cards. That handoff is deliberate: scientist/designer first, programmer second.</p>
+      <ul>
+        <li>Click a teammate to get an immediate greeting and real question choices.</li>
+        <li>Use the Resources panel to attach behaviour cards to the selected object.</li>
+        <li>You can now attach any unlocked behaviour to any object. Recommended attachments are marked, but mistakes are allowed because they can produce useful debugging conversations.</li>
+        <li>For Lunar Lander vertical motion: start the Lunar brief, ask the scientist why vertical position matters, then ask the programmer to create the behaviour card.</li>
+      </ul>
+      <div class="button-row"><button id="closeHelpBtn" class="primary">Close</button></div>
+    </div>
+  </div>
+
+  <script>
+    const VERSION_KEY = "first-day-game-studio-state-v7";
+    const canvasSize = { w: 900, h: 540 };
+    let canvas = null, ctx = null;
+    let loadedImages = {};
+    let audioCtx = null;
+    let keyState = {};
+    let lastFrame = null;
+
+    const stars = makeStars(150);
+
+    const DEFAULT_STATE = () => ({
+      version: 7,
+      tabLeft: "team",
+      tabRight: "resources",
+      inspectSide: "back",
+      selected: "astronaut",
+      activeTeam: "boss",
+      studioOpen: false,
+      currentProject: "rescue",
+      briefAccepted: false,
+      lunarUnlocked: false,
+      lunarBriefAccepted: false,
+      firstPlaytestRun: false,
+      feedbackGiven: false,
+      unlocked: {},
+      ideas: {},
+      visits: {},
+      log: [
+        { who: "System", text: "Welcome. The boss is waiting with your first assignment. Start in the Team room." }
+      ],
+      objects: {
+        astronaut: { id:"astronaut", project:"rescue", name:"Astronaut", emoji:"🧑‍🚀", prompt:"A small readable 2D astronaut sprite in a white suit, friendly game style, transparent background.", imgData:null, x:90, y:270, vx:0, vy:0, r:25, mass:80, behaviors:[] },
+        ship: { id:"ship", project:"rescue", name:"Rescue ship", emoji:"🚀", prompt:"A simple 2D rescue spaceship, readable at small size, friendly game style, transparent background.", imgData:null, x:810, y:270, vx:0, vy:0, r:36, mass:1000, behaviors:[] },
+        lander: { id:"lander", project:"lunar", name:"Lunar lander", emoji:"🛸", prompt:"A small readable 2D lunar lander sprite with landing legs, friendly game style, transparent background.", imgData:null, x:450, y:90, vx:0, vy:0, r:30, mass:650, behaviors:[] },
+        moonPad: { id:"moonPad", project:"lunar", name:"Landing pad", emoji:"▰", prompt:"A flat moon landing pad with simple warning stripes, transparent background.", imgData:null, x:450, y:500, vx:0, vy:0, r:46, mass:100000, behaviors:[] }
+      },
+      runtime: {
+        running:false, t:0, result:null, resultDetail:"", oxygen:30, fuel:100, rocksRemaining:8, throwCooldown:0, particles:[], lastX:90
+      }
+    });
+
+    let state = loadState() || DEFAULT_STATE();
+
+    const RESOURCE_NAMES = {
+      missionBrief: "Astronaut rescue brief",
+      lunarBrief: "Lunar Lander brief",
+      placeholderArt: "Placeholder art set",
+      soundPack: "Tiny sound feedback pack",
+      historyNotes: "Historical context note"
+    };
+
+    const TEAM = {
+      boss: {
+        title: "Boss", icon: "🧑‍💼", summary: "Gives briefs, asks for prototypes, and keeps the project moving.",
+        greeting: () => state.lunarBriefAccepted
+          ? "Good, you are on the Lunar Lander project now. It is still a game about motion, but the player must manage descent, fuel, and safe touchdown. Talk to the scientist and designer before asking the programmer for behaviours."
+          : state.lunarUnlocked
+            ? "Nice work on the rescue prototype. The next assignment is Lunar Lander. This is where gravity enters, and where telemetry becomes essential rather than decorative."
+            : "First day. Small brief. Do not build a giant engine. Build a tiny rescue game: an astronaut has drifted from the ship. Meet the team, get behaviours, then make the simplest playable version.",
+        options: () => [
+          { text: state.briefAccepted ? "Ask for the rescue status" : "Accept the astronaut-rescue assignment", action: () => {
+              state.briefAccepted = true; unlock("missionBrief");
+              return "Assignment accepted. Go meet the scientist, designer, programmer, artist, historian, and sound person. The important workflow is: specialists give ideas, then the programmer turns those ideas into behaviour cards.";
+            } },
+          { text: "Open the studio once the minimum team handoff is ready", action: () => {
+              const ready = rescueStudioReady();
+              if (ready) { state.studioOpen = true; return "Studio opened. Select an object, attach behaviours to its backside, run a playtest, and critique what happens."; }
+              return "Not yet. You need art, a motion idea from the scientist, and at least one programmer-created behaviour card. The Brief tab lists the missing pieces.";
+            } },
+          { text: state.lunarUnlocked ? "Start the Lunar Lander brief" : "What comes after the rescue game?", action: () => {
+              if (!state.lunarUnlocked) return "After a safe rescue, I will ask for Lunar Lander. It uses some of the same ideas, but now vertical motion and gravity dominate.";
+              state.currentProject = "lunar"; state.lunarBriefAccepted = true; state.studioOpen = true; unlock("lunarBrief");
+              return "New brief: build a small Lunar Lander. Minimum goal: a lander falls toward the moon, the player uses thrust, and touchdown succeeds only if speed is safe and the lander is over the pad. Ask the scientist about vertical motion and gravity, then ask the programmer for behaviours.";
+            } }
+        ]
+      },
+      scientist: {
+        title: "Scientist", icon: "🧪", summary: "Explains motion, momentum, gravity, and what should be measured. Does not write code.",
+        greeting: () => state.currentProject === "lunar"
+          ? "Welcome back. In Lunar Lander we need a vertical model. I can explain the physical idea, but the programmer has to turn it into a behaviour card."
+          : "Good to meet you. I am not the programmer. I can explain the science clearly enough that you can take the idea to the programmer.",
+        options: () => state.currentProject === "lunar" ? [
+          { text: "Why do we need vertical motion?", action: () => { state.ideas.lunarVertical = true; return "The rescue game could mostly live on one horizontal line. Lunar Lander cannot. The lander has altitude. Each tick, its vertical position should change according to its vertical velocity. Take that to the programmer and ask for a Vertical motion card."; } },
+          { text: "What exactly is lunar gravity doing?", action: () => { state.ideas.lunarGravity = true; return "Near the lunar surface, gravity steadily changes vertical velocity downward. In pseudocode: every tick, add gravity × time step to vertical velocity. That idea needs a separate gravity behaviour, not a hidden rule buried inside the lander."; } },
+          { text: "How do thrusters fit the physics?", action: () => { state.ideas.lunarThrusters = true; return "A thruster throws exhaust downward, so the lander's velocity changes upward. It also burns fuel. The player should feel the tradeoff: more thrust slows descent but consumes fuel."; } },
+          { text: "What should the player measure?", action: () => { state.ideas.lunarTelemetry = true; return "At minimum: altitude, vertical speed, and fuel. Without telemetry, the player is guessing. Ask the programmer for a lander telemetry gauge after you have the measurement idea."; } }
+        ] : [
+          { text: "What is the simplest motion idea?", action: () => { state.ideas.rescueHorizontal = true; return "In near-empty space, no air keeps slowing the astronaut. If she has a horizontal velocity, her x-position changes every tick. That is the first idea to take to the programmer."; } },
+          { text: "How can the astronaut change velocity?", action: () => { state.ideas.rescueMomentum = true; return "Throw mass one way and the astronaut's velocity changes the other way. That is conservation of momentum made concrete. Tell the programmer you need throw-rock thrust controls."; } },
+          { text: "What should count as safe rescue?", action: () => { state.ideas.rescueSafety = true; return "Distance is not enough. If the astronaut reaches the ship too fast, that is a crash. The designer should help set the rule, and the programmer can encode it."; } },
+          { text: "What should the player measure?", action: () => { state.ideas.rescueTelemetry = true; return "Horizontal velocity matters. A gauge lets the player compare approach speed with the safe speed. Ask the programmer for a velocity gauge only after this measurement question is clear."; } }
+        ]
+      },
+      programmer: {
+        title: "Programmer", icon: "💻", summary: "Turns good team ideas into composable behaviours with parameters and pseudocode.",
+        greeting: () => "I write behaviours, but I need a brief. Bring me a scientist/designer idea and I will turn it into a transparent card you can attach to the back of an object.",
+        options: () => [
+          { text: "Create the next behaviour from the team's ideas", action: () => programmerCreateNext() },
+          { text: "Explain why behaviours are separate cards", action: () => "Separate behaviours make composition visible. Horizontal motion, vertical motion, gravity, thrust, rules, and gauges can be attached, removed, inspected, or mistakenly attached to the wrong object. That is not a bug; it is material for debugging." },
+          { text: "What do I do after attaching a wrong behaviour?", action: () => "Run the game and observe. If the ship starts falling, or the landing pad has a velocity gauge, that is evidence. The next question is not 'why did the app block me?' but 'what does this behaviour actually do when attached here?'" }
+        ]
+      },
+      designer: {
+        title: "Assistant game designer", icon: "🎮", summary: "Turns simulations into games by adding goals, constraints, feedback, and difficulty.",
+        greeting: () => state.currentProject === "lunar"
+          ? "Lunar Lander is about controlled descent under constraints. The player should care about speed, fuel, landing zone, and failure feedback."
+          : "A simulation is not automatically a game. We need a goal, a failure condition, and feedback that helps the player improve.",
+        options: () => state.currentProject === "lunar" ? [
+          { text: "What makes Lunar Lander a game rather than just falling?", action: () => { state.ideas.lunarRule = true; return "The rule should be explicit: success means touchdown on the pad below a safe vertical speed. A crash means too fast or off the pad. Take that to the programmer as a Safe touchdown rule."; } },
+          { text: "How should difficulty grow?", action: () => "First: vertical-only landing. Then add horizontal drift, narrower pad, limited fuel, and scoring by fuel left plus touchdown speed. Do not add all of that before the first playable loop works." },
+          { text: "What feedback should a failed landing give?", action: () => "Say whether the problem was speed, location, or fuel. 'Crash' alone is weak. 'Too fast: 42 px/s, safe below 18' teaches the player what to try next." }
+        ] : [
+          { text: "How do we make the rescue a game?", action: () => { state.ideas.rescueRule = true; return "Give it a goal and a judgement: reach the ship, but only safely. If arrival speed is too high, it is a crash. Now the programmer can write the safe-reach rule."; } },
+          { text: "How do we stop the game being too easy?", action: () => { state.ideas.rescueOxygen = true; return "Add pressure. An oxygen timer gives slow play a cost, but keep it tunable so the first version is not punishing."; } },
+          { text: "What should a debrief ask?", action: () => "Ask what was missing: control, rule, pressure, telemetry, sound, or explanation. The answer should point to the right teammate, not silently hand the player a resource." }
+        ]
+      },
+      historian: {
+        title: "Historian", icon: "📚", summary: "Supplies historical context and links for deeper inquiry.",
+        greeting: () => "The history is not garnish. Lunar Lander, Logo microworlds, constructionism, Apollo guidance, and Newtonian mechanics give the project intellectual roots.",
+        options: () => [
+          { text: "Give me a concise historical context note", action: () => { unlock("historyNotes"); return "Context added. This is in the tradition of game-making as a route into mathematical physics: visible procedures, microworlds, simulations, and learners taking responsibility for a working artifact."; } },
+          { text: "Why Lunar Lander historically?", action: () => "Lunar Lander is a classic because the physics is legible. Gravity, velocity, thrust, fuel, and safe landing speed are all visible in the player's failures. That makes it a strong bridge between game design and mechanics." }
+        ]
+      },
+      artist: {
+        title: "Artist / animator", icon: "🎨", summary: "Provides placeholder sprites and art prompts; final artwork can come from the player or image models.",
+        greeting: () => "I can give you readable placeholder art now. Later the player should be able to replace any sprite with generated or uploaded artwork.",
+        options: () => [
+          { text: "Add placeholder art for both projects", action: () => { unlock("placeholderArt"); return "Placeholder art unlocked for astronaut, rescue ship, lunar lander, and landing pad. It is deliberately simple so the motion and behaviours stay readable."; } },
+          { text: "How should final art be handled?", action: () => "Use prompts as editable art direction. The game engine should not depend on a particular image generator. Players can upload, paste an image URL, or eventually call a text-to-image service outside this prototype." }
+        ]
+      },
+      sound: {
+        title: "Sound / music", icon: "🎧", summary: "Adds perceptual feedback: thrust, success, crash, warnings, and later music.",
+        greeting: () => "Sound should tell the player that an action happened and whether the result is good or dangerous. It is not just decoration.",
+        options: () => [
+          { text: "Add a tiny sound feedback pack", action: () => { unlock("soundPack"); return "Sound pack unlocked: small thrust/throw blips, success cue, and failure cue. Browser audio starts after the first click or playtest."; } },
+          { text: "What should Lunar Lander sound like?", action: () => "The thruster should pulse when fuel is spent; a warning should intensify near unsafe impact speed; success should sound calm rather than explosive." }
+        ]
+      }
+    };
+
+    const BEHAVIORS = {
+      horizontalMotion: {
+        id:"horizontalMotion", name:"Horizontal motion", role:"Programmer from Scientist idea", recommended:["astronaut","ship","lander"], project:"both",
+        blurb:"Updates x-position from horizontal velocity every tick.", defaultParams:{ startVx:0 },
+        params:[{ key:"startVx", label:"Starting horizontal velocity", min:-160, max:160, step:1, unit:"px/s" }],
+        pseudocode:`On reset:\n  set my horizontal velocity to starting horizontal velocity\n\nEvery tick:\n  change my x position by my horizontal velocity × time step`,
+        onReset(obj, params) { obj.vx = Number(params.startVx || 0); },
+        update(obj, params, dt) { obj.x += obj.vx * dt; }
+      },
+      verticalMotion: {
+        id:"verticalMotion", name:"Vertical motion", role:"Programmer from Scientist idea", recommended:["lander","astronaut"], project:"lunar",
+        blurb:"Updates y-position from vertical velocity every tick. This is the missing piece for falling or rising.", defaultParams:{ startVy:0 },
+        params:[{ key:"startVy", label:"Starting vertical velocity", min:-120, max:160, step:1, unit:"px/s" }],
+        pseudocode:`On reset:\n  set my vertical velocity to starting vertical velocity\n\nEvery tick:\n  change my y position by my vertical velocity × time step`,
+        onReset(obj, params) { obj.vy = Number(params.startVy || 0); },
+        update(obj, params, dt) { obj.y += obj.vy * dt; }
+      },
+      rockThrower: {
+        id:"rockThrower", name:"Throw-rock thrust controls", role:"Programmer from Scientist momentum idea", recommended:["astronaut"], project:"rescue",
+        blurb:"Left/right arrows throw rocks and change the object's horizontal velocity by a momentum rule.", defaultParams:{ totalRockMass:8, rockMass:1, rockSpeed:34 },
+        params:[
+          { key:"totalRockMass", label:"Total rock mass", min:1, max:50, step:1, unit:"kg" },
+          { key:"rockMass", label:"Mass per thrown rock", min:.25, max:10, step:.25, unit:"kg" },
+          { key:"rockSpeed", label:"Rock throw speed", min:5, max:100, step:1, unit:"px/s" }
+        ],
+        pseudocode:`When Right Arrow is pressed:\n  if rocks remain:\n    throw one rock left\n    increase my horizontal velocity\n\nWhen Left Arrow is pressed:\n  if rocks remain:\n    throw one rock right\n    decrease my horizontal velocity`,
+        onReset(obj, params) { if (obj.id === "astronaut") state.runtime.rocksRemaining = Math.max(0, Math.floor(Number(params.totalRockMass || 0) / Math.max(.01, Number(params.rockMass || 1)))); }
+      },
+      reachShipRule: {
+        id:"reachShipRule", name:"Reach ship safely rule", role:"Programmer from Designer rule", recommended:["astronaut"], project:"rescue",
+        blurb:"Checks whether this object reaches the rescue ship slowly enough.", defaultParams:{ dockingRadius:56, safeSpeed:22 },
+        params:[
+          { key:"dockingRadius", label:"Docking distance", min:20, max:120, step:1, unit:"px" },
+          { key:"safeSpeed", label:"Maximum safe speed", min:1, max:100, step:1, unit:"px/s" }
+        ],
+        pseudocode:`Every tick:\n  if distance between me and the ship is small enough:\n    if my speed is less than safe speed:\n      rescue succeeds\n    otherwise:\n      rescue fails because I arrived too fast`,
+        update(obj, params) {
+          if (state.currentProject !== "rescue") return;
+          const ship = state.objects.ship;
+          const d = distance(obj, ship);
+          const speed = Math.hypot(obj.vx, obj.vy);
+          if (!state.runtime.result && d <= Number(params.dockingRadius || 56)) {
+            if (speed <= Number(params.safeSpeed || 22)) endPlaytest("success", `Safe rescue. ${obj.name} reached the ship at ${speed.toFixed(1)} px/s.`);
+            else endPlaytest("crash", `${obj.name} arrived too fast: ${speed.toFixed(1)} px/s. Safe limit is ${Number(params.safeSpeed || 22)} px/s.`);
+          }
+        }
+      },
+      oxygenTimer: {
+        id:"oxygenTimer", name:"Oxygen timer", role:"Programmer from Designer pressure idea", recommended:["astronaut"], project:"rescue",
+        blurb:"Adds time pressure. If oxygen reaches zero before rescue, the playtest fails.", defaultParams:{ maxOxygen:30 },
+        params:[{ key:"maxOxygen", label:"Oxygen seconds", min:5, max:120, step:1, unit:"s" }],
+        pseudocode:`On reset:\n  oxygen = maximum oxygen\n\nEvery tick:\n  oxygen decreases by elapsed time\n  if oxygen is zero:\n    mission fails`,
+        onReset(obj, params) { if (state.currentProject === "rescue") state.runtime.oxygen = Number(params.maxOxygen || 30); },
+        update(obj, params, dt) {
+          if (state.currentProject !== "rescue") return;
+          state.runtime.oxygen -= dt;
+          if (!state.runtime.result && state.runtime.oxygen <= 0) { state.runtime.oxygen = 0; endPlaytest("lost", "Oxygen ran out before rescue."); }
+        }
+      },
+      velocityGauge: {
+        id:"velocityGauge", name:"Horizontal velocity gauge", role:"Programmer from Scientist telemetry idea", recommended:["astronaut"], project:"rescue",
+        blurb:"Displays the attached object's horizontal speed and direction.", defaultParams:{ maxShownSpeed:90 },
+        params:[{ key:"maxShownSpeed", label:"Gauge max speed", min:20, max:220, step:5, unit:"px/s" }],
+        pseudocode:`Every frame:\n  read my horizontal velocity\n  draw a gauge needle\n  label leftward velocity negative and rightward positive`,
+        render(obj, params, slot) { drawHorizontalGauge(obj, params, slot); }
+      },
+      lunarGravity: {
+        id:"lunarGravity", name:"Lunar gravity", role:"Programmer from Scientist gravity idea", recommended:["lander"], project:"lunar",
+        blurb:"Changes vertical velocity downward every tick.", defaultParams:{ gravity:42 },
+        params:[{ key:"gravity", label:"Downward gravity", min:5, max:120, step:1, unit:"px/s²" }],
+        pseudocode:`Every tick:\n  change my vertical velocity downward by gravity × time step`,
+        update(obj, params, dt) { if (state.currentProject === "lunar") obj.vy += Number(params.gravity || 42) * dt; }
+      },
+      landerThrusters: {
+        id:"landerThrusters", name:"Lander thrusters", role:"Programmer from Scientist thruster idea", recommended:["lander"], project:"lunar",
+        blurb:"Arrow Up/W applies upward thrust and burns fuel. Left/right can nudge horizontal velocity.", defaultParams:{ thrust:92, sideThrust:38, fuel:100, burnRate:18 },
+        params:[
+          { key:"thrust", label:"Upward thrust", min:20, max:180, step:1, unit:"px/s²" },
+          { key:"sideThrust", label:"Side thrust", min:0, max:100, step:1, unit:"px/s²" },
+          { key:"fuel", label:"Starting fuel", min:10, max:300, step:5, unit:"units" },
+          { key:"burnRate", label:"Fuel burn rate", min:2, max:60, step:1, unit:"units/s" }
+        ],
+        pseudocode:`On reset:\n  fuel = starting fuel\n\nWhile Up Arrow is pressed and fuel remains:\n  change vertical velocity upward\n  spend fuel\n\nWhile Left or Right Arrow is pressed and fuel remains:\n  change horizontal velocity sideways\n  spend fuel`,
+        onReset(obj, params) { if (obj.id === "lander") state.runtime.fuel = Number(params.fuel || 100); },
+        update(obj, params, dt) {
+          if (state.currentProject !== "lunar" || state.runtime.fuel <= 0) return;
+          let firing = false;
+          const burnRate = Number(params.burnRate || 18);
+          if (keyState.ArrowUp || keyState.w || keyState.W) { obj.vy -= Number(params.thrust || 92) * dt; firing = true; addThrusterParticle(obj, 0); }
+          if (keyState.ArrowLeft || keyState.a || keyState.A) { obj.vx -= Number(params.sideThrust || 38) * dt; firing = true; addThrusterParticle(obj, 1); }
+          if (keyState.ArrowRight || keyState.d || keyState.D) { obj.vx += Number(params.sideThrust || 38) * dt; firing = true; addThrusterParticle(obj, -1); }
+          if (firing) { state.runtime.fuel = Math.max(0, state.runtime.fuel - burnRate * dt); playSound("thrust", .045); }
+        }
+      },
+      touchdownRule: {
+        id:"touchdownRule", name:"Safe touchdown rule", role:"Programmer from Designer landing rule", recommended:["lander"], project:"lunar",
+        blurb:"Wins only if this object touches down on the pad below the safe speed.", defaultParams:{ safeVy:24, safeVx:35, padHalfWidth:76 },
+        params:[
+          { key:"safeVy", label:"Maximum safe vertical speed", min:5, max:80, step:1, unit:"px/s" },
+          { key:"safeVx", label:"Maximum safe horizontal speed", min:5, max:100, step:1, unit:"px/s" },
+          { key:"padHalfWidth", label:"Half-width of landing pad", min:24, max:140, step:1, unit:"px" }
+        ],
+        pseudocode:`Every tick:\n  if my feet touch the lunar surface:\n    if I am over the pad and speeds are safe:\n      landing succeeds\n    otherwise:\n      landing crashes with a useful explanation`,
+        update(obj, params) {
+          if (state.currentProject !== "lunar") return;
+          const surfaceY = 500;
+          if (!state.runtime.result && obj.y + obj.r >= surfaceY) {
+            const pad = state.objects.moonPad;
+            const onPad = Math.abs(obj.x - pad.x) <= Number(params.padHalfWidth || 76);
+            const safe = Math.abs(obj.vy) <= Number(params.safeVy || 24) && Math.abs(obj.vx) <= Number(params.safeVx || 35) && onPad;
+            obj.y = surfaceY - obj.r;
+            if (safe) endPlaytest("success", `Safe touchdown. Vertical speed ${Math.abs(obj.vy).toFixed(1)} px/s; fuel left ${state.runtime.fuel.toFixed(0)}.`);
+            else {
+              const reason = !onPad ? "off the pad" : Math.abs(obj.vy) > Number(params.safeVy || 24) ? `vertical speed too high (${Math.abs(obj.vy).toFixed(1)} px/s)` : `horizontal speed too high (${Math.abs(obj.vx).toFixed(1)} px/s)`;
+              endPlaytest("crash", `Crash landing: ${reason}.`);
+            }
+          }
+        }
+      },
+      landerTelemetry: {
+        id:"landerTelemetry", name:"Lander telemetry gauge", role:"Programmer from Scientist measurement idea", recommended:["lander"], project:"lunar",
+        blurb:"Displays altitude, vertical speed, horizontal speed, and fuel.", defaultParams:{ maxVy:120 },
+        params:[{ key:"maxVy", label:"Gauge max vertical speed", min:20, max:220, step:5, unit:"px/s" }],
+        pseudocode:`Every frame:\n  show altitude\n  show vertical velocity\n  show horizontal velocity\n  show remaining fuel`,
+        render(obj, params, slot) { drawLanderTelemetry(obj, params, slot); }
+      },
+      soundPack: {
+        id:"soundPack", name:"Tiny sound feedback pack", role:"Sound designer", recommended:["astronaut","lander"], project:"both",
+        blurb:"Plays short audio cues for thrust/throw, success, and failure.", defaultParams:{ volume:.18 },
+        params:[{ key:"volume", label:"Volume", min:0, max:1, step:.05, unit:"" }],
+        pseudocode:`When thrust or rock throw occurs:\n  play a short action cue\n\nWhen success happens:\n  play an upward cue\n\nWhen failure happens:\n  play a low warning cue`
+      }
+    };
+
+    function programmerCreateNext() {
+      const seq = state.currentProject === "lunar" ? [
+        ["verticalMotion", "lunarVertical", "I need the scientist's vertical-motion idea first. Ask: Why do we need vertical motion?"],
+        ["lunarGravity", "lunarGravity", "I need the scientist's gravity idea first. Ask: What exactly is lunar gravity doing?"],
+        ["landerThrusters", "lunarThrusters", "I need the scientist's thruster idea first. Ask: How do thrusters fit the physics?"],
+        ["touchdownRule", "lunarRule", "I need the designer's landing rule first. Ask what makes Lunar Lander a game rather than just falling."],
+        ["landerTelemetry", "lunarTelemetry", "I need the scientist's measurement idea first. Ask what the player should measure."]
+      ] : [
+        ["horizontalMotion", "rescueHorizontal", "I need the scientist's horizontal-motion idea first. Ask about the simplest motion idea."],
+        ["rockThrower", "rescueMomentum", "I need the scientist's momentum idea first. Ask how the astronaut can change velocity."],
+        ["reachShipRule", "rescueRule", "I need the designer's rule idea first. Ask how to make the rescue a game."],
+        ["oxygenTimer", "rescueOxygen", "I need the designer's pressure idea first. Ask how to stop the game being too easy."],
+        ["velocityGauge", "rescueTelemetry", "I need the scientist's measurement idea first. Ask what the player should measure."]
+      ];
+      for (const [behavior, idea, missing] of seq) {
+        if (!isUnlocked(behavior)) {
+          if (!state.ideas[idea]) return missing;
+          unlock(behavior);
+          return `I created the ${BEHAVIORS[behavior].name} behaviour card. It is now in Resources. Attach it to the back of the recommended object, or attach it elsewhere deliberately and see what breaks.`;
+        }
+      }
+      return state.currentProject === "lunar" ? "All core Lunar Lander behaviours are ready. Now test the composition: vertical motion + gravity + thrusters + touchdown rule + telemetry." : "All core rescue behaviours are ready. Now run the game and use the debrief to decide what is missing.";
+    }
+
+    function isUnlocked(id) { return !!state.unlocked[id]; }
+    function unlock(id) {
+      if (!id || state.unlocked[id]) return false;
+      state.unlocked[id] = true;
+      const name = BEHAVIORS[id]?.name || RESOURCE_NAMES[id] || id;
+      addLog("Unlocked", name);
+      toast(`Unlocked: ${name}`);
+      return true;
+    }
+    function addLog(who, text) { state.log.unshift({ who, text }); state.log = state.log.slice(0, 100); }
+
+    function consult(roleId) {
+      state.activeTeam = roleId;
+      state.visits[roleId] = (state.visits[roleId] || 0) + 1;
+      const role = TEAM[roleId];
+      addLog(role.title, role.greeting());
+      saveState(); renderAll();
+    }
+    function chooseDialog(roleId, index) {
+      const role = TEAM[roleId];
+      const opt = role.options()[index];
+      const response = opt.action();
+      addLog("You", opt.text);
+      addLog(role.title, response);
+      if (rescueStudioReady()) state.studioOpen = true;
+      saveState(); renderAll();
+    }
+
+    function rescueStudioReady() {
+      return state.briefAccepted && isUnlocked("placeholderArt") && (isUnlocked("horizontalMotion") || isUnlocked("rockThrower") || isUnlocked("reachShipRule"));
+    }
+
+    function projectObjects() {
+      return Object.values(state.objects).filter(o => o.project === state.currentProject || o.id === "ship" && state.currentProject === "rescue");
+    }
+
+    function resetPlaytest(logIt = true) {
+      state.runtime.running = false;
+      state.runtime.t = 0;
+      state.runtime.result = null;
+      state.runtime.resultDetail = "";
+      state.runtime.oxygen = 30;
+      state.runtime.fuel = 100;
+      state.runtime.rocksRemaining = 0;
+      state.runtime.throwCooldown = 0;
+      state.runtime.particles = [];
+      const a = state.objects.astronaut, s = state.objects.ship, l = state.objects.lander, p = state.objects.moonPad;
+      a.x = 90; a.y = 270; a.vx = 0; a.vy = 0;
+      s.x = 810; s.y = 270; s.vx = 0; s.vy = 0;
+      l.x = 450; l.y = 90; l.vx = 0; l.vy = 0;
+      p.x = 450; p.y = 500; p.vx = 0; p.vy = 0;
+      state.runtime.lastX = state.currentProject === "lunar" ? l.x : a.x;
+      for (const obj of Object.values(state.objects)) for (const b of obj.behaviors) BEHAVIORS[b.id]?.onReset?.(obj, b.params);
+      if (logIt) addLog("Playtest", "Reset the stage.");
+      saveState(); renderAll();
+    }
+
+    function runPlaytest() {
+      if (!state.studioOpen) { toast("Meet the team and open the studio first."); return; }
+      if (state.runtime.result) resetPlaytest(false);
+      ensureAudio();
+      state.runtime.running = true;
+      state.firstPlaytestRun = true;
+      addLog("Playtest", state.currentProject === "lunar" ? "Started Lunar Lander. Use Up/W for thrust; Left/Right for side thrust if attached." : "Started rescue. Use Left/Right if throw-rock controls are attached.");
+      saveState(); renderAll();
+    }
+    function pausePlaytest() { state.runtime.running = false; addLog("Playtest", "Paused."); saveState(); renderAll(); }
+    function endPlaytest(result, detail) {
+      state.runtime.result = result;
+      state.runtime.resultDetail = detail;
+      state.runtime.running = false;
+      state.feedbackGiven = false;
+      if (result === "success" && state.currentProject === "rescue") { state.lunarUnlocked = true; addLog("Boss", "Good enough. Lunar Lander is now available as the next brief."); }
+      playSound(result === "success" ? "success" : "fail");
+      addLog("Playtest result", detail);
+      saveState(); renderAll();
+    }
+
+    function simulationStep(dt) {
+      if (!state.runtime.running || state.runtime.result) return;
+      dt = Math.min(dt, .05);
+      state.runtime.t += dt;
+      state.runtime.throwCooldown = Math.max(0, state.runtime.throwCooldown - dt);
+      for (const obj of projectObjects()) for (const b of obj.behaviors) BEHAVIORS[b.id]?.update?.(obj, b.params, dt);
+      const tracked = state.currentProject === "lunar" ? state.objects.lander : state.objects.astronaut;
+      state.runtime.lastX = tracked.x;
+      for (const p of state.runtime.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+      state.runtime.particles = state.runtime.particles.filter(p => p.life > 0);
+      if (state.currentProject === "rescue") {
+        const a = state.objects.astronaut;
+        if (!state.runtime.result && (a.x < -120 || a.x > canvas.width + 120 || a.y < -120 || a.y > canvas.height + 120)) endPlaytest("lost", "The astronaut drifted out of the playable area.");
+        if (!state.runtime.result && state.runtime.t > 45) endPlaytest("lost", "Prototype time limit reached. Add a clearer strategy or tune parameters.");
+      } else {
+        const l = state.objects.lander;
+        if (!state.runtime.result && (l.x < -160 || l.x > canvas.width + 160 || l.y < -160)) endPlaytest("lost", "The lander left the playable area.");
+        if (!state.runtime.result && l.y > canvas.height + 120) endPlaytest("lost", "The lander fell through the scene. Did you forget the touchdown rule?");
+      }
+    }
+
+    function throwRock(direction, obj, behavior) {
+      if (!state.runtime.running || state.runtime.result || state.runtime.throwCooldown > 0) return;
+      const params = behavior.params;
+      const rockMass = Math.max(.01, Number(params.rockMass || 1));
+      const rockSpeed = Number(params.rockSpeed || 34);
+      if (state.runtime.rocksRemaining <= 0) { toast("No rocks left. You are out of thrust."); playSound("fail", .08); return; }
+      const remainingRockMass = state.runtime.rocksRemaining * rockMass;
+      const currentMass = Math.max(1, obj.mass + remainingRockMass);
+      const dv = direction * (rockMass * rockSpeed) / currentMass * 20;
+      obj.vx += dv;
+      state.runtime.rocksRemaining -= 1;
+      state.runtime.throwCooldown = .15;
+      state.runtime.particles.push({ x: obj.x - direction * 20, y: obj.y + (Math.random()-.5)*16, vx: -direction * (rockSpeed + Math.abs(obj.vx)), vy:(Math.random()-.5)*32, life:1.5, kind:"rock" });
+      addLog("Control", `${obj.name} threw a rock; horizontal velocity changed.`);
+      playSound("throw");
+      saveState(); renderAll();
+    }
+
+    function attachBehavior(objectId, behaviorId) {
+      const obj = state.objects[objectId], def = BEHAVIORS[behaviorId];
+      if (!obj || !def || !isUnlocked(behaviorId)) return;
+      if (obj.behaviors.some(b => b.id === behaviorId)) { toast(`${obj.name} already has ${def.name}.`); return; }
+      const recommended = def.recommended.includes(objectId);
+      obj.behaviors.push({ id: behaviorId, params: structuredClone(def.defaultParams), code: def.pseudocode, reviewed:false, note: recommended ? "recommended" : "experimental attachment" });
+      addLog("Studio", recommended ? `Attached ${def.name} to ${obj.name}.` : `Attached ${def.name} to ${obj.name} even though it is not recommended. This is allowed; run it and inspect what happens.`);
+      if (!recommended) toast("Experimental attachment allowed. It may behave oddly; that is useful evidence.");
+      state.tabRight = "inspector"; state.inspectSide = "back";
+      resetPlaytest(false); saveState(); renderAll();
+    }
+    function removeBehavior(objectId, behaviorId, index) {
+      const obj = state.objects[objectId]; if (!obj) return;
+      const removed = obj.behaviors.splice(index, 1)[0];
+      addLog("Studio", `Removed ${BEHAVIORS[removed?.id]?.name || behaviorId} from ${obj.name}.`);
+      resetPlaytest(false); saveState(); renderAll();
+    }
+    function getAttached(objectId, behaviorId) { return state.objects[objectId]?.behaviors.find(b => b.id === behaviorId) || null; }
+
+    function renderAll() {
+      const layout = document.getElementById("layout");
+      layout.classList.toggle("prestudio", !state.studioOpen);
+      document.getElementById("rightPanel").style.display = state.studioOpen ? "block" : "none";
+      renderLeft(); renderStage(); renderRight(); renderFeedback(); renderStats(); renderCanvasSafe();
+      document.getElementById("tabTeam").classList.toggle("active", state.tabLeft === "team");
+      document.getElementById("tabBrief").classList.toggle("active", state.tabLeft === "brief");
+      document.getElementById("tabResources").classList.toggle("active", state.tabRight === "resources");
+      document.getElementById("tabInspector").classList.toggle("active", state.tabRight === "inspector");
+      const sel = state.objects[state.selected];
+      document.getElementById("selectedHint").innerHTML = state.studioOpen ? `Selected: <strong>${escapeHtml(sel.name)}</strong>` : "Story mode";
+      document.getElementById("projectTag").textContent = state.currentProject === "lunar" ? "Project 2: Lunar Lander" : "Project 1: Astronaut Rescue";
+    }
+
+    function renderLeft() {
+      const el = document.getElementById("leftContent");
+      if (state.tabLeft === "brief") { el.innerHTML = briefMarkup(); bindLeftEvents(el); return; }
+      const role = TEAM[state.activeTeam] || TEAM.boss;
+      el.innerHTML = `
+        <div class="team-grid">
+          ${Object.entries(TEAM).map(([id, t]) => `
+            <div class="team-card ${state.activeTeam === id ? "active" : ""}">
+              <div class="team-avatar">${t.icon}</div>
+              <div>
+                <h3>${escapeHtml(t.title)}</h3>
+                <p>${escapeHtml(t.summary)}</p>
+                <button data-consult="${id}" ${id !== "boss" && !state.briefAccepted ? "disabled" : ""}>Talk to ${id === "boss" ? "boss" : "team member"}</button>
+              </div>
+            </div>`).join("")}
+        </div>
+        <div class="dialog-card" id="dialogCard">
+          <div class="dialog-head"><div class="dialog-avatar">${role.icon}</div><div><h3>${escapeHtml(role.title)}</h3><div class="tiny">Conversation</div></div></div>
+          <div class="dialog-text">${escapeHtml(role.greeting())}</div>
+          <div class="dialog-options" style="margin-top:12px">
+            ${role.options().map((opt, i) => `<button data-dialog-choice="${i}">${escapeHtml(opt.text)}</button>`).join("")}
+          </div>
+        </div>
+        <details style="margin-top:12px">
+          <summary>Conversation log</summary>
+          <div class="log">${state.log.map(entry => `<div class="log-entry"><strong>${escapeHtml(entry.who)}:</strong> ${escapeHtml(entry.text)}</div>`).join("")}</div>
+        </details>
+      `;
+      bindLeftEvents(el);
+    }
+    function bindLeftEvents(el) {
+      el.querySelectorAll("[data-consult]").forEach(btn => btn.addEventListener("click", () => consult(btn.dataset.consult)));
+      el.querySelectorAll("[data-dialog-choice]").forEach(btn => btn.addEventListener("click", () => chooseDialog(state.activeTeam, Number(btn.dataset.dialogChoice))));
+      el.querySelectorAll("[data-switch-project]").forEach(btn => btn.addEventListener("click", () => { switchProject(btn.dataset.switchProject); }));
+      el.querySelectorAll("[data-open-studio]").forEach(btn => btn.addEventListener("click", () => { if (rescueStudioReady() || state.lunarBriefAccepted) { state.studioOpen = true; saveState(); renderAll(); } else toast("The Brief tab shows what is missing before opening the studio."); }));
+      el.querySelectorAll("[data-set-left]").forEach(btn => btn.addEventListener("click", () => { state.tabLeft = btn.dataset.setLeft; saveState(); renderAll(); }));
+      el.querySelectorAll("[data-set-right]").forEach(btn => btn.addEventListener("click", () => { state.tabRight = btn.dataset.setRight; saveState(); renderAll(); }));
+    }
+
+    function briefMarkup() {
+      const m = milestones();
+      return `
+        <div class="note-card">
+          <h2>${state.currentProject === "lunar" ? "Boss brief: Lunar Lander" : "Boss brief: Astronaut Rescue"}</h2>
+          <p class="small">${state.currentProject === "lunar" ? "Build a playable landing game: a lander descends under gravity, the player spends fuel on thrust, and landing succeeds only when speed and location are safe." : "Build a small rescue game. The astronaut is untethered. The player must use motion and thrown mass to reach the ship, but arriving too fast should fail once the safety rule is attached."}</p>
+          <div class="button-row">
+            <button class="primary" data-consult="boss">Talk to boss</button>
+            <button data-open-studio>Open studio</button>
+            <button data-set-right="resources" ${state.studioOpen ? "" : "disabled"}>Open resources</button>
+          </div>
+          <div class="project-switch">
+            <button data-switch-project="rescue" class="${state.currentProject === "rescue" ? "active" : ""}">Astronaut Rescue</button>
+            <button data-switch-project="lunar" class="${state.currentProject === "lunar" ? "active" : ""}" ${state.lunarUnlocked || state.lunarBriefAccepted ? "" : "disabled"}>Lunar Lander</button>
+          </div>
+        </div>
+        <div style="height:12px"></div>
+        <div class="note-card">
+          <h3>Milestones</h3>
+          <div class="milestones">${m.map(item => `<div class="milestone ${item.done ? "done" : ""}"><div class="check">✓</div><div>${escapeHtml(item.text)}</div></div>`).join("")}</div>
+        </div>
+        ${guidanceMarkup()}
+        ${isUnlocked("historyNotes") ? `<div style="height:12px"></div><div class="note-card"><h3>Historian's context note</h3><p class="small">The design combines a story wrapper, construction-kit behaviours, visible code, and physics-rich play. Suggested deep links: Lunar Lander games, Logo microworlds, constructionism, Newton's laws, conservation of momentum, and Apollo-era navigation.</p></div>` : ""}
+      `;
+    }
+    function milestones() {
+      if (state.currentProject === "lunar") return [
+        { text:"Start the Lunar Lander brief with the boss.", done: state.lunarBriefAccepted },
+        { text:"Ask the scientist why vertical motion is needed.", done: !!state.ideas.lunarVertical },
+        { text:"Ask the programmer to create Vertical motion.", done: isUnlocked("verticalMotion") },
+        { text:"Ask the scientist what gravity does.", done: !!state.ideas.lunarGravity },
+        { text:"Ask the programmer to create Lunar gravity.", done: isUnlocked("lunarGravity") },
+        { text:"Ask about thrusters, then get the Lander thrusters behaviour.", done: isUnlocked("landerThrusters") },
+        { text:"Ask the designer for the touchdown rule, then get it from the programmer.", done: isUnlocked("touchdownRule") },
+        { text:"Ask the scientist what to measure, then get telemetry from the programmer.", done: isUnlocked("landerTelemetry") },
+        { text:"Attach core behaviours to the lander and make a safe touchdown.", done: state.currentProject === "lunar" && state.runtime.result === "success" }
+      ];
+      return [
+        { text:"Accept the astronaut rescue assignment from the boss.", done: state.briefAccepted },
+        { text:"Get placeholder art from the artist.", done: isUnlocked("placeholderArt") },
+        { text:"Ask the scientist about horizontal motion.", done: !!state.ideas.rescueHorizontal },
+        { text:"Ask the programmer to create Horizontal motion.", done: isUnlocked("horizontalMotion") },
+        { text:"Ask the scientist about momentum / throw-rock control.", done: !!state.ideas.rescueMomentum },
+        { text:"Ask the designer for a safe-rescue rule.", done: !!state.ideas.rescueRule },
+        { text:"Attach behaviours and run at least one playtest.", done: state.firstPlaytestRun },
+        { text:"Safely rescue the astronaut to unlock Lunar Lander.", done: state.lunarUnlocked }
+      ];
+    }
+    function guidanceMarkup() {
+      const notes = [];
+      if (state.ideas.needTelemetry) notes.push("Debrief says telemetry is needed. Talk to the scientist about what should be measured, then ask the programmer to create the gauge.");
+      if (state.currentProject === "lunar" && !isUnlocked("verticalMotion")) notes.push("To get vertical motion: Scientist → 'Why do we need vertical motion?' Then Programmer → 'Create the next behaviour from the team's ideas'.");
+      if (state.currentProject === "lunar" && !isUnlocked("lunarGravity")) notes.push("To get gravity: Scientist → 'What exactly is lunar gravity doing?' Then Programmer creates Lunar gravity.");
+      if (!notes.length) return "";
+      return `<div style="height:12px"></div><div class="note-card nudge"><h3>Current guidance</h3>${notes.map(n => `<p class="small">${escapeHtml(n)}</p>`).join("")}</div>`;
+    }
+
+    function renderStage() {
+      const el = document.getElementById("stageContent");
+      document.getElementById("stageTitle").textContent = state.studioOpen ? "Game creation area" : "Story / team phase";
+      if (!state.studioOpen) {
+        el.innerHTML = `<div class="prestage"><div><div class="big">🎬</div><h2>Talk to the team before entering the studio</h2><p class="small" style="max-width:660px;margin:8px auto 0">The boss wants you to meet teammates first. Specialists provide ideas; the programmer creates behaviours only after you bring those ideas back.</p><div class="button-row" style="justify-content:center"><button class="primary" data-set-left-stage="team">Go to team room</button><button data-set-left-stage="brief">See brief checklist</button></div></div></div>`;
+        el.querySelectorAll("[data-set-left-stage]").forEach(btn => btn.addEventListener("click", () => { state.tabLeft = btn.dataset.setLeftStage; saveState(); renderAll(); }));
+        return;
+      }
+      el.innerHTML = `
+        <div class="stage-toolbar">
+          <div class="group"><button id="runBtn" class="primary">Run</button><button id="pauseBtn">Pause</button><button id="resetBtn">Reset stage</button></div>
+          <div class="group" id="statsPills"></div>
+        </div>
+        <canvas id="gameCanvas" width="900" height="540"></canvas>
+        <div class="hint-row"><span>${state.currentProject === "lunar" ? "Lunar controls: Up/W thrusts upward; Left/Right or A/D nudge sideways if thrusters are attached." : "Rescue controls: Left/Right throw rocks if throw-rock controls are attached."}</span><span>Click objects to select them; behaviours live on the back.</span></div>
+      `;
+      canvas = document.getElementById("gameCanvas"); ctx = canvas.getContext("2d");
+      canvas.addEventListener("click", onCanvasClick);
+      document.getElementById("runBtn").addEventListener("click", runPlaytest);
+      document.getElementById("pauseBtn").addEventListener("click", pausePlaytest);
+      document.getElementById("resetBtn").addEventListener("click", () => resetPlaytest(true));
+    }
+
+    function renderRight() {
+      const el = document.getElementById("rightContent");
+      if (!state.studioOpen) { el.innerHTML = ""; return; }
+      el.innerHTML = state.tabRight === "resources" ? resourcesMarkup() : inspectorMarkup();
+      bindRightEvents(el);
+    }
+    function visibleObjects() { return Object.values(state.objects).filter(o => o.project === state.currentProject); }
+    function availableBehaviors() {
+      return Object.values(BEHAVIORS).filter(b => b.project === "both" || b.project === state.currentProject || (state.currentProject === "lunar" && b.id === "horizontalMotion"));
+    }
+    function resourcesMarkup() {
+      const selected = state.objects[state.selected] && state.objects[state.selected].project === state.currentProject ? state.objects[state.selected] : visibleObjects()[0];
+      if (selected.id !== state.selected) state.selected = selected.id;
+      const behaviorCards = availableBehaviors().map(def => {
+        const unlocked = isUnlocked(def.id);
+        const already = !!getAttached(selected.id, def.id);
+        const recommended = def.recommended.includes(selected.id);
+        return `<div class="behavior-card ${unlocked ? "" : "locked"} ${!recommended && unlocked ? "warn" : ""}">
+          <div class="behavior-title"><span>${escapeHtml(def.name)}</span><span class="tag ${unlocked ? "green" : "red"}">${unlocked ? "unlocked" : "locked"}</span></div>
+          <div class="small">${escapeHtml(def.blurb)}</div>
+          <div class="tiny" style="margin-top:6px">From: ${escapeHtml(def.role)}</div>
+          <div class="tiny" style="margin-top:4px">Recommended for: ${def.recommended.map(id => state.objects[id]?.name || id).join(", ")}${recommended ? "" : " — experimental on selected object"}</div>
+          <div class="button-row"><button data-attach="${def.id}" ${!unlocked || already ? "disabled" : ""}>${already ? "Attached" : recommended ? `Attach to ${escapeHtml(selected.name)}` : `Attach experimentally to ${escapeHtml(selected.name)}`}</button></div>
+        </div>`;
+      }).join("");
+      return `<div class="object-buttons">${visibleObjects().map(o => `<button data-select="${o.id}" class="${state.selected === o.id ? "active" : ""}">${o.emoji} ${escapeHtml(o.name)}</button>`).join("")}</div>
+        <div class="resource-list">
+          <div class="resource-card ${isUnlocked("placeholderArt") ? "" : "locked"}"><div class="resource-title"><span>Artwork</span><span class="tag ${isUnlocked("placeholderArt") ? "green" : "red"}">${isUnlocked("placeholderArt") ? "unlocked" : "locked"}</span></div><div class="small">Placeholder sprites for both projects. Replace selected-object art in the Inspector.</div><div class="button-row"><button data-consult="artist">Talk to artist</button></div></div>
+          <div class="resource-card ${isUnlocked("missionBrief") ? "" : "locked"}"><div class="resource-title"><span>Mission brief</span><span class="tag ${isUnlocked("missionBrief") ? "green" : "red"}">${isUnlocked("missionBrief") ? "unlocked" : "locked"}</span></div><div class="small">The narrative frame and current project assignment.</div><div class="button-row"><button data-consult="boss">Talk to boss</button></div></div>
+        </div>
+        <div style="height:12px"></div><h3>Behaviour cards</h3><p class="small">Selected object: <strong>${escapeHtml(selected.name)}</strong>. Attachments are no longer blocked by object type; non-recommended attachments are marked experimental.</p><div class="behavior-list">${behaviorCards}</div>`;
+    }
+    function inspectorMarkup() {
+      let obj = state.objects[state.selected];
+      if (!obj || obj.project !== state.currentProject) { obj = visibleObjects()[0]; state.selected = obj.id; }
+      return `<div class="object-buttons">${visibleObjects().map(o => `<button data-select="${o.id}" class="${state.selected === o.id ? "active" : ""}">${o.emoji} ${escapeHtml(o.name)}</button>`).join("")}</div>
+        <h2>${escapeHtml(obj.name)}</h2><div class="side-toggle"><button data-side="front" class="${state.inspectSide === "front" ? "active" : ""}">Front: image</button><button data-side="back" class="${state.inspectSide === "back" ? "active" : ""}">Back: behaviours</button></div>${state.inspectSide === "front" ? frontMarkup(obj) : backMarkup(obj)}`;
+    }
+    function frontMarkup(obj) {
+      return `<div class="note-card"><div class="row"><label>Name</label><input data-obj-field="name" value="${escapeAttr(obj.name)}"></div><div class="row"><label>Fallback emoji</label><input data-obj-field="emoji" value="${escapeAttr(obj.emoji)}"></div><div class="code-label"><span>Text-to-image prompt / art direction</span></div><textarea data-obj-field="prompt">${escapeHtml(obj.prompt)}</textarea><div class="code-label"><span>Replace sprite with a local image</span></div><input type="file" accept="image/*" data-image-file="${obj.id}"><div class="code-label"><span>Or paste an image URL</span></div><input placeholder="https://..." data-image-url="${obj.id}"><div class="button-row"><button data-clear-image="${obj.id}">Use emoji placeholder</button></div></div>`;
+    }
+    function backMarkup(obj) {
+      if (!obj.behaviors.length) return `<div class="empty-state">No behaviours attached yet. Go to Resources, select this object, and attach a card to its backside.</div>`;
+      return `<div class="behavior-list">${obj.behaviors.map((b, i) => {
+        const def = BEHAVIORS[b.id]; const recommended = def.recommended.includes(obj.id);
+        return `<div class="behavior-card ${recommended ? "" : "warn"}"><div class="behavior-title"><span>${escapeHtml(def.name)}</span><span class="tag ${recommended ? "blue" : "gold"}">${recommended ? "backside card" : "experimental"}</span></div><div class="small">${escapeHtml(def.blurb)}</div>${!recommended ? `<div class="tiny" style="color:var(--warn);margin-top:6px">Not recommended for ${escapeHtml(obj.name)}, but deliberately allowed.</div>` : ""}${def.params.map(p => paramMarkup(i, b, p)).join("")}<div class="code-label"><span>Transparent pseudocode</span><span>${b.reviewed ? "reviewed" : "editable"}</span></div><textarea data-code-index="${i}">${escapeHtml(b.code)}</textarea><div class="button-row"><button data-reviewed="${i}">${b.reviewed ? "Reviewed ✓" : "Mark reviewed"}</button><button class="danger" data-remove-index="${i}">Remove</button></div></div>`;
+      }).join("")}</div>`;
+    }
+    function paramMarkup(index, behavior, p) {
+      const val = behavior.params[p.key];
+      return `<div class="row"><label>${escapeHtml(p.label)} ${p.unit ? `<span class="tiny">(${escapeHtml(p.unit)})</span>` : ""}</label><input type="number" min="${p.min}" max="${p.max}" step="${p.step}" value="${escapeAttr(String(val))}" data-param-index="${index}" data-param-key="${p.key}"></div>`;
+    }
+    function bindRightEvents(el) {
+      el.querySelectorAll("[data-select]").forEach(btn => btn.addEventListener("click", () => { state.selected = btn.dataset.select; saveState(); renderAll(); }));
+      el.querySelectorAll("[data-attach]").forEach(btn => btn.addEventListener("click", () => attachBehavior(state.selected, btn.dataset.attach)));
+      el.querySelectorAll("[data-consult]").forEach(btn => btn.addEventListener("click", () => { state.tabLeft = "team"; consult(btn.dataset.consult); }));
+      el.querySelectorAll("[data-side]").forEach(btn => btn.addEventListener("click", () => { state.inspectSide = btn.dataset.side; saveState(); renderAll(); }));
+      el.querySelectorAll("[data-param-index]").forEach(input => input.addEventListener("change", () => { const obj = state.objects[state.selected]; const b = obj.behaviors[Number(input.dataset.paramIndex)]; b.params[input.dataset.paramKey] = Number(input.value); resetPlaytest(false); saveState(); renderAll(); }));
+      el.querySelectorAll("[data-code-index]").forEach(textarea => textarea.addEventListener("input", () => { const obj = state.objects[state.selected]; obj.behaviors[Number(textarea.dataset.codeIndex)].code = textarea.value; saveState(); }));
+      el.querySelectorAll("[data-reviewed]").forEach(btn => btn.addEventListener("click", () => { const obj = state.objects[state.selected]; const b = obj.behaviors[Number(btn.dataset.reviewed)]; b.reviewed = !b.reviewed; addLog("Reflection", `${obj.name}'s ${BEHAVIORS[b.id].name} pseudocode marked ${b.reviewed ? "reviewed" : "not reviewed"}.`); saveState(); renderAll(); }));
+      el.querySelectorAll("[data-remove-index]").forEach(btn => btn.addEventListener("click", () => removeBehavior(state.selected, null, Number(btn.dataset.removeIndex))));
+      el.querySelectorAll("[data-obj-field]").forEach(input => input.addEventListener("change", () => { const obj = state.objects[state.selected]; obj[input.dataset.objField] = input.value; saveState(); renderAll(); }));
+      el.querySelectorAll("[data-image-file]").forEach(input => input.addEventListener("change", ev => loadLocalImage(ev, input.dataset.imageFile)));
+      el.querySelectorAll("[data-image-url]").forEach(input => input.addEventListener("change", () => loadUrlImage(input.dataset.imageUrl, input.value)));
+      el.querySelectorAll("[data-clear-image]").forEach(btn => btn.addEventListener("click", () => { const obj = state.objects[btn.dataset.clearImage]; obj.imgData = null; delete loadedImages[obj.id]; saveState(); renderAll(); }));
+    }
+
+    function renderFeedback() {
+      const el = document.getElementById("feedbackPanel");
+      if (!state.studioOpen) { el.innerHTML = ""; return; }
+      const rt = state.runtime;
+      let status = "Run a playtest, then critique what happened.";
+      let cls = "";
+      if (rt.result === "success") { status = rt.resultDetail; cls = "green"; }
+      else if (rt.result === "crash" || rt.result === "lost") { status = rt.resultDetail; cls = "red"; }
+      else if (rt.running) { status = state.currentProject === "lunar" ? "Playtest running. Watch altitude, vertical speed, fuel, and touchdown location." : "Playtest running. Watch motion, speed, oxygen, and whether the goal is clear."; cls = "blue"; }
+      const lunar = state.currentProject === "lunar";
+      el.innerHTML = `<div class="feedback-card"><div class="resource-title"><span>Debrief</span><span class="tag ${cls}">${rt.result || (rt.running ? "running" : "ready")}</span></div><div class="small">${escapeHtml(status)}</div><div class="feedback-list" style="margin-top:10px">
+        ${lunar ? `<button data-feedback="needVertical">The lander is not changing altitude correctly.</button><button data-feedback="needGravity">The lander needs gravity.</button><button data-feedback="needThrusters">The player needs thrust controls.</button><button data-feedback="needLandingRule">The landing needs a safe/crash rule.</button><button data-feedback="needTelemetry">I need telemetry to make good landing decisions.</button>` : `<button data-feedback="noMotion">The astronaut cannot really move yet.</button><button data-feedback="noGoal">The game needs a win/loss rule.</button><button data-feedback="tooEasy">The game is too easy; add pressure.</button><button data-feedback="needTelemetry">I need telemetry to make good decisions.</button><button data-feedback="tooQuiet">The game needs sound feedback.</button>`}
+      </div></div>`;
+      el.querySelectorAll("[data-feedback]").forEach(btn => btn.addEventListener("click", () => handleFeedback(btn.dataset.feedback)));
+    }
+    function handleFeedback(kind) {
+      state.feedbackGiven = true;
+      const suggestions = {
+        noMotion: "Good critique. Do not auto-add the behaviour. Talk to the scientist about horizontal motion, then ask the programmer to create motion and throw-rock behaviours.",
+        noGoal: "Correct. A simulation needs a rule before it becomes a game. Talk to the designer about a safe-rescue rule, then take that to the programmer.",
+        tooEasy: "Useful. Talk to the designer about pressure. The likely next behaviour is an oxygen timer, but the programmer should create it after the design idea exists.",
+        tooQuiet: "Fair. Talk to the sound/music teammate for perceptual feedback cues.",
+        needTelemetry: state.currentProject === "lunar" ? "Telemetry is the right critique. Talk to the scientist about altitude, vertical speed, horizontal speed, and fuel. Then ask the programmer for the Lander telemetry gauge." : "Telemetry is the right critique. Talk to the scientist about what should be measured. Then ask the programmer for the Horizontal velocity gauge.",
+        needVertical: "Talk to the scientist: 'Why do we need vertical motion?' Then ask the programmer to create Vertical motion.",
+        needGravity: "Talk to the scientist: 'What exactly is lunar gravity doing?' Then ask the programmer to create Lunar gravity.",
+        needThrusters: "Talk to the scientist about thrusters and fuel. Then ask the programmer for Lander thrusters.",
+        needLandingRule: "Talk to the designer about what makes Lunar Lander a game. Then ask the programmer for the Safe touchdown rule."
+      };
+      if (kind === "needTelemetry") state.ideas.needTelemetry = true;
+      addLog("Player feedback", suggestions[kind] || "Good critique. Ask the relevant teammate before requesting code.");
+      toast("Debrief added a team suggestion, not an automatic behaviour unlock.");
+      saveState(); renderAll();
+    }
+
+    function renderStats() {
+      const el = document.getElementById("statsPills"); if (!el) return;
+      const obj = state.currentProject === "lunar" ? state.objects.lander : state.objects.astronaut;
+      const speed = Math.hypot(obj.vx, obj.vy);
+      const pills = state.currentProject === "lunar" ? [
+        ["time", `${state.runtime.t.toFixed(1)}s`], ["vy", `${obj.vy.toFixed(1)}`], ["vx", `${obj.vx.toFixed(1)}`], ["fuel", `${state.runtime.fuel.toFixed(0)}`], ["alt", `${Math.max(0, 500 - (obj.y + obj.r)).toFixed(0)}`]
+      ] : [
+        ["time", `${state.runtime.t.toFixed(1)}s`], ["vx", `${obj.vx.toFixed(1)}`], ["speed", `${speed.toFixed(1)}`], ["oxygen", `${state.runtime.oxygen.toFixed(1)}s`], ["rocks", `${state.runtime.rocksRemaining}`]
+      ];
+      el.innerHTML = pills.map(([k,v]) => `<span class="stat-pill">${k}: <strong>${v}</strong></span>`).join("");
+    }
+
+    function renderCanvasSafe() { if (canvas && ctx) renderCanvas(); }
+    function renderCanvas() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      drawSpace();
+      if (state.currentProject === "lunar") drawMoonScene(); else drawRescueGuides();
+      for (const p of state.runtime.particles) drawParticle(p);
+      for (const obj of visibleObjects()) drawObject(obj);
+      drawHud();
+      let slot = 0;
+      for (const obj of visibleObjects()) for (const b of obj.behaviors) { const def = BEHAVIORS[b.id]; if (def?.render) def.render(obj, b.params, slot++); }
+      drawResultOverlay();
+    }
+    function drawSpace() {
+      const g = ctx.createLinearGradient(0,0,canvas.width,canvas.height); g.addColorStop(0,"#050817"); g.addColorStop(.58,"#0a1230"); g.addColorStop(1,"#120b22"); ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width,canvas.height);
+      for (const s of stars) { ctx.globalAlpha = s.a; ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(s.x*canvas.width, s.y*canvas.height, s.r, 0, Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1;
+    }
+    function drawRescueGuides() {
+      const a = state.objects.astronaut, s = state.objects.ship;
+      ctx.save(); ctx.strokeStyle = "rgba(123,223,242,.20)"; ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(s.x,s.y); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+    }
+    function drawMoonScene() {
+      const surfaceY = 500, pad = state.objects.moonPad;
+      ctx.save(); ctx.fillStyle = "rgba(240,240,255,.13)"; ctx.beginPath(); ctx.moveTo(0,surfaceY); for (let x=0; x<=canvas.width; x+=30) ctx.lineTo(x, surfaceY + Math.sin(x*.035)*8 + Math.cos(x*.017)*5); ctx.lineTo(canvas.width, canvas.height); ctx.lineTo(0, canvas.height); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(247,215,116,.75)"; roundRect(ctx, pad.x-88, surfaceY-7, 176, 14, 6); ctx.fill(); ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.font="12px system-ui"; ctx.textAlign="center"; ctx.fillText("LANDING PAD", pad.x, surfaceY+18); ctx.restore();
+    }
+    function drawObject(obj) {
+      const selected = obj.id === state.selected;
+      const artReady = isUnlocked("placeholderArt") || obj.imgData;
+      ctx.save();
+      if (selected) { ctx.strokeStyle = state.inspectSide === "back" ? "rgba(247,215,116,.9)" : "rgba(123,223,242,.85)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(obj.x,obj.y,obj.r+13,0,Math.PI*2); ctx.stroke(); if (state.inspectSide === "back" && obj.behaviors.length) drawBacksideMarker(obj); }
+      if (!artReady) { ctx.fillStyle="rgba(255,255,255,.08)"; ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(obj.x,obj.y,obj.r,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.fillStyle="rgba(255,255,255,.72)"; ctx.font="13px system-ui"; ctx.textAlign="center"; ctx.fillText("ask artist", obj.x, obj.y+4); }
+      else if (loadedImages[obj.id]) { const img=loadedImages[obj.id]; const size=obj.r*2.7; ctx.drawImage(img, obj.x-size/2, obj.y-size/2, size, size); }
+      else if (obj.id === "moonPad") { ctx.fillStyle="rgba(247,215,116,.7)"; roundRect(ctx, obj.x-72, obj.y-10, 144, 20, 8); ctx.fill(); }
+      else { ctx.font = `${obj.r*1.65}px system-ui, Apple Color Emoji, Segoe UI Emoji`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(obj.emoji || "●", obj.x, obj.y+1); }
+      if (obj.id !== "moonPad") { ctx.fillStyle = selected ? "#f7d774" : "rgba(238,244,255,.82)"; ctx.font="13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="top"; ctx.fillText(obj.name, obj.x, obj.y+obj.r+16); }
+      ctx.restore();
+    }
+    function drawBacksideMarker(obj) {
+      ctx.save(); const n = obj.behaviors.length; const txt = `${n} behaviour${n===1?"":"s"} on back`; ctx.font="12px system-ui"; const w = Math.max(112, ctx.measureText(txt).width+20); roundRect(ctx, obj.x-w/2, obj.y-obj.r-42, w, 24, 10); ctx.fillStyle="rgba(247,215,116,.86)"; ctx.fill(); ctx.fillStyle="#211800"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(txt, obj.x, obj.y-obj.r-30); ctx.restore();
+    }
+    function drawParticle(p) { ctx.save(); ctx.globalAlpha=Math.max(0, Math.min(1, p.life/1.5)); ctx.fillStyle = p.kind === "flame" ? "#ffd08a" : "#c7b08a"; ctx.beginPath(); ctx.arc(p.x,p.y,p.kind === "flame" ? 4 : 5,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+    function drawHud() {
+      ctx.save(); ctx.fillStyle="rgba(0,0,0,.34)"; roundRect(ctx,18,18,310,94,16); ctx.fill(); ctx.fillStyle="#eef4ff"; ctx.font="15px system-ui";
+      if (state.currentProject === "lunar") { const l=state.objects.lander; ctx.fillText(`Altitude: ${Math.max(0, 500-(l.y+l.r)).toFixed(0)} px`,34,44); ctx.fillText(`Vertical velocity: ${l.vy.toFixed(1)} px/s`,34,68); ctx.fillText(`Fuel: ${state.runtime.fuel.toFixed(0)}`,34,92); }
+      else { const a=state.objects.astronaut, s=state.objects.ship; ctx.fillText(`Distance to ship: ${distance(a,s).toFixed(0)} px`,34,44); ctx.fillText(`Horizontal velocity: ${a.vx.toFixed(1)} px/s`,34,68); ctx.fillText(getAttached("astronaut","oxygenTimer") ? `Oxygen: ${state.runtime.oxygen.toFixed(1)} s` : "Oxygen timer: not attached",34,92); }
+      ctx.restore();
+    }
+    function drawHorizontalGauge(obj, params, slot) {
+      const x = canvas.width - 245, y = 28 + slot*96, w = 220, h = 86, max = Math.max(1, Number(params.maxShownSpeed || 90)), mid = x+w/2, needleX = mid + Math.max(-1, Math.min(1, obj.vx/max))*(w/2-18);
+      ctx.save(); ctx.fillStyle="rgba(0,0,0,.38)"; ctx.strokeStyle="rgba(123,223,242,.45)"; ctx.lineWidth=1; roundRect(ctx,x,y,w,h,16); ctx.fill(); ctx.stroke(); ctx.fillStyle="#eef4ff"; ctx.font="13px system-ui"; ctx.fillText(`${obj.name}: horizontal velocity`,x+14,y+22); ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.beginPath(); ctx.moveTo(x+18,y+50); ctx.lineTo(x+w-18,y+50); ctx.stroke(); ctx.strokeStyle="rgba(247,215,116,.95)"; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(needleX,y+39); ctx.lineTo(needleX,y+61); ctx.stroke(); ctx.fillStyle="#aebee4"; ctx.font="11px system-ui"; ctx.fillText(`-${max}`,x+18,y+74); ctx.fillText("0",mid-3,y+74); ctx.fillText(`+${max}`,x+w-48,y+74); ctx.restore();
+    }
+    function drawLanderTelemetry(obj, params, slot) {
+      const x=canvas.width-260, y=28+slot*116, w=235, h=106, max=Math.max(1, Number(params.maxVy || 120));
+      ctx.save(); ctx.fillStyle="rgba(0,0,0,.40)"; ctx.strokeStyle="rgba(247,215,116,.45)"; roundRect(ctx,x,y,w,h,16); ctx.fill(); ctx.stroke(); ctx.fillStyle="#eef4ff"; ctx.font="13px system-ui"; ctx.fillText(`${obj.name}: telemetry`,x+14,y+22); ctx.fillStyle="#aebee4"; ctx.font="12px system-ui"; const alt=Math.max(0,500-(obj.y+obj.r)); ctx.fillText(`altitude: ${alt.toFixed(0)} px`,x+14,y+45); ctx.fillText(`vertical speed: ${obj.vy.toFixed(1)} px/s`,x+14,y+63); ctx.fillText(`horizontal speed: ${obj.vx.toFixed(1)} px/s`,x+14,y+81); ctx.fillText(`fuel: ${state.runtime.fuel.toFixed(0)}`,x+14,y+99); const barX=x+150, barY=y+48, barH=46; ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.strokeRect(barX,barY,50,barH); ctx.fillStyle=Math.abs(obj.vy)>max*.75?"#ff9cae":"#f7d774"; const fillH=Math.min(1,Math.abs(obj.vy)/max)*barH; ctx.fillRect(barX,barY+barH-fillH,50,fillH); ctx.restore();
+    }
+    function drawResultOverlay() {
+      const rt = state.runtime; if (!rt.result) return;
+      const color = rt.result === "success" ? "rgba(156,246,178,.92)" : "rgba(255,156,174,.92)"; const title = rt.result === "success" ? (state.currentProject === "lunar" ? "SAFE TOUCHDOWN" : "SAFE RESCUE") : rt.result === "crash" ? "CRASH" : "MISSION FAILED";
+      ctx.save(); ctx.fillStyle="rgba(0,0,0,.56)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle=color; ctx.font="bold 42px system-ui"; ctx.textAlign="center"; ctx.fillText(title,canvas.width/2,canvas.height/2-22); ctx.fillStyle="#eef4ff"; ctx.font="18px system-ui"; wrapText(rt.resultDetail, canvas.width/2, canvas.height/2+20, 680, 26, "center"); ctx.restore();
+    }
+
+    function addThrusterParticle(obj, side) { state.runtime.particles.push({ x: obj.x + side*18 + (Math.random()-.5)*8, y: obj.y + obj.r*.75, vx: side*24 + (Math.random()-.5)*18, vy: 80 + Math.random()*35, life:.45, kind:"flame" }); }
+    function onCanvasClick(ev) { const rect=canvas.getBoundingClientRect(); const x=(ev.clientX-rect.left)*(canvas.width/rect.width); const y=(ev.clientY-rect.top)*(canvas.height/rect.height); let best=null,bestD=Infinity; for (const obj of visibleObjects()) { const d=Math.hypot(x-obj.x,y-obj.y); if (d<obj.r+24 && d<bestD) { best=obj; bestD=d; } } if (best) { state.selected=best.id; state.tabRight="inspector"; saveState(); renderAll(); } }
+    function switchProject(project) { if (project === "lunar" && !state.lunarUnlocked && !state.lunarBriefAccepted) { toast("Lunar Lander unlocks after a safe rescue, or use Jump to Lunar test."); return; } state.currentProject = project; state.selected = project === "lunar" ? "lander" : "astronaut"; resetPlaytest(false); saveState(); renderAll(); }
+    function jumpToLunarTest() { state.briefAccepted = true; state.lunarUnlocked = true; state.lunarBriefAccepted = true; state.currentProject = "lunar"; state.studioOpen = true; unlock("missionBrief"); unlock("placeholderArt"); unlock("lunarBrief"); state.selected = "lander"; addLog("Prototype shortcut", "Jumped to the Lunar Lander test path. The behaviours still need to be earned through scientist/designer → programmer handoff unless you already unlocked them."); saveState(); renderAll(); }
+
+    function loadLocalImage(ev, objectId) { const file=ev.target.files?.[0]; if (!file) return; const reader=new FileReader(); reader.onload=()=>{ state.objects[objectId].imgData=reader.result; loadImageForObject(objectId); addLog("Artist", `Loaded local image for ${state.objects[objectId].name}.`); saveState(); renderAll(); }; reader.readAsDataURL(file); }
+    function loadUrlImage(objectId, url) { if (!url.trim()) return; state.objects[objectId].imgData=url.trim(); loadImageForObject(objectId); addLog("Artist", `Loaded image URL for ${state.objects[objectId].name}.`); saveState(); renderAll(); }
+    function loadImageForObject(objectId) { const src=state.objects[objectId].imgData; if (!src) return; const img=new Image(); img.onload=()=>{ loadedImages[objectId]=img; renderCanvasSafe(); }; img.onerror=()=>toast("Image could not be loaded. Try a local file or another URL."); img.src=src; }
+    function hydrateImages() { for (const obj of Object.values(state.objects)) if (obj.imgData) loadImageForObject(obj.id); }
+    function exportProject() { const data=JSON.stringify(state,null,2); const blob=new Blob([data],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="first-day-game-studio-project.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),500); addLog("System", "Exported JSON project state."); saveState(); renderAll(); }
+    function resetEverything() { if (!confirm("Reset story progress, unlocked resources, and project state?")) return; localStorage.removeItem(VERSION_KEY); state=DEFAULT_STATE(); loadedImages={}; canvas=null; ctx=null; saveState(); renderAll(); }
+    function saveState() { try { localStorage.setItem(VERSION_KEY, JSON.stringify(state)); } catch(_) {} }
+    function loadState() { try { const raw=localStorage.getItem(VERSION_KEY); if (!raw) return null; return mergeState(DEFAULT_STATE(), JSON.parse(raw)); } catch(_) { return null; } }
+    function mergeState(base, saved) { for (const [k,v] of Object.entries(saved||{})) { if (v && typeof v === "object" && !Array.isArray(v) && base[k] && typeof base[k] === "object" && !Array.isArray(base[k])) base[k]=mergeState(base[k],v); else base[k]=v; } return base; }
+    function ensureAudio() { if (!audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); } if (audioCtx?.state === "suspended") audioCtx.resume(); }
+    function playSound(type, volumeOverride) { if (!isUnlocked("soundPack") && type !== "thrust") return; ensureAudio(); if (!audioCtx) return; const b = getAttached("astronaut","soundPack") || getAttached("lander","soundPack"); const volume = volumeOverride ?? Number(b?.params.volume ?? .18); if (type === "thrust" && Math.random() > .12) return; const now=audioCtx.currentTime; const tones=type==="success"?[520,680,880]:type==="fail"?[220,160]:type==="thrust"?[90]:[420]; tones.forEach((freq,i)=>{ const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain(); osc.type= type==="throw" || type==="thrust" ? "square" : "sine"; osc.frequency.value=freq; gain.gain.setValueAtTime(0,now+i*.08); gain.gain.linearRampToValueAtTime(volume, now+i*.08+.012); gain.gain.exponentialRampToValueAtTime(.0001, now+i*.08+(type==="thrust"?.05:.12)); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now+i*.08); osc.stop(now+i*.08+(type==="thrust"?.06:.14)); }); }
+    function distance(a,b) { return Math.hypot(a.x-b.x, a.y-b.y); }
+    function makeStars(n) { let seed=1234567; const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; }; return Array.from({length:n},()=>({x:rnd(), y:rnd(), r:rnd()*1.8+.4, a:rnd()*.65+.25})); }
+    function roundRect(c,x,y,w,h,r) { const rr=Math.min(r,w/2,h/2); c.beginPath(); c.moveTo(x+rr,y); c.arcTo(x+w,y,x+w,y+h,rr); c.arcTo(x+w,y+h,x,y+h,rr); c.arcTo(x,y+h,x,y,rr); c.arcTo(x,y,x+w,y,rr); c.closePath(); }
+    function wrapText(text,x,y,maxWidth,lineHeight,align="left") { const words=String(text).split(/\s+/); let line=""; ctx.textAlign=align; for (const word of words) { const test=line?line+" "+word:word; if (ctx.measureText(test).width>maxWidth && line) { ctx.fillText(line,x,y); line=word; y+=lineHeight; } else line=test; } if (line) ctx.fillText(line,x,y); }
+    function escapeHtml(s) { return String(s).replace(/[&<>\"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
+    function escapeAttr(s) { return escapeHtml(s).replace(/'/g,"&#39;"); }
+    function toast(msg) { const el=document.getElementById("toast"); el.textContent=msg; el.classList.add("show"); clearTimeout(toast._timer); toast._timer=setTimeout(()=>el.classList.remove("show"),2600); }
+
+    document.getElementById("tabTeam").addEventListener("click", () => { state.tabLeft="team"; saveState(); renderAll(); });
+    document.getElementById("tabBrief").addEventListener("click", () => { state.tabLeft="brief"; saveState(); renderAll(); });
+    document.getElementById("tabResources").addEventListener("click", () => { state.tabRight="resources"; saveState(); renderAll(); });
+    document.getElementById("tabInspector").addEventListener("click", () => { state.tabRight="inspector"; saveState(); renderAll(); });
+    document.getElementById("exportBtn").addEventListener("click", exportProject);
+    document.getElementById("resetAllBtn").addEventListener("click", resetEverything);
+    document.getElementById("lunarShortcutBtn").addEventListener("click", jumpToLunarTest);
+    document.getElementById("helpBtn").addEventListener("click", () => document.getElementById("helpModal").classList.add("show"));
+    document.getElementById("closeHelpBtn").addEventListener("click", () => document.getElementById("helpModal").classList.remove("show"));
+    document.getElementById("helpModal").addEventListener("click", ev => { if (ev.target.id === "helpModal") ev.currentTarget.classList.remove("show"); });
+    document.addEventListener("keydown", ev => {
+      if (["ArrowLeft","ArrowRight","ArrowUp","w","W","a","A","d","D"].includes(ev.key)) {
+        if (document.activeElement && ["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+        ev.preventDefault();
+      }
+      keyState[ev.key] = true;
+      if (state.currentProject === "rescue" && ["ArrowLeft","ArrowRight"].includes(ev.key)) {
+        const dir = ev.key === "ArrowRight" ? 1 : -1;
+        for (const obj of visibleObjects()) for (const b of obj.behaviors) if (b.id === "rockThrower") throwRock(dir, obj, b);
+      }
+    });
+    document.addEventListener("keyup", ev => { keyState[ev.key] = false; });
+    function loop(ts) { if (lastFrame == null) lastFrame = ts; const dt=(ts-lastFrame)/1000; lastFrame=ts; simulationStep(dt); renderStats(); renderCanvasSafe(); requestAnimationFrame(loop); }
+
+    hydrateImages();
+    renderAll();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
