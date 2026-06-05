@@ -1,0 +1,1706 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>A Space Travel Games Construction Kit</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+    <style>
+/* A Space Travel Games Construction Kit
+   Faithful reconstruction of the Imagine Logo plugin look (c. 2006). */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: #6f7e8c;            /* neutral plugin chrome */
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  color: #111;
+}
+
+.plugin {
+  width: 820px;
+  max-width: 100%;
+  margin: 16px auto;
+  background: #d4d0c8;            /* classic dialog gray */
+  border: 2px solid #fff;
+  outline: 2px solid #808080;
+  box-shadow: 0 10px 40px rgba(0,0,0,.5);
+}
+
+.screen { padding: 14px; }
+[hidden] { display: none !important; }
+
+/* ---------- Classic "Logo" beveled buttons ---------- */
+.logo-btn {
+  font-family: "MS Sans Serif", Tahoma, Arial, sans-serif;
+  font-size: 13px;
+  padding: 5px 12px;
+  color: #111;
+  background: #d4d0c8;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  cursor: pointer;
+}
+.logo-btn:active { border-color: #808080 #fff #fff #808080; }
+.logo-btn.primary { font-weight: bold; }
+.logo-btn.green  { background: #b9e6b9; }
+.logo-btn.red    { background: #efb9b9; }
+.logo-btn:disabled { color: #888; cursor: default; }
+
+/* ---------- Yellow note (story / help / message) ---------- */
+.yellow-note {
+  background: #ffffcc;
+  border: 1px solid #c9b94a;
+  padding: 14px 16px;
+  line-height: 1.5;
+  font-size: 15px;
+  white-space: pre-line;
+}
+.yellow-note .red { color: #c00; }
+
+/* ================= STORY SCREEN ================= */
+.story-screen { text-align: center; }
+.kit-title {
+  font-size: 26px;
+  font-weight: bold;
+  margin: 8px 0 2px;
+}
+.kit-welcome { margin: 0 0 16px; font-size: 13px; color: #333; }
+
+.story-card {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #aaa;
+  padding: 16px;
+  min-height: 320px;
+}
+.story-portraits {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.story-portraits img {
+  max-width: 240px;
+  border: 1px solid #888;
+  background: #fff;
+}
+.story-portraits .caption {
+  font-size: 12px;
+  color: #444;
+  text-align: center;
+}
+.story-portraits.team-grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+  flex-basis: 300px;
+}
+.story-portraits.team-grid figure { margin: 0; width: 92px; text-align: center; }
+.story-portraits.team-grid img { width: 92px; height: 70px; object-fit: cover; }
+.story-portraits.team-grid figcaption { font-size: 11px; }
+
+.story-body { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.story-text { flex: 1; }
+.story-nav { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ================= WORKSHOP ================= */
+.banner {
+  background: #1f3a5f;
+  color: #fff;
+  padding: 6px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+}
+.banner-title { font-weight: bold; }
+.banner-game { opacity: .85; font-style: italic; }
+
+.game-switch { display: inline-flex; }
+.game-switch .seg {
+  font-family: "MS Sans Serif", Tahoma, Arial, sans-serif;
+  font-size: 12px; padding: 4px 10px; cursor: pointer;
+  background: #2b4d75; color: #cfe0f2; border: 1px solid #16263c;
+}
+.game-switch .seg.active { background: #ffec8b; color: #1f3a5f; font-weight: bold; }
+
+.workshop {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  align-items: stretch;
+}
+.stage-col { flex: 1; min-width: 0; }
+
+.stage {
+  position: relative;
+  height: 420px;
+  background: #000 url("assets/starfield2_580.jpg") center/cover;
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  overflow: hidden;
+}
+.stage.moon { background: #000 url("assets/moonscape2_780.gif") center/cover; }
+.sprite { position: absolute; image-rendering: auto; }
+.astronaut { width: 64px; }
+.ship { width: 70px; right: 24px; top: 40%; }
+.lander { width: 64px; }
+.pad {
+  position: absolute; height: 8px; background: #8a8a8a;
+  border-top: 2px solid #cfcfcf; box-shadow: 0 0 12px rgba(255,255,255,.3);
+}
+
+.stage-status {
+  position: absolute;
+  top: 6px; left: 8px;
+  color: #ffec8b;
+  font-size: 13px;
+  text-shadow: 0 0 3px #000;
+  z-index: 4;
+}
+.drop-hint-stage {
+  position: absolute;
+  bottom: 8px; left: 0; right: 0;
+  text-align: center;
+  color: #9fb6d4;
+  font-size: 12px;
+  pointer-events: none;
+}
+.stage.drag-over { outline: 3px dashed #ffec8b; outline-offset: -6px; }
+.astronaut.drop-target { outline: 3px solid #ffec8b; border-radius: 50%; }
+
+.bubble {
+  position: absolute;
+  max-width: 60%;
+  left: 12px; bottom: 28px;
+  font-size: 13px;
+  padding: 8px 10px;
+  z-index: 6;
+  box-shadow: 0 3px 10px rgba(0,0,0,.5);
+}
+.big-message {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%,-50%);
+  width: max-content; max-width: min(460px, 88%);
+  text-align: center;
+  padding: 20px 26px;
+  z-index: 7;
+  box-shadow: 0 6px 24px rgba(0,0,0,.6);
+}
+.bm-title { font-weight: bold; font-size: 17px; line-height: 1.35; margin-bottom: 8px; }
+.bm-title.win { color: #1d6b1d; }
+.bm-title.lose { color: #9b2d2d; }
+.bm-sub { font-size: 13px; color: #444; line-height: 1.4; }
+#bigMessageText { white-space: normal; }
+.sprite { cursor: grab; }
+.sprite.grabbing { cursor: grabbing; outline: 2px dashed #ffec8b; }
+
+.rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.readouts {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+  background: #c8c4bc;
+  border: 1px solid #999;
+  padding: 6px 10px;
+}
+.readouts strong { font-family: "Courier New", monospace; }
+
+/* big message action buttons */
+.big-actions { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+
+.sprite.drop-target { outline: 3px solid #ffec8b; }
+
+/* object backs */
+.object-backs { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.obj-back {
+  flex: 1 1 220px; min-width: 200px;
+  background: #efe9d8; border: 2px dashed #9a9377;
+}
+.obj-back.drag-over { border-color: #c79a1a; background: #fff7d6; }
+.obj-back-head { background: #d8cfae; font-size: 12px; font-weight: bold; padding: 3px 7px; }
+.obj-back-body { padding: 7px; display: flex; gap: 6px; flex-wrap: wrap; min-height: 30px; align-items: center; }
+.back-tag {
+  background: #bfe0ff; border: 1px solid #5a87b0; border-radius: 3px;
+  font-size: 11px; padding: 2px 4px 2px 7px; display: inline-flex; align-items: center; gap: 4px;
+}
+.back-tag.wrong { background: #ffd6d6; border-color: #b05a5a; }
+.tag-x { border: none; background: transparent; cursor: pointer; font-weight: bold; font-size: 13px; color: #444; }
+
+/* throw / throttle controls */
+.throw-controls { margin-top: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ctrl-label { font-size: 12px; font-weight: bold; }
+.ctrl-hint { font-size: 11px; color: #555; }
+
+/* gauges */
+.gauge-panel {
+  margin-top: 8px; background: #c8c4bc; border: 1px solid #999; padding: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.gauge-panel canvas { background: #f7f4ea; border: 1px solid #888; width: 100%; height: 104px; }
+
+/* gadget tip / attached note */
+.gadget-tip { font-size: 11px; color: #234; margin-bottom: 6px; }
+.attached-on { font-size: 11px; color: #2a6e2a; margin-bottom: 6px; }
+.gadget .grip { cursor: grab; opacity: .8; }
+.gadget-list .empty { padding: 8px; }
+
+/* grant note in team visit */
+.grant-note { background: #e7f6e0; border: 1px solid #8bbf78; padding: 8px 10px; font-size: 13px; }
+.grant-note.deferred { background: #fff4d6; border-color: #c9b94a; font-style: italic; }
+#visitName { margin: 0 0 6px; font-size: 16px; }
+
+/* code overlay extras */
+.codebox-title { font-size: 13px; margin: 12px 0 4px; }
+.code-area { width: 100%; height: 200px; font-family: "Courier New", monospace; font-size: 12px; padding: 8px; }
+.auto-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+
+/* ---------- Behaviour gadget column ---------- */
+.gadget-col {
+  flex: 0 0 232px;
+  background: #c8c4bc;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+.gadget-col-head { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+.gadget-col-hint { font-size: 11px; color: #444; margin: 0 0 8px; }
+.gadget-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+
+/* The cyan gadget box */
+.gadget {
+  background: #bfe0ff;
+  border: 2px solid;
+  border-color: #fff #5a87b0 #5a87b0 #fff;
+  user-select: none;
+}
+.gadget.attached { opacity: .55; }
+
+/* cyan behaviour-gadget box */
+.gadget {
+  background: #bfe0ff;
+  border: 2px solid;
+  border-color: #fff #5a87b0 #5a87b0 #fff;
+  user-select: none;
+}
+.gadget.attached { opacity: .6; }
+.gadget-title {
+  background: #6aa0d8;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 4px 6px;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.gadget-body { padding: 6px; }
+.gadget-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+.gadget-btns .logo-btn { font-size: 11px; padding: 3px 7px; }
+
+/* gadget column */
+.gadget-col {
+  flex: 0 0 236px;
+  background: #c8c4bc;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+.gadget-col-head { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+.gadget-col-hint { font-size: 11px; color: #444; margin: 0 0 8px; }
+.gadget-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+
+/* ================= OVERLAYS ================= */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50; padding: 16px;
+}
+.overlay-card {
+  position: relative;
+  background: #d4d0c8;
+  border: 2px solid #fff;
+  outline: 2px solid #808080;
+  max-width: 640px; width: 100%;
+  max-height: 88vh; overflow: auto;
+  padding: 18px;
+}
+.overlay-card h2 { margin: 0 0 10px; font-size: 18px; }
+.overlay-close { position: absolute; top: 8px; right: 8px; padding: 2px 8px; font-weight: bold; }
+.muted { color: #444; font-size: 13px; }
+
+.team-chooser { display: flex; flex-wrap: wrap; gap: 10px; }
+.team-chooser button {
+  background: #fff; border: 1px solid #888; width: 120px; padding: 6px;
+  cursor: pointer; text-align: center; font-size: 12px;
+}
+.team-chooser button img { width: 100%; height: 76px; object-fit: cover; }
+.team-chooser button strong { display: block; margin-top: 4px; }
+.team-chooser button span { font-size: 11px; color: #555; }
+
+.team-visit { display: flex; gap: 14px; margin-top: 4px; }
+.visit-portrait { width: 200px; border: 1px solid #888; background: #fff; align-self: flex-start; }
+.visit-body { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.visit-nav { display: flex; justify-content: space-between; }
+
+.settings-body { display: flex; flex-direction: column; gap: 14px; }
+.slider-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+.slider-row label { font-size: 13px; }
+.slider-row .val { font-family: "Courier New", monospace; font-size: 13px; min-width: 60px; text-align: right; }
+.slider-row input[type=range] { grid-column: 1 / -1; width: 100%; }
+.slider-row .note { grid-column: 1 / -1; font-size: 11px; color: #555; }
+
+.code-box {
+  font-family: "Courier New", monospace; font-size: 12px;
+  background: #fff; border: 1px solid #888; padding: 8px;
+  white-space: pre-wrap; line-height: 1.4;
+}
+.help-card .code-box { margin-top: 10px; }
+.code-box .red { color: #c00; }
+.code-box .comment { color: #2a7d2a; }
+
+@media (max-width: 760px) {
+  .plugin { width: 100%; margin: 0; }
+  .workshop { flex-direction: column; }
+  .gadget-col { flex-basis: auto; }
+  .story-card { flex-direction: column; }
+  .team-visit { flex-direction: column; }
+  .visit-portrait { width: 160px; }
+}
+
+    </style>
+  </head>
+  <body>
+    <div id="plugin" class="plugin">
+
+      <!-- ============ STORY / INTRO SCREEN ============ -->
+      <section id="storyScreen" class="screen story-screen">
+        <h1 class="kit-title">A Space Travel Games Construction Kit</h1>
+        <p class="kit-welcome">Welcome</p>
+        <div class="story-card">
+          <div class="story-portraits" id="storyPortraits"></div>
+          <div class="story-body">
+            <div class="yellow-note story-text" id="storyText"></div>
+            <div class="story-nav">
+              <button class="logo-btn" id="storyBack" type="button">BACK</button>
+              <button class="logo-btn primary" id="storyNext" type="button">NEXT</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ WORKSHOP SCREEN ============ -->
+      <section id="workshopScreen" class="screen" hidden>
+        <div class="banner">
+          <span class="banner-title">A Space Travel Games Construction Kit</span>
+          <span class="game-switch" role="group" aria-label="Choose a game">
+            <button class="seg active" id="gameRescue" type="button" data-game="rescue">Astronaut Rescue</button>
+            <button class="seg" id="gameLander" type="button" data-game="lander">Lunar Lander</button>
+          </span>
+        </div>
+
+        <div class="workshop">
+          <div class="stage-col">
+            <div id="stage" class="stage">
+              <div id="statusLeft" class="stage-status"></div>
+              <img id="ship" class="sprite ship" src="assets/lander_drawing.gif" alt="" draggable="false">
+              <img id="astronaut" class="sprite astronaut" src="assets/astronaut2.gif" alt="" draggable="false">
+              <img id="lander" class="sprite lander" src="assets/lander_drawing.gif" alt="" draggable="false" hidden>
+              <div id="pad" class="pad" hidden></div>
+              <div id="messageBubble" class="yellow-note bubble" hidden></div>
+              <div id="bigMessage" class="yellow-note big-message" hidden>
+                <div id="bigMessageText"></div>
+                <div class="big-actions">
+                  <button class="logo-btn primary" id="bigMessageAction" type="button" hidden></button>
+                  <button class="logo-btn" id="bigMessageClose" type="button">OK</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- play controls -->
+            <div class="rail">
+              <button class="logo-btn green" id="startBtn" type="button">Start Game</button>
+              <button class="logo-btn red" id="stopBtn" type="button">Stop</button>
+              <button class="logo-btn" id="recordBtn" type="button" hidden>● Record</button>
+              <button class="logo-btn" id="autopilotBtn" type="button" hidden>Auto-pilot Code…</button>
+              <button class="logo-btn" id="teamBtn" type="button">Visit with your Team</button>
+              <button class="logo-btn" id="slidersBtn" type="button">Sliders…</button>
+            </div>
+
+            <div id="throwControls" class="throw-controls" hidden></div>
+
+            <!-- gauges (only when the Gauges gadget is attached) -->
+            <div id="gaugePanel" class="gauge-panel" hidden>
+              <div class="readouts" id="readouts"></div>
+              <canvas id="gaugeCanvas" width="430" height="104"></canvas>
+            </div>
+
+            <!-- backs of objects: behaviours live here, below the display -->
+            <div id="objectBacks" class="object-backs"></div>
+          </div>
+
+          <aside class="gadget-col" id="gadgetCol">
+            <div class="gadget-col-head">Behaviour Gadgets</div>
+            <p class="gadget-col-hint" id="gadgetHint"></p>
+            <div id="gadgetList" class="gadget-list"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ============ OVERLAYS ============ -->
+      <div id="teamOverlay" class="overlay" hidden>
+        <div class="overlay-card team-card">
+          <button class="overlay-close logo-btn" data-close="teamOverlay" type="button">&times;</button>
+          <h2>Visit with your Team</h2>
+          <div class="team-chooser" id="teamChooser"></div>
+          <div class="team-visit" id="teamVisit" hidden>
+            <img id="visitPortrait" class="visit-portrait" alt="">
+            <div class="visit-body">
+              <h3 id="visitName"></h3>
+              <div class="yellow-note" id="visitText"></div>
+              <div id="visitGrant" class="grant-note" hidden></div>
+              <div class="visit-nav">
+                <button class="logo-btn" id="visitBackToTeam" type="button">&larr; Team</button>
+                <button class="logo-btn primary" id="visitMore" type="button">Tell me more</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsOverlay" class="overlay" hidden>
+        <div class="overlay-card">
+          <button class="overlay-close logo-btn" data-close="settingsOverlay" type="button">&times;</button>
+          <h2 id="settingsTitle">Settings</h2>
+          <p class="muted">Sliders change the numbers that your program uses. The <span class="red">red</span> parts of the code can be changed without knowing how to program.</p>
+          <div id="settingsBody" class="settings-body"></div>
+        </div>
+      </div>
+
+      <div id="helpOverlay" class="overlay" hidden>
+        <div class="overlay-card help-card">
+          <button class="overlay-close logo-btn" data-close="helpOverlay" type="button">&times;</button>
+          <h2 id="helpTitle">Help</h2>
+          <p class="muted" id="helpWho"></p>
+          <div class="yellow-note" id="helpText"></div>
+          <pre class="code-box" id="helpCode" hidden></pre>
+        </div>
+      </div>
+
+      <div id="codeOverlay" class="overlay" hidden>
+        <div class="overlay-card">
+          <button class="overlay-close logo-btn" data-close="codeOverlay" type="button">&times;</button>
+          <h2 id="codeTitle">Code</h2>
+          <p class="muted">This program runs as an independent process. The <span class="red">red</span> parts can be changed without knowing how to program.</p>
+          <div id="codeBody"></div>
+        </div>
+      </div>
+
+      <div id="autopilotOverlay" class="overlay" hidden>
+        <div class="overlay-card">
+          <button class="overlay-close logo-btn" data-close="autopilotOverlay" type="button">&times;</button>
+          <h2>Auto-pilot Code</h2>
+          <p class="muted">This code was created by recording the throttle changes from your last flight. The first number is when to set the throttle; the second is the value. Edit it, then run it to fly automatically.</p>
+          <textarea id="autopilotCode" class="code-area" spellcheck="false"></textarea>
+          <div class="auto-actions">
+            <button class="logo-btn primary" id="runAutopilot" type="button">Run Auto-pilot</button>
+            <span class="muted" id="autopilotStatus"></span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <script>
+"use strict";
+/* =====================================================================
+   Content for A Space Travel Games Construction Kit.
+   Narrative, gadget, code and help text recovered from the original
+   lunar589.IMP / lunar402b.IMP / diana.IMP project files.
+   Loaded before app.js; these top-level consts are visible to it.
+   ===================================================================== */
+
+const CEO = { name: "the Director", role: "CEO", a: "assets/director_a.jpg", b: "assets/director_b.jpg" };
+const TEAM = {
+  signer:    { name: "Signer", role: "Assistant Game Designer", a: "assets/game_designer_a.jpg", b: "assets/game_designer_b.jpg" },
+  scientist: { name: "Tist",   role: "Scientist",  a: "assets/scientist_a.jpg",  b: "assets/scientist_b.jpg" },
+  programmer:{ name: "Jammer", role: "Programmer", a: "assets/programmer_a.jpg",  b: "assets/programmer_b.jpg" },
+  historian: { name: "Ian",    role: "Historian",  a: "assets/historian_a.jpg",   b: "assets/historian_b.jpg" },
+  animator:  { name: "Mator",  role: "Animator",   a: "assets/animator_a.jpg",    b: "assets/animator_b.jpg" },
+  sound:     { name: "Ound",   role: "Sound",      a: "assets/sound_guy_a.jpg",   b: "assets/sound_guy_b.jpg" },
+};
+const TEAM_ORDER = ["signer", "scientist", "programmer", "historian", "animator", "sound"];
+
+const STORY = [
+  { who: null, text:
+`Ever want to make a computer game?
+
+Just click on the NEXT button and you'll get your chance to build some space travel games.
+
+Don't know how to program or build games? Don't know anything about space travel? Don't worry, you'll have a team of experts to help you. Your first games will be very simple but if you keep with it you'll build some games to be proud of.
+
+Building games is fun. Hard fun.
+
+And while building your games you'll learn plenty of new things in new ways. Physics. Game design. Mathematics. History. Art. Computer programming. And more.
+
+So go ahead. Click the NEXT button.` },
+  { who: "ceo", text:
+`Congratulations!
+
+We've decided to hire you as a game developer. Your first assignment is to make a space game. Make it realistic and fun. And keep it simple.
+
+The player is an astronaut who is adrift in space and will die if he or she doesn't get back to the ship.
+
+I've assigned a team to help you. You'll need them to provide programs, artwork, and scientific and game design advice.` },
+  { who: "ceo", team: true, text:
+`Here is the team I've assigned to help you. Visit any of them at any time by clicking "Visit with your Team".
+
+Jammer the Programmer writes the behaviour gadgets. Tist the Scientist works out the physics. Signer is your assistant game designer. Ian the Historian knows the real space history. Mator the Animator supplies the artwork. Ound handles sound.
+
+You won't have any behaviour gadgets to start with. Go and visit your team - especially Tist and Jammer - to get what you need. They often have something new to say each time you visit.
+
+Click NEXT to start building your first game.` },
+];
+
+const GADGETS = {
+  /* ---- Rescue ---- */
+  horizontalVelocity: {
+    game: "rescue", target: "astronaut", name: "Horizontal Velocity Gadget", helpFrom: "scientist",
+    tip: "Things can't move left or right without this behaviour. It belongs on the astronaut. It contains a program that defines horizontal motion at the current speed.",
+    help: `Hi. So you want to know more about the HORIZONTAL VELOCITY GADGET?
+
+It runs every 1/100th of a second. That is its sampling rate. It keeps adding the horizontal velocity to the horizontal position. It divides the velocity by 100 since the velocity is the number of meters per second the thing is moving.`,
+    code:
+`; [HORIZONTAL VELOCITY CODE]
+; Updates my position from my velocity, 100 times a second.
+; This code only applies to motion to the left or right.
+repeat_every 1/100
+   [change_my_horizontal_position_by
+        my_horizontal_velocity / 100]`,
+    settings: [],
+  },
+  horizontalRockThrowing: {
+    game: "rescue", target: "astronaut", name: "Horizontal Rock Throwing Gadget", helpFrom: "programmer",
+    tip: "Belongs on the astronaut. It lets her change her left/right speed by throwing rocks in the opposite direction.",
+    help: `I'll be glad to tell you about the HORIZONTAL ROCK THROWING GADGET.
+
+When the player throws a rock, it checks there are enough rocks left, reduces the remaining rock mass, changes the astronaut's velocity by the formula Tist gave me, and animates the rock flying away. Throw a rock one way and you move the other way - that's conservation of momentum.`,
+    code:
+`; [HORIZONTAL ROCK THROWING CODE]
+; When the player throws a rock:
+; This implements Newton's Third Law of Motion -
+; for every action there is an equal and opposite reaction.
+if my_horizontal_rocks_remaining >=
+     value_of_slider_for_horizontal_rock_mass
+   [change_my_horizontal_rocks_remaining_by
+        -1 * value_of_slider_for_horizontal_rock_mass
+    change_my_horizontal_velocity_by
+        -1 * value_of_slider_for_horizontal_rock_mass
+            * §value_of_slider_for_horizontal_rock_speed§
+            / (value_of_slider_for_mass_without_rocks
+               + my_horizontal_rocks_remaining)
+    animate_horizontal_rock_moving_away]`,
+    settings: [
+      { key: "rockSpeed", label: "Speed a rock is thrown (m/s)", min: 20, max: 100, step: 1, value: 100,
+        note: "The rocks are thrown at this speed. Faster rocks give a bigger push." },
+      { key: "rockMass", label: "Mass of each rock (kg)", min: 1, max: 21, step: 1, value: 4,
+        note: "The maximum mass of a horizontal rock is 21 kilograms. Smaller rocks give finer control." },
+      { key: "initialRocks", label: "Initial total mass of rocks (kg)", min: 10, max: 60, step: 1, value: 42,
+        note: "The astronaut starts out with horizontal rocks of this total mass." },
+    ],
+  },
+  reachedShip: {
+    game: "rescue", target: "astronaut", name: "Reached or Missed Ship Gadget", helpFrom: "programmer",
+    tip: "Belongs on the astronaut. Without it she just slides past the ship and the game never ends. With it you decide what happens when she docks, crashes, runs out of rocks, or runs out of air.",
+    help: `The REACHED SHIP GADGET has four code boxes. REACHED SHIP SAFELY and REACHED SHIP BUT TOO FAST can be changed with the SETTINGS button. OUT OF AIR and OUT OF ROCKS can be changed by editing them. The red parts can be changed without knowing how to program.`,
+    fourBoxes: true,
+    codeBoxes: [
+      { title: "REACHED SHIP SAFELY", code:
+`when [and [reached_ship]
+          [my_speed <= §value_of_slider_for_safe_docking_speed§]]
+     [describe_docking "|Good job! You reached your ship.|
+      stop_game]` },
+      { title: "REACHED SHIP BUT TOO FAST", code:
+`when [and [reached_ship]
+          [my_speed > §value_of_slider_for_safe_docking_speed§]]
+     [describe_docking "|You reached your ship but you were moving too fast.|
+      stop_game]` },
+      { title: "OUT OF ROCKS", code:
+`when [and [not reached_ship]
+          [my_horizontal_rocks_remaining = 0]]
+     [show_and_say "|You are out of rocks!|]` },
+      { title: "OUT OF AIR", code:
+`when [and [not reached_ship]
+          [time_since_start > §120§]]
+     [describe_docking "|You are out of air! Too bad.|
+      stop_game]` },
+    ],
+    settings: [
+      { key: "safeSpeed", label: "Safe docking speed (m/s)", min: 1, max: 30, step: 1, value: 12,
+        note: "She dies if she hits the ship faster than this. 12 m/s is 43.2 km/h." },
+      { key: "airSeconds", label: "Seconds of air", min: 30, max: 300, step: 10, value: 120,
+        note: "How long the player has to get back to the ship." },
+    ],
+  },
+  verticalVelocityRescue: {
+    game: "rescue", target: "astronaut", name: "Vertical Velocity Gadget", helpFrom: "scientist",
+    tip: "Belongs on the astronaut. Lets her move up and down. Without it she can only move left and right.",
+    help: `The VERTICAL VELOCITY GADGET updates the astronaut's up/down position from her vertical velocity 100 times a second, just like the horizontal one does for left and right.`,
+    code:
+`; [VERTICAL VELOCITY CODE]
+repeat_every 1/100
+   [change_my_vertical_position_by
+        my_vertical_velocity / 100]`,
+    settings: [],
+  },
+  verticalRockThrowing: {
+    game: "rescue", target: "astronaut", name: "Vertical Rock Throwing Gadget", helpFrom: "programmer",
+    tip: "Belongs on the astronaut. Lets her change her up/down speed by throwing rocks the opposite way. Use the up and down arrow keys. It shares the same bag of rocks.",
+    help: `The VERTICAL ROCK THROWING GADGET is just like the horizontal one - I copied it and changed horizontal to vertical. Throw a rock down and the astronaut moves up, and the other way around.`,
+    code:
+`; [VERTICAL ROCK THROWING CODE]
+; Just like horizontal, but up and down.
+if my_rocks_remaining >= value_of_slider_for_rock_mass
+   [change_my_vertical_velocity_by
+        -1 * value_of_slider_for_rock_mass
+            * §value_of_slider_for_rock_speed§
+            / (value_of_slider_for_mass_without_rocks
+               + my_rocks_remaining)
+    animate_vertical_rock_moving_away]`,
+    settings: [],
+  },
+  gaugesRescue: {
+    game: "rescue", target: "astronaut", name: "Gauges", helpFrom: "programmer",
+    tip: "Belongs on the astronaut. Adds gauges to display the position, velocity, fuel and time.",
+    help: `Add gauges to display the position, velocity, fuel, acceleration and more. They make it much easier to see what your astronaut is doing.`,
+    code: `; Shows live read-outs and a moving speed gauge under the stage.`,
+    settings: [], isGauges: true,
+  },
+
+  /* ---- Lander ---- */
+  verticalVelocity: {
+    game: "lander", target: "lander", name: "Vertical Velocity Gadget", helpFrom: "scientist",
+    tip: "Belongs on the lander. Things can't move up and down without it. It defines up and down motion.",
+    help: `The VERTICAL VELOCITY GADGET updates the lander's position from its velocity 100 times a second so the motion is smooth. The velocity is how many meters it moves in one second.`,
+    code:
+`; [VERTICAL VELOCITY CODE]
+; Updates my position from my velocity, 100 times a second.
+repeat_every 1/100
+   [change_my_vertical_position_by
+        my_vertical_velocity / 100]`,
+    settings: [],
+  },
+  gravity: {
+    game: "lander", target: "lander", name: "Gravity Gadget", helpFrom: "scientist",
+    tip: "Belongs on the lander. Without it the lander will not fall. It implements gravity near the surface of a moon.",
+    help: `Gravity near the surface of the moon decreases the upward vertical speed by 1.6 meters per second every second. Decreasing the upward speed is the same as increasing the downward speed. On Earth gravity is about 9.8 m/s every second.`,
+    code:
+`; [CONSTANT GRAVITY CODE]
+; On every second it increases my downward speed.
+repeat_every 1
+   [change_my_vertical_velocity_by §value_of_slider_for_gravity§]`,
+    settings: [
+      { key: "gravity", label: "Gravity (m/s every second, downward)", min: -25, max: -1, step: 0.1, value: -1.6,
+        note: "Near the surface of the moon gravity is about -1.6. On Earth it is about -9.8." },
+    ],
+  },
+  verticalThruster: {
+    game: "lander", target: "lander", name: "Vertical Thruster Gadget", helpFrom: "programmer",
+    tip: "Belongs on the lander. It throws projectiles downward several times a second so the lander pushes upward. The throttle controls how fast it fires.",
+    help: `The THRUSTER GADGET throws projectiles downward, and the lander recoils upward - conservation of momentum. The throttle sets how fast it fires (up to a few times a second at 100%). Watch your fuel: each shot uses some. The real Apollo descent engine threw about 26 kilograms of exhaust every second.`,
+    code:
+`; [VERTICAL THRUSTER CODE]
+; Throws a projectile downward when the throttle is on.
+; This is an example of conservation of momentum.
+repeat_every [1 / §value_of_slider_for_vertical_throttle§]
+   [if my_projectiles_left > 0
+      [change_my_projectiles_left_by -1
+       change_my_vertical_velocity_by
+           -1 * §value_of_slider_for_projectile_speed§
+               * §value_of_slider_for_projectile_mass§
+               / my_mass
+       animate_projectile_moving_away]]`,
+    settings: [
+      { key: "throttle", label: "Throttle (%)", min: 0, max: 100, step: 1, value: 0,
+        note: "How hard the engine fires. Use Up/Down (or W/S) to change it during the flight." },
+      { key: "projectileSpeed", label: "Speed of a projectile (m/s)", min: 40, max: 120, step: 1, value: 100,
+        note: "The fuel is ejected at this speed. Faster exhaust = more push per kilogram of fuel." },
+      { key: "projectileMass", label: "Mass of each projectile (kg)", min: 1, max: 10, step: 1, value: 5,
+        note: "Smaller projectiles give finer control and use less fuel per shot." },
+      { key: "fuel", label: "Initial fuel (kg)", min: 40, max: 200, step: 10, value: 100,
+        note: "The lander starts with this total mass of projectiles." },
+    ],
+  },
+  landingAction: {
+    game: "lander", target: "lander", name: "Landing Action Gadget", helpFrom: "programmer",
+    tip: "Belongs on the lander. Without it the lander just stops when it reaches the surface. With it you decide if it lands safely or crashes.",
+    help: `Without this gadget your lander just stops when it reaches the surface. With it you can decide if it lands safely or crashes. A lander crashes if it hits the surface moving faster than the safe landing speed.`,
+    fourBoxes: true,
+    codeBoxes: [
+      { title: "LANDED SAFELY", code:
+`when [and [landed] [my_speed <= §value_of_slider_for_safe_landing_speed§]]
+     [describe_landing "|The Eagle has landed!|
+      stop_game]` },
+      { title: "CRASHED", code:
+`when [and [landed] [my_speed > §value_of_slider_for_safe_landing_speed§]]
+     [describe_landing "|Too bad. You crashed!|
+      stop_game]` },
+    ],
+    settings: [
+      { key: "safeLandingSpeed", label: "Safe landing speed (m/s)", min: 1, max: 10, step: 0.5, value: 3,
+        note: "A real lander crashes above about 1 m/s. Pick a value that is fair but not too easy." },
+    ],
+  },
+  gaugesLander: {
+    game: "lander", target: "lander", name: "Gauges", helpFrom: "programmer",
+    tip: "Belongs on the lander. Adds gauges for height, speed and fuel. It is easier to land safely when you watch a speed gauge.",
+    help: `Add gauges to display the height, vertical speed and fuel. See if you can stop your lander in mid-flight - it is easier if you watch the speed gauge.`,
+    code: `; Shows live read-outs and a moving speed gauge under the stage.`,
+    settings: [], isGauges: true,
+  },
+};
+
+const DIALOGUE = {
+  rescue: {
+    signer: [
+      { text: `Did you hear the joke about the astronaut returning from a space walk? He knocked on the hatch and the astronaut inside asked, "Who's there?"
+
+I guess we can't use that. Maybe the game should have a background story. Helen the astronaut has been collecting rock samples from an asteroid. On her way back to the ship something goes wrong with her equipment. She'll die if she doesn't get back to her ship. All she has is her bag full of asteroid rocks.
+
+I thought the name Helen was good since Helen Sharman was Britain's first astronaut. Before going into space she was a scientist working on chocolate for Mars Confectionary Limited.` },
+      { text: `I think we should start off with a very simple game. The ship is directly to the right and all the player does is throw rocks to the left. We'll make it more fun after we get that much working.
+
+Visit Jammer the Programmer - he can give you behaviour gadgets to make the astronaut move.` },
+      { text: `A good start! We need to decide what should happen when the astronaut reaches the ship. Or not!
+
+I can think of four conditional actions for Jammer to program:
+
+Reach ship but moving too fast. Game over. Player loses.
+Reach ship and not moving too fast. Player wins.
+Run out of rocks. Player might still win if the astronaut is headed towards the ship.
+Run out of air. The player has only so much time to get back. Otherwise the game is too easy.
+
+Go and ask Jammer for a Reached or Missed Ship gadget.`, needs: "testedIncomplete", sets: "designedEnding" },
+      { text: `We're making good progress but all the movement is too "one-dimensional". It would be fun to move in diagonals as well. Let's get Jammer to make a gadget for throwing rocks up and down too.`, needs: "designedEnding", sets: "wantsVertical" },
+    ],
+    scientist: [
+      { text: `An astronaut adrift, huh?
+
+Well, she could throw rocks. If she does, she'll begin to move in the opposite direction. And she won't stop. There's no air friction to slow her down. Every time she throws a rock she'll go faster. Unless she changes the direction she is throwing the rocks.` },
+      { text: `Let me explain why rock throwing works. The physics of your game is based on conservation of momentum. That means total momentum never changes. Momentum depends on velocity and mass.
+
+So the change of the speed of the astronaut in one direction is the change of the speed of the rock in the opposite direction, times the mass of the rock, divided by the mass of the astronaut.
+
+Now Jammer has the equation he needs.`, sets: "physicsKnown" },
+      { text: `If there was no friction, then when you threw something you would begin moving in the opposite direction. And without friction once you start moving, you won't stop unless something interferes. Try it sometime while ice skating - there isn't much friction on ice.` },
+    ],
+    programmer: [
+      { text: `It will be fun to write programs for your Astronaut game. But first you'd better see Tist the Scientist so I know what physics to program.` },
+      { text: `So we're making a game about throwing rocks in space? Sounds fun.
+
+I've programmed a gadget for moving horizontally and another for throwing rocks left or right, plus some gauges. Take them and try them out. To add one to your astronaut, drag it onto the picture of the astronaut. You can change the values it uses with the SETTINGS button.`,
+        grants: ["horizontalVelocity", "horizontalRockThrowing", "gaugesRescue"], needs: "physicsKnown" },
+      { text: `You decided what should happen when the astronaut reaches the ship? Good. Here's the REACHED OR MISSED SHIP GADGET. It has four code boxes: reached safely, reached too fast, out of rocks, and out of air. Drop it on the astronaut.`,
+        grants: ["reachedShip"], needs: "designedEnding" },
+      { text: `No problem. It's easy to make a VERTICAL ROCK THROWING GADGET - I just copy the horizontal one and make small edits. The vertical and horizontal programs are almost the same. Drop them on the astronaut. Enjoy.`, grants: ["verticalVelocityRescue", "verticalRockThrowing"], needs: "wantsVertical" },
+    ],
+    historian: [
+      { text: `A game about a rock throwing astronaut?
+
+Astronauts on space walks travel around using a hand held unit that produces short bursts of gas. Rather than throwing rocks, they were throwing a trillion trillion molecules every second. But the principles are the same.
+
+Only astronauts using a big backpack called the Manned Maneuvering Unit have ever become disconnected from their space vehicle. They're usually tethered to their ship with a cable.` },
+      { text: `The first human to leave their vehicle in space was Alexei Leonov on March 18, 1965, from the Soviet Union. A few months later Ed White became the first American to walk in space. The first woman to perform a space walk was Soviet cosmonaut Svetlana Savitskaya in July 1984.
+
+The United States and the Soviet Union competed to be first to travel in space, orbit the Earth, walk in space, dock ships, and go to the moon. We call this the Space Race.` },
+    ],
+    animator: [
+      { text: `But outer Space, at least this far, for all the fuss of the populace, stays more popular, than populous. Robert Frost wrote that in 1959.
+
+Sounds like a fun project but I'm too busy just now to make a full animation. I found a few photos you can use in the meanwhile - an astronaut in space, the lander, and a starfield background. They're already on your stage. Good luck.`, sets: "haveArt" },
+      { text: `The astronaut picture has no behaviours so it just sits there. Take the gadgets Jammer gave you and drag them onto the astronaut. If you're curious, click FLIP on a gadget to read the program that gives it its behaviour.` },
+    ],
+    sound: [
+      { text: `So, you're working on a game in space, huh? Sorry, there is no air, so there is no sound. You don't need me.` },
+      { text: `Have you talked to Tist the Scientist? She probably has ideas about how this game will work.` },
+    ],
+  },
+
+  lander: {
+    signer: [
+      { text: `A Lunar Lander game! Classic. The player flies a lander down to the surface and has to land gently. If it touches down too fast, it crashes.
+
+Get the behaviours from Jammer, and ask Tist about gravity. When you've got the lander flying, come back and we'll decide what counts as a safe landing.` },
+      { text: `Now that you've tried flying, we need to decide what happens when the lander reaches the surface. Land slowly - it's a safe landing. Hit too fast - it crashes. Ask Jammer for a Landing Action gadget.`, needs: "testedIncomplete", sets: "designedEnding" },
+    ],
+    scientist: [
+      { text: `Gravity near the surface of the moon decreases the lander's upward speed by 1.6 meters per second every second. That's about a sixth of Earth's gravity. Decreasing the upward speed is the same as increasing the downward speed.
+
+Jammer can put that in a Gravity Gadget.`, sets: "physicsKnown" },
+      { text: `A lander crashes if it hits the surface faster than about 1 meter per second - that's 3.6 km/h. The lander's speed is the square root of the sum of the squares of its horizontal and vertical velocity.` },
+    ],
+    programmer: [
+      { text: `For the lander you'll need three behaviours: a Vertical Velocity Gadget so it can move up and down, a Gravity Gadget so it falls, and a Thruster Gadget so the engine can push it back up. Here they are - drop them on the lander.
+
+Tip: once it's flying, you can RECORD your flight. I'll turn it into editable code that the lander can run on auto-pilot.`,
+        grants: ["verticalVelocity", "gravity", "verticalThruster", "gaugesLander"], needs: "physicsKnown" },
+      { text: `Here's the LANDING ACTION GADGET. It decides whether the lander touches down safely or crashes, based on the safe landing speed you set. Drop it on the lander.`,
+        grants: ["landingAction"], needs: "designedEnding" },
+    ],
+    historian: [
+      { text: `On July 20, 1969, Apollo 11's lunar module Eagle landed on the moon with Neil Armstrong and Buzz Aldrin aboard. Armstrong took over manual control to avoid a boulder field and landed with only seconds of fuel to spare. "The Eagle has landed."` },
+    ],
+    animator: [
+      { text: `I've put a lander drawing and a moonscape on the stage for you. Watch the lander as it fires its thrusters. Good luck getting it down in one piece.`, sets: "haveArt" },
+    ],
+    sound: [
+      { text: `Still no air in space, so still no sound on the way down. But you'd hear a thump - or a crunch - at the end. I'll leave that to your imagination.` },
+    ],
+  },
+};
+const TALK_END = "Sorry, I can't think of more to tell you just now. If you want to know the science behind a behaviour gadget, click its HELP button and come back here.";
+
+const GAMES = {
+  rescue: {
+    title: "Astronaut Rescue",
+    objects: [
+      { id: "astronaut", label: "Astronaut", el: "astronaut" },
+      { id: "ship", label: "Spaceship", el: "ship" },
+    ],
+    player: "astronaut",
+    needGadgets: ["horizontalVelocity", "horizontalRockThrowing", "reachedShip"],
+  },
+  lander: {
+    title: "Lunar Lander",
+    objects: [{ id: "lander", label: "Lunar Lander", el: "lander" }],
+    player: "lander",
+    needGadgets: ["verticalVelocity", "gravity", "verticalThruster", "landingAction"],
+    throttle: true,
+  },
+};
+const PHYS = { massWithoutRocks: 95, landerMass: 300, landerFireRate: 4,
+  worldW: 200, worldH: 140, dockRadius: 12, landerStartHeight: 90, landerWorldH: 140 };
+
+
+"use strict";
+/* =====================================================================
+   A Space Travel Games Construction Kit — application logic.
+   Content (TEAM, STORY, GADGETS, DIALOGUE, GAMES, PHYS …) is in data.js,
+   which is loaded first and shares this global scope.
+   ===================================================================== */
+
+const $ = (id) => document.getElementById(id);
+const show = (el) => { el.hidden = false; };
+const hide = (el) => { el.hidden = true; };
+
+/* ------------------------------------------------------------------ */
+/* STATE                                                              */
+/* ------------------------------------------------------------------ */
+function newGameState() {
+  return { acquired: new Set(), backs: {}, flags: new Set(), settings: {}, seen: {} };
+}
+const state = {
+  storyIndex: 0,
+  game: "rescue",
+  games: { rescue: newGameState(), lander: newGameState() },
+  visit: { role: null, line: 0 },
+  running: false, recording: false, autopilot: false,
+  t: 0, x: 0, y: 0, vx: 0, vy: 0, rocks: 0, fuel: 0, outOfRocks: false,
+  ended: false, reachedDuringRun: false,
+  record: [], autoCode: "", autoSchedule: [], gaugeHist: [],
+};
+
+function initSettings(g) {
+  const gs = state.games[g];
+  Object.entries(GADGETS).forEach(([k, def]) => {
+    if (def.game !== g) return;
+    def.settings.forEach((s) => { if (gs.settings[`${k}.${s.key}`] === undefined) gs.settings[`${k}.${s.key}`] = s.value; });
+  });
+}
+initSettings("rescue"); initSettings("lander");
+const G = () => state.games[state.game];
+const sv = (key, sk) => G().settings[`${key}.${sk}`];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function ensureStartPositions() {
+  if (!state.startA) state.startA = { x: 20, y: 70 };
+  if (!state.shipPos) state.shipPos = { x: 182, y: 70 };
+  if (state.landerStartH === undefined) state.landerStartH = PHYS.landerStartHeight;
+}
+
+/* ------------------------------------------------------------------ */
+/* CODE RENDERING                                                     */
+/* ------------------------------------------------------------------ */
+function renderCode(code) {
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return esc(code)
+    .replace(/§([^§]*)§/g, '<span class="red">$1</span>')
+    .replace(/^(;.*)$/gm, '<span class="comment">$1</span>');
+}
+
+/* ==================================================================== */
+/* STORY                                                                */
+/* ==================================================================== */
+function renderStory() {
+  const p = STORY[state.storyIndex];
+  const port = $("storyPortraits");
+  port.innerHTML = "";
+  port.className = "story-portraits" + (p.team ? " team-grid" : "");
+  if (p.team) {
+    TEAM_ORDER.forEach((r) => {
+      const t = TEAM[r];
+      const fig = document.createElement("figure");
+      fig.innerHTML = `<img src="${t.a}" alt="${t.name}"><figcaption>${t.name}<br><small>${t.role}</small></figcaption>`;
+      port.appendChild(fig);
+    });
+  } else if (p.who === "ceo") {
+    port.innerHTML = `<img src="${CEO.a}" alt="CEO"><div class="caption">The Director (CEO)</div>`;
+  }
+  $("storyText").textContent = p.text;
+  $("storyBack").disabled = state.storyIndex === 0;
+  $("storyNext").textContent = state.storyIndex === STORY.length - 1 ? "Meet your team →" : "NEXT";
+}
+$("storyNext").addEventListener("click", () => {
+  if (state.storyIndex < STORY.length - 1) { state.storyIndex++; renderStory(); }
+  else enterWorkshop();
+});
+$("storyBack").addEventListener("click", () => { if (state.storyIndex > 0) { state.storyIndex--; renderStory(); } });
+
+function enterWorkshop() {
+  hide($("storyScreen"));
+  show($("workshopScreen"));
+  switchGame("rescue");
+  openTeam();   // first thing: meet the team to collect behaviours
+}
+
+/* ==================================================================== */
+/* GAME SWITCH                                                          */
+/* ==================================================================== */
+document.querySelectorAll(".game-switch .seg").forEach((b) =>
+  b.addEventListener("click", () => switchGame(b.dataset.game)));
+
+function switchGame(g) {
+  state.game = g;
+  state.running = false; state.recording = false; state.autopilot = false;
+  document.querySelectorAll(".game-switch .seg").forEach((b) => b.classList.toggle("active", b.dataset.game === g));
+  $("astronaut").hidden = g !== "rescue";
+  $("ship").hidden = g !== "rescue";
+  $("lander").hidden = g !== "lander";
+  $("pad").hidden = true;
+  $("stage").classList.toggle("moon", g === "lander");
+  GAMES[g].objects.forEach((o) => { if (!G().backs[o.id]) G().backs[o.id] = new Set(); });
+  $("recordBtn").hidden = !GAMES[g].throttle;
+  $("recordBtn").textContent = "● Record";
+  $("autopilotBtn").hidden = !GAMES[g].throttle;
+  renderGadgets(); renderBacks(); renderThrowControls(); resetSim();
+  const hint = G().acquired.size === 0
+    ? 'You have no behaviour gadgets yet. Click "Visit with your Team" - especially Tist and Jammer - to get them.'
+    : "Drag a gadget onto the back of the object it belongs to. Click FLIP to read its code, or SETTINGS to change its numbers.";
+  $("gadgetHint").textContent = hint;
+  if (!setupTip()) message(hint);
+}
+
+/* ==================================================================== */
+/* BEHAVIOUR GADGET PANEL                                               */
+/* ==================================================================== */
+function renderGadgets() {
+  const list = $("gadgetList");
+  list.innerHTML = "";
+  const acquired = [...G().acquired];
+  if (acquired.length === 0) {
+    list.innerHTML = '<p class="muted empty">Nothing here yet. Visit your team to get behaviour gadgets.</p>';
+    return;
+  }
+  acquired.forEach((key) => {
+    const g = GADGETS[key];
+    const attachedTo = attachedObject(key);
+    const box = document.createElement("div");
+    box.className = "gadget" + (attachedTo ? " attached" : "");
+    box.dataset.key = key;
+    box.innerHTML =
+      `<div class="gadget-title" draggable="true"><span class="grip">⠿</span> ${g.name}</div>
+      <div class="gadget-body">
+        <div class="gadget-tip">${g.tip}</div>
+        ${attachedTo ? `<div class="attached-on">On the ${objLabel(attachedTo)}'s back.</div>` : ""}
+        <div class="gadget-btns">
+          ${g.settings.length ? '<button class="logo-btn" data-act="settings">SETTINGS</button>' : ""}
+          <button class="logo-btn" data-act="help">HELP</button>
+          <button class="logo-btn" data-act="flip">FLIP</button>
+        </div>
+      </div>`;
+    list.appendChild(box);
+    box.querySelectorAll("[data-act]").forEach((btn) =>
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (btn.dataset.act === "settings") openSettings(key);
+        else if (btn.dataset.act === "help") openHelp(key);
+        else if (btn.dataset.act === "flip") openCode(key);
+      }));
+    box.querySelector(".gadget-title").addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", key);
+      e.dataTransfer.effectAllowed = "copy";
+    });
+  });
+}
+function attachedObject(key) {
+  for (const [oid, set] of Object.entries(G().backs)) if (set.has(key)) return oid;
+  return null;
+}
+function objLabel(oid) { return GAMES[state.game].objects.find((o) => o.id === oid)?.label || oid; }
+
+/* ---- object backs (drop targets) ---- */
+function renderBacks() {
+  const wrap = $("objectBacks");
+  wrap.innerHTML = "";
+  GAMES[state.game].objects.forEach((o) => {
+    const set = G().backs[o.id] || new Set();
+    const panel = document.createElement("div");
+    panel.className = "obj-back";
+    panel.dataset.obj = o.id;
+    const tags = [...set].map((k) => {
+      const wrong = GADGETS[k].target !== o.id;
+      return `<span class="back-tag ${wrong ? "wrong" : ""}" title="${wrong ? "This gadget doesn't belong here!" : ""}">${GADGETS[k].name}${wrong ? " ⚠" : ""} <button class="tag-x" data-remove="${k}" data-obj="${o.id}">×</button></span>`;
+    }).join("");
+    panel.innerHTML = `<div class="obj-back-head">Back of the ${o.label}</div>
+      <div class="obj-back-body">${tags || '<span class="muted">empty — drag a behaviour gadget here</span>'}</div>`;
+    wrap.appendChild(panel);
+    ["dragenter", "dragover"].forEach((ev) => panel.addEventListener(ev, (e) => { e.preventDefault(); panel.classList.add("drag-over"); }));
+    panel.addEventListener("dragleave", () => panel.classList.remove("drag-over"));
+    panel.addEventListener("drop", (e) => { e.preventDefault(); panel.classList.remove("drag-over"); dropOn(o.id, e.dataTransfer.getData("text/plain")); });
+    panel.querySelectorAll("[data-remove]").forEach((b) =>
+      b.addEventListener("click", () => { G().backs[b.dataset.obj].delete(b.dataset.remove); renderBacks(); renderGadgets(); updateGaugeVisibility(); renderThrowControls(); }));
+  });
+}
+function wireSpriteDrop(elId, objId) {
+  const el = $(elId);
+  ["dragenter", "dragover"].forEach((ev) => el.addEventListener(ev, (e) => { e.preventDefault(); el.classList.add("drop-target"); }));
+  el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
+  el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("drop-target"); dropOn(objId, e.dataTransfer.getData("text/plain")); });
+}
+wireSpriteDrop("astronaut", "astronaut");
+wireSpriteDrop("ship", "ship");
+wireSpriteDrop("lander", "lander");
+
+function dropOn(objId, key) {
+  if (!key || !GADGETS[key] || !G().acquired.has(key)) return;
+  Object.values(G().backs).forEach((s) => s.delete(key));
+  G().backs[objId].add(key);
+  renderBacks(); renderGadgets(); updateGaugeVisibility(); renderThrowControls();
+  if (GADGETS[key].target === objId) { message(`Added the ${GADGETS[key].name} to the back of the ${objLabel(objId)}.`); setTimeout(setupTip, 1200); }
+  else message(`Hmm — the ${GADGETS[key].name} is meant for the ${objLabel(GADGETS[key].target)}, not the ${objLabel(objId)}. You can leave it there, but the game won't work right. Drag the × off the tag to fix it.`, true);
+}
+function playerHas(key) {
+  const pid = GAMES[state.game].player;
+  return G().backs[pid] && G().backs[pid].has(key);
+}
+
+/* ==================================================================== */
+/* SETTINGS / HELP / CODE                                               */
+/* ==================================================================== */
+function openSettings(key) {
+  const g = GADGETS[key];
+  $("settingsTitle").textContent = g.name + " — Settings";
+  const body = $("settingsBody");
+  body.innerHTML = g.settings.length ? "" : '<p class="muted">This gadget has no adjustable settings.</p>';
+  g.settings.forEach((s) => {
+    const id = `set_${key}_${s.key}`;
+    const row = document.createElement("div");
+    row.className = "slider-row";
+    row.innerHTML = `<label for="${id}">${s.label}</label>
+      <span class="val" id="${id}_val">${sv(key, s.key)}</span>
+      <input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${sv(key, s.key)}">
+      <span class="note">${s.note || ""}</span>`;
+    body.appendChild(row);
+    row.querySelector("input").addEventListener("input", (e) => {
+      G().settings[`${key}.${s.key}`] = Number(e.target.value);
+      $(`${id}_val`).textContent = e.target.value;
+    });
+  });
+  show($("settingsOverlay"));
+}
+function openHelp(key) {
+  const g = GADGETS[key];
+  $("helpTitle").textContent = g.name + " — Help";
+  $("helpWho").textContent = g.helpFrom ? `${TEAM[g.helpFrom].name} the ${TEAM[g.helpFrom].role} explains:` : "";
+  $("helpText").textContent = g.help;
+  const codeEl = $("helpCode");
+  if (g.code) { codeEl.hidden = false; codeEl.innerHTML = renderCode(g.code); } else codeEl.hidden = true;
+  show($("helpOverlay"));
+}
+function openCode(key) {
+  const g = GADGETS[key];
+  $("codeTitle").textContent = g.name + " — Code (flipped over)";
+  const body = $("codeBody");
+  body.innerHTML = "";
+  if (g.fourBoxes) {
+    g.codeBoxes.forEach((cb) => {
+      const h = document.createElement("h3"); h.className = "codebox-title"; h.textContent = cb.title;
+      const pre = document.createElement("pre"); pre.className = "code-box"; pre.innerHTML = renderCode(cb.code);
+      body.appendChild(h); body.appendChild(pre);
+    });
+  } else {
+    const pre = document.createElement("pre"); pre.className = "code-box"; pre.innerHTML = renderCode(g.code || "; (no code)");
+    body.appendChild(pre);
+  }
+  show($("codeOverlay"));
+}
+$("slidersBtn").addEventListener("click", () => {
+  const key = state.game === "rescue" ? "horizontalRockThrowing" : "verticalThruster";
+  if (G().acquired.has(key)) openSettings(key);
+  else message("You don't have any gadgets with sliders yet. Visit Jammer the Programmer.");
+});
+
+/* ==================================================================== */
+/* TEAM VISITS + ACQUISITION                                            */
+/* ==================================================================== */
+$("teamBtn").addEventListener("click", openTeam);
+function openTeam() {
+  const chooser = $("teamChooser");
+  chooser.innerHTML = "";
+  TEAM_ORDER.forEach((role) => {
+    const t = TEAM[role];
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerHTML = `<img src="${t.a}" alt=""><strong>${t.name}</strong><span>${t.role}</span>`;
+    btn.addEventListener("click", () => visit(role));
+    chooser.appendChild(btn);
+  });
+  hide($("teamVisit")); show($("teamChooser")); show($("teamOverlay"));
+}
+function visit(role) {
+  if (G().seen[role] === undefined) G().seen[role] = 0;
+  state.visit = { role, line: G().seen[role] };
+  hide($("teamChooser")); show($("teamVisit"));
+  showVisitLine();
+}
+function currentLines() { return (DIALOGUE[state.game][state.visit.role]) || []; }
+function lineAvailable(line) { return !line.needs || G().flags.has(line.needs); }
+function fallbackText(role, gatedLine) {
+  if (gatedLine && gatedLine.needs) {
+    if (gatedLine.needs === "physicsKnown") return "First go and see Tist the Scientist so I know the physics to program. Then come back.";
+    if (gatedLine.needs === "testedIncomplete") return "Build the simple game with what you have and try it out first. Then come back and we'll make it better.";
+    if (gatedLine.needs === "designedEnding") return "Talk it over with Signer, your game designer, first. Then come back.";
+    if (gatedLine.needs === "wantsVertical") return "We haven't decided to add up-and-down movement yet. Talk to Signer about making the game less one-dimensional.";
+  }
+  return "I don't have anything new for you just now. Maybe talk to the others, or come back after you've made some more progress.";
+}
+function showVisitLine() {
+  const role = state.visit.role, t = TEAM[role], lines = currentLines();
+  const idx = state.visit.line;
+  $("visitName").textContent = `${t.name} the ${t.role}`;
+  const note = $("visitGrant"); note.hidden = true; note.innerHTML = "";
+  const cur = lines[idx];
+  if (cur && lineAvailable(cur)) {
+    $("visitPortrait").src = idx % 2 === 0 ? t.a : t.b;
+    $("visitText").textContent = cur.text;
+    applyLine(cur, note);
+    G().seen[role] = Math.max(G().seen[role] || 0, idx + 1);
+    const next = lines[idx + 1];
+    const hasNext = next && lineAvailable(next);
+    $("visitMore").textContent = hasNext ? "Tell me more" : "That's all for now";
+    $("visitMore").disabled = !hasNext;
+  } else {
+    // no new available line: gentle fallback, end the visit
+    $("visitPortrait").src = t.a;
+    $("visitText").textContent = fallbackText(role, cur);
+    $("visitMore").textContent = "That's all for now";
+    $("visitMore").disabled = true;
+  }
+}
+function applyLine(line, noteEl) {
+  if (line.sets) G().flags.add(line.sets);
+  if (line.grants) {
+    const newly = line.grants.filter((k) => !G().acquired.has(k));
+    line.grants.forEach((k) => G().acquired.add(k));
+    if (newly.length) {
+      noteEl.hidden = false; noteEl.className = "grant-note";
+      noteEl.innerHTML = "★ You received: " + newly.map((k) => GADGETS[k].name).join(", ") +
+        '. <span class="muted">Find them in the Behaviour Gadgets panel.</span>';
+      renderGadgets();
+      $("gadgetHint").textContent = "Drag a gadget onto the back of the object it belongs to.";
+    }
+  }
+}
+$("visitMore").addEventListener("click", () => {
+  const lines = currentLines();
+  const next = lines[state.visit.line + 1];
+  if (next && lineAvailable(next)) { state.visit.line += 1; showVisitLine(); }
+});
+$("visitBackToTeam").addEventListener("click", () => { hide($("teamVisit")); show($("teamChooser")); });
+
+/* ==================================================================== */
+/* OVERLAYS / MESSAGES                                                  */
+/* ==================================================================== */
+document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => hide($(b.dataset.close))));
+document.querySelectorAll(".overlay").forEach((ov) => ov.addEventListener("click", (e) => { if (e.target === ov) hide(ov); }));
+
+let messageTimer = null;
+function message(text, sticky) {
+  const b = $("messageBubble");
+  b.textContent = text; show(b);
+  if (messageTimer) clearTimeout(messageTimer);
+  if (!sticky) messageTimer = setTimeout(() => hide(b), 7000);
+}
+function bigMessage(text, actionLabel, actionFn) {
+  $("bigMessageText").textContent = text;
+  const act = $("bigMessageAction");
+  if (actionLabel) { act.hidden = false; act.textContent = actionLabel; act.onclick = () => { hide($("bigMessage")); actionFn(); }; }
+  else act.hidden = true;
+  show($("bigMessage"));
+}
+$("bigMessageClose").addEventListener("click", () => hide($("bigMessage")));
+
+/* ==================================================================== */
+/* THROW / THROTTLE CONTROLS                                            */
+/* ==================================================================== */
+function renderThrowControls() {
+  const box = $("throwControls");
+  box.hidden = false;
+  if (state.game === "rescue") {
+    const vMove = G().acquired.has("verticalRockThrowing");
+    box.innerHTML = `<span class="ctrl-label">Throw a rock:</span>
+      <button class="logo-btn" data-throw="left">◄ left (move right)</button>
+      <button class="logo-btn" data-throw="right">right (move left) ►</button>`
+      + (vMove ? `<button class="logo-btn" data-vmove="up">▲ down (move up)</button>
+      <button class="logo-btn" data-vmove="down">▼ up (move down)</button>` : ``)
+      + `<span class="ctrl-hint">or use the arrow keys &nbsp;\u00b7&nbsp; drag the astronaut or ship to reposition them before you start</span>`;
+    box.querySelectorAll("[data-throw]").forEach((b) => b.addEventListener("click", () => throwRock(b.dataset.throw)));
+    box.querySelectorAll("[data-vmove]").forEach((b) => b.addEventListener("click", () => throwRockVertical(b.dataset.vmove)));
+  } else {
+    box.innerHTML = `<span class="ctrl-label">Throttle:</span>
+      <button class="logo-btn" data-throttle="up">▲ More (W / ↑)</button>
+      <button class="logo-btn" data-throttle="down">▼ Less (S / ↓)</button>
+      <span class="ctrl-hint">fire the thruster to slow your fall</span>`;
+    box.querySelectorAll("[data-throttle]").forEach((b) => b.addEventListener("click", () => adjustThrottle(b.dataset.throttle === "up" ? 10 : -10)));
+  }
+}
+
+/* ==================================================================== */
+/* SIMULATION                                                           */
+/* ==================================================================== */
+$("startBtn").addEventListener("click", startGame);
+$("stopBtn").addEventListener("click", () => stopGame(true));
+$("recordBtn").addEventListener("click", toggleRecord);
+$("autopilotBtn").addEventListener("click", openAutopilot);
+
+function resetSim() {
+  state.running = false; state.ended = false; state.reachedDuringRun = false; state.autopilot = false;
+  state.t = 0; state.vx = 0; state.vy = 0; state.gaugeHist = []; state.outOfRocks = false; state._fireAcc = 0;
+  ensureStartPositions();
+  if (state.game === "rescue") {
+    state.ax = state.startA.x; state.ay = state.startA.y;
+    state.shipX = state.shipPos.x; state.shipY = state.shipPos.y;
+    state.rocks = sv("horizontalRockThrowing", "initialRocks") ?? 42;
+  } else {
+    state.y = state.landerStartH; state.vy = 0;
+    state.fuel = sv("verticalThruster", "fuel") ?? 80;
+    if (G().acquired.has("verticalThruster")) G().settings["verticalThruster.throttle"] = 0;
+  }
+  updateGaugeVisibility(); layout(); updateReadouts(); drawGauge();
+}
+
+function movementMissing() {
+  return state.game === "rescue"
+    ? (!playerHas("horizontalRockThrowing") || !playerHas("horizontalVelocity"))
+    : (!playerHas("verticalVelocity") || !playerHas("verticalThruster"));
+}
+function missingDiag() {
+  if (state.game === "rescue") {
+    if (!playerHas("horizontalRockThrowing")) return "Your astronaut can't do anything yet. Drag the Horizontal Rock Throwing Gadget onto her back so she can move by throwing rocks.";
+    if (!playerHas("horizontalVelocity")) return "Your astronaut can throw rocks, but the picture won't move because she hasn't got the Horizontal Velocity Gadget. That program defines what it means to move left or right.";
+  } else {
+    if (!playerHas("verticalVelocity")) return "Your lander has no Vertical Velocity Gadget, so it can't move up or down. Drag it onto the lander's back.";
+    if (!playerHas("verticalThruster")) return "All your lander can do is fall, because it has no Thruster Gadget to push it back up.";
+  }
+  return null;
+}
+
+function setupTip() {
+  if (state.running) return false;
+  if (state.game === "rescue" && playerHas("horizontalRockThrowing") && playerHas("horizontalVelocity")) {
+    message("Ready! Press Start Game, then tap \u2190 / \u2192 (or the buttons) to throw rocks. You can drag the astronaut or the ship to reposition them first.", true);
+    return true;
+  }
+  if (state.game === "lander" && playerHas("verticalVelocity") && playerHas("verticalThruster")) {
+    message("Ready! Press Start Game, then use \u2191 / \u2193 to set the throttle. Keep your descent speed low and watch the Descent dial. You can drag the lander to set its start height first.", true);
+    return true;
+  }
+  return false;
+}
+function startGame() {
+  if (movementMissing()) { bigMessage(missingDiag(), "Visit your team", openTeam); return; }
+  resetSim();
+  state.running = true;
+  hide($("bigMessage"));
+  hide($("messageBubble"));          // the setup tip disappears once the game starts
+  if (state.recording) state.record = [];
+  lastFrame = performance.now();
+  requestAnimationFrame(loop);
+}
+function stopGame(byUser) {
+  if (!state.running) { evaluateIncomplete(); return; }
+  state.running = false;
+  if (byUser) { message("Stopped everything."); evaluateIncomplete(); }
+}
+function evaluateIncomplete() {
+  if (state.ended) return;
+  const endKey = state.game === "rescue" ? "reachedShip" : "landingAction";
+  const reachedGoal = state.game === "rescue" ? state.reachedDuringRun : (state.y <= 0.5);
+  if (reachedGoal && !playerHas(endKey)) {
+    G().flags.add("testedIncomplete");
+    const msg = state.game === "rescue"
+      ? "Your astronaut reached the ship — but nothing happened! You haven't decided what should happen when she gets there, so she just slides past. Visit your team to figure out the ending."
+      : "Your lander reached the surface — but nothing happened! You haven't decided what counts as a safe landing. Visit your team to add a Landing Action.";
+    bigMessage(msg, "Visit your team", openTeam);
+  }
+}
+
+let lastFrame = 0;
+function loop(now) {
+  if (!state.running) return;
+  let dt = (now - lastFrame) / 1000; lastFrame = now;
+  if (dt > 0.05) dt = 0.05;
+  if (state.game === "rescue") stepRescue(dt); else stepLander(dt);
+  if (state.autopilot) applyAutopilot();
+  layout(); updateReadouts(); pushGauge(); drawGauge();
+  if (state.running) requestAnimationFrame(loop);
+}
+
+/* ---- Rescue ---- */
+function throwRock(dir) {
+  if (!state.running || state.game !== "rescue" || !playerHas("horizontalRockThrowing")) return;
+  const mass = sv("horizontalRockThrowing", "rockMass");
+  const speed = sv("horizontalRockThrowing", "rockSpeed");
+  if (state.rocks < mass) { if (!state.outOfRocks) { state.outOfRocks = true; message("You are out of rocks!", true); } return; }
+  state.rocks -= mass;
+  const total = PHYS.massWithoutRocks + state.rocks;
+  const sign = dir === "left" ? +1 : -1;       // throw left -> move right (+x)
+  state.vx += sign * mass * speed / total;
+  animateProjectile("astronaut", dir === "left" ? -1 : +1, 0);
+}
+function throwRockVertical(dir) {
+  if (!state.running || state.game !== "rescue" || !playerHas("verticalRockThrowing")) return;
+  const mass = sv("horizontalRockThrowing", "rockMass");
+  const speed = sv("horizontalRockThrowing", "rockSpeed");
+  if (state.rocks < mass) { if (!state.outOfRocks) { state.outOfRocks = true; message("You are out of rocks!", true); } return; }
+  state.rocks -= mass;
+  const total = PHYS.massWithoutRocks + state.rocks;
+  const sign = dir === "up" ? -1 : +1;                 // screen y: up = negative
+  state.vy += sign * mass * speed / total;
+  animateProjectile("astronaut", 0, dir === "up" ? +1 : -1);
+}
+function stepRescue(dt) {
+  state.t += dt;
+  if (playerHas("horizontalVelocity")) state.ax += state.vx * dt;
+  if (playerHas("verticalVelocityRescue")) state.ay += state.vy * dt;
+  state.ax = clamp(state.ax, -10, PHYS.worldW + 10);
+  state.ay = clamp(state.ay, 0, PHYS.worldH);
+  const dist = Math.hypot(state.shipX - state.ax, state.shipY - state.ay);
+  if (dist <= PHYS.dockRadius) {
+    state.reachedDuringRun = true;
+    if (playerHas("reachedShip")) {
+      const speed = Math.hypot(state.vx, state.vy), safe = sv("reachedShip", "safeSpeed");
+      if (speed <= safe) endGame(true, "Good job! You reached your ship.", `Docking speed ${speed.toFixed(1)} m/s \u00b7 time ${state.t.toFixed(1)} s`);
+      else endGame(false, "You reached your ship but you were moving too fast.", `Your speed was ${speed.toFixed(1)} m/s (safe is ${safe} m/s)`);
+      return;
+    }
+  }
+  if (playerHas("reachedShip") && state.t > sv("reachedShip", "airSeconds"))
+    endGame(false, "You are out of air! Too bad.", `The astronaut ran out of oxygen after ${sv("reachedShip", "airSeconds")} seconds.`);
+}
+
+
+/* ---- Lander ---- */
+function adjustThrottle(delta) {
+  if (state.game !== "lander" || !G().acquired.has("verticalThruster")) return;
+  const cur = G().settings["verticalThruster.throttle"] || 0;
+  const next = Math.max(0, Math.min(100, cur + delta));
+  G().settings["verticalThruster.throttle"] = next;
+  if (state.running && state.recording) state.record.push([Number(state.t.toFixed(2)), next]);
+}
+function stepLander(dt) {
+  state.t += dt;
+  if (playerHas("gravity")) state.vy += sv("gravity", "gravity") * dt;   // gravity negative
+  if (playerHas("verticalThruster")) {
+    const throttle = G().settings["verticalThruster.throttle"] || 0;
+    if (throttle > 0 && state.fuel > 0) {
+      const pMass = sv("verticalThruster", "projectileMass");
+      const pSpeed = sv("verticalThruster", "projectileSpeed");
+      state._fireAcc += dt * (throttle / 100) * PHYS.landerFireRate;
+      while (state._fireAcc >= 1 && state.fuel >= pMass) {
+        state._fireAcc -= 1; state.fuel -= pMass;
+        state.vy += pSpeed * pMass / PHYS.landerMass;
+        animateProjectile("lander", 0, +1);
+      }
+    }
+  }
+  if (playerHas("verticalVelocity")) state.y += state.vy * dt;
+  if (state.y <= 0) {
+    state.y = 0; state.reachedDuringRun = true;
+    if (playerHas("landingAction")) {
+      const speed = Math.abs(state.vy), safe = sv("landingAction", "safeLandingSpeed");
+      if (speed <= safe) endGame(true, "The Eagle has landed!", `Touchdown ${speed.toFixed(2)} m/s \u00b7 fuel left ${Math.max(0, state.fuel).toFixed(0)} kg`);
+      else endGame(false, "Too bad. You crashed!", `Touchdown ${speed.toFixed(2)} m/s (safe is ${safe} m/s)`);
+      return;
+    }
+    state.vy = 0; state.running = false; evaluateIncomplete();
+  }
+}
+
+function endGame(win, headline, detail) {
+  state.running = false; state.ended = true;
+  if (state.recording) { state.recording = false; $("recordBtn").textContent = "● Record"; }
+  const icon = win ? "\u2714" : "\u2716";
+  $("bigMessageText").innerHTML = `<div class="bm-title ${win ? "win" : "lose"}">${icon} ${headline}</div>`
+    + (detail ? `<div class="bm-sub">${detail}</div>` : "");
+  $("bigMessageAction").hidden = true;
+  show($("bigMessage"));
+  if (win) playPhut();
+}
+
+/* ---- record / autopilot ---- */
+function toggleRecord() {
+  state.recording = !state.recording;
+  $("recordBtn").textContent = state.recording ? "● Recording…" : "● Record";
+  if (state.recording) { state.record = []; message("Recording is on. Click Start and fly - your throttle changes are recorded. Then Stop and open Auto-pilot Code.", true); }
+}
+function buildAutopilotCode() {
+  const lines = state.record.length ? state.record : [[0, 0]];
+  let out = "; AUTOPILOT CODE\n; Created by recording the throttle changes from your last flight.\n; The first number is when (seconds) to set the throttle; the second is the value.\n";
+  lines.forEach(([t, v]) => { out += `schedule ${t} [set_throttle ${v}]\n`; });
+  return out;
+}
+function openAutopilot() {
+  if (state.game !== "lander") return;
+  if (!state.record.length && !state.autoCode) message("Record a flight first: click ● Record, then Start, fly the lander, and Stop. Then open Auto-pilot Code.", true);
+  $("autopilotCode").value = state.record.length ? buildAutopilotCode() : (state.autoCode || buildAutopilotCode());
+  $("autopilotStatus").textContent = "";
+  show($("autopilotOverlay"));
+}
+$("runAutopilot").addEventListener("click", () => {
+  state.autoCode = $("autopilotCode").value;
+  state.autoSchedule = parseAutopilot(state.autoCode);
+  hide($("autopilotOverlay"));
+  if (!playerHas("verticalThruster") || !playerHas("verticalVelocity")) { bigMessage("Put the lander's behaviour gadgets back on before running the auto-pilot.", "Visit your team", openTeam); return; }
+  resetSim();
+  state.running = true; state.autopilot = true; state._autoIdx = 0;
+  hide($("bigMessage")); hide($("messageBubble"));
+  lastFrame = performance.now(); requestAnimationFrame(loop);
+});
+function parseAutopilot(text) {
+  const out = [];
+  text.split("\n").forEach((l) => {
+    const m = l.match(/schedule\s+([\d.]+)\s*\[\s*set_throttle\s+([\d.]+)/i);
+    if (m) out.push([parseFloat(m[1]), parseFloat(m[2])]);
+  });
+  return out.sort((a, b) => a[0] - b[0]);
+}
+function applyAutopilot() {
+  const sch = state.autoSchedule || [];
+  while (state._autoIdx < sch.length && sch[state._autoIdx][0] <= state.t) {
+    G().settings["verticalThruster.throttle"] = sch[state._autoIdx][1]; state._autoIdx++;
+  }
+}
+
+/* ==================================================================== */
+/* RENDER                                                               */
+/* ==================================================================== */
+function stageW() { return $("stage").clientWidth || 700; }
+function stageH() { return $("stage").clientHeight || 420; }
+function layout() {
+  const W = stageW(), H = stageH();
+  if (state.game === "rescue") {
+    if (state.ax === undefined) { ensureStartPositions(); state.ax = state.startA.x; state.ay = state.startA.y; state.shipX = state.shipPos.x; state.shipY = state.shipPos.y; }
+    const sX = W / PHYS.worldW, sY = H / PHYS.worldH;
+    const a = $("astronaut"); a.style.right = "auto";
+    a.style.left = (state.ax * sX - 32) + "px"; a.style.top = (state.ay * sY - 32) + "px";
+    const sh = $("ship"); sh.style.right = "auto";
+    sh.style.left = (state.shipX * sX - 35) + "px"; sh.style.top = (state.shipY * sY - 35) + "px";
+  } else {
+    const surfaceY = H - 14, scaleYL = (surfaceY - 12) / PHYS.landerWorldH;
+    const yv = (state.y === undefined ? state.landerStartH : state.y);
+    const l = $("lander"); l.style.right = "auto"; l.style.left = (W / 2 - 32) + "px";
+    l.style.top = Math.max(2, surfaceY - 64 - yv * scaleYL) + "px";
+  }
+}
+function updateGaugeVisibility() {
+  const key = state.game === "rescue" ? "gaugesRescue" : "gaugesLander";
+  $("gaugePanel").hidden = !playerHas(key);
+}
+function updateReadouts() {
+  const r = $("readouts");
+  if (state.game === "rescue") {
+    const dist = Math.hypot(state.shipX - state.ax, state.shipY - state.ay);
+    const air = playerHas("reachedShip") ? Math.max(0, sv("reachedShip", "airSeconds") - state.t) : null;
+    r.innerHTML = `<span>Time <strong>${state.t.toFixed(1)}</strong> s</span>
+      <span>Speed <strong>${Math.hypot(state.vx, state.vy).toFixed(1)}</strong> m/s</span>
+      <span>Rocks <strong>${Math.max(0, state.rocks).toFixed(0)}</strong> kg</span>
+      <span>Distance <strong>${dist.toFixed(0)}</strong> m</span>`
+      + (air !== null ? `<span>Air <strong>${air.toFixed(0)}</strong> s</span>` : "");
+  } else {
+    r.innerHTML = `<span>Time <strong>${state.t.toFixed(1)}</strong> s</span>
+      <span>Height <strong>${Math.max(0, state.y).toFixed(0)}</strong> m</span>
+      <span>Vert. speed <strong>${state.vy.toFixed(1)}</strong> m/s</span>
+      <span>Throttle <strong>${(G().settings["verticalThruster.throttle"] || 0).toFixed(0)}</strong>%</span>
+      <span>Fuel <strong>${Math.max(0, state.fuel).toFixed(0)}</strong> kg</span>`;
+  }
+  $("statusLeft").textContent = G().acquired.size === 0 ? "No behaviours yet — visit your team."
+    : (playerBackEmpty() ? "This object has no behaviours. Drag gadgets onto its back." : "");
+}
+function playerBackEmpty() {
+  const pid = GAMES[state.game].player;
+  return !G().backs[pid] || G().backs[pid].size === 0;
+}
+function pushGauge() {
+  const v = state.game === "rescue" ? Math.abs(state.vx) : state.vy;
+  state.gaugeHist.push(v); if (state.gaugeHist.length > 200) state.gaugeHist.shift();
+}
+function drawGauge() {
+  const c = $("gaugeCanvas"); if (!c || $("gaugePanel").hidden) return;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = "#f7f4ea"; ctx.fillRect(0, 0, c.width, c.height);
+  let dials;
+  if (state.game === "rescue") {
+    const initRocks = sv("horizontalRockThrowing", "initialRocks") || 42;
+    const dist = Math.hypot((state.shipX ?? 182) - (state.ax ?? 20), (state.shipY ?? 70) - (state.ay ?? 70));
+    dials = [
+      ["Speed", Math.hypot(state.vx, state.vy), 30, "m/s"],
+      ["Distance", dist, 200, "m"],
+      ["Rocks", Math.max(0, state.rocks), initRocks, "kg"],
+    ];
+    if (playerHas("reachedShip")) {
+      const airMax = sv("reachedShip", "airSeconds");
+      dials.push(["Air", Math.max(0, airMax - state.t), airMax, "s"]);
+    }
+  } else {
+    const fuel0 = sv("verticalThruster", "fuel") || 100;
+    dials = [
+      ["Descent", Math.max(0, -state.vy), 20, "m/s"],
+      ["Height", Math.max(0, state.y), PHYS.landerStartHeight, "m"],
+      ["Thrust", (G().settings["verticalThruster.throttle"] || 0), 100, "%"],
+      ["Fuel", Math.max(0, state.fuel), fuel0, "kg"],
+    ];
+  }
+  const n = dials.length, w = c.width / n;
+  dials.forEach((d, i) => dial(ctx, w * i + w / 2, 74, 30, d, i === 0));
+}
+function dial(ctx, cx, cy, r, spec, hot) {
+  const label = spec[0], val = spec[1], max = spec[2], unit = spec[3];
+  const a0 = Math.PI, a1 = 2 * Math.PI;            // top semicircle
+  const frac = Math.max(0, Math.min(1, val / max));
+  ctx.lineCap = "round";
+  ctx.lineWidth = 6; ctx.strokeStyle = "#d8d4c8";
+  ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1); ctx.stroke();
+  ctx.strokeStyle = (hot && frac > 0.8) ? "#c0392b" : "#1f6fb2";
+  ctx.beginPath(); ctx.arc(cx, cy, r, a0, a0 + (a1 - a0) * frac); ctx.stroke();
+  const ang = a0 + (a1 - a0) * frac;
+  ctx.strokeStyle = "#333"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(ang) * r * 0.85, cy + Math.sin(ang) * r * 0.85); ctx.stroke();
+  ctx.fillStyle = "#333"; ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, 7); ctx.fill();
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#222"; ctx.font = "bold 12px 'Courier New', monospace";
+  ctx.fillText(val.toFixed(unit === "m/s" ? 1 : 0), cx, cy - 7);
+  ctx.fillStyle = "#555"; ctx.font = "10px Arial";
+  ctx.fillText(label + " (" + unit + ")", cx, cy + 13);
+  ctx.textAlign = "left";
+}
+function animateProjectile(objId, dx, dy) {
+  const a = $(objId), stage = $("stage");
+  const rock = document.createElement("img");
+  rock.src = state.game === "rescue" ? "assets/rock1.gif" : "assets/rock2.gif";
+  rock.style.cssText = "position:absolute;width:16px;z-index:5;pointer-events:none;";
+  let x = a.offsetLeft + a.offsetWidth / 2, y = a.offsetTop + a.offsetHeight / 2;
+  rock.style.left = x + "px"; rock.style.top = y + "px"; stage.appendChild(rock);
+  let life = 0;
+  const iv = setInterval(() => {
+    life += 0.05; x += dx * 7; y += dy * 7;
+    rock.style.left = x + "px"; rock.style.top = y + "px"; rock.style.opacity = String(Math.max(0, 1 - life));
+    if (life >= 1) { clearInterval(iv); rock.remove(); }
+  }, 40);
+}
+let phut;
+function playPhut() { try { phut = phut || new Audio("assets/Phut.wav"); phut.currentTime = 0; phut.play().catch(() => {}); } catch (e) {} }
+
+/* ==================================================================== */
+/* KEYBOARD                                                             */
+/* ==================================================================== */
+window.addEventListener("keydown", (e) => {
+  if ($("workshopScreen").hidden) return;
+  if (state.game === "rescue") {
+    if (e.key === "ArrowRight" || e.key === "d") { throwRock("left"); e.preventDefault(); }
+    else if (e.key === "ArrowLeft" || e.key === "a") { throwRock("right"); e.preventDefault(); }
+    else if (e.key === "ArrowUp" || e.key === "w") { throwRockVertical("up"); e.preventDefault(); }
+    else if (e.key === "ArrowDown" || e.key === "s") { throwRockVertical("down"); e.preventDefault(); }
+  } else {
+    if (e.key === "ArrowUp" || e.key === "w") { adjustThrottle(10); e.preventDefault(); }
+    else if (e.key === "ArrowDown" || e.key === "s") { adjustThrottle(-10); e.preventDefault(); }
+  }
+});
+
+/* ==================================================================== */
+/* DRAG INITIAL POSITIONS (only when the game is not running)           */
+/* ==================================================================== */
+function makeDraggable(elId, onMove) {
+  const el = $(elId); if (!el) return;
+  let dragging = false;
+  el.style.touchAction = "none";
+  el.addEventListener("pointerdown", (e) => {
+    if (state.running) return;
+    dragging = true;
+    try { el.setPointerCapture(e.pointerId); } catch (x) {}
+    el.classList.add("grabbing"); e.preventDefault();
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!dragging || state.running) return;
+    const r = $("stage").getBoundingClientRect();
+    onMove(e.clientX - r.left, e.clientY - r.top, r.width || stageW(), r.height || stageH());
+  });
+  const end = () => { dragging = false; el.classList.remove("grabbing"); };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+}
+function setupDragging() {
+  makeDraggable("astronaut", (px, py, W, H) => {
+    const x = clamp(px / (W / PHYS.worldW), 0, PHYS.worldW), y = clamp(py / (H / PHYS.worldH), 0, PHYS.worldH);
+    state.startA = { x, y }; state.ax = x; state.ay = y; layout(); updateReadouts(); drawGauge();
+  });
+  makeDraggable("ship", (px, py, W, H) => {
+    const x = clamp(px / (W / PHYS.worldW), 0, PHYS.worldW), y = clamp(py / (H / PHYS.worldH), 0, PHYS.worldH);
+    state.shipPos = { x, y }; state.shipX = x; state.shipY = y; layout(); updateReadouts(); drawGauge();
+  });
+  makeDraggable("lander", (px, py, W, H) => {
+    const surfaceY = H - 14, scaleYL = (surfaceY - 12) / PHYS.landerWorldH;
+    const y = clamp((surfaceY - 32 - py) / scaleYL, 2, PHYS.landerWorldH);
+    state.landerStartH = y; state.y = y; layout(); updateReadouts(); drawGauge();
+  });
+}
+
+/* ==================================================================== */
+/* BOOT                                                                 */
+/* ==================================================================== */
+ensureStartPositions();
+setupDragging();
+renderStory();
+window.addEventListener("resize", () => { if (!$("workshopScreen").hidden) layout(); });
+
+    </script>
+  </body>
+</html>
