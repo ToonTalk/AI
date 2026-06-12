@@ -166,6 +166,7 @@ details.codeview pre,.codeview textarea{font-family:ui-monospace,Menlo,Consolas,
 .how-list{margin:4px 0 6px; padding-left:20px; font-size:13.5px}
 .how-list li{margin:3px 0}
 .waiting-note{margin:6px 0 0; font-size:12.5px; font-weight:700; color:var(--sun-deep,#B8860B); background:#FFF7E0; border:1.5px solid #F2DFA4; border-radius:8px; padding:5px 8px}
+.no-storage-banner{max-width:1200px; margin:6px auto 0; padding:8px 14px; font-size:13px; color:#7A4B00; background:#FFF3D6; border:1.5px solid #F2DFA4; border-radius:10px}
 #askFab{position:fixed; right:18px; bottom:18px; z-index:70; font-family:var(--display); font-weight:800; font-size:14.5px;
   color:#fff; background:var(--violet); border:none; border-radius:999px; padding:11px 18px; cursor:pointer;
   box-shadow:0 6px 18px rgba(0,0,0,.22); display:flex; align-items:center; gap:7px}
@@ -210,6 +211,9 @@ table.roles th{background:#EFF5FA; font-family:var(--display)}
 .chart-box h4{font-family:var(--display); margin:0 0 4px; font-size:14px}
 
 footer{max-width:1200px; margin:0 auto; padding:0 20px 40px; font-size:12.5px; color:var(--ink-soft)}
+footer .guide-links{margin-top:6px}
+footer .guide-links a{color:var(--turtle-deep,#1F7A50); font-weight:700; text-decoration:none}
+footer .guide-links a:hover{text-decoration:underline}
 @media (prefers-reduced-motion: reduce){.phase.working .phase-name::after{animation:none}}
 </style>
 </head>
@@ -221,13 +225,19 @@ footer{max-width:1200px; margin:0 auto; padding:0 20px 40px; font-size:12.5px; c
 <nav class="tabs" id="tabs"></nav>
 <main id="app"></main>
 <button id="askFab" title="Ask the helper about the app or your minds">🤖 Ask</button>
-<footer>The Atelier — a place to build little minds that make, look, and learn. Everything lives only in this browser unless you export it.</footer>
+<footer>The Atelier — a place to build little minds that make, look, and learn. Everything lives only in this browser unless you export it.
+<div class="guide-links">Guides:
+<a href="guides/guide-young-students.html" target="_blank" rel="noopener">For young makers</a> ·
+<a href="guides/guide-older-students.html" target="_blank" rel="noopener">For older students</a> ·
+<a href="guides/guide-teachers.html" target="_blank" rel="noopener">For teachers</a></div></footer>
 
 <script>
 "use strict";
 /* ===== SECTION: CONSTANTS & MODEL_DEFAULTS ===== */
 const SCHEMA = "atelier.v1";
 const LS_KEY = "atelier.v1";
+// Whether localStorage actually works here. Inside a Claude artifact it's sandboxed away, so nothing persists.
+const STORAGE_OK = (()=>{ try { localStorage.setItem(LS_KEY+"__probe","1"); localStorage.removeItem(LS_KEY+"__probe"); return true; } catch(_){ return false; } })();
 
 // Model ids verified against the owner's environment (knowledge cutoff Jan 2026).
 // Users may type any model id in Settings; these are only defaults.
@@ -235,7 +245,7 @@ const MODEL_DEFAULTS = {
   artifact: "claude-sonnet-4-20250514",        // keyless Claude inside an artifact, all roles
   anthropic: { maker:"claude-haiku-4-5-20251001", eyes:"claude-sonnet-4-6", judge:"claude-sonnet-4-6", reflect:"claude-haiku-4-5-20251001" },
   openai:    { maker:"gpt-5.4-mini", eyes:"gpt-5.4-mini", judge:"gpt-5.4-mini", reflect:"gpt-5.4-mini" },
-  google:    { maker:"gemini-1.5-flash", eyes:"gemini-1.5-pro", judge:"gemini-1.5-pro", reflect:"gemini-1.5-flash" }
+  google:    { maker:"gemini-2.5-flash", eyes:"gemini-2.5-pro", judge:"gemini-2.5-pro", reflect:"gemini-2.5-flash" }
 };
 // rough cost guess per 1k tokens (USD) — labelled "rough guess" in UI
 const COST_GUESS = { anthropic:0.004, openai:0.004, google:0.002, artifact:0, mock:0 };
@@ -443,6 +453,7 @@ function save(){
     agents: state.agents, works: state.works,
     critSessions: state.critSessions, experiments: state.experiments, notebook: state.notebook
   };
+  if (!STORAGE_OK) return;   // no localStorage here (e.g. inside an artifact); the boot banner explains, so stay quiet
   try { localStorage.setItem(LS_KEY, JSON.stringify(out, stripCacheReplacer)); _storageWarned = false; }
   catch(e){
     console.warn("Could not save to localStorage:", e);
@@ -521,7 +532,8 @@ const llm = {
     const max = Math.min(opts.maxTokens || s.budgets.maxTokensPerCall, s.budgets.maxTokensPerCall);
     if (s.useMock || /[?&]mock=1/.test(location.search)) return mockComplete(opts);
 
-    const { provider, model } = roleModel(role);
+    // opts.fixedModel lets a caller pin a {provider, model} (used so an experiment's judge stays constant).
+    const { provider, model } = (opts.fixedModel && opts.fixedModel.model) ? opts.fixedModel : roleModel(role);
     let result;
     const run = async () => {
       if (provider === "artifact") return callAnthropic(model, opts, max, /*keyless*/true);
@@ -616,17 +628,19 @@ async function callOpenAI(model, opts, max){
   const netMsg = "OpenAI does not allow calls straight from a web page, so The Atelier cannot use it without your own small proxy server. For now, open Settings and choose Anthropic or Google instead, or turn on the pretend helper (mock).";
   const url = "https://api.openai.com/v1/chat/completions";
   const headers = { "Content-Type":"application/json", "Authorization":"Bearer "+key };
-  // Newer OpenAI models (gpt-5 / o-series) require max_completion_tokens; older ones use max_tokens. Try modern first, fall back.
+  // Reasoning models (gpt-5 / o-series) can spend the whole budget thinking and return empty content,
+  // so give OpenAI extra room. Newer models also require max_completion_tokens; older ones use max_tokens.
+  const oaMax = Math.max(max, 2000);
   let data;
   try {
-    data = await apiFetch(url, { method:"POST", headers, body:JSON.stringify({ model, max_completion_tokens:max, messages }) }, netMsg);
+    data = await apiFetch(url, { method:"POST", headers, body:JSON.stringify({ model, max_completion_tokens:oaMax, messages }) }, netMsg);
   } catch(e){
     if (e.status===400 && /max_completion_tokens/i.test(e.message))
-      data = await apiFetch(url, { method:"POST", headers, body:JSON.stringify({ model, max_tokens:max, messages }) }, netMsg);
+      data = await apiFetch(url, { method:"POST", headers, body:JSON.stringify({ model, max_tokens:oaMax, messages }) }, netMsg);
     else throw e;
   }
   const text = (data.choices && data.choices[0] && data.choices[0].message.content || "").trim();
-  if (!text) throw new Error("The art helper sent back an empty reply. Try the round again.");
+  if (!text) throw new Error("The art helper replied but with no words — a reasoning model may have used its whole thinking budget. Try again, or raise 'Most tokens per call' in Settings, or pick a non-reasoning model.");
   return { text, usage:{ total:(data.usage? data.usage.total_tokens:0) } };
 }
 
@@ -638,7 +652,7 @@ async function callGoogle(model, opts, max){
   const body = { contents:[{ role:"user", parts }], generationConfig:{ maxOutputTokens:max } };
   if (opts.system) body.systemInstruction = { parts:[{ text:opts.system }] };
   const url = "https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent";
-  const netMsg = "We could not reach Google. Check that you are online. Note: since 19 June 2026 Google turns away unrestricted keys, so your key may need restrictions added in Google AI Studio.";
+  const netMsg = "We could not reach Google. Check that you are online. Note: from 19 June 2026 Google rejects unrestricted keys (existing ones too) — in Google AI Studio, add the 'Restrict to Gemini API' setting to your key.";
   const data = await apiFetch(url, { method:"POST",
     headers:{ "Content-Type":"application/json", "x-goog-api-key":key }, body:JSON.stringify(body) }, netMsg);
   const text = ((((data.candidates||[])[0]||{}).content||{}).parts||[]).map(p=>p.text||"").join("").trim();
@@ -693,8 +707,10 @@ function mockComplete(opts){
   } else if (role === "critic"){
     text = "I really like how the centre holds together — it draws my eye. One small wish: let one part near the edge surprise me next time.";
   } else if (role === "judge"){
-    const score = Math.min(5, 2 + Math.floor((m.round||1)/2));
-    text = "RATING: "+score+"/5 — it sits close to its Spark and feels intentional.";
+    // vary by agent so the two experiment arms visibly differ in mock mode (not just by round)
+    let off = 0; const aid = m.agentId || ""; for (let i=0;i<aid.length;i++) off = (off + aid.charCodeAt(i)) % 3;
+    const score = Math.max(1, Math.min(5, 1 + Math.floor((m.round||1)/2) + off));
+    text = "RATING: "+score+"/5 — it sits "+(off>=2?"very ":"")+"close to its Spark and feels intentional.";
   } else if (role === "ask"){
     // practice helper: answer from real state so the feature is testable without a connection
     const n = state.agents.length;
@@ -954,7 +970,7 @@ const SANDBOX_SRCDOC =
 'parent.postMessage({kind:"ready"},"*");'+
 '<\/script></body></html>';
 
-let _sandbox = null, _sandboxReady = null, _runSeq = 0;
+let _sandbox = null, _sandboxReady = null, _runSeq = 0, _sandboxListener = null;
 const _pending = {};
 function ensureSandbox(){
   if (_sandbox) return _sandboxReady;
@@ -963,20 +979,26 @@ function ensureSandbox(){
   _sandbox.style.cssText = "position:absolute;width:1px;height:1px;left:-9999px;border:0";
   _sandbox.srcdoc = SANDBOX_SRCDOC;
   _sandboxReady = new Promise(res=>{
-    function onMsg(e){
+    _sandboxListener = function onMsg(e){
       const d = e.data||{};
       if (d.kind==="ready"){ res(); }
       else if (d.kind==="result" && _pending[d.id]){ _pending[d.id](d); delete _pending[d.id]; }
-    }
-    window.addEventListener("message", onMsg);
+    };
+    window.addEventListener("message", _sandboxListener);
   });
   document.body.appendChild(_sandbox);
   return _sandboxReady;
 }
+// A hung run leaves the iframe wedged; drop it so the next run builds a fresh one.
+function teardownSandbox(){
+  if (_sandboxListener){ window.removeEventListener("message", _sandboxListener); _sandboxListener = null; }
+  if (_sandbox && _sandbox.parentNode) _sandbox.remove();
+  _sandbox = null; _sandboxReady = null;
+}
 function runTurtleSandbox(code, seed){
   return ensureSandbox().then(()=> new Promise((resolve,reject)=>{
     const id = ++_runSeq;
-    const timer = setTimeout(()=>{ delete _pending[id]; reject(new Error("The drawing took too long (over 3 seconds).")); }, 3000);
+    const timer = setTimeout(()=>{ delete _pending[id]; teardownSandbox(); reject(new Error("The drawing took too long (over 3 seconds).")); }, 3000);
     _pending[id] = d => { clearTimeout(timer); if (d.error) reject(new Error(d.error)); else resolve(d); };
     _sandbox.contentWindow.postMessage({ kind:"run", id, code, seed:(seed>>>0)||1 }, "*");
   }));
@@ -1106,8 +1128,8 @@ const stars = n => n? ('<span class="stars">'+"★".repeat(n)+"☆".repeat(5-n)+
 
 function bigIdea(key){ return BIG_IDEAS[key] ? '<details class="bigidea"><summary>big idea</summary><p>'+esc(BIG_IDEAS[key])+'</p></details>' : ""; }
 function hoodView(label, req, resp){
-  // always collapsed — the prompt/response is only shown when the student chooses to open it
-  return '<details class="hood"><summary>peek under the hood — what we actually sent</summary>'+
+  // collapsed in Studio mode; open by default in Advanced mode (matches the Settings copy)
+  return '<details class="hood"'+(state.settings.advancedMode?" open":"")+'><summary>peek under the hood — what we actually sent</summary>'+
     '<p><strong>'+esc(label)+' — what we sent (~'+Math.round((req.length)/4)+' tokens):</strong></p><pre>'+esc(req)+'</pre>'+
     '<p><strong>what came back:</strong></p><pre>'+esc(resp)+'</pre></details>';
 }
@@ -1255,16 +1277,16 @@ async function runRound(agentId, opts){
     let ph = addPhase("Make","✏️");
     const lastConsumed = lastWork(agentId);   // its unread critiques are fed into this Make
     work._critiquesUsed = pending.map(c=>c.text).join(" / ") || null;
+    const makePrompt = makerPrompt(agent,{round, critiques:pending});   // capture the EXACT prompt sent (state changes below)
     const makeRes = await llm.complete({ role:"maker", system:PREAMBLE,
-      userText: makerPrompt(agent,{round, critiques:pending}),
-      meta:{ round, medium, form, agentName:agent.name } });
+      userText: makePrompt, meta:{ round, medium, form, agentName:agent.name } });
     const made = parseMaker(makeRes.text, round, medium, form);
     Object.assign(work, { intention:made.intention, title:made.title, payload:made.payload });
     work.artistStatement = made.intention;
     // the mind has now heard the critiques on its previous work — don't feed them again next round
     if (lastConsumed) lastConsumed.critiques.forEach(c=>{ c.readByAgent = true; });
     state.works.push(work); save();
-    ph.done("<strong>"+esc(work.intention)+"</strong>"+carriedLessonsHTML(agent)+hoodView("Make", makerPrompt(agent,{round,critiques:pending}), makeRes.text));
+    ph.done("<strong>"+esc(work.intention)+"</strong>"+carriedLessonsHTML(agent)+hoodView("Make", makePrompt, makeRes.text));
 
     /* 2 · RENDER */
     ph = addPhase("Render", medium==="turtle"?"🐢":"📝");
@@ -1297,12 +1319,13 @@ async function runRound(agentId, opts){
         const pics = prev ? [await getThumbnail(prev), await getThumbnail(work)] : [await getThumbnail(work)];
         images = pics.filter(Boolean);
       }
-      const eRes = await llm.complete({ role:"eyes", system:PREAMBLE, userText:eyesPrompt(agent,work,prev),
+      const lookPrompt = eyesPrompt(agent,work,prev);
+      const eRes = await llm.complete({ role:"eyes", system:PREAMBLE, userText:lookPrompt,
         images: medium==="turtle"? images : null, meta:{ round, medium, form } });
       work.observations = stripMd(eRes.text); save();
       ph.done(esc(work.observations).replace(/\n/g,"<br>")+
         (prev? '<p class="hint" style="margin:6px 0 0">👀 Compared with “'+esc(prev.title)+'”.</p>':"")+
-        hoodView("Look", eyesPrompt(agent,work,prev), eRes.text));
+        hoodView("Look", lookPrompt, eRes.text));
     } else if (!work.error){
       addPhase("Look","👀").done("<em>Eyes closed — it cannot look at what it made.</em>");
     }
@@ -1319,17 +1342,19 @@ async function runRound(agentId, opts){
 
     /* 6 · REFLECT */
     ph = addPhase("Reflect","💭");
-    const rRes = await llm.complete({ role:"reflect", system:PREAMBLE, userText:reflectPrompt(agent,work), meta:{ round, medium, form } });
+    const reflPrompt = reflectPrompt(agent,work);   // capture before journal.push changes "your last journal entry"
+    const rRes = await llm.complete({ role:"reflect", system:PREAMBLE, userText:reflPrompt, meta:{ round, medium, form } });
     const refl = parseReflect(rRes.text);
     work.selfRating = refl.rating;
     agent.memory.journal.push({ round, text:refl.body, createdAt:now() }); save();
-    ph.done(esc(refl.body).replace(/\n/g,"<br>")+(refl.rating? "<br>"+stars(refl.rating):"")+hoodView("Reflect", reflectPrompt(agent,work), rRes.text));
+    ph.done(esc(refl.body).replace(/\n/g,"<br>")+(refl.rating? "<br>"+stars(refl.rating):"")+hoodView("Reflect", reflPrompt, rRes.text));
 
     /* 7 · DISTILL — every 3rd round */
     if (round % 3 === 0){
       ph = addPhase("Distill","⭐");
       const beforeTexts = activeLessons(agent).map(l=>l.text);   // remember the lessons it had, to show what changed
-      const dRes = await llm.complete({ role:"reflect", system:PREAMBLE, userText:distillPrompt(agent), meta:{ round, medium, form, distill:true } });
+      const distPrompt = distillPrompt(agent);   // capture before lessons are replaced (the hood must show what was actually sent)
+      const dRes = await llm.complete({ role:"reflect", system:PREAMBLE, userText:distPrompt, meta:{ round, medium, form, distill:true } });
       const fresh = parseLessons(dRes.text);
       let msg;
       if (fresh.length){
@@ -1341,7 +1366,7 @@ async function runRound(agentId, opts){
         msg = "It thought about its lessons but kept the ones it already had:";
       }
       save();
-      ph.done("<div>"+msg+"</div>"+lessonChangeHTML(beforeTexts, activeLessons(agent))+distillJumpHTML(agent.id)+hoodView("Distill", distillPrompt(agent), dRes.text));
+      ph.done("<div>"+msg+"</div>"+lessonChangeHTML(beforeTexts, activeLessons(agent))+distillJumpHTML(agent.id)+hoodView("Distill", distPrompt, dRes.text));
     }
 
     agent.stats.roundsRun = round; save();
@@ -1506,27 +1531,38 @@ function setPart(agent, key, val){
   o[ks[ks.length-1]] = val;
 }
 
+// Resumable: skips (agent, round) pairs already in exp.results, so a failed run can continue without
+// re-cloning or double-counting. The judge uses the model snapshotted in exp.judgeSpec at creation.
 async function runExperiment(exp, progressEl){
   const base = getAgent(exp.baselineAgentId), variant = getAgent(exp.variantAgentId);
-  exp.results = [];
+  if (!base || !variant) throw new Error("This experiment's minds are missing — it can't run.");
   const total = exp.rounds * 2;
-  let done = 0;
-  let prevHash = { [base.id]:null, [variant.id]:null };
-  let prevPoem = { [base.id]:null, [variant.id]:null };
+  // seed the novelty baselines from each arm's most recent already-judged work (matters when resuming)
+  const prevHash = {}, prevPoem = {};
+  for (const ag of [base, variant]){
+    const lastDone = exp.results.filter(x=>x.agentId===ag.id).sort((a,b)=>a.round-b.round).slice(-1)[0];
+    prevHash[ag.id] = null; prevPoem[ag.id] = null;
+    if (lastDone){ const w = state.works.find(w=>w.id===lastDone.workId);
+      if (w && w.medium==="turtle"){ const t = await getThumbnail(w); if (t) prevHash[ag.id] = await aHash(t); }
+      else if (w) prevPoem[ag.id] = w.payload.poem; }
+  }
+  let done = exp.results.length;
   for (let r=1; r<=exp.rounds; r++){
     for (const ag of [base, variant]){
-      const work = await runRound(ag.id, { mount:null, silentNotebook:true, critiques:[] });
-      // judge (fixed prompt + model for whole experiment)
-      const thumb = work.medium==="turtle" ? await getThumbnail(work) : null;
-      const images = thumb ? [thumb] : null;
-      const jRes = await llm.complete({ role:"judge", system:PREAMBLE+KINDNESS,
-        userText: judgePrompt(ag, work, exp.judgeSpec), images, meta:{ round:r, medium:work.medium } });
-      const judgeRating = parseRating(jRes.text);
-      let novelty = null;
-      if (thumb){
-        const h = await aHash(thumb); novelty = turtleNovelty(prevHash[ag.id], h); prevHash[ag.id]=h;
-      } else if (work.medium==="poet"){
-        novelty = poemNovelty(prevPoem[ag.id], work.payload.poem); prevPoem[ag.id]=work.payload.poem;
+      if (exp.results.some(x=>x.agentId===ag.id && x.round===r)) continue;   // already done — resume past it
+      let work, judgeRating=null, novelty=null;
+      try {
+        work = await runRound(ag.id, { mount:null, silentNotebook:true, critiques:[] });
+        const thumb = work.medium==="turtle" ? await getThumbnail(work) : null;
+        const images = thumb ? [thumb] : null;
+        const jRes = await llm.complete({ role:"judge", fixedModel:exp.judgeSpec.model, system:PREAMBLE+KINDNESS,
+          userText: judgePrompt(ag, work, exp.judgeSpec), images, meta:{ round:r, medium:work.medium, agentId:ag.id } });
+        judgeRating = parseRating(jRes.text);
+        if (thumb){ const h = await aHash(thumb); novelty = turtleNovelty(prevHash[ag.id], h); prevHash[ag.id]=h; }
+        else if (work.medium==="poet"){ novelty = poemNovelty(prevPoem[ag.id], work.payload.poem); prevPoem[ag.id]=work.payload.poem; }
+      } catch(e){
+        if (progressEl) progressEl.textContent = "Stopped at round "+r+" ("+(ag===base?"baseline":"variant")+"): "+e.message;
+        throw e;   // results so far are saved; the wizard offers Resume
       }
       exp.results.push({ agentId:ag.id, round:r, workId:work.id, selfRating:work.selfRating, judgeRating, novelty });
       done++; if (progressEl) progressEl.textContent = "Running… "+done+" of "+total+" rounds done.";
@@ -2022,7 +2058,7 @@ function openWorkDetail(w){
     c.appendChild(el("p","hint","Invite agents to respond:"));
     const row = el("div","row");
     others.slice(0,5).forEach(a=>{
-      const b = el("button","small-btn", a.look.emoji+" "+a.name);
+      const b = el("button","small-btn", esc(a.look.emoji)+" "+esc(a.name));
       b.onclick = async ()=>{ b.disabled=true; b.textContent="thinking…";
         const prior = findPriorCritique(a.id, w.agentId);
         const images = w.medium==="turtle" ? [await getThumbnail(w)].filter(Boolean) : null;
@@ -2052,8 +2088,9 @@ function critTurnEl(turn){
     return e;
   }
   const work = turn.workId ? state.works.find(w=>w.id===turn.workId) : null;
-  const ttl = work ? work.title : "";
-  const head = turn.kind==="present" ? " shows “"+esc(ttl)+"”" : (turn.kind==="critique" ? " on “"+esc(ttl)+"”" : "");
+  // the work may have been cleared by "start a fresh set of rounds" — don't render empty quotes
+  const ttl = work ? '“'+esc(work.title)+'”' : "an earlier work";
+  const head = turn.kind==="present" ? " shows "+ttl : (turn.kind==="critique" ? " on "+ttl : "");
   const t = el("div","crit-turn"+(turn.kind==="moderator"?" student":""));
   t.innerHTML = '<div class="av" style="background:'+sp.look.color+'22">'+esc(sp.look.emoji)+'</div>'+
     '<div class="bub"><div class="who">'+esc(sp.name)+head+'</div>'+esc(turn.text)+'</div>';
@@ -2114,7 +2151,7 @@ function screenCrit(){
     const last = lastWork(a.id);
     const row = el("div","switch");
     const cb = el("input"); cb.type="checkbox"; cb.disabled = !last; picks[a.id]=cb;
-    row.appendChild(cb); row.appendChild(el("span","", a.look.emoji+" "+a.name+(last? " — latest: “"+last.title+"”" : " (no work yet)")));
+    row.appendChild(cb); row.appendChild(el("span","", esc(a.look.emoji)+" "+esc(a.name)+(last? " — latest: “"+esc(last.title)+"”" : " (no work yet)")));
     pickCard.appendChild(row);
   });
   const startB = el("button","run","Start Show & Tell"); startB.style.cssText="font-size:15px;padding:9px 16px;margin-top:6px";
@@ -2184,9 +2221,10 @@ function screenScience(){
   return wrap;
 }
 function openExperimentWizard(){
-  if (!state.agents.length){ toast("Make a mind first."); return; }
+  const baseMinds = state.agents.filter(a=>!a.experimentId);   // don't let experiment clones become new bases
+  if (!baseMinds.length){ toast("Make a mind first."); return; }
   const c = el("div");
-  const sel = el("select"); sel.innerHTML = state.agents.map(a=>'<option value="'+a.id+'">'+esc(a.name)+' ('+a.medium+')</option>').join("");
+  const sel = el("select"); sel.innerHTML = baseMinds.map(a=>'<option value="'+a.id+'">'+esc(a.name)+' ('+a.medium+')</option>').join("");
   c.appendChild(el("label","","Base mind to study")); c.appendChild(sel);
   c.appendChild(el("label","","Change exactly ONE part on the variant"));
   const partSel = el("select"); partSel.innerHTML = ANATOMY_PARTS.map(p=>'<option value="'+p.key+'">'+esc(p.label)+'</option>').join(""); c.appendChild(partSel);
@@ -2217,32 +2255,53 @@ function openExperimentWizard(){
   rounds.oninput=updEst; sel.addEventListener("change",updEst); updEst();
   const go = el("button","run","Clone, change one thing, and run"); go.style.cssText="font-size:15px;padding:10px 18px;margin-top:12px";
   const prog = el("p","hint","");
-  go.onclick = async ()=>{
-    const base = getAgent(sel.value);
-    const variant = cloneAgent(base, " (variant)");
-    const baseClone = cloneAgent(base, " (baseline)");
-    const key = partSel.value;
-    if (key.endsWith("enabled")||key.endsWith("remember")) setPart(variant, key, !getPart(base,key));
-    else setPart(variant, key, $("expVal").value);
-    state.agents.push(baseClone, variant);
-    const exp = { id:uid(), name:"Experiment "+(state.experiments.length+1), question:q.value.trim(),
-      baselineAgentId:baseClone.id, variantAgentId:variant.id, changedPart:key,
-      rounds:Math.min(12,Math.max(1,+rounds.value||6)), results:[],
-      judgeSpec:{ prompt:judge.value.trim(), providerRole:"judge" }, createdAt:now() };
-    baseClone.experimentId = variant.experimentId = exp.id;   // tag clones so they fold out of the Studio grid
-    state.experiments.push(exp); save();
-    go.disabled=true; go.textContent="Running… (this makes many calls)"; c.appendChild(prog);
+  const tools = el("div","row"); tools.style.marginTop="8px";   // holds Resume / Delete after a failure
+  let exp = null;   // created once, on the first run; resumed on retry
+  async function runIt(){
+    go.disabled=true; tools.innerHTML=""; if (!prog.parentNode) c.appendChild(prog);
+    if (!exp){
+      // create the clones + experiment exactly once
+      const base = getAgent(sel.value);
+      const variant = cloneAgent(base, " (variant)");
+      const baseClone = cloneAgent(base, " (baseline)");
+      const key = partSel.value;
+      if (key.endsWith("enabled")||key.endsWith("remember")) setPart(variant, key, !getPart(base,key));
+      else setPart(variant, key, $("expVal").value);
+      state.agents.push(baseClone, variant);
+      exp = { id:uid(), name:"Experiment "+(state.experiments.length+1), question:q.value.trim(),
+        baselineAgentId:baseClone.id, variantAgentId:variant.id, changedPart:key,
+        rounds:Math.min(12,Math.max(1,+rounds.value||6)), results:[],
+        judgeSpec:{ prompt:judge.value.trim(), providerRole:"judge", model:roleModel("judge") },   // fix the judge model for the whole run
+        createdAt:now() };
+      baseClone.experimentId = variant.experimentId = exp.id;   // tag clones so they fold out of the Studio grid
+      state.experiments.push(exp); save();
+    }
+    go.textContent="Running… (this makes many calls)";
     try { await runExperiment(exp, prog); back.remove(); nav("science"); }
-    catch(e){ toast(e.message); go.disabled=false; go.textContent="Try again"; }
-  };
-  c.appendChild(go);
+    catch(e){
+      go.style.display="none";
+      const resume = el("button","run","Resume"); resume.onclick=()=>{ go.style.display=""; runIt(); };
+      const del = el("button","small-btn danger","Delete this experiment");
+      del.onclick=()=>{ // remove the partial experiment and its clones, let the student start over
+        state.experiments = state.experiments.filter(x=>x.id!==exp.id);
+        state.agents = state.agents.filter(a=>a.experimentId!==exp.id);
+        state.works = state.works.filter(w=>state.agents.some(a=>a.id===w.agentId));
+        save(); back.remove(); nav("science");
+      };
+      tools.appendChild(resume); tools.appendChild(del);
+    }
+  }
+  go.onclick = runIt;
+  c.appendChild(go); c.appendChild(tools);
   const back = modal("New experiment — change one thing", c);
 }
 function experimentView(exp){
   const base=getAgent(exp.baselineAgentId), variant=getAgent(exp.variantAgentId);
   const c = el("div","card");
+  const jm = exp.judgeSpec && exp.judgeSpec.model;
   c.innerHTML = '<label>'+esc(exp.name)+'</label><p class="hint">Question: '+esc(exp.question||"(none)")+'</p>'+
-    '<p class="hint">Changed part: <strong>'+esc((ANATOMY_PARTS.find(p=>p.key===exp.changedPart)||{label:exp.changedPart}).label)+'</strong> · '+exp.rounds+' rounds each</p>';
+    '<p class="hint">Changed part: <strong>'+esc((ANATOMY_PARTS.find(p=>p.key===exp.changedPart)||{label:exp.changedPart}).label)+'</strong> · '+exp.rounds+' rounds each'+
+    (jm&&jm.model? ' · judge: <strong>'+esc(jm.model)+'</strong> (fixed)':'')+'</p>';
   if (!base||!variant){ c.insertAdjacentHTML("beforeend","<p class='empty-note'>Agents were deleted.</p>"); return c; }
   // thumbnail strips
   [base,variant].forEach(ag=>{
@@ -2280,6 +2339,15 @@ function screenSettings(){
   const wrap = el("div");
   wrap.appendChild(el("h2","screen-title","⚙️ Settings"));
 
+  // guides
+  const guides = el("div","card");
+  guides.innerHTML = "<label>Guides</label><p class='hint'>How to use The Atelier — open in a new tab.</p>"+
+    '<div class="row" style="gap:8px;flex-wrap:wrap">'+
+    '<a class="small-btn" href="guides/guide-young-students.html" target="_blank" rel="noopener">📘 For young makers</a>'+
+    '<a class="small-btn" href="guides/guide-older-students.html" target="_blank" rel="noopener">📗 For older students</a>'+
+    '<a class="small-btn" href="guides/guide-teachers.html" target="_blank" rel="noopener">📕 For teachers</a></div>';
+  wrap.appendChild(guides);
+
   // advanced
   const adv = el("div","card");
   adv.innerHTML="<label>Advanced mode</label><p class='hint'>Unlocks the Science Corner and shows the 'peek under the hood' panels open by default. Uses slightly harder words.</p>";
@@ -2312,7 +2380,7 @@ function screenSettings(){
       save(); render();
     };
     keys.appendChild(el("p","hint","Which provider to use (the model jobs below switch to good defaults for it):")); keys.appendChild(provSel);
-    keys.appendChild(el("p","hint","Anthropic and Google work straight from this page. OpenAI does not allow web-page calls, so it needs your own proxy server. Google keys made after 19 June 2026 must have restrictions set."));
+    keys.appendChild(el("p","hint","Anthropic and Google work straight from this page. OpenAI does not allow web-page calls, so it needs your own proxy server. From 19 June 2026 Google rejects unrestricted keys — in AI Studio, add the 'Restrict to Gemini API' setting to your key."));
     const keyMap = { anthropicKey:"anthropic", openaiKey:"openai", googleKey:"google" };
     [["anthropicKey","Anthropic key"],["openaiKey","OpenAI key"],["googleKey","Google key"]].forEach(([k,lbl])=>{
       keys.appendChild(el("p","hint",lbl));
@@ -2357,7 +2425,14 @@ function screenSettings(){
   const row = el("div","row");
   const expB=el("button","small-btn","Export everything (backup)"); expB.onclick=()=>{ if(confirm("This file holds all your minds and works. Only share it with people you trust. Download it now?")) download("atelier-backup.json", exportAll()); };
   const impB=el("button","small-btn","Import a backup or a saved mind"); impB.onclick=importFlow;
-  const clr=el("button","small-btn danger","Start over (delete everything)"); clr.onclick=()=>{ if(confirm("This deletes ALL minds, works, and notes. Are you sure?")){ localStorage.removeItem(LS_KEY); location.reload(); } };
+  const clr=el("button","small-btn danger","Start over (delete everything)"); clr.onclick=()=>{ if(confirm("This deletes ALL minds, works, and notes. Are you sure?")){
+    if (STORAGE_OK){ try{ localStorage.removeItem(LS_KEY); }catch(_){}; location.reload(); }
+    else { // no storage to clear (artifact): reset in memory and reseed
+      state.agents=[]; state.works=[]; state.critSessions=[]; state.experiments=[]; state.notebook=[];
+      state.settings=defaultSettings(); state.agents.push(agentFromTemplate(TEMPLATES[0]));
+      nav("studio",{agentId:null}); toast("Started over.");
+    }
+  } };
   row.appendChild(expB); row.appendChild(impB); row.appendChild(clr); data.appendChild(row);
   wrap.appendChild(data);
   return wrap;
@@ -2507,12 +2582,26 @@ function exportNotebookMd(){
 }
 
 /* ===== SECTION: BOOT ===== */
+const hadSavedState = STORAGE_OK && !!localStorage.getItem(LS_KEY);
 load();
+
+// A double-clicked file (not embedded, nothing saved yet) can't use keyless artifact mode, so start it
+// in a mode that works on the first try: standalone with the pretend helper on. The student can change both.
+if (!hadSavedState && !inEmbeddedFrame){
+  state.settings.runtimeMode = "standalone";
+  state.settings.useMock = true;
+}
 
 // Seed a first agent on a truly fresh start so the studio isn't empty.
 if (!state.agents.length){
   const seed = agentFromTemplate(TEMPLATES[0]);
   state.agents.push(seed); save();
+}
+
+// If storage is unavailable (e.g. inside an artifact), say so plainly — the studio won't survive a reload here.
+if (!STORAGE_OK){
+  const banner = el("div","no-storage-banner","⚠️ This place can’t save your studio between visits (you may be inside a Claude artifact). Use Settings → Export to keep a backup of your minds.");
+  document.body.insertBefore(banner, document.getElementById("tabs"));
 }
 
 $("homeLink").onclick = ()=>nav("studio",{agentId:null});
@@ -2547,7 +2636,7 @@ window.__atelier = {
   runRound(agentId, opts){ return runRound(agentId || (state.agents[0]&&state.agents[0].id), opts||{}); },
   runPhase(agentId){ return runRound(agentId || (state.agents[0]&&state.agents[0].id), { silentNotebook:true }); },
   newFromTemplate(i){ const a=agentFromTemplate(TEMPLATES[i||0]); state.agents.push(a); save(); render(); return a.id; },
-  reset(){ localStorage.removeItem(LS_KEY); }
+  reset(){ try{ localStorage.removeItem(LS_KEY); }catch(_){} }
 };
 </script>
 </body>

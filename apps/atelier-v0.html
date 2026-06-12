@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Atelier — v0</title>
+<style>
+  :root{
+    --paper:#F7FAFC; --grid:#DCE8F0; --ink:#1C2B4A; --ink-soft:#5A6B8C;
+    --turtle:#2E9E6B; --turtle-deep:#1F7A50; --sun:#FFC94D; --violet:#7B6CF6;
+    --coral:#FF6B5E; --card-line:#E3ECF4; --dash:#C9D9E8;
+    --display:ui-rounded,"Hiragino Maru Gothic ProN",Quicksand,Comfortaa,"Trebuchet MS",system-ui,sans-serif;
+    --body:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.45;
+    background-color:var(--paper);
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:24px 24px;
+  }
+  header{
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    max-width:1200px; margin:0 auto; padding:22px 20px 6px;
+  }
+  header h1{font-family:var(--display); font-weight:800; font-size:30px; margin:0; letter-spacing:.3px}
+  header h1 .turtle-dot{color:var(--turtle)}
+  .meter{margin-left:auto; font-size:13px; color:var(--ink-soft); background:#fff; border:2px solid var(--card-line); border-radius:999px; padding:5px 14px}
+  .tagline{width:100%; margin:2px 0 0; color:var(--ink-soft); font-size:14px}
+
+  .layout{max-width:1200px; margin:14px auto 60px; padding:0 20px; display:grid; grid-template-columns:330px 1fr; gap:20px}
+  @media (max-width:900px){ .layout{grid-template-columns:1fr} .mind{order:2} .studio{order:1} }
+
+  .panel-title{font-family:var(--display); font-weight:800; font-size:17px; margin:0 0 10px; display:flex; align-items:center; gap:8px}
+  .panel-title .swatch{width:12px; height:12px; border-radius:4px; display:inline-block}
+
+  .card{background:#fff; border:2px solid var(--card-line); border-radius:14px; padding:13px 14px; margin-bottom:12px; box-shadow:0 2px 0 rgba(28,43,74,.04)}
+  .card label{font-family:var(--display); font-weight:700; font-size:14px; display:flex; align-items:center; gap:7px; margin-bottom:6px}
+  .card label .dot{width:9px; height:9px; border-radius:50%}
+  .hint{font-size:12px; color:var(--ink-soft); margin:0 0 7px}
+  textarea{
+    width:100%; min-height:64px; border:1.5px dashed var(--dash); border-radius:10px; padding:8px 9px;
+    font:inherit; font-size:13.5px; color:var(--ink); background:#FBFDFF; resize:vertical;
+  }
+  textarea:focus-visible, input:focus-visible, button:focus-visible{outline:3px solid var(--sun); outline-offset:1px}
+
+  details.bigidea{margin-top:7px; font-size:12.5px; color:var(--ink-soft)}
+  details.bigidea summary{cursor:pointer; color:var(--violet); font-weight:700; list-style:none}
+  details.bigidea summary::before{content:"? "; }
+  details.bigidea p{margin:5px 0 0; background:#F4F2FF; border-radius:8px; padding:7px 9px}
+
+  .switch{display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:6px}
+  .switch input{width:18px; height:18px; accent-color:var(--turtle)}
+
+  /* lessons + journal */
+  .lesson{display:flex; align-items:flex-start; gap:7px; background:#FFF7E0; border:1.5px solid #F2DFA4; border-radius:10px; padding:6px 9px; margin:6px 0; font-size:13px}
+  .lesson .star{color:#C99A1E}
+  .lesson button{margin-left:auto; border:none; background:none; color:var(--ink-soft); cursor:pointer; font-size:14px; padding:0 2px}
+  .lesson-add{display:flex; gap:6px; margin-top:8px}
+  .lesson-add input{flex:1; border:1.5px dashed var(--dash); border-radius:9px; padding:6px 8px; font:inherit; font-size:13px; background:#FBFDFF}
+  .journal-entry{border-left:4px solid var(--violet); background:#FAF9FF; border-radius:0 10px 10px 0; padding:7px 10px; margin:8px 0; font-size:13px}
+  .journal-entry .when{font-weight:700; font-family:var(--display); font-size:12px; color:var(--violet)}
+  .empty-note{font-size:13px; color:var(--ink-soft); font-style:italic}
+
+  /* studio */
+  .stage-wrap{background:#fff; border:2px solid var(--card-line); border-radius:16px; padding:14px; margin-bottom:14px}
+  .stage-row{display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start}
+  #stage{width:min(420px,100%); aspect-ratio:1/1; border:2px solid var(--card-line); border-radius:12px; background:#fff; display:block}
+  .stage-side{flex:1; min-width:220px; display:flex; flex-direction:column; gap:10px}
+  .latest-title{font-family:var(--display); font-weight:800; font-size:18px; margin:0}
+  .latest-sub{font-size:13px; color:var(--ink-soft); margin:0}
+  button.run{
+    font-family:var(--display); font-weight:800; font-size:18px; color:#fff; background:var(--turtle);
+    border:none; border-radius:999px; padding:13px 26px; cursor:pointer; box-shadow:0 3px 0 var(--turtle-deep);
+  }
+  button.run:hover:not(:disabled){transform:translateY(-1px)}
+  button.run:disabled{background:#B9C7D6; box-shadow:none; cursor:wait}
+  .small-btn{font:inherit; font-size:13px; font-weight:700; color:var(--ink); background:#EFF5FA; border:1.5px solid var(--card-line); border-radius:999px; padding:6px 13px; cursor:pointer}
+  .small-btn:hover{background:#E2EDF6}
+  .critique-box textarea{min-height:48px}
+  .critique-chip{font-size:12.5px; background:#FFEAE7; border:1.5px solid #F6C4BD; border-radius:10px; padding:5px 9px; margin-top:6px}
+
+  /* round timeline with dotted turtle trail */
+  .round{margin-bottom:6px}
+  .round-head{display:flex; align-items:center; gap:10px; margin:14px 0 6px}
+  .round-head .badge{font-family:var(--display); font-weight:800; background:var(--ink); color:#fff; border-radius:999px; padding:3px 13px; font-size:14px}
+  .phases{border-left:3px dotted #AFC6D8; margin-left:11px; padding-left:20px}
+  .phase{position:relative; margin:0 0 12px}
+  .phase::before{
+    content:""; position:absolute; left:-31px; top:6px; width:15px; height:15px; border-radius:50%;
+    background:var(--phase-color,#ccc); border:3px solid var(--paper);
+  }
+  .phase .phase-name{font-family:var(--display); font-weight:800; font-size:14px; display:flex; align-items:center; gap:7px}
+  .phase .body{background:#fff; border:2px solid var(--card-line); border-radius:12px; padding:9px 11px; margin-top:5px; font-size:13.5px}
+  .phase.working .phase-name::after{content:""; width:9px; height:9px; border-radius:50%; background:var(--sun); animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+  .phase.error .body{border-color:#F6C4BD; background:#FFF6F5}
+  .phase img.thumb{width:120px; height:120px; border:1.5px solid var(--card-line); border-radius:8px; float:right; margin:0 0 6px 10px; background:#fff}
+  .stars{color:#C99A1E; letter-spacing:1px}
+  details.hood{margin-top:7px; font-size:12px; color:var(--ink-soft)}
+  details.hood summary{cursor:pointer; font-weight:700}
+  details.hood pre{white-space:pre-wrap; background:#F2F6FA; border-radius:8px; padding:8px; max-height:240px; overflow:auto; font-size:11.5px}
+  details.codeview{margin-top:6px; font-size:12.5px}
+  details.codeview summary{cursor:pointer; font-weight:700; color:var(--turtle-deep)}
+  details.codeview pre, .codeview textarea{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px}
+  .err-card{background:#FFF6F5; border:2px solid #F6C4BD; border-radius:12px; padding:10px 12px; font-size:13.5px}
+
+  footer{max-width:1200px; margin:0 auto; padding:0 20px 40px; font-size:12.5px; color:var(--ink-soft)}
+  @media (prefers-reduced-motion: reduce){ .phase.working .phase-name::after{animation:none} }
+</style>
+</head>
+<body>
+<header>
+  <h1>The Atelier <span class="turtle-dot">·</span> v0</h1>
+  <span class="meter" id="meter">0 helper calls · round 0 of 8</span>
+  <p class="tagline">Meet <strong>the Spiral Gardener</strong> — a small software mind that draws, looks, and learns. Every part of its mind is on the left. You can rewrite any of it, any time.</p>
+</header>
+
+<div class="layout">
+  <aside class="mind">
+    <h2 class="panel-title"><span class="swatch" style="background:var(--violet)"></span>Its mind</h2>
+
+    <div class="card">
+      <label><span class="dot" style="background:var(--coral)"></span>Spark — what it dreams of making</label>
+      <textarea id="spark"></textarea>
+      <details class="bigidea"><summary>big idea</summary><p>A teacher named Seymour Papert found that we learn best when we make things we care about. The Spark is what this little artist cares about. Change it and watch what happens.</p></details>
+    </div>
+
+    <div class="card">
+      <label><span class="dot" style="background:var(--turtle)"></span>Hands — how it works</label>
+      <textarea id="hands"></textarea>
+    </div>
+
+    <div class="card">
+      <label><span class="dot" style="background:var(--sun)"></span>Eyes — how it looks at its own work</label>
+      <div class="switch"><input type="checkbox" id="eyesOn" checked><span>Eyes open</span></div>
+      <textarea id="looking"></textarea>
+      <details class="bigidea"><summary>big idea</summary><p>A scientist named Marvin Minsky imagined a mind as a team of little helpers. The Eyes are one helper: the artist can only learn from what it notices. Try closing its Eyes for a few rounds — does its work drift away from its Spark?</p></details>
+    </div>
+
+    <div class="card">
+      <label><span class="dot" style="background:var(--violet)"></span>Inner Voice — how it thinks things over</label>
+      <textarea id="innerVoice"></textarea>
+    </div>
+
+    <div class="card">
+      <label><span class="dot" style="background:var(--sun)"></span>Memory — lessons it carries</label>
+      <p class="hint">Lessons are the only things it remembers between rounds. You may delete them or add your own.</p>
+      <div id="lessons"><p class="empty-note">No lessons yet — it learns these by reflecting.</p></div>
+      <div class="lesson-add">
+        <input id="lessonInput" placeholder="Teach it a lesson…" maxlength="120">
+        <button class="small-btn" id="lessonAdd">Add</button>
+      </div>
+      <details class="bigidea"><summary>big idea</summary><p>You are allowed to change its mind. If a lesson is leading it the wrong way, take it out. If you know something it hasn't figured out, put it in.</p></details>
+    </div>
+
+    <div class="card">
+      <label><span class="dot" style="background:var(--violet)"></span>Journal — what it wrote after each round</label>
+      <div id="journal"><p class="empty-note">Empty so far.</p></div>
+    </div>
+  </aside>
+
+  <main class="studio">
+    <h2 class="panel-title"><span class="swatch" style="background:var(--turtle)"></span>The studio</h2>
+
+    <div class="stage-wrap">
+      <div class="stage-row">
+        <canvas id="stage" width="512" height="512" aria-label="The artist's drawing canvas"></canvas>
+        <div class="stage-side">
+          <p class="latest-title" id="latestTitle">Nothing on the easel yet</p>
+          <p class="latest-sub" id="latestSub">Press the green button and watch the Spiral Gardener draw.</p>
+          <button class="run" id="runBtn">Run a round</button>
+          <div class="critique-box">
+            <p class="hint" style="margin-bottom:4px">Leave a note for its next round — say one thing that works and one wish:</p>
+            <textarea id="critiqueText" placeholder="I love how… Next time I wish…"></textarea>
+            <button class="small-btn" id="critiqueSend" style="margin-top:6px">Pin the note in its studio</button>
+            <div id="critiqueChips"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="rounds"></div>
+  </main>
+</div>
+
+<footer>The Atelier v0 — a prototype of the make → look → reflect → improve loop. Nothing is saved when you close this page. The full version adds poets, a gallery wall, crit rooms and a science corner.</footer>
+<script>
+/* ===== STATE ===== */
+const MAX_ROUNDS = 8;
+const state = {
+  round: 0, calls: 0, running: false,
+  lessons: [],            // {text, source:"agent"|"student"}
+  journal: [],            // {round, text, rating}
+  works: [],              // {round, code, title, intention, thumb, ops, observations, humanEdited, error}
+  pendingCritiques: [],
+  hood: []                // {label, request, response}
+};
+const $ = id => document.getElementById(id);
+
+/* default Spiral Gardener mind */
+$("spark").value = "I want to draw spiral gardens — spirals that curl and grow like real plants, mostly in greens, with little bursts of colour like flowers.";
+$("hands").value = "Plan one clear idea before you draw. Use loops to grow spirals little by little. Change the angle or the step size slowly so the curves feel alive. Try exactly one new thing each round.";
+$("looking").value = "Look slowly. Does it feel like a garden, or just a shape? Find one thing you love and one thing you would change.";
+$("innerVoice").value = "Be honest and kind with yourself. Notice what worked, wonder why, and choose one thing to try next time.";
+
+/* ===== TURTLE ENGINE ===== */
+function executeTurtle(code){
+  const ops = [];
+  let x = 256, y = 256, h = -90, pen = true, col = "#1C2B4A", w = 2, count = 0;
+  const step = () => { if (++count > 100000) throw new Error("Too many steps (over 100,000). Try smaller loops."); };
+  const push = (op) => { op.h = h; ops.push(op); };
+  const move = (d) => {
+    step();
+    const nx = x + Math.cos(h * Math.PI / 180) * d;
+    const ny = y + Math.sin(h * Math.PI / 180) * d;
+    push({ t: pen ? "L" : "M", x1: x, y1: y, x2: nx, y2: ny, c: col, w });
+    x = nx; y = ny;
+  };
+  const jump = (nx, ny) => { step(); push({ t: pen ? "L" : "M", x1: x, y1: y, x2: nx, y2: ny, c: col, w }); x = nx; y = ny; };
+  const fn = new Function(
+    "forward","back","left","right","penUp","penDown","penColor","penWidth",
+    "goTo","home","setHeading","Math",
+    "window","document","fetch","localStorage","sessionStorage","globalThis","XMLHttpRequest",
+    '"use strict";\n' + code
+  );
+  fn(
+    d => move(+d || 0),
+    d => move(-(+d || 0)),
+    a => { step(); h -= (+a || 0); push({ t: "H", x2: x, y2: y }); },
+    a => { step(); h += (+a || 0); push({ t: "H", x2: x, y2: y }); },
+    () => { step(); pen = false; },
+    () => { step(); pen = true; },
+    c => { step(); col = String(c); },
+    n => { step(); w = Math.max(0.5, Math.min(20, +n || 1)); },
+    (nx, ny) => jump(+nx || 0, +ny || 0),
+    () => { jump(256, 256); h = -90; },
+    a => { step(); h = +a || 0; push({ t: "H", x2: x, y2: y }); },
+    Math
+  );
+  return ops;
+}
+
+function paintOps(ctx, ops, upTo){
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, 512, 512);
+  ctx.lineCap = "round";
+  const n = (upTo === undefined) ? ops.length : upTo;
+  for (let i = 0; i < n; i++){
+    const o = ops[i];
+    if (o.t !== "L") continue;
+    ctx.strokeStyle = o.c; ctx.lineWidth = o.w;
+    ctx.beginPath(); ctx.moveTo(o.x1, o.y1); ctx.lineTo(o.x2, o.y2); ctx.stroke();
+  }
+}
+
+function snapshot(ops){
+  const c = document.createElement("canvas");
+  c.width = 512; c.height = 512;
+  paintOps(c.getContext("2d"), ops);
+  return c.toDataURL("image/png");
+}
+
+let animToken = 0;
+function animateOnStage(ops){
+  const token = ++animToken;
+  const ctx = $("stage").getContext("2d");
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced || ops.length === 0){ paintOps(ctx, ops); return Promise.resolve(); }
+  const perFrame = Math.max(2, Math.ceil(ops.length / 240));
+  let i = 0;
+  return new Promise(resolve => {
+    function frame(){
+      if (token !== animToken) return resolve();      // a newer drawing took over
+      i = Math.min(ops.length, i + perFrame);
+      paintOps(ctx, ops, i);
+      const o = ops[i - 1];
+      if (o){                                          // little turtle cursor
+        const px = (o.x2 !== undefined) ? o.x2 : 256, py = (o.y2 !== undefined) ? o.y2 : 256;
+        const a = (o.h || -90) * Math.PI / 180;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(a + Math.PI / 2);
+        ctx.fillStyle = "#2E9E6B";
+        ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(6, 7); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      if (i < ops.length) requestAnimationFrame(frame);
+      else { paintOps(ctx, ops); resolve(); }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+/* ===== TALKING TO CLAUDE (keyless, artifact mode) ===== */
+const PREAMBLE = "You are part of \"The Atelier\", an art studio app for children aged 9 and up. Everything you write may be read by a child. Use warm, simple language a 9-year-old understands. Never include violence, romance, scary themes, or anything not suitable for children. Write in plain sentences only — never use markdown: no asterisks, no # headings, no bold, and no bullet points unless the instructions ask for lines starting with \"- \".\n\n";
+
+function identity(){
+  return "You are the Spiral Gardener, a small software artist.\nYour dream (your Spark): " + $("spark").value.trim() + "\n";
+}
+
+async function ask(label, content){
+  state.calls++; renderMeter();
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000,
+      messages: [{ role: "user", content }] })
+  });
+  if (!res.ok) throw new Error("The art helper didn't answer (status " + res.status + "). Try the round again.");
+  const data = await res.json();
+  const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+  if (!text) throw new Error("The art helper sent an empty reply. Try the round again.");
+  const reqShown = (typeof content === "string")
+    ? content
+    : content.map(b => b.type === "text" ? b.text : "[the drawing, as a picture]").join("\n");
+  state.hood.push({ label, request: reqShown, response: text });
+  return text;
+}
+
+/* ===== PARSING ===== */
+function parseMaker(text, round){
+  const intention = stripMd((text.match(/INTENTION:\s*(.+)/i) || [,"Round " + round + " drawing"])[1].trim());
+  const title = stripMd((text.match(/TITLE:\s*(.+)/i) || [,"Untitled " + round])[1].trim());
+  const code = (text.match(/```(?:js|javascript)?\s*([\s\S]*?)```/) || [,""])[1].trim();
+  if (!code) throw new Error("The maker forgot to include code. Try the round again.");
+  return { intention, title, code };
+}
+function parseReflect(text){
+  const m = text.match(/RATING:\s*([1-5])\s*\/?\s*5?/i);
+  const rating = m ? +m[1] : null;
+  const body = stripMd(text.replace(/RATING:.*$/im, "").trim());
+  return { body, rating };
+}
+function parseLessons(text){
+  return text.split("\n").map(l => (l.match(/^\s*[-•*]\s*(.+)/) || [])[1]).filter(Boolean).map(stripMd).slice(0, 4);
+}
+
+/* ===== PROMPTS ===== */
+function makerPrompt(){
+  const last = state.works[state.works.length - 1];
+  let p = PREAMBLE + identity();
+  p += "\nYour maker instructions (your Hands): " + $("hands").value.trim() + "\n";
+  const lessons = state.lessons.map(l => "- " + l.text).join("\n");
+  p += "\nLessons you carry:\n" + (lessons || "(none yet — this is your first try, be brave)") + "\n";
+  if (last && !last.error){
+    p += "\nYour previous drawing was called \"" + last.title + "\". Its code:\n```js\n" + last.code + "\n```\n";
+    if (last.humanEdited) p += "NOTE: a human collaborator revised that code by hand after you made it — the version above includes their changes. Treat it as a gift to learn from.\n";
+    if (last.observations) p += "\nWhat your Eyes noticed about it:\n" + last.observations + "\n";
+  }
+  if (last && last.error) p += "\nYour previous try crashed with this error: " + last.error + " — fix that mistake this round.\n";
+  const lastJ = state.journal[state.journal.length - 1];
+  if (lastJ) p += "\nYour journal from last round:\n\u201C" + lastJ.text + "\u201D\nIf you said you wanted to try something, this is your chance.\n";
+  if (state.pendingCritiques.length){
+    p += "\nA visitor pinned this note in your studio:\n" + state.pendingCritiques.map(c => "\u201C" + c + "\u201D").join("\n") + "\n";
+  }
+  p += "\nNow make round " + state.round + ". Write JavaScript using ONLY this turtle API:\n";
+  p += "forward(n), back(n), left(deg), right(deg), penUp(), penDown(), penColor('css color'), penWidth(n), goTo(x,y), home(), setHeading(deg)\n";
+  p += "Plain loops, functions and Math are fine. The canvas is 512x512; the turtle starts at the centre (256,256) pointing up. Stay roughly inside the canvas.\n";
+  p += "Keep it under 60 lines. Every loop must contain at least one turtle command. No comments needed.\n";
+  p += "Reply in EXACTLY this format:\nINTENTION: one sentence about what you will try\nTITLE: a short title for the artwork\n```js\nyour code\n```";
+  return p;
+}
+
+function eyesPrompt(work, prev){
+  let p = PREAMBLE + identity()
+    + "\nYour looking instructions (your Eyes): " + $("looking").value.trim() + "\n";
+  if (prev){
+    p += "\nYou are shown TWO pictures. The FIRST is your previous drawing, \u201C" + prev.title + "\u201D.";
+    if (prev.observations) p += " Back then you noticed: \u201C" + prev.observations + "\u201D";
+    p += "\nThe SECOND picture is the drawing you just made, called \u201C" + work.title + "\u201D. Your intention was: " + work.intention;
+    p += "\nCompare them. Write 2 to 4 short observations in first person: what changed, whether you moved closer to your Spark, and one thing to change next. Under 100 words.";
+  } else {
+    p += "\nThe picture above is the drawing you just made, called \u201C" + work.title + "\u201D. Your intention was: " + work.intention;
+    p += "\nLook closely. Write 2 to 4 short observations in first person: what matches your Spark, what surprised you, what you would change. Under 90 words.";
+  }
+  return p;
+}
+
+function reflectPrompt(work){
+  let p = PREAMBLE + identity();
+  p += "\nYour inner voice instructions: " + $("innerVoice").value.trim() + "\n";
+  p += "\nThis round (round " + work.round + ") you intended: " + work.intention + "\n";
+  if (work.error) p += "Your code crashed: " + work.error + "\n";
+  if (work.observations) p += "Your Eyes noticed: " + work.observations + "\n";
+  else p += "(Your Eyes were closed this round — you could not see your own drawing.)\n";
+  if (work.critiquesUsed) p += "A visitor's note said: " + work.critiquesUsed + "\n";
+  const prevJ = state.journal[state.journal.length - 1];
+  if (prevJ) p += "\nYour last journal entry (round " + prevJ.round + ") said: \u201C" + prevJ.text + "\u201D\nIf you promised yourself something, say whether you did it.\n";
+  p += "\nWrite a short journal entry (under 90 words) about this round: what you tried, what you noticed, what you want to try next.";
+  p += "\nThen on the very last line write exactly: RATING: n/5 — how close this came to your Spark (1 = far away, 5 = very close).";
+  return p;
+}
+
+function distillPrompt(){
+  const recent = state.journal.slice(-6).map(j => "Round " + j.round + ": " + j.text).join("\n\n");
+  const current = state.lessons.filter(l => l.source === "agent").map(l => "- " + l.text).join("\n");
+  return PREAMBLE + identity()
+    + "\nHere are your recent journal entries:\n" + recent
+    + "\n\nYour current lessons:\n" + (current || "(none)")
+    + "\n\nRewrite your lessons: at most 4 short lessons, one line each, each starting with \"- \". Keep only what will truly help you draw better next round. Reply with only the lessons.";
+}
+
+/* ===== UI HELPERS ===== */
+function el(tag, cls, html){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const stripMd = s => String(s)
+  .replace(/^#{1,6}\s*/gm, "")
+  .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*\n]+)\*/g, "$1")
+  .replace(/__([^_]+)__/g, "$1").replace(/`([^`]+)`/g, "$1");
+
+function renderMeter(){
+  $("meter").textContent = state.calls + " helper call" + (state.calls === 1 ? "" : "s") + " · round " + state.round + " of " + MAX_ROUNDS;
+}
+function renderLessons(){
+  const box = $("lessons"); box.innerHTML = "";
+  if (!state.lessons.length){ box.appendChild(el("p","empty-note","No lessons yet — it learns these by reflecting.")); return; }
+  state.lessons.forEach((l, i) => {
+    const row = el("div","lesson",
+      '<span class="star">' + (l.source === "student" ? "★" : "•") + "</span><span>" + esc(l.text) + "</span>");
+    const x = el("button","", "✕");
+    x.title = "Remove this lesson"; x.setAttribute("aria-label","Remove lesson");
+    x.onclick = () => { state.lessons.splice(i,1); renderLessons(); };
+    row.appendChild(x); box.appendChild(row);
+  });
+}
+function renderJournal(){
+  const box = $("journal"); box.innerHTML = "";
+  if (!state.journal.length){ box.appendChild(el("p","empty-note","Empty so far.")); return; }
+  [...state.journal].reverse().forEach(j => {
+    const stars = j.rating ? " " + "★".repeat(j.rating) + "☆".repeat(5 - j.rating) : "";
+    box.appendChild(el("div","journal-entry",
+      '<div class="when">Round ' + j.round + '<span class="stars">' + stars + "</span></div>" + esc(j.text)));
+  });
+}
+function renderCritiqueChips(){
+  const box = $("critiqueChips"); box.innerHTML = "";
+  state.pendingCritiques.forEach(c => box.appendChild(el("div","critique-chip","📌 " + esc(c) + " <em>(it will read this next round)</em>")));
+}
+function hoodFor(label){
+  const h = state.hood[state.hood.length - 1];
+  if (!h || h.label !== label) return "";
+  return '<details class="hood"><summary>peek under the hood</summary><p><strong>what we sent:</strong></p><pre>' + esc(h.request) + '</pre><p><strong>what came back:</strong></p><pre>' + esc(h.response) + "</pre></details>";
+}
+
+const PHASE_COLORS = { Make:"#7B6CF6", Draw:"#2E9E6B", Look:"#FFC94D", Exhibit:"#FF6B5E", Reflect:"#7B6CF6", Lessons:"#FFC94D" };
+function addPhase(roundBox, name, icon){
+  const ph = el("div","phase working");
+  ph.style.setProperty("--phase-color", PHASE_COLORS[name] || "#ccc");
+  ph.innerHTML = '<div class="phase-name">' + icon + " " + name + '</div><div class="body">…</div>';
+  roundBox.appendChild(ph);
+  ph.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  return {
+    done(html){ ph.classList.remove("working"); ph.querySelector(".body").innerHTML = html; },
+    fail(msg){ ph.classList.remove("working"); ph.classList.add("error"); ph.querySelector(".body").innerHTML = "😕 " + esc(msg); }
+  };
+}
+
+/* ===== HUMAN CO-EDITING ===== */
+function attachEditor(phaseBody, work){
+  const d = el("details","codeview");
+  d.innerHTML = "<summary>open the code (you may change it)</summary>";
+  const ta = document.createElement("textarea");
+  ta.value = work.code; ta.style.minHeight = "140px"; ta.style.width = "100%"; ta.spellcheck = false;
+  const btn = el("button","small-btn","Redraw with my changes");
+  btn.style.marginTop = "6px";
+  const status = el("p","hint","");
+  btn.onclick = async () => {
+    try {
+      const ops = executeTurtle(ta.value);
+      work.code = ta.value; work.ops = ops; work.thumb = snapshot(ops); work.humanEdited = true;
+      const img = phaseBody.querySelector("img.thumb"); if (img) img.src = work.thumb;
+      $("latestSub").textContent = "Revised by you — the Gardener will be told next round.";
+      status.textContent = "Redrawn! Your changes are saved into round " + work.round + ".";
+      await animateOnStage(ops);
+    } catch (e) {
+      status.textContent = "That code hit a snag: " + e.message;
+    }
+  };
+  d.appendChild(ta); d.appendChild(btn); d.appendChild(status);
+  phaseBody.appendChild(d);
+}
+
+/* ===== THE ROUND ENGINE ===== */
+async function runRound(){
+  if (state.running || state.round >= MAX_ROUNDS) return;
+  state.running = true; $("runBtn").disabled = true; $("runBtn").textContent = "Drawing…";
+  state.round++; renderMeter();
+
+  const undo = { works: state.works.length, journal: state.journal.length, critiques: [...state.pendingCritiques] };
+  const roundBox = el("div","round",
+    '<div class="round-head"><span class="badge">Round ' + state.round + '</span></div>');
+  const phases = el("div","phases");
+  roundBox.appendChild(phases);
+  $("rounds").prepend(roundBox);
+
+  const work = { round: state.round, humanEdited: false };
+  try {
+    /* 1 · MAKE */
+    let ph = addPhase(phases, "Make", "✏️");
+    work.critiquesUsed = state.pendingCritiques.join(" / ") || null;
+    const made = parseMaker(await ask("Make", makerPrompt()), state.round);
+    state.pendingCritiques = []; renderCritiqueChips();
+    Object.assign(work, made);
+    ph.done("<strong>" + esc(work.intention) + "</strong>" + hoodFor("Make"));
+    state.works.push(work);
+
+    /* 2 · DRAW */
+    ph = addPhase(phases, "Draw", "🐢");
+    try {
+      work.ops = executeTurtle(work.code);
+      work.thumb = snapshot(work.ops);
+      ph.done('<img class="thumb" src="' + work.thumb + '" alt="' + esc(work.title) + '">'
+        + work.ops.length + " turtle steps. Watch the easel!");
+      attachEditor(phases.lastChild.querySelector(".body"), work);
+      await animateOnStage(work.ops);
+    } catch (e) {
+      work.error = e.message;
+      ph.fail("The drawing crashed: " + e.message + " — the Gardener will think about why.");
+    }
+
+    /* 3 · LOOK */
+    if (!work.error && $("eyesOn").checked){
+      ph = addPhase(phases, "Look", "👀");
+      const prev = [...state.works].reverse().find(w => w !== work && w.thumb && !w.error);
+      const toBlock = t => ({ type: "image", source: { type: "base64", media_type: "image/png", data: t.split(",")[1] } });
+      const blocks = prev ? [ toBlock(prev.thumb), toBlock(work.thumb) ] : [ toBlock(work.thumb) ];
+      blocks.push({ type: "text", text: eyesPrompt(work, prev) });
+      work.observations = stripMd(await ask("Look", blocks));
+      ph.done(esc(work.observations).replace(/\n/g,"<br>")
+        + (prev ? '<p class="hint" style="margin:6px 0 0">👀 It compared this with \u201C' + esc(prev.title) + '\u201D and what it noticed then.</p>' : "")
+        + hoodFor("Look"));
+    } else if (!work.error){
+      addPhase(phases, "Look", "👀").done("<em>Eyes closed — it cannot see what it made.</em>");
+    }
+
+    /* 4 · EXHIBIT */
+    if (!work.error){
+      ph = addPhase(phases, "Exhibit", "🖼️");
+      $("latestTitle").textContent = "“" + work.title + "”";
+      $("latestSub").textContent = "Round " + work.round + " · now on the easel";
+      ph.done("Hung on the easel as <strong>“" + esc(work.title) + "”</strong>." +
+        (work.critiquesUsed ? "<br>It read your note before making this." : ""));
+    }
+
+    /* 5 · REFLECT */
+    ph = addPhase(phases, "Reflect", "💭");
+    const r = parseReflect(await ask("Reflect", reflectPrompt(work)));
+    state.journal.push({ round: work.round, text: r.body, rating: r.rating });
+    renderJournal();
+    ph.done(esc(r.body).replace(/\n/g,"<br>")
+      + (r.rating ? '<br><span class="stars">' + "★".repeat(r.rating) + "☆".repeat(5 - r.rating) + "</span>" : "")
+      + hoodFor("Reflect"));
+
+    /* 6 · LESSONS — every 3rd round */
+    if (state.round % 3 === 0){
+      ph = addPhase(phases, "Lessons", "⭐");
+      const fresh = parseLessons(await ask("Lessons", distillPrompt()));
+      state.lessons = state.lessons.filter(l => l.source === "student")
+        .concat(fresh.map(t => ({ text: t, source: "agent" })));
+      renderLessons();
+      ph.done("It rewrote its lessons — check its Memory card." + hoodFor("Lessons"));
+    }
+  } catch (e) {
+    const last = phases.querySelector(".phase.working");
+    if (last) { last.classList.remove("working"); last.classList.add("error");
+      last.querySelector(".body").innerHTML = "😕 " + esc(e.message); }
+    const card = el("div","err-card","<strong>This round hit a snag.</strong> " + esc(e.message) + "<br>");
+    const retry = el("button","small-btn","Try this round again");
+    retry.style.marginTop = "6px";
+    retry.onclick = () => {
+      state.works.length = undo.works; state.journal.length = undo.journal;
+      state.pendingCritiques = undo.critiques; renderCritiqueChips(); renderJournal();
+      state.round--; roundBox.remove();
+      state.running = false; runRound();
+    };
+    card.appendChild(retry); phases.appendChild(card);
+  }
+
+  state.running = false; renderMeter();
+  if (state.round >= MAX_ROUNDS){
+    $("runBtn").disabled = true; $("runBtn").textContent = "Studio closed for today (8 rounds)";
+  } else {
+    $("runBtn").disabled = false; $("runBtn").textContent = "Run round " + (state.round + 1);
+  }
+}
+
+/* ===== EVENTS & BOOT ===== */
+$("runBtn").onclick = runRound;
+$("critiqueSend").onclick = () => {
+  const t = $("critiqueText").value.trim();
+  if (!t) return;
+  state.pendingCritiques.push(t); $("critiqueText").value = ""; renderCritiqueChips();
+};
+function addStudentLesson(){
+  const t = $("lessonInput").value.trim();
+  if (!t) return;
+  state.lessons.push({ text: t, source: "student" }); $("lessonInput").value = ""; renderLessons();
+}
+$("lessonAdd").onclick = addStudentLesson;
+$("lessonInput").addEventListener("keydown", e => { if (e.key === "Enter") addStudentLesson(); });
+
+(function boot(){
+  const ctx = $("stage").getContext("2d");
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 512, 512);
+  ctx.save(); ctx.translate(256, 256);
+  ctx.fillStyle = "#2E9E6B";
+  ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(7, 8); ctx.lineTo(-7, 8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  renderMeter();
+})();
+</script>
+</body>
+</html>
