@@ -437,6 +437,7 @@ let state = {
   schemaVersion: SCHEMA,
   settings: defaultSettings(),
   agents: [], works: [], critSessions: [], experiments: [], notebook: [],
+  askChat: [],   // the Ask-helper conversation, kept so it doesn't vanish when the popup is reopened
   ui: { screen:"studio", agentId:null, galleryAgentId:"all", workId:null },
   session: { calls:0, tokens:0 }
 };
@@ -455,7 +456,8 @@ function save(){
     schemaVersion: SCHEMA,
     settings: persistSettings,
     agents: state.agents, works: state.works,
-    critSessions: state.critSessions, experiments: state.experiments, notebook: state.notebook
+    critSessions: state.critSessions, experiments: state.experiments, notebook: state.notebook,
+    askChat: state.askChat.slice(-40)   // keep the recent Ask conversation
   };
   if (!STORAGE_OK) return;   // no localStorage here (e.g. inside an artifact); the boot banner explains, so stay quiet
   try { localStorage.setItem(LS_KEY, JSON.stringify(out, stripCacheReplacer)); _storageWarned = false; }
@@ -477,6 +479,7 @@ function load(){
     state.critSessions = d.critSessions || [];
     state.experiments = d.experiments || [];
     state.notebook = d.notebook || [];
+    state.askChat = Array.isArray(d.askChat) ? d.askChat : [];
   } catch(e){ console.warn("Could not load saved state:", e); }
 }
 
@@ -501,6 +504,7 @@ function importAll(json){
   // crit sessions and experiments reference ids only (no HTML interpolation); keep them but remap agent ids defensively
   state.critSessions = Array.isArray(d.critSessions) ? d.critSessions : [];
   state.experiments = Array.isArray(d.experiments) ? d.experiments : [];
+  state.askChat = Array.isArray(d.askChat) ? d.askChat.filter(m=>m&&(m.who==="you"||m.who==="ai")).map(m=>({ who:m.who, text:_str(m.text,4000) })) : [];
   if (d.settings){ const keep = state.settings.providers; state.settings = Object.assign(defaultSettings(), d.settings); state.settings.providers = keep; }
   save(); render();
 }
@@ -1180,17 +1184,24 @@ function uiConfirm(message, opts){
 }
 
 // The "Ask" helper: a small chat that answers questions about the app and the person's own studio.
+// The conversation is kept in state.askChat, so it persists when the popup is closed and reopened.
 function openAskAI(){
   const c = el("div","ask-wrap");
-  c.appendChild(el("p","hint","Ask me how The Atelier works, or about your own minds and what they have been making. I can read your studio, but I cannot change it."));
+  const head = el("div","row"); head.style.cssText="justify-content:space-between;align-items:flex-start;gap:8px";
+  head.appendChild(el("p","hint","Ask me how The Atelier works, or about your own minds and what they have been making. I can read your studio, but I cannot change it."));
+  const clearB = el("button","small-btn","Clear"); clearB.title="Forget this conversation";
+  head.appendChild(clearB);
   const suggest = el("div","ask-suggest");
   const log = el("div","ask-log");
-  const history = [];
   function addBubble(who, text){
     const b = el("div","ask-msg "+(who==="you"?"you":"ai"));
     b.innerHTML = '<div class="who">'+(who==="you"?"You":"Helper")+'</div>'+esc(text).replace(/\n/g,"<br>");
     log.appendChild(b); log.scrollTop = log.scrollHeight; return b;
   }
+  function renderHistory(){ log.innerHTML=""; state.askChat.forEach(m=>addBubble(m.who, m.text)); }
+  renderHistory();
+  // recent complete exchanges, for prompt context
+  function pairs(){ const p=[], m=state.askChat; for(let i=0;i<m.length-1;i++){ if(m[i].who==="you" && m[i+1].who==="ai"){ p.push({q:m[i].text, a:m[i+1].text}); i++; } } return p; }
   const row = el("div","row"); row.style.marginTop="6px";
   const ta = el("textarea"); ta.placeholder="Type your question…"; ta.style.flex="1"; ta.style.minHeight="44px";
   const send = el("button","small-btn primary","Ask");
@@ -1201,23 +1212,24 @@ function openAskAI(){
     addBubble("you", q);
     const thinking = addBubble("ai", "…");
     try {
-      const res = await llm.complete({ role:"ask", system:ASK_SYSTEM, userText:askPrompt(q, history), maxTokens:500, meta:{ ask:true } });
+      const res = await llm.complete({ role:"ask", system:ASK_SYSTEM, userText:askPrompt(q, pairs()), maxTokens:500, meta:{ ask:true } });
       const ans = stripMd(res.text);
       thinking.innerHTML = '<div class="who">Helper</div>'+esc(ans).replace(/\n/g,"<br>");
-      history.push({ q, a:ans });
+      state.askChat.push({ who:"you", text:q }, { who:"ai", text:ans }); save();   // persist only complete exchanges
     } catch(e){
       thinking.innerHTML = '<div class="who">Helper</div>😕 '+esc(e.message).replace(/\n/g,"<br>");
     }
     log.scrollTop = log.scrollHeight;
     busy = false; send.disabled = false; ta.focus();
   }
+  clearB.onclick = ()=>{ state.askChat = []; save(); renderHistory(); ta.focus(); };
   ["How does this app work?","What have my minds been making?","What should I try next?"].forEach(qq=>{
     const b = el("button","",qq); b.onclick=()=>ask(qq); suggest.appendChild(b);
   });
   send.onclick = ()=>ask(ta.value);
   ta.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); ask(ta.value); } });
   row.appendChild(ta); row.appendChild(send);
-  c.appendChild(suggest); c.appendChild(log); c.appendChild(row);
+  c.appendChild(head); c.appendChild(suggest); c.appendChild(log); c.appendChild(row);
   modal("🤖 Ask the helper", c);
   setTimeout(()=>ta.focus(), 50);
 }
@@ -2479,7 +2491,7 @@ function screenSettings(){
   const clr=el("button","small-btn danger","Start over (delete everything)"); clr.onclick=async ()=>{ if(await uiConfirm("This deletes ALL minds, works, and notes. Are you sure?", {title:"Start over?", okText:"Delete everything", danger:true})){
     if (STORAGE_OK){ try{ localStorage.removeItem(LS_KEY); }catch(_){}; location.reload(); }
     else { // no storage to clear (artifact): reset in memory and reseed
-      state.agents=[]; state.works=[]; state.critSessions=[]; state.experiments=[]; state.notebook=[];
+      state.agents=[]; state.works=[]; state.critSessions=[]; state.experiments=[]; state.notebook=[]; state.askChat=[];
       state.settings=defaultSettings(); state.agents.push(agentFromTemplate(TEMPLATES[0]));
       nav("studio",{agentId:null}); toast("Started over.");
     }
