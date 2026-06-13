@@ -184,6 +184,10 @@ details.codeview pre,.codeview textarea{font-family:ui-monospace,Menlo,Consolas,
 .exp-strip .cell{width:74px; text-align:center; font-size:10.5px; color:var(--ink-soft)}
 .exp-strip .cell img{width:70px; height:70px; border:1.5px solid var(--card-line); border-radius:6px}
 .exp-strip .cell .mini-poem{width:70px;height:70px;border:1.5px solid var(--card-line);border-radius:6px;font-size:7px;padding:3px;overflow:hidden;text-align:left;line-height:1.2}
+.exp-strip .cell{cursor:pointer}
+.exp-strip .cell img:hover, .exp-strip .cell .mini-poem:hover{border-color:var(--turtle); box-shadow:0 0 0 2px #2E9E6B33}
+.zoom-img{display:block; margin:0 auto; width:100%; max-width:512px; height:auto; border:2px solid var(--card-line); border-radius:10px; background:#fff}
+.zoom-code{white-space:pre-wrap; word-break:break-word; background:#F4F7FA; border:1.5px solid var(--card-line); border-radius:8px; padding:9px 11px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; max-height:280px; overflow:auto; margin:6px 0 0}
 table.roles{width:100%; border-collapse:collapse; font-size:13px}
 table.roles th,table.roles td{border:1px solid var(--card-line); padding:6px 8px; text-align:left}
 table.roles th{background:#EFF5FA; font-family:var(--display)}
@@ -1150,6 +1154,31 @@ function modal(title, contentNode){
   return back;
 }
 
+// An in-app confirm dialog. Native confirm()/alert() are blocked inside a sandboxed artifact iframe
+// (no allow-modals), so they silently return false; this DOM modal works everywhere. Returns a Promise<boolean>.
+function uiConfirm(message, opts){
+  opts = opts || {};
+  return new Promise(resolve=>{
+    const c = el("div");
+    const msg = el("p"); msg.style.cssText = "white-space:pre-wrap;margin:0 0 14px;font-size:14.5px;line-height:1.55";
+    msg.textContent = message;
+    const row = el("div","row"); row.style.cssText = "gap:8px;justify-content:flex-end";
+    const cancel = el("button","small-btn", opts.cancelText || "Cancel");
+    const ok = el("button","small-btn primary"+(opts.danger?" danger":""), opts.okText || "Yes");
+    row.appendChild(cancel); row.appendChild(ok);
+    c.appendChild(msg); c.appendChild(row);
+    const back = modal(opts.title || "Just checking", c);
+    let done = false;
+    const finish = v => { if (done) return; done = true; obs.disconnect(); if (document.body.contains(back)) back.remove(); resolve(v); };
+    // dismissing the modal (Escape, backdrop, ×) counts as Cancel
+    const obs = new MutationObserver(()=>{ if (!document.body.contains(back)) finish(false); });
+    obs.observe(document.body, { childList:true });
+    ok.onclick = ()=>finish(true);
+    cancel.onclick = ()=>finish(false);
+    setTimeout(()=>ok.focus(), 50);
+  });
+}
+
 // The "Ask" helper: a small chat that answers questions about the app and the person's own studio.
 function openAskAI(){
   const c = el("div","ask-wrap");
@@ -1795,7 +1824,7 @@ function screenMind(){
 
   const danger = el("div","row"); danger.style.marginTop="12px";
   const del = el("button","small-btn danger","Delete this mind");
-  del.onclick = ()=>{ if(confirm("Delete "+agent.name+" and all its works? This cannot be undone.")){ state.agents=state.agents.filter(a=>a!==agent); state.works=state.works.filter(w=>w.agentId!==agent.id); save(); nav("studio"); } };
+  del.onclick = async ()=>{ if(await uiConfirm("Delete "+agent.name+" and all its works? This cannot be undone.", {title:"Delete this mind?", okText:"Delete", danger:true})){ state.agents=state.agents.filter(a=>a!==agent); state.works=state.works.filter(w=>w.agentId!==agent.id); save(); nav("studio"); } };
   const card = el("button","small-btn","Export trading card"); card.onclick=()=>exportTradingCard(agent);
   danger.appendChild(card); danger.appendChild(del);
   wrap.appendChild(danger);
@@ -2295,6 +2324,24 @@ function openExperimentWizard(){
   c.appendChild(go); c.appendChild(tools);
   const back = modal("New experiment — change one thing", c);
 }
+// Enlarge a single work in a popup: the full-size drawing (plus its turtle code) or the full writing.
+function openWorkZoom(work, caption){
+  const agent = getAgent(work.agentId) || { look:{ color:"#7B6CF6" } };
+  const c = el("div");
+  if (work.medium==="turtle"){
+    if (work.error) c.insertAdjacentHTML("beforeend", "<p class='empty-note'>This drawing crashed: "+esc(work.error)+"</p>");
+    else c.appendChild(thumbImgEl(work, "zoom-img"));
+    if (work.payload && work.payload.code){
+      const d = el("details","codeview"); d.style.marginTop="8px";
+      d.innerHTML = "<summary>show the turtle code</summary><pre class='zoom-code'>"+esc(work.payload.code)+"</pre>";
+      c.appendChild(d);
+    }
+  } else {
+    c.insertAdjacentHTML("beforeend", writingCardHTML(work, agent.look.color));
+  }
+  if (caption) c.insertAdjacentHTML("beforeend", '<p class="hint" style="margin-top:8px;text-align:center">'+esc(caption)+'</p>');
+  modal((work.title||"Work")+(work.round?" · round "+work.round:""), c);
+}
 function experimentView(exp){
   const base=getAgent(exp.baselineAgentId), variant=getAgent(exp.variantAgentId);
   const c = el("div","card");
@@ -2310,9 +2357,13 @@ function experimentView(exp){
     const strip = el("div","exp-strip");
     worksFor(ag.id).forEach(w=>{
       const cell = el("div","cell");
-      if (w.medium==="turtle"){ if(!w.error) cell.appendChild(thumbImgEl(w)); }
+      if (w.medium==="turtle"){ if(!w.error) cell.appendChild(thumbImgEl(w)); else cell.insertAdjacentHTML("afterbegin","<div class='mini-poem'>💥 crashed</div>"); }
       else cell.innerHTML='<div class="mini-poem">'+esc((w.payload.poem||"").slice(0,80))+'</div>';
       cell.insertAdjacentHTML("beforeend","r"+w.round);
+      const res = exp.results.find(r=>r.workId===w.id);
+      const cap = "Round "+w.round + (res ? " · self "+(res.selfRating!=null?res.selfRating:"–")+"/5 · judge "+(res.judgeRating!=null?res.judgeRating:"–")+"/5"+(res.novelty!=null?" · novelty "+res.novelty.toFixed(2):"") : "");
+      cell.title = "Click to enlarge";
+      cell.onclick = ()=>openWorkZoom(w, cap);
       strip.appendChild(cell);
     });
     c.appendChild(strip);
@@ -2423,9 +2474,9 @@ function screenSettings(){
   // data
   const data = el("div","card"); data.innerHTML="<label>Your data</label>";
   const row = el("div","row");
-  const expB=el("button","small-btn","Export everything (backup)"); expB.onclick=()=>{ if(confirm("This file holds all your minds and works. Only share it with people you trust. Download it now?")) download("atelier-backup.json", exportAll()); };
+  const expB=el("button","small-btn","Export everything (backup)"); expB.onclick=async ()=>{ if(await uiConfirm("This file holds all your minds and works. Only share it with people you trust. Download it now?", {title:"Export a backup?", okText:"Download"})) download("atelier-backup.json", exportAll()); };
   const impB=el("button","small-btn","Import a backup or a saved mind"); impB.onclick=importFlow;
-  const clr=el("button","small-btn danger","Start over (delete everything)"); clr.onclick=()=>{ if(confirm("This deletes ALL minds, works, and notes. Are you sure?")){
+  const clr=el("button","small-btn danger","Start over (delete everything)"); clr.onclick=async ()=>{ if(await uiConfirm("This deletes ALL minds, works, and notes. Are you sure?", {title:"Start over?", okText:"Delete everything", danger:true})){
     if (STORAGE_OK){ try{ localStorage.removeItem(LS_KEY); }catch(_){}; location.reload(); }
     else { // no storage to clear (artifact): reset in memory and reseed
       state.agents=[]; state.works=[]; state.critSessions=[]; state.experiments=[]; state.notebook=[];
@@ -2439,11 +2490,11 @@ function screenSettings(){
 }
 
 /* ===== SECTION: SHARING ===== */
-function exportTradingCard(agent){
+async function exportTradingCard(agent){
   const works = worksFor(agent.id).filter(w=>!w.error).sort((a,b)=>(b.selfRating||0)-(a.selfRating||0)).slice(0,3);
   const card = { kind:"atelier-trading-card", schemaVersion:SCHEMA, exportedAt:now(),
     agent: JSON.parse(JSON.stringify(agent)), works: JSON.parse(JSON.stringify(works)) };
-  if (confirm("This card holds "+agent.name+"'s mind, its lessons, journal, and its best works. Share only with people you trust. Download it?"))
+  if (await uiConfirm("This card holds "+agent.name+"'s mind, its lessons, journal, and its best works. Share only with people you trust. Download it?", {title:"Export a trading card?", okText:"Download"}))
     // strip the regenerable thumbnail/op cache — the recipient regenerates the very same drawings from {code, seed}
     download("trading-card-"+agent.name.replace(/\W+/g,"-").toLowerCase()+".json", JSON.stringify(card, stripCacheReplacer, 2));
 }
@@ -2530,7 +2581,7 @@ async function exportGalleryHTML(agentId){
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>Atelier Gallery</title></head>'+
     '<body style="font-family:system-ui;background:#F7FAFC;margin:0;padding:24px"><h1 style="font-family:Trebuchet MS">The Atelier — Gallery</h1>'+
     '<div style="column-width:240px;column-gap:16px">'+body+'</div></body></html>';
-  if (confirm("This makes a single web page of the selected works (with pictures inside it). Share only with people you trust. Download it?"))
+  if (await uiConfirm("This makes a single web page of the selected works (with pictures inside it). Share only with people you trust. Download it?", {title:"Save the gallery?", okText:"Download"}))
     download("atelier-gallery.html", html, "text/html");
 }
 // Save one mind's whole set of rounds as a single self-contained web page (pictures inline, no code needed to view).
@@ -2560,13 +2611,13 @@ async function exportRoundsHTML(agent){
     + '<h1 style="font-family:Trebuchet MS,sans-serif">'+esc(agent.look.emoji)+' '+esc(agent.name)+'</h1>'
     + '<p style="color:#5A6B8C">Its dream: '+esc(agent.anatomy.spark||"")+'</p>'
     + body + '<p style="color:#9BAAC4;font-size:12px">Made with The Atelier.</p></div></body></html>';
-  if (confirm("This makes a single web page of "+agent.name+"'s "+works.length+" round"+(works.length===1?"":"s")+" (with pictures inside it). Share only with people you trust. Download it?"))
+  if (await uiConfirm("This makes a single web page of "+agent.name+"'s "+works.length+" round"+(works.length===1?"":"s")+" (with pictures inside it). Share only with people you trust. Download it?", {title:"Save these rounds?", okText:"Download"}))
     download("atelier-"+agent.name.replace(/\W+/g,"-").toLowerCase()+"-rounds.html", html, "text/html");
 }
 // Clear a mind's history so it can begin a fresh set of rounds, keeping the mind the student built.
-function restartRounds(agent){
+async function restartRounds(agent){
   if (!worksFor(agent.id).length && !agent.stats.roundsRun){ toast(agent.name+" hasn't run any rounds yet."); return; }
-  if (!confirm("Start a fresh set of rounds for "+agent.name+"?\n\nIt keeps the mind you built (Spark, Hands, Eyes and so on) and any lessons you added by hand, but it forgets the works it made, its journal, the lessons it taught itself, and its round count goes back to zero.\n\nIf you want to keep this set, press Cancel and use “Save these rounds” first.")) return;
+  if (!await uiConfirm("Start a fresh set of rounds for "+agent.name+"?\n\nIt keeps the mind you built (Spark, Hands, Eyes and so on) and any lessons you added by hand, but it forgets the works it made, its journal, the lessons it taught itself, and its round count goes back to zero.\n\nIf you want to keep this set, press Cancel and use “Save these rounds” first.", {title:"Start a fresh set of rounds?", okText:"Start fresh", danger:true})) return;
   state.works = state.works.filter(w=>w.agentId!==agent.id);
   agent.memory.journal = [];
   agent.memory.lessons = agent.memory.lessons.filter(l=>l.source==="student");   // keep what the student taught it
