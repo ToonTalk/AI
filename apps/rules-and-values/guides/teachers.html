@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teacher's guide — Rule Debugger</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<style>
+  :root { --b:#d8d6cd; --fg:#23231f; --mut:#6b6a63; --accent:#b5532f; --bg2:#f6f4ee; --harm:#b5532f; --help:#3f7d57; --warn:#8a6d1f; --warnbg:#fbf3da; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.62 system-ui,-apple-system,sans-serif; color:var(--fg); background:#fff; }
+  .wrap { max-width:800px; margin:0 auto; padding:24px 20px 64px; }
+  a.back { font-size:14px; color:var(--mut); text-decoration:none; }
+  a.back:hover { color:var(--accent); }
+  h1 { font-size:30px; margin:12px 0 2px; }
+  .lede { font-size:18px; color:#43403a; margin:0 0 8px; }
+  h2 { font-size:20px; margin:30px 0 8px; border-bottom:2px solid var(--bg2); padding-bottom:5px; }
+  h3 { font-size:16px; margin:18px 0 4px; color:var(--accent); }
+  code, .mono { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.9em; background:var(--bg2); padding:1px 5px; border-radius:4px; }
+  pre { background:var(--bg2); border:1px solid var(--b); border-radius:8px; padding:12px 14px; overflow:auto; font-size:13.5px; }
+  blockquote { margin:12px 0; padding:8px 14px; border-left:4px solid var(--accent); background:var(--bg2); border-radius:0 8px 8px 0; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:15px; }
+  th, td { border:1px solid var(--b); padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--bg2); }
+  ul, ol { margin:8px 0; padding-left:22px; } li { margin:4px 0; }
+  .card { border:1px solid var(--b); border-radius:10px; padding:13px 16px; margin:12px 0; background:var(--bg2); }
+  .warn { background:var(--warnbg); border:1px solid #e7d8a8; color:var(--warn); border-radius:8px; padding:11px 14px; margin:14px 0; }
+  .ok { background:#eef3ee; border:1px solid #cfe0d2; border-radius:8px; padding:11px 14px; margin:14px 0; }
+  .ok b { color:var(--help); }
+  footer { margin-top:34px; padding-top:14px; border-top:1px solid var(--b); font-size:14px; color:var(--mut); }
+  footer a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">&#8592; Back to the app</a>
+  <h1>Teacher's guide</h1>
+  <p class="lede">A constructionist civics tool. Students build a constitution, watch it harm specific people, and debug it &mdash; deriving the real principles of free expression from their own design failures rather than from a lecture.</p>
+
+  <h2>What it's for</h2>
+  <p>The artifact is the student's <b>ruleset</b>, and the learning is in wrestling with it. The tool never quizzes; it surfaces a person harmed by the exact rule the student wrote, shows <i>how it read that rule</i>, and lets them revise. The pedagogical spine is <b>experience first, label second</b>: students feel a failure (an honest critic gets sued; a vague rule strands an enforcer), <i>name it in their own words</i>, and only then receive the formal term (chilling effect, void for vagueness). The principle arrives attached to a memory.</p>
+
+  <h2>The core mechanic &mdash; and why you can trust it</h2>
+  <p>A tool that &ldquo;finds someone harmed by your rule&rdquo; has an obvious failure mode: an LLM, left to choose, doesn't draw victims from a neutral distribution &mdash; it leans toward whichever harms its training makes most available. A student who keeps revising in response to that lean would absorb a political conclusion the tool never meant to teach. So the design splits the decision in two:</p>
+  <div class="card">
+    <b>Competence &rarr; the model.</b> Reading the student's literal wording and finding the sharp, rule-specific victim is something only a language model does well.<br><br>
+    <b>Neutrality &rarr; the code.</b> <i>Which side</i> the victim comes from is decided by code, never the model. The rule: <b>after a move toward direction D, the next victim must be a casualty of D.</b> Tighten the rule and you meet who your tightening hurt; loosen it and you meet who your looseness hurt.
+  </div>
+  <p>This is the property that makes it <b>civics, not persuasion</b>. The model voices the victim; it does not get to pick the political direction of the lesson. (Under the hood this is enforced in code &mdash; an off-side victim from a live model is detected and replaced &mdash; not merely requested in a prompt.)</p>
+  <div class="ok"><b>A hard guarantee:</b> the model <b>never invents a precedent</b>. Citable real cases come from a small vetted allow-list; anything else is presented as an explicit hypothetical, and stray citations are stripped by code. No invented case names, no words put in real people's mouths.</div>
+
+  <h2>The specification trap</h2>
+  <p>The deep idea students extract is that a rule can fail in two opposite ways at once:</p>
+  <table>
+    <tr><th>Too vague</th><th>Too specific</th></tr>
+    <tr>
+      <td>Strands whoever must enforce it &mdash; no standard, so a hunch becomes the law. (<span class="mono">void for vagueness</span>)</td>
+      <td>Its letter misses the obvious case &mdash; a clear harm that dodges the exact words. (<span class="mono">letter vs spirit</span>)</td>
+    </tr>
+  </table>
+  <p>A complete issue must contain <i>both</i> jaws, so students can't &ldquo;solve&rdquo; one by ignoring the other. That tension is the lesson.</p>
+
+  <h2>Running a session</h2>
+  <h3>Setup (zero install)</h3>
+  <ul>
+    <li><b>Open <span class="mono">index.html</span></b> in any modern browser, or serve it with <span class="mono">node server.js</span>. It works <b>fully offline</b> on a built-in case bank &mdash; no account, no key, no network needed.</li>
+    <li><b>Live mode (optional):</b> a teacher or student can paste an API key (Anthropic / OpenAI / Gemini) to get victims written to each student's exact wording. The key is stored only in that browser's local storage. See <i>Privacy &amp; safety</i> below before using it with students.</li>
+  </ul>
+  <h3>Pick a band (age level)</h3>
+  <table>
+    <tr><th>Band</th><th>Audience</th><th>Axes</th></tr>
+    <tr><td>Playground</td><td>~8+</td><td>fair turns vs. free play; safety vs. fun</td></tr>
+    <tr><td>Free speech</td><td>13+</td><td>reputation vs. criticism; freedom vs. safety</td></tr>
+    <tr><td>Privacy &amp; surveillance</td><td>13+</td><td>security vs. privacy; accountability vs. privacy</td></tr>
+    <tr><td>Land &amp; environment</td><td>13+</td><td>environment vs. development; an owner vs. the community</td></tr>
+  </table>
+  <p>Every band runs the <i>same engine</i> &mdash; only the scenarios and vocabulary change &mdash; so a concept named at recess (&ldquo;a rule no one can follow&rdquo;) is literally the same <span class="mono">void for vagueness</span> a teen meets in a privacy law, a zoning board, or a courtroom. Adding an issue is a config block, not new code, which is why the same five guarantees hold for all four. The four issues also share concepts on purpose &mdash; <span class="mono">chilling effect</span> shows up in both free speech and surveillance; <span class="mono">externalities</span> links pollution to a shoving game &mdash; so students can watch one idea travel across very different problems.</p>
+  <h3>A 40-minute arc</h3>
+  <ol>
+    <li><b>(5 min) Provoke.</b> &ldquo;Write the simplest free-speech rule you can.&rdquo; Most write an absolute (&ldquo;anyone can say anything&rdquo;). Test it.</li>
+    <li><b>(15 min) Debug in pairs.</b> Each fix should summon a counter-victim. Students keep revising; the cast on the left visibly shifts as they do.</li>
+    <li><b>(10 min) Extract.</b> When a fix bites back, students name the pattern <i>before</i> seeing the term. Compare phrasings across the room.</li>
+    <li><b>(10 min) Debrief.</b> Read the Field guides aloud. The point isn't who has the &ldquo;best&rdquo; rule &mdash; it's who can articulate which errors they chose and why.</li>
+  </ol>
+
+  <h2>Facilitation prompts</h2>
+  <ul>
+    <li>&ldquo;Your rule helped Mara but harmed Aron. Is that trade worth it? Who decides?&rdquo;</li>
+    <li>&ldquo;The tool read your rule a certain way. Did it read it <i>wrong</i>, or did your rule <i>allow</i> that reading?&rdquo; (This is the moment to use <b>Contest</b>.)</li>
+    <li>&ldquo;Could a real official abuse this rule the way the scene shows? Find the words that let them.&rdquo;</li>
+    <li>&ldquo;Is there <i>any</i> rule with no victims? What does that tell you about writing rules?&rdquo;</li>
+  </ul>
+
+  <h2>Assessment</h2>
+  <p>Assess the <b>Field guide</b>, not the ruleset. A strong student can (1) state which failures their final rule still has, (2) explain why they chose to accept those rather than others, and (3) use the formal terms correctly in their own sentences. The <b>Edit log</b> (under the constitution) shows their revision history if you want to see the reasoning trail.</p>
+
+  <h2>AI-literacy extension</h2>
+  <p>Turn on <b>roam</b> mode to switch the neutrality constraint off on purpose. Now the model chooses victims freely. Have students run several rounds and chart which side the victims come from. The discussion &mdash; <i>why does an AI lean, and what would it take to notice your own tool leaning?</i> &mdash; is a self-contained lesson in machine bias, demonstrated rather than asserted.</p>
+
+  <h2>Accessibility &amp; the speech interface</h2>
+  <p>An optional <b>&#128266; speech</b> toggle (top bar) reads scenes aloud (text-to-speech) and lets students dictate rules and rebuttals by voice (speech-to-text) &mdash; useful for younger learners and for students who find typing a barrier. It's off by default and the app is fully usable without it. <b>Dictation needs a secure context</b> (localhost or https), so run <span class="mono">node server.js</span> rather than opening the file directly if the mic doesn't engage.</p>
+
+  <h2>Privacy &amp; safety</h2>
+  <div class="warn">
+    <b>Offline mode sends nothing anywhere.</b> In <b>live mode</b>, the student's typed rules are sent to the chosen AI provider to generate a victim. Don't have students type personal information into rules, and prefer offline or a teacher-held key for younger classes.<br><br>
+    The scenarios are deliberate, non-graphic hypotheticals for discussion. The tool is not legal advice, and the &ldquo;victims&rdquo; are illustrative, not real people.
+  </div>
+
+  <h2>How the code decides which side the victim comes from</h2>
+  <p>This is the heart of the design, so here is the exact sequence &mdash; no magic, and nothing the AI gets a vote on.</p>
+  <ol>
+    <li><b>The edit becomes a &ldquo;move.&rdquo;</b> When a student adds or revises a rule, the tool classifies it on two fixed dimensions: an <b>axis</b> (which value tension it touches &mdash; e.g. reputation vs. criticism) and a <b>direction</b> (does it push toward <i>more restriction</i> or <i>more permission</i>?). That pair is stored as the student's <b>last move</b>.</li>
+    <li><b>Code fixes the required side.</b> When they press <b>Test</b>, the tool &mdash; not the model &mdash; sets the constraint: the next victim <b>must be a casualty of the same axis and direction the student just moved.</b> Tighten the rule, and you meet whoever the tightening hurt; loosen it, and you meet whoever the looseness hurt. The direction of the lesson is pinned before the model is ever called.</li>
+    <li><b>The model only voices it.</b> The model is handed the specific person it must speak for and told to read the student's literal words for the sharpest version of <i>that</i> harm. It is asked for craft &mdash; a vivid, rule-specific scene &mdash; never for <i>which side</i> to choose.</li>
+    <li><b>Code checks the model's work.</b> If a live model drifts and returns someone from the wrong side anyway, the tool detects it, substitutes the vetted case for the correct side, and says so on screen. The guarantee lives in code, not in the model's good behavior.</li>
+    <li><b>Offline, it's purely structural.</b> With no API key, victims come from a built-in bank tagged by (axis, direction), so the same move always produces the same side. There is literally no path for a lean to creep in.</li>
+  </ol>
+  <p>One more guard: the tool won't surface two same-direction victims back-to-back without flagging it &mdash; so a student who keeps tightening is shown that they are <i>turning one screw</i>, not balancing the trade-off. Taken together, the victims <b>alternate with the student's own moves</b> instead of leaning a way the student never chose. That is the whole reason this is civics and not persuasion. (Turning on <b>roam</b> removes the constraint on purpose &mdash; that is the AI-literacy lesson: watch the model lean once the code stops holding it straight.)</p>
+  <p>The full design rationale, and an automated harness that asserts every one of these properties, live in <span class="mono">SPEC.md</span> and <span class="mono">PLAN.md</span>.</p>
+
+  <h2>Roadmap note</h2>
+  <p>An explicit <b>justiciability ladder</b> (value &rarr; right &rarr; test &rarr; holding) is deliberately kept <i>implicit</i> in this version &mdash; carried by the two &ldquo;form&rdquo; cases &mdash; pending a content review of exactly where the &ldquo;justiciable&rdquo; line falls. Country-by-country contrasts (UK / US / Singapore on the same issue) and a Constitutional-AI capstone are planned extensions.</p>
+
+  <footer>
+    More guides: <a href="young.html">For younger students &#8599;</a> &middot; <a href="older.html">For older students &#8599;</a><br>
+    <a href="../index.html">&#8592; Back to the app</a>
+  </footer>
+</div>
+</body>
+</html>

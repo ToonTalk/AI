@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Civics: rule debugger</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <!--
   Constructionist civics tool. Built from v0.html (the seed) per SPEC.md + PLAN.md.
   Single file, no build step, BYO-key, multi-provider. Open it in a browser.
@@ -60,6 +61,8 @@
   .scene .reading { font-size: 14px; color: #4a463d; border-left: 3px solid var(--accent); padding-left: 10px; margin: 10px 0; background: #fff; padding: 8px 10px; border-radius: 0 6px 6px 0; }
   .scene .case { font-size: 13px; color: var(--mut); }
   .scene .case.real { color: var(--fg); }
+  .scene .case a { color: var(--accent); text-decoration: underline; }
+  .scene .case a:hover { text-decoration: none; }
   .note { font-size: 13px; border-radius: 6px; padding: 7px 10px; margin: 10px 0; }
   .note.warn { background: var(--warnbg); color: var(--warn); border: 1px solid #e7d8a8; }
   .note.info { background: #eef3ee; color: var(--help); border: 1px solid #cfe0d2; }
@@ -95,6 +98,17 @@
   .bridge { border: 1px dashed var(--b); border-radius: 8px; padding: 12px; margin-top: 12px; background: var(--bg2); }
   .bridge .out { margin-top: 8px; font-size: 14.5px; }
   .hide { display: none !important; }
+  /* optional speech */
+  .mic, .speak { background: var(--bg2); }
+  .mic.listening { background: var(--accent); color: #fff; border-color: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+  header a#guidelink { text-decoration: none; color: var(--mut); margin-left: 6px; font-size: 13px; }
+  header a#guidelink:hover { text-decoration: underline; color: var(--accent); }
+  #appfooter { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--b); background: var(--bg2); font-size: 13px; color: var(--mut); }
+  #appfooter .lbl { font-weight: 600; }
+  #appfooter a { color: var(--accent); text-decoration: none; }
+  #appfooter a:hover { text-decoration: underline; }
+  #appfooter .sep { color: var(--b); }
   @media (max-width: 860px) { main, main.phase2 { grid-template-columns: 1fr; } section { border-right: 0; border-bottom: 1px solid var(--b); } .diff { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -118,7 +132,11 @@
   <label style="font-size:13px;color:var(--mut);display:flex;align-items:center;gap:4px" title="AI-literacy mode: drop the neutrality constraint and let the model's tilt become the lesson.">
     <input type="checkbox" id="unconstrained" style="width:auto"> roam
   </label>
+  <label id="speech-wrap" class="hide" style="font-size:13px;color:var(--mut);display:flex;align-items:center;gap:4px" title="Read scenes aloud and dictate rules by voice. Off by default.">
+    <input type="checkbox" id="speech" style="width:auto"> &#128266; speech
+  </label>
   <button id="save">Save</button>
+  <a id="guidelink" href="guides/older.html" target="_blank" rel="noopener" title="Open the guide for this band">Guide &#8599;</a>
 </header>
 <div id="status"></div>
 
@@ -131,6 +149,7 @@
     <div class="row">
       <button id="addrule" class="primary">Add rule</button>
       <button id="test">Test it</button>
+      <button class="mic hide" data-mic="newrule" title="Dictate this rule">&#127908;</button>
     </div>
 
     <h2 style="margin-top:18px" id="cast-h">Your community</h2>
@@ -163,6 +182,7 @@
     <textarea id="newvalue"></textarea>
     <div class="row">
       <button id="addvalue" class="primary">Add value</button>
+      <button class="mic hide" data-mic="newvalue" title="Dictate this value">&#127908;</button>
     </div>
     <div id="values" style="margin-top:10px"></div>
 
@@ -184,11 +204,21 @@
     <div class="row">
       <button id="answer" class="primary">Answer it</button>
       <button id="strand">Who does a vague value strand?</button>
+      <button class="mic hide" data-mic="question" title="Dictate your question">&#127908;</button>
     </div>
     <div id="answer-out"></div>
     <div id="values-scene"></div>
   </section>
 </main>
+
+<footer id="appfooter">
+  <span class="lbl">Guides:</span>
+  <a href="guides/young.html" target="_blank" rel="noopener">For younger students</a>
+  <span class="sep">·</span>
+  <a href="guides/older.html" target="_blank" rel="noopener">For older students</a>
+  <span class="sep">·</span>
+  <a href="guides/teachers.html" target="_blank" rel="noopener">For teachers</a>
+</footer>
 
 <script>
 "use strict";
@@ -211,6 +241,10 @@ const BANDS = {
       'form': 'the form of the rule itself (too vague / too specific)'
     },
     directionLabels: { 'toward-restriction': 'restricts speech', 'toward-permission': 'permits speech' },
+    defaultAxis: 'criticism-vs-reputation',
+    axisKeywords: [
+      ['freedom-vs-safety', /\b(safe|safety|violence|violent|threat|hate|harm|riot|incite|danger|attack|fight|weapon)\b/]
+    ],
     // Real cases the model is ALLOWED to cite. Everything else is hypothetical.
     vettedCases: [
       'Singh v. British Chiropractic Association (2008)',
@@ -307,6 +341,10 @@ const BANDS = {
       'form': 'the form of the rule itself (too vague / too specific)'
     },
     directionLabels: { 'toward-restriction': 'limits play', 'toward-permission': 'allows play' },
+    defaultAxis: 'fairness-vs-freedom',
+    axisKeywords: [
+      ['safety-vs-fun', /\b(safe|safety|hurt|injur|rough|shove|push|run|fall|body|accident|hit)\b/]
+    ],
     vettedCases: [], // kids don't cite court cases; everything is a plausible story.
     // Same transferable civics concepts, scaled to recess.
     concepts: {
@@ -384,7 +422,219 @@ const BANDS = {
           with: 'Shaped by your values: if you prize fun and only draw the line at hurting others, you allow the game and only step in if it turns to shoving.' }
       ]
     }
+  },
+
+  'privacy': {
+    id: 'privacy',
+    label: 'Privacy & surveillance · 13+',
+    title: 'Rule debugger · privacy & surveillance · 13+',
+    subject: 'data collection',
+    axes: {
+      'security-vs-privacy': 'collective security vs individual privacy',
+      'accountability-vs-privacy': 'public accountability and openness vs individual privacy',
+      'form': 'the form of the rule itself (too vague / too specific)'
+    },
+    directionLabels: { 'toward-restriction': 'limits data collection', 'toward-permission': 'allows data collection' },
+    defaultAxis: 'security-vs-privacy',
+    axisKeywords: [
+      ['security-vs-privacy', /\b(secur|safe|safety|terror|threat|crime|criminal|police|catch|danger|attack|protect|suspect|surveil|camera|watch)\b/],
+      ['accountability-vs-privacy', /\b(account|transparen|public|official|govern|corrupt|expose|journalist|record|open|scrutin|watchdog|power|disclos)\b/]
+    ],
+    vettedCases: [
+      'Carpenter v. United States (2018)',
+      'Katz v. United States (1967)',
+      'Riley v. California (2014)'
+    ],
+    concepts: {
+      'chilling effect': 'When the fear of being watched stops people doing things that are perfectly legal.',
+      'security blind spot': 'When a privacy limit leaves a genuine danger uninvestigated.',
+      'overexposure': 'When openness strips the privacy of an ordinary person caught in the data.',
+      'accountability gap': 'When privacy rules end up shielding the powerful from scrutiny.',
+      'void for vagueness': 'A rule too unclear for anyone to know what it forbids.',
+      'letter vs spirit': 'When the exact words of a rule miss its obvious intent.'
+    },
+    cast: [
+      { id: 'lior',  who: 'Lior Adler',   role: 'a climate protester',      axis: 'security-vs-privacy', dir: 'toward-permission' },
+      { id: 'bell',  who: 'Marcus Bell',  role: 'harassed by a stalker',    axis: 'security-vs-privacy', dir: 'toward-restriction' },
+      { id: 'reyes', who: 'Tomas Reyes',  role: 'a junior city clerk',      axis: 'accountability-vs-privacy', dir: 'toward-permission' },
+      { id: 'amara', who: 'Amara Okoye',  role: 'an investigative reporter', axis: 'accountability-vs-privacy', dir: 'toward-restriction' },
+      { id: 'tan',   who: 'Mr. Tan',      role: 'a data officer',           axis: 'form', subtype: 'too-vague' },
+      { id: 'yara',  who: 'Yara Haddad',  role: 'a clinic patient',         axis: 'form', subtype: 'too-specific' }
+    ],
+    canned: [
+      { id: 'chill', castId: 'lior', axis: 'security-vs-privacy', harmed_by: 'toward-permission',
+        harm: 'Face-recognition cameras log everyone at every rally. After your rule let the city collect that data freely, Lior stopped going to protests at all — not because they were banned, but because being on a permanent list felt too risky.',
+        reading: 'Your rule lets data be gathered on anyone in a public space, so simply showing up to a lawful protest now follows people home.',
+        realCase: 'Carpenter v. United States (2018)', concept: 'chilling effect',
+        defense: 'Your rule allows collecting data on anyone in public with no purpose limit. A protest is public, so every attendee is fair game — and people change what they do once they know that.',
+        concedeIf: /(purpose|necessary|specific|warrant|suspect|targeted|limit|delete|protest|lawful)/i,
+        concedeMsg: 'Fair — once collection needs a specific purpose or a warrant, simply attending a lawful protest no longer puts Lior on a list. Keep the rule.' },
+      { id: 'blind', castId: 'bell', axis: 'security-vs-privacy', harmed_by: 'toward-restriction',
+        harm: 'A man was escalating threats against Marcus across several apps. Under your rule the platforms couldn’t share what they each saw, so no one connected the dots until he showed up at Marcus’s door.',
+        reading: 'Your blanket ban on sharing personal data, read literally, also blocked the one cross-check that would have surfaced a real and specific threat.',
+        realCase: null, concept: 'security blind spot',
+        defense: 'Your rule forbids sharing personal data, full stop. A credible threat is personal data, so the platforms were barred from comparing notes even when a specific person was clearly in danger.',
+        concedeIf: /(threat|danger|emergenc|imminent|safety|exception|credible|harm|specific)/i,
+        concedeMsg: 'Granted — with an exception for a credible, specific threat to someone’s safety, the platforms can connect the dots in time. Keep the rule.' },
+      { id: 'expose', castId: 'reyes', axis: 'accountability-vs-privacy', harmed_by: 'toward-permission',
+        harm: 'You opened government records to the public to expose corruption. The dump included Tomas’s home address and salary — he’s a junior clerk, not a decision-maker — and he started getting threats meant for his bosses.',
+        reading: 'Your rule makes all government-held data public, so it exposed a low-level employee along with the officials you meant to scrutinize.',
+        realCase: null, concept: 'overexposure',
+        defense: 'Your rule says government records are public, with no line between an official’s decisions and a clerk’s home address. Both are “government records,” so both went out.',
+        concedeIf: /(official|decision|senior|public figure|role|redact|personal|address|only|relevant)/i,
+        concedeMsg: 'Right — limited to officials acting in their public role, your rule exposes the decisions, not a junior clerk’s address. Keep the rule.' },
+      { id: 'gap', castId: 'amara', axis: 'accountability-vs-privacy', harmed_by: 'toward-restriction',
+        harm: 'Amara had evidence a city contract was steered to the mayor’s friend. Your strict privacy rule let the parties seal every relevant document as “personal data,” so she couldn’t show the public what happened.',
+        reading: 'Your rule treats all named data as private, which let powerful people reclassify their own dealings as off-limits.',
+        realCase: null, concept: 'accountability gap',
+        defense: 'Your rule shields “personal data,” and a contract has names on it, so the officials sealed the whole thing. The rule handed them the cover.',
+        concedeIf: /(public interest|official|misconduct|corrupt|power|contract|exception|scrutin|wrongdoing)/i,
+        concedeMsg: 'Fair — with a public-interest exception for official conduct, the mayor’s contract can’t hide behind privacy. Keep the rule.' },
+      { id: 'vague', castId: 'tan', axis: 'form', subtype: 'too-vague',
+        harm: 'Told only to “collect just what’s necessary,” Mr. Tan had no standard. To be safe he hoarded everything — then, fearing the same rule, deleted a record a fraud investigation actually needed.',
+        reading: 'Your rule gives the data officer no definition of “necessary,” so his guess became the policy, swinging both ways at once.',
+        realCase: null, concept: 'void for vagueness',
+        defense: '“Necessary” is never defined in your rule. You handed Mr. Tan a blank standard and he filled it in two contradictory ways. That gap is in the wording.',
+        concedeIf: /(define|specific|standard|criteria|list|example|what counts|necessary means|clear)/i,
+        concedeMsg: 'Fair — with concrete criteria for “necessary,” Mr. Tan has a standard instead of a guess. Keep the rule.' },
+      { id: 'specific', castId: 'yara', axis: 'form', subtype: 'too-specific',
+        harm: 'Your rule listed the exact data types that may not be collected. A clinic tracked Yara’s location through a new kind of sensor not on the list, mapped her visits, and by the letter of the rule that was allowed.',
+        reading: 'Your rule names specific forbidden data types, so a new and equally invasive one slipped straight through the list.',
+        realCase: 'Riley v. California (2014)', concept: 'letter vs spirit',
+        defense: 'Your rule is a list of banned data types. The sensor produces a type you didn’t list, so by the letter it’s fine — even though it tracks her every visit.',
+        concedeIf: /(intent|purpose|any|sensitive|effect|track|locat|spirit|reasonable|equivalent|invasive)/i,
+        concedeMsg: 'Granted — a rule aimed at any equally invasive tracking catches the new sensor too. Keep the rule.' }
+    ],
+    copy: {
+      ruleHint: "Write a data or surveillance rule in your own words, e.g. “The government can collect any data it needs to stop crime.”",
+      sceneEmpty: "Add a rule, then press Test it. Someone affected by your data rule will show up here.",
+      fgEmpty: "When a fix of yours breaks something else, you’ll name the pattern. Your notes collect here.",
+      castNote: "These six share one society’s data. Watch who your rule protects and who it exposes.",
+      valueHint: "State a value in your own words, e.g. “People should be able to live without being watched.”",
+      dilemmas: [
+        { q: 'Should police be allowed to scan every face in a crowd to find one suspect?',
+          without: 'Default answer: allow it — more data means a better chance of catching the suspect.',
+          with: 'Shaped by your values: if you prize being able to live unwatched, you require a specific warrant first, accepting a harder search to keep everyone else off the list.' },
+        { q: 'Should a public official’s work emails be open to anyone who asks?',
+          without: 'Default answer: keep them private by default — they are personal correspondence.',
+          with: 'Shaped by your values: if you prize holding power accountable, official work emails are open by default, with only genuinely personal lines redacted.' }
+      ]
+    }
+  },
+
+  'land': {
+    id: 'land',
+    label: 'Land & environment · 13+',
+    title: 'Rule debugger · land & environment · 13+',
+    subject: 'land use',
+    axes: {
+      'environment-vs-development': 'protecting the shared environment vs allowing development',
+      'property-vs-community': 'an owner’s freedom to use their land vs the surrounding community',
+      'form': 'the form of the rule itself (too vague / too specific)'
+    },
+    directionLabels: { 'toward-restriction': 'limits land use', 'toward-permission': 'allows land use' },
+    defaultAxis: 'property-vs-community',
+    axisKeywords: [
+      ['environment-vs-development', /\b(environment|pollut|river|water|flood|forest|tree|green|wildlife|emission|nature|climate|wetland|habitat)\b/],
+      ['property-vs-community', /\b(owner|propert|rent|tenant|evict|build|house|housing|land|develop|neighbor|zoning|construct|lot)\b/]
+    ],
+    vettedCases: [
+      'Village of Euclid v. Ambler Realty Co. (1926)',
+      'Kelo v. City of New London (2005)',
+      'Lucas v. South Carolina Coastal Council (1992)'
+    ],
+    concepts: {
+      'externalities': 'Costs of one person’s building that land on neighbors who never agreed to them.',
+      'exclusion': 'When a protective rule also locks out the people who needed what it stopped from being built.',
+      'displacement': 'When one owner’s free use pushes out people who were already there.',
+      'regulatory taking': 'When a rule controls land so tightly it’s as if the owner had it taken away.',
+      'void for vagueness': 'A rule too unclear for anyone to know what it forbids.',
+      'letter vs spirit': 'When the exact words of a rule miss its obvious intent.'
+    },
+    cast: [
+      { id: 'okonkwo', who: 'The Okonkwo family', role: 'downstream residents', axis: 'environment-vs-development', dir: 'toward-permission' },
+      { id: 'delgado', who: 'Rosa Delgado',     role: 'a young teacher',     axis: 'environment-vs-development', dir: 'toward-restriction' },
+      { id: 'sofia',   who: 'Sofia Marchetti',  role: 'a longtime renter',   axis: 'property-vs-community', dir: 'toward-permission' },
+      { id: 'voss',    who: 'Gary Voss',        role: 'a retiree',           axis: 'property-vs-community', dir: 'toward-restriction' },
+      { id: 'iyer',    who: 'Ms. Iyer',         role: 'a zoning officer',    axis: 'form', subtype: 'too-vague' },
+      { id: 'chen',    who: 'Daniel Chen',      role: 'a neighbor',          axis: 'form', subtype: 'too-specific' }
+    ],
+    canned: [
+      { id: 'flood', castId: 'okonkwo', axis: 'environment-vs-development', harmed_by: 'toward-permission',
+        harm: 'A developer cleared the wooded hillside above the valley. Your rule let owners build freely, and with the trees gone the first heavy rain sent mud and water straight into the Okonkwos’ home downstream.',
+        reading: 'Your rule lets an owner develop without accounting for what runs downhill, so the cost of their building landed on a family that had no say.',
+        realCase: null, concept: 'externalities',
+        defense: 'Your rule lets owners build on their own land with no duty to the people downstream. Clearing the hillside is “their land,” so the flooding it caused is allowed by your words.',
+        concedeIf: /(downstream|neighbor|harm|runoff|flood|impact|affect|others|drainage|consider)/i,
+        concedeMsg: 'Fair — once your rule makes owners answer for harm that flows downhill, the hillside can’t be cleared blind. The Okonkwos are protected. Keep the rule.' },
+      { id: 'priced', castId: 'delgado', axis: 'environment-vs-development', harmed_by: 'toward-restriction',
+        harm: 'To protect open land, your rule blocked nearly all new housing. Rents climbed as people competed for what already existed, and Rosa — a new teacher at the local school — couldn’t find anywhere she could afford to live.',
+        reading: 'Your rule stops building to save green space, but read literally it also stopped the modest housing people like Rosa needed.',
+        realCase: 'Village of Euclid v. Ambler Realty Co. (1926)', concept: 'exclusion',
+        defense: 'Your rule bars new development to protect the environment, with no carve-out for housing. No new homes get built, so the shortage — and Rosa’s rent — is the rule working as written.',
+        concedeIf: /(housing|home|affordable|except|some|density|infill|allow|build homes|exemption)/i,
+        concedeMsg: 'Granted — with an exception for needed housing, your green rule no longer prices Rosa out. Keep the rule.' },
+      { id: 'evict', castId: 'sofia', axis: 'property-vs-community', harmed_by: 'toward-permission',
+        harm: 'Your rule let owners do as they like with their buildings. Sofia’s landlord cleared the whole block of long-term renters to flip it into luxury units, and after twenty years she had nowhere in the neighborhood left to go.',
+        reading: 'Your rule treats a building as the owner’s alone, so the community of people living in it counted for nothing against his plans.',
+        realCase: 'Kelo v. City of New London (2005)', concept: 'displacement',
+        defense: 'Your rule gives the owner full freedom over his property. The tenants are not the owner, so on your words their twenty years there carry no weight against his decision to clear them out.',
+        concedeIf: /(tenant|renter|notice|community|protect|displace|long-term|stay|relocat|hearing)/i,
+        concedeMsg: 'Right — once tenants get standing and protection, an owner can’t clear a block of long-term residents overnight. Keep the rule.' },
+      { id: 'taking', castId: 'voss', axis: 'property-vs-community', harmed_by: 'toward-restriction',
+        harm: 'Gary spent his savings on a lot to build a retirement home. Then your rule, meant to keep the area as it was, forbade building anything on it at all — leaving him with land he’d paid for but could never use.',
+        reading: 'Your rule restricts land use so tightly that, applied to Gary’s lot, it took away the entire value of property he already owned.',
+        realCase: 'Lucas v. South Carolina Coastal Council (1992)', concept: 'regulatory taking',
+        defense: 'Your rule forbids building, period. Applied to a lot someone bought specifically to build on, that’s not a limit — it erases the only reason the land had value to him.',
+        concedeIf: /(except|existing|already|compensat|reasonable|some use|grandfather|owned|prior|allow)/i,
+        concedeMsg: 'Fair — with relief for someone who already owned a buildable lot, your rule shapes the area without wiping out Gary’s investment. Keep the rule.' },
+      { id: 'vague', castId: 'iyer', axis: 'form', subtype: 'too-vague',
+        harm: 'Told only to block “out-of-character” building, Ms. Iyer had no standard. She approved a glass tower a neighbor hated and rejected a modest porch a family needed, and both sides accused her of bias.',
+        reading: 'Your rule gives the zoning officer no definition of “in character,” so her taste became the law and no one could predict it.',
+        realCase: null, concept: 'void for vagueness',
+        defense: 'Your rule never says what “out of character” means. You handed Ms. Iyer a blank standard, so the same instinct blessed a tower and killed a porch. That’s the wording, not her.',
+        concedeIf: /(define|specific|standard|criteria|height|size|example|what counts|measur|clear)/i,
+        concedeMsg: 'Fair — with measurable standards for what fits, Ms. Iyer rules by the book instead of by mood. Keep the rule.' },
+      { id: 'specific', castId: 'chen', axis: 'form', subtype: 'too-specific',
+        harm: 'Your rule listed the exact structures that aren’t allowed. A neighbor built a towering floodlit billboard that wasn’t on the list, shining into Daniel’s bedroom all night, and by the letter of the rule it was permitted.',
+        reading: 'Your rule names specific banned structures, so a new nuisance that wasn’t named slipped straight through.',
+        realCase: null, concept: 'letter vs spirit',
+        defense: 'Your rule is a list of banned structures. A floodlit billboard isn’t on it, so by the letter it’s allowed — even though it does exactly the harm the list was meant to prevent.',
+        concedeIf: /(nuisance|intent|purpose|effect|any|harm|spirit|reasonable|light|equivalent|disturb)/i,
+        concedeMsg: 'Granted — a rule aimed at any structure that disturbs the neighbors catches the billboard too. Keep the rule.' }
+    ],
+    copy: {
+      ruleHint: "Write a land-use rule in your own words, e.g. “Owners can build whatever they want on their own land.”",
+      sceneEmpty: "Add a rule, then press Test it. Someone affected by your land rule will show up here.",
+      fgEmpty: "When a fix of yours breaks something else, you’ll name the pattern. Your notes collect here.",
+      castNote: "These six share one town. Watch who your rule protects and who it displaces.",
+      valueHint: "State a value in your own words, e.g. “A neighborhood should have a say in what gets built.”",
+      dilemmas: [
+        { q: 'A factory wants to open upriver. It brings jobs but may pollute the water. Allow it?',
+          without: 'Default answer: allow it — the jobs are certain and the pollution is only a risk.',
+          with: 'Shaped by your values: if you prize the shared river, you allow it only with hard limits on what it can discharge, accepting fewer jobs to keep the water clean.' },
+        { q: 'The town wants to take a few homes to build a transit hub everyone would use. Should it?',
+          without: 'Default answer: build it — the many who would use the hub outweigh the few homes.',
+          with: 'Shaped by your values: if you prize people’s roots in a place, you look hard for another site first, and pay far more than market price if you truly can’t avoid it.' }
+      ]
+    }
   }
+};
+
+/* Source links for the vetted real cases. Keyed by the EXACT citation string a
+   band lists in vettedCases, so a cited case can be shown as a link to a source
+   (verified-resolving Wikipedia articles). Anything not on this list is never
+   cited as real in the first place (see sanitizeVictim). */
+const CASE_SOURCES = {
+  'Singh v. British Chiropractic Association (2008)': 'https://en.wikipedia.org/wiki/British_Chiropractic_Association_v_Singh',
+  'Brandenburg v. Ohio (1969)': 'https://en.wikipedia.org/wiki/Brandenburg_v._Ohio',
+  'New York Times Co. v. Sullivan (1964)': 'https://en.wikipedia.org/wiki/New_York_Times_Co._v._Sullivan',
+  'Carpenter v. United States (2018)': 'https://en.wikipedia.org/wiki/Carpenter_v._United_States',
+  'Katz v. United States (1967)': 'https://en.wikipedia.org/wiki/Katz_v._United_States',
+  'Riley v. California (2014)': 'https://en.wikipedia.org/wiki/Riley_v._California',
+  'Village of Euclid v. Ambler Realty Co. (1926)': 'https://en.wikipedia.org/wiki/Village_of_Euclid_v._Ambler_Realty_Co.',
+  'Kelo v. City of New London (2005)': 'https://en.wikipedia.org/wiki/Kelo_v._City_of_New_London',
+  'Lucas v. South Carolina Coastal Council (1992)': 'https://en.wikipedia.org/wiki/Lucas_v._South_Carolina_Coastal_Council'
 };
 
 /* =========================================================================
@@ -407,7 +657,7 @@ const S = {
   values: [],           // [{id, text}]
   phase: 'rules'
 };
-const cfg = { provider: '', model: '', key: '', unconstrained: false };
+const cfg = { provider: '', model: '', key: '', unconstrained: false, speech: false };
 
 const band = () => BANDS[S.band];
 const opposite = d => d === 'toward-restriction' ? 'toward-permission' : 'toward-restriction';
@@ -510,18 +760,16 @@ Use "form" as the axis ONLY when the problem is that the rule is too vague or to
   }
 }
 
-// Crude offline classifier so the loop still moves with no key.
+// Crude offline classifier so the loop still moves with no key. The axis
+// keywords live in each band's config (B.axisKeywords / B.defaultAxis), so this
+// stays band-agnostic — adding an issue is config only, never an engine edit.
 function cannedClassify(text) {
   const s = ' ' + text.toLowerCase() + ' ';
+  const B = band();
   const restrict = /\b(no|not|ban|banned|forbid|prohibit|except|unless|can'?t|cannot|must not|don'?t|never|illegal|limit|restrict|remove|block)\b/.test(s);
-  const axes = Object.keys(band().axes);
-  let axis = axes[0];
-  if (band().id === 'free-speech') {
-    if (/\b(safe|safety|violence|violent|threat|hate|harm|riot|incite|danger|attack|fight|weapon)\b/.test(s)) axis = 'freedom-vs-safety';
-    else axis = 'criticism-vs-reputation';
-  } else {
-    if (/\b(safe|safety|hurt|injur|rough|shove|push|run|fall|body|accident|hit)\b/.test(s)) axis = 'safety-vs-fun';
-    else axis = 'fairness-vs-freedom';
+  let axis = B.defaultAxis || Object.keys(B.axes)[0];
+  for (const [axisId, re] of (B.axisKeywords || [])) {
+    if (re.test(s)) { axis = axisId; break; }
   }
   return { axis, direction: restrict ? 'toward-restriction' : 'toward-permission' };
 }
@@ -731,8 +979,13 @@ function renderScene() {
   if (!v) { el.innerHTML = `<p class="muted">${esc(band().copy.sceneEmpty)}</p>`; return; }
   const reg = S.lastMove && S.lastMove.regression;
   const pileOn = v._pileOn;
+  const caseCite = v.realCase
+    ? (CASE_SOURCES[v.realCase]
+        ? `<a href="${esc(CASE_SOURCES[v.realCase])}" target="_blank" rel="noopener">${esc(v.realCase)}</a>`
+        : esc(v.realCase))
+    : '';
   const caseLine = v.realCase
-    ? `<div class="case real">This really happened: ${esc(v.realCase)}.</div>`
+    ? `<div class="case real">This really happened: ${caseCite}.</div>`
     : `<div class="case">(A plausible case, not a real person.)</div>`;
   const roamNote = (v._constraint && v._constraint.roam)
     ? `<div class="note warn">Roam mode: code did <b>not</b> constrain which side this victim comes from. Over several rounds, notice whether the model keeps showing you one kind of victim — and ask why an AI might.</div>` : '';
@@ -753,6 +1006,7 @@ function renderScene() {
         <button onclick="startRevise()">Revise a rule</button>
         <button onclick="openContest()">That’s not a fair reading</button>
         ${reg ? `<button class="primary" onclick="openExtract()">Name what just happened</button>` : ''}
+        ${cfg.speech ? `<button class="speak" onclick="speakCurrent()" title="Read this aloud / stop">&#128266;</button>` : ''}
       </div>
       ${!reg ? `<div class="muted" style="margin-top:8px">Fix this, and when your fix bites back you’ll get to name the pattern.</div>` : ''}
     </div>
@@ -852,6 +1106,7 @@ async function testIt() {
     S.lastFired = { axis: c.axis, direction: c.direction, subtype: c.subtype };
     logEvent('test', `victim: ${v.who} (${c.roam ? 'roam' : c.axis + '/' + (c.subtype || c.direction)})${v._pileOn ? ' [same side again]' : ''}`);
     renderScene(); clearBusy();
+    if (cfg.speech) speakCurrent();
   } catch (e) {
     clearBusy();
     showError(e, testIt);
@@ -893,6 +1148,7 @@ function openContest() {
     <div class="row">
       <button class="primary" id="submit-objection">Submit rebuttal</button>
       <button class="ghost" onclick="document.getElementById('contest-panel').innerHTML=''">Cancel</button>
+      ${cfg.speech && Speech.sttOK ? `<button class="mic" data-mic="objection" title="Dictate your rebuttal">&#127908;</button>` : ''}
     </div>
     <div id="contest-result"></div>
   </div>`;
@@ -967,6 +1223,7 @@ function openExtract() {
     <div class="row">
       <button class="primary" id="commit-extract">Add to field guide</button>
       <button class="ghost" onclick="document.getElementById('extract-panel').innerHTML=''">Cancel</button>
+      ${cfg.speech && Speech.sttOK ? `<button class="mic" data-mic="phrasing" title="Dictate your words">&#127908;</button>` : ''}
     </div>
     <div id="extract-reveal"></div>
   </div>`;
@@ -1116,6 +1373,58 @@ function clearBusy() { refreshStatus(); }
 function flash(m) { setBusy(m); setTimeout(refreshStatus, 1800); }
 function trim(s, n = 42) { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
+/* =========================================================================
+   OPTIONAL SPEECH — text-to-speech for the scene, speech-to-text for inputs.
+   Feature-detected and OFF by default; the app is fully usable without it, and
+   nothing here touches the engine or the loop. Dictation needs a secure context
+   (localhost or https) — run `node server.js` if the mic won't engage on file://.
+   ========================================================================= */
+const Speech = {
+  SR: window.SpeechRecognition || window.webkitSpeechRecognition || null,
+  rec: null, target: null,
+  get ttsOK() { return 'speechSynthesis' in window; },
+  get sttOK() { return !!this.SR; },
+  speak(text) {
+    if (!this.ttsOK || !text) return;
+    try { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch (e) {}
+  },
+  stop() { if (this.ttsOK) try { window.speechSynthesis.cancel(); } catch (e) {} },
+  dictate(targetId, btn) {
+    if (!this.sttOK) return;
+    if (this.rec && this.target === targetId) { try { this.rec.stop(); } catch (e) {} return; } // toggle off
+    if (this.rec) { try { this.rec.stop(); } catch (e) {} }
+    const ta = document.getElementById(targetId);
+    if (!ta) return;
+    const base = ta.value ? ta.value.replace(/\s+$/, '') + ' ' : '';
+    const rec = new this.SR();
+    rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = false;
+    this.rec = rec; this.target = targetId;
+    document.querySelectorAll('.mic.listening').forEach(b => b.classList.remove('listening'));
+    if (btn) btn.classList.add('listening');
+    rec.onresult = (e) => {
+      let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      ta.value = base + t;
+    };
+    rec.onerror = () => {};
+    rec.onend = () => { if (btn) btn.classList.remove('listening'); this.rec = null; this.target = null; ta.focus(); };
+    try { rec.start(); } catch (e) { if (btn) btn.classList.remove('listening'); this.rec = null; this.target = null; }
+  }
+};
+// Read the current victim aloud; clicking again while speaking stops it.
+function speakCurrent() {
+  const v = S.current; if (!v) return;
+  if (Speech.ttsOK && window.speechSynthesis.speaking) { Speech.stop(); return; }
+  Speech.speak([`${v.who}${v.role ? ', ' + v.role : ''}.`, v.harm, `How your rule was read: ${v.reading}`].join(' '));
+}
+// Show/hide the speech controls based on browser support and the toggle.
+function refreshSpeechUI() {
+  const wrap = document.getElementById('speech-wrap');
+  if (wrap) wrap.classList.toggle('hide', !(Speech.ttsOK || Speech.sttOK)); // hide entirely if no support
+  const micsOn = !!cfg.speech && Speech.sttOK;
+  document.querySelectorAll('[data-mic]').forEach(b => b.classList.toggle('hide', !micsOn));
+  if (S.current) renderScene(); // refresh the scene's read-aloud button
+}
+
 function refreshStatus() {
   const live = cfg.provider && cfg.key;
   const mode = cfg.unconstrained
@@ -1133,6 +1442,8 @@ function applyBandCopy() {
   document.getElementById('newrule').placeholder = B.copy.ruleHint;
   document.getElementById('newvalue').placeholder = B.copy.valueHint;
   document.getElementById('cast-h').textContent = B.id === 'playground' ? 'Your playground' : 'Your community';
+  const gl = document.getElementById('guidelink');
+  if (gl) gl.href = B.id === 'playground' ? 'guides/young.html' : 'guides/older.html';
   // dilemmas
   const sel = document.getElementById('dilemma');
   sel.innerHTML = B.copy.dilemmas.map((d, i) => `<option value="${i}">${esc(d.q)}</option>`).join('') + `<option value="-1">— or type your own below —</option>`;
@@ -1169,7 +1480,9 @@ function loadCfg() {
   document.getElementById('model').value = cfg.model || '';
   document.getElementById('key').value = cfg.key || '';
   document.getElementById('unconstrained').checked = !!cfg.unconstrained;
+  document.getElementById('speech').checked = !!cfg.speech;
   refreshStatus();
+  refreshSpeechUI();
 }
 
 function wire() {
@@ -1196,12 +1509,24 @@ function wire() {
     cfg.model = document.getElementById('model').value.trim();
     cfg.key = document.getElementById('key').value.trim();
     cfg.unconstrained = document.getElementById('unconstrained').checked;
+    cfg.speech = document.getElementById('speech').checked;
     localStorage.setItem('civics_cfg', JSON.stringify(cfg));
     refreshStatus();
   };
   document.getElementById('unconstrained').onchange = () => {
     cfg.unconstrained = document.getElementById('unconstrained').checked; refreshStatus();
   };
+  // speech (optional, off by default)
+  document.getElementById('speech').onchange = () => {
+    cfg.speech = document.getElementById('speech').checked;
+    if (!cfg.speech) Speech.stop();
+    localStorage.setItem('civics_cfg', JSON.stringify(cfg));
+    refreshSpeechUI();
+  };
+  document.addEventListener('click', (e) => {
+    const m = e.target.closest && e.target.closest('[data-mic]');
+    if (m) { e.preventDefault(); Speech.dictate(m.getAttribute('data-mic'), m); }
+  });
 }
 
 // init
@@ -1220,7 +1545,8 @@ window.__civics = {
   addRule, commitRule, testIt, requiredConstraint, summonVictim, cannedVictim,
   classifyEdit, cannedClassify, isRegression, sanitizeVictim, recomputePositions,
   constraintCast, isOnConstraint, reconcileVictim,
-  runContest, concedeKeep, openExtract, commitExtract, castStatus, opposite
+  runContest, concedeKeep, openExtract, commitExtract, castStatus, opposite,
+  Speech, speakCurrent, refreshSpeechUI, CASE_SOURCES
 };
 </script>
 </body>
