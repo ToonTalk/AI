@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Civics: rule debugger — v0 seed</title>
+<!--
+  v0 SEED — hand-authored contract for Claude Code. Deliberately barebones.
+  Read SPEC.md and PLAN.md alongside this file. The point of this file is to
+  PIN the architecture, not to be finished. UI is intentionally plain; styling
+  and most features are for Claude Code to build per the plan.
+
+  Core decision encoded here (see SPEC "competence vs neutrality"):
+    - CODE owns DIRECTION: which axis and which side the next victim must come
+      from. This is the debiasing guarantee that keeps it civics, not persuasion.
+    - LLM owns the VICTIM: chooses + dramatizes a real casualty WITHIN that
+      constraint, reading the student's literal rule for maximum bite.
+  Runs in your own browser with a key (not inside claude.ai). Falls back to a
+  canned case bank with no key so the harness can run offline.
+-->
+<style>
+  :root { --b: #d8d6cd; --fg: #23231f; --mut: #6b6a63; --accent: #b5532f; --bg2: #f6f4ee; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.55 system-ui, sans-serif; color: var(--fg); }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--b); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 15px; font-weight: 500; margin: 0 12px 0 0; }
+  header select, header input, button { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--b); border-radius: 6px; background: #fff; }
+  header input[type=password] { width: 200px; }
+  button { cursor: pointer; background: var(--bg2); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #status { font-size: 13px; color: var(--mut); padding: 6px 16px; border-bottom: 1px solid var(--b); }
+  main { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 0; min-height: 70vh; }
+  section { padding: 14px 16px; border-right: 1px solid var(--b); }
+  section:last-child { border-right: 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); font-weight: 500; margin: 0 0 10px; }
+  .rule { border: 1px solid var(--b); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; font-size: 15px; }
+  .rule .tag { font-size: 12px; color: var(--mut); }
+  textarea { width: 100%; min-height: 64px; font: inherit; font-size: 15px; padding: 8px; border: 1px solid var(--b); border-radius: 6px; resize: vertical; }
+  .scene { border: 1px solid var(--b); border-radius: 8px; padding: 14px; background: var(--bg2); }
+  .scene .who { font-weight: 500; }
+  .scene .harm { margin: 8px 0; }
+  .scene .reading { font-size: 14px; color: var(--mut); border-left: 3px solid var(--accent); padding-left: 10px; margin: 10px 0; }
+  .scene .case { font-size: 13px; color: var(--mut); }
+  .fg-entry { border: 1px solid var(--b); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; font-size: 14px; }
+  .fg-entry .name { color: var(--accent); }
+  .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .muted { color: var(--mut); font-size: 14px; }
+  .win { font-size: 14px; color: var(--mut); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--b); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rule debugger · free speech · 13+</h1>
+  <select id="provider">
+    <option value="anthropic">Anthropic</option>
+    <option value="openai">OpenAI</option>
+    <option value="gemini">Gemini</option>
+    <option value="">Offline (canned)</option>
+  </select>
+  <input id="model" placeholder="model id">
+  <input id="key" type="password" placeholder="API key (stored locally)">
+  <button id="save">Save</button>
+</header>
+<div id="status"></div>
+
+<main>
+  <section id="left">
+    <h2>Your constitution</h2>
+    <div id="rules"></div>
+    <textarea id="newrule" placeholder="Write a speech rule in your own words, e.g. 'People can say anything they want.'"></textarea>
+    <div class="row">
+      <button id="addrule" class="primary">Add rule</button>
+      <button id="test">Test it</button>
+    </div>
+  </section>
+
+  <section id="center">
+    <h2>What happens to someone</h2>
+    <div id="scene"><p class="muted">Add a rule, then press <b>Test it</b>. Someone affected by your rule will show up here.</p></div>
+  </section>
+
+  <section id="right">
+    <h2>Field guide</h2>
+    <div id="fieldguide"><p class="muted">When a fix of yours breaks something else, you'll name the pattern. Your notes collect here.</p></div>
+    <div class="win" id="win"></div>
+  </section>
+</main>
+
+<script>
+// ---------- issue config (one issue in v0) ----------
+const AXES = {
+  'criticism-vs-reputation': 'protecting reputation vs allowing open criticism',
+  'freedom-vs-safety': 'expressive freedom vs public safety',
+  'form': 'the form of the rule itself (too vague / too specific)'
+};
+// direction = whether the move RESTRICTS or PERMITS speech.
+// A victim is "harmed_by" the direction the student just moved toward.
+
+// Real cases the model is ALLOWED to cite. Everything else must be hypothetical.
+const VETTED_CASES = [
+  'Singh v. British Chiropractic Association (2008)',
+  'Brandenburg v. Ohio (1969)',
+  'New York Times Co. v. Sullivan (1964)'
+];
+
+const CONCEPTS = {
+  'defamation': 'False statements that damage someone\u2019s reputation.',
+  'chilling effect': 'When fear of legal trouble silences speech that should be allowed.',
+  'incitement': 'Speech that directly pushes others toward violence.',
+  'overbreadth': 'A rule written so broadly it catches speech it was never meant to.',
+  'void for vagueness': 'A rule too unclear for anyone to know what it forbids.',
+  'letter vs spirit': 'When the exact words of a rule miss its obvious intent.'
+};
+
+// Canned bank used when offline. Tagged so regressions fire by structure.
+const CANNED = [
+  { id:'libel', axis:'criticism-vs-reputation', harmed_by:'toward-permission',
+    who:'Mara Velez, a caf\u00e9 owner',
+    harm:'A viral post falsely called her caf\u00e9 a front for laundering money. Bookings collapsed, and nothing in your rules let her demand a correction.',
+    reading:'Your rule lets any claim stand, true or false, so she has nothing to point to.',
+    realCase:null, concept:'defamation' },
+  { id:'singh', axis:'criticism-vs-reputation', harmed_by:'toward-restriction',
+    who:'Dr. Aron Sethi, a science writer',
+    harm:'He called a clinic\u2019s treatment claims bogus in a newspaper column and was sued for libel. Defending it took two years and his savings, though he was telling the truth.',
+    reading:'Your ban on false or harmful claims, read literally, lets a powerful body drag an honest critic through court.',
+    realCase:'Singh v. British Chiropractic Association (2008)', concept:'chilling effect' },
+  { id:'incite', axis:'freedom-vs-safety', harmed_by:'toward-permission',
+    who:'Omar Haddad, a corner-shop owner',
+    harm:'A local figure spent weeks telling crowds his community were vermin. The night after a rally, Omar\u2019s shop was set on fire.',
+    reading:'Your rule protects all speech, so the speeches that primed the crowd were untouchable.',
+    realCase:null, concept:'incitement' },
+  { id:'overbroad', axis:'freedom-vs-safety', harmed_by:'toward-restriction',
+    who:'Lena Park, a student organizer',
+    harm:'Her peaceful protest was shut down under your rule against speech that \u201ccould provoke disorder.\u201d She was detained for leading a chant.',
+    reading:'Your safety exception is broad enough that an official used it to silence ordinary dissent.',
+    realCase:'Brandenburg v. Ohio (1969)', concept:'overbreadth' },
+  { id:'vague', axis:'form', subtype:'too-vague',
+    who:'Mr. Adeyemi, a school librarian',
+    harm:'Told only to \u201cdo the right thing,\u201d he pulled a history book a parent disliked. A student lost the one source she needed for her project.',
+    reading:'Your rule gives the person enforcing it no standard, so their hunch became the law.',
+    realCase:null, concept:'void for vagueness' },
+  { id:'overspecific', axis:'form', subtype:'too-specific',
+    who:'Priya Nair, a nurse',
+    harm:'Someone posted her home address with \u201cyou know what to do.\u201d Your rule listed banned words, and that post used none of them, so it was allowed.',
+    reading:'Your rule names specific forbidden phrases, so a clear threat that dodged the list slipped through.',
+    realCase:null, concept:'letter vs spirit' }
+];
+
+// ---------- state ----------
+const S = {
+  rules: [],            // {id, text, axis, direction}
+  fieldGuide: [],       // {phrasing, concept, def}
+  surfaced: new Set(),  // concept names already taught
+  fired: new Set(),     // canned case ids already shown
+  lastMove: null,       // {axis, direction}
+  lastFiredDir: null,
+  current: null         // the victim currently on screen
+};
+const cfg = { provider:'', model:'', key:'' };
+
+// ---------- LLM plumbing (BYO key, multi-provider) ----------
+async function callLLM(system, user) {
+  if (!cfg.provider || !cfg.key) throw new Error('offline');
+  if (cfg.provider === 'anthropic') {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'content-type':'application/json', 'x-api-key':cfg.key,
+        'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:cfg.model||'claude-sonnet-4-6', max_tokens:1024,
+        system, messages:[{role:'user', content:user}] })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'api error');
+    return d.content.map(b => b.text||'').join('');
+  }
+  if (cfg.provider === 'openai') {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'content-type':'application/json', Authorization:`Bearer ${cfg.key}` },
+      body: JSON.stringify({ model:cfg.model||'gpt-4o',
+        messages:[{role:'system',content:system},{role:'user',content:user}] })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'api error');
+    return d.choices[0].message.content;
+  }
+  if (cfg.provider === 'gemini') {
+    const m = cfg.model || 'gemini-2.0-flash';
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${cfg.key}`, {
+      method:'POST', headers:{ 'content-type':'application/json' },
+      body: JSON.stringify({ systemInstruction:{parts:[{text:system}]},
+        contents:[{role:'user',parts:[{text:user}]}] })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'api error');
+    return d.candidates[0].content.parts.map(p=>p.text||'').join('');
+  }
+}
+function parseJSON(t) {
+  return JSON.parse(t.replace(/```json/gi,'').replace(/```/g,'').trim());
+}
+
+// ---------- LLM job A: classify the student's edit as a move ----------
+async function classifyEdit(ruleText, allRules) {
+  const sys = `You classify a proposed school-friendly free-speech rule as a single MOVE.
+Return ONLY JSON: {"axis": one of ${JSON.stringify(Object.keys(AXES))}, "direction": "toward-restriction" or "toward-permission"}.
+"direction" means whether this rule RESTRICTS or PERMITS speech. Use "form" as the axis only when the issue is that the rule is too vague or too narrowly specific to apply; then also add "subtype": "too-vague" or "too-specific".`;
+  const usr = `Existing rules:\n${allRules.map(r=>'- '+r.text).join('\n')||'(none)'}\n\nNew/edited rule:\n"${ruleText}"`;
+  try { return parseJSON(await callLLM(sys, usr)); }
+  catch { return cannedClassify(ruleText); }
+}
+// crude offline fallback so the loop still moves
+function cannedClassify(t) {
+  const s = t.toLowerCase();
+  const restrict = /\b(no|not|ban|forbid|prohibit|except|unless|can'?t|must not|illegal)\b/.test(s);
+  let axis = 'criticism-vs-reputation';
+  if (/\b(safe|safety|violence|threat|hate|harm|riot|incite|danger)\b/.test(s)) axis = 'freedom-vs-safety';
+  return { axis, direction: restrict ? 'toward-restriction' : 'toward-permission' };
+}
+
+// ---------- code owns DIRECTION: what must the next victim be? ----------
+function requiredConstraint() {
+  // The victim is a casualty of the move the student just made.
+  // (Extreme-case caveat from SPEC: if there were no prior move, just fire the
+  // strongest victim of the current stance — handled because Test needs >=1 rule.)
+  return { axis: S.lastMove.axis, direction: S.lastMove.direction, subtype: S.lastMove.subtype };
+}
+
+// ---------- LLM job B: summon a victim WITHIN the constraint ----------
+async function summonVictim(c) {
+  const unsurfaced = Object.keys(CONCEPTS).filter(k => !S.surfaced.has(k));
+  const sys = `You generate ONE realistic person harmed by the student's most recent rule change, for a civics lesson (ages 13+, no graphic detail).
+HARD CONSTRAINT: the person must be a genuine casualty of moving "${c.direction}" on the axis "${AXES[c.axis]}"${c.subtype?` (specifically: rule is ${c.subtype})`:''}. Do NOT pick an easier or opposite harm. This constraint exists to keep the lesson balanced, so honor it exactly.
+Read the student's rules LITERALLY and find the real edge their own wording opens. Do not strawman.
+You may cite a real legal case ONLY from this list: ${JSON.stringify(VETTED_CASES)}. For anything else, present it as a plausible hypothetical and do NOT invent case names, people, or citations.
+Also explain, in "reading", how you interpreted their rule to reach this harm.
+Suggest a "concept" the student just bumped into, preferably from ${JSON.stringify(unsurfaced)}, with a one-sentence "def".
+Return ONLY JSON: {"who":"Name, short role","harm":"2-3 sentences","reading":"1 sentence","realCase": string or null,"concept":"name","def":"one sentence"}.`;
+  const usr = `The student's full ruleset:\n${S.rules.map(r=>'- '+r.text).join('\n')}`;
+  try { return parseJSON(await callLLM(sys, usr)); }
+  catch { return cannedVictim(c); }
+}
+function cannedVictim(c) {
+  const pool = CANNED.filter(x => !S.fired.has(x.id) && x.axis === c.axis &&
+    (c.axis === 'form' ? x.subtype === c.subtype : x.harmed_by === c.direction));
+  const pick = pool[0] || CANNED.find(x => !S.fired.has(x.id)) || CANNED[0];
+  S.fired.add(pick.id);
+  return { who:pick.who, harm:pick.harm, reading:pick.reading, realCase:pick.realCase,
+    concept:pick.concept, def:CONCEPTS[pick.concept] };
+}
+
+// ---------- render ----------
+function renderRules() {
+  document.getElementById('rules').innerHTML = S.rules.length ? S.rules.map(r =>
+    `<div class="rule">${esc(r.text)}<div class="tag">${r.axis} \u00b7 ${r.direction}</div></div>`).join('') : '';
+}
+function renderScene() {
+  const el = document.getElementById('scene');
+  const v = S.current;
+  if (!v) return;
+  el.innerHTML = `
+    <div class="scene">
+      <div class="who">${esc(v.who)}</div>
+      <div class="harm">${esc(v.harm)}</div>
+      <div class="reading">How your rule was read: ${esc(v.reading)}</div>
+      ${v.realCase ? `<div class="case">This really happened: ${esc(v.realCase)}.</div>` : `<div class="case">(A plausible case, not a real person.)</div>`}
+      <div class="row">
+        <button onclick="document.getElementById('newrule').focus()">Revise a rule</button>
+        <button onclick="contest()">That's not a fair reading</button>
+        <button class="primary" onclick="offerConcept()">Name what just happened</button>
+      </div>
+    </div>`;
+}
+function renderFG() {
+  const el = document.getElementById('fieldguide');
+  if (!S.fieldGuide.length) return;
+  el.innerHTML = S.fieldGuide.map(e =>
+    `<div class="fg-entry">\u201c${esc(e.phrasing)}\u201d<br><span class="name">${esc(e.concept)}</span> \u2014 ${esc(e.def)}</div>`).join('');
+  document.getElementById('win').textContent =
+    `${S.fieldGuide.length} pattern${S.fieldGuide.length>1?'s':''} found. You don't win by writing a leak-free rule \u2014 there isn't one. You win by choosing which errors you'll accept, and knowing why.`;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// ---------- loop actions ----------
+async function addRule() {
+  const ta = document.getElementById('newrule');
+  const text = ta.value.trim();
+  if (!text) return;
+  setBusy('Reading your rule\u2026');
+  const move = await classifyEdit(text, S.rules);
+  S.rules.push({ id:Date.now(), text, axis:move.axis, direction:move.direction });
+  S.lastMove = move;
+  ta.value = '';
+  renderRules(); clearBusy();
+}
+async function testIt() {
+  if (!S.rules.length) { flash('Add a rule first.'); return; }
+  setBusy('Finding someone your rule affects\u2026');
+  const v = await summonVictim(requiredConstraint());
+  S.current = v;
+  S.lastFiredDir = S.lastMove.direction;
+  renderScene(); clearBusy();
+}
+async function contest() {
+  // Cheap v0 version: re-run with a nudge that the student disputes the reading.
+  // Claude Code: turn this into a real back-and-forth (see PLAN milestone 2).
+  setBusy('Re-reading your rule\u2026');
+  const v = await summonVictim(requiredConstraint());
+  S.current = v; renderScene(); clearBusy();
+}
+function offerConcept() {
+  const v = S.current; if (!v) return;
+  const phrasing = prompt(`In your own words: what just went wrong?\n\n(There's a name for this \u2014 ${v.concept} \u2014 but say it your way first.)`);
+  if (phrasing == null) return;
+  S.fieldGuide.push({ phrasing: phrasing.trim() || '(left blank)', concept:v.concept, def:v.def });
+  S.surfaced.add(v.concept);
+  renderFG();
+}
+
+// ---------- status / config ----------
+function setBusy(m){ document.getElementById('status').textContent = m; }
+function clearBusy(){ refreshStatus(); }
+function flash(m){ setBusy(m); setTimeout(refreshStatus, 1500); }
+function refreshStatus() {
+  document.getElementById('status').textContent = (cfg.provider && cfg.key)
+    ? `Live: ${cfg.provider}${cfg.model?' ('+cfg.model+')':''}. The case is chosen by code to be a victim of your last move; the model only voices it.`
+    : 'Offline (canned cases). Add a key above for live, rule-specific victims.';
+}
+function loadCfg() {
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem('civics_cfg')||'{}')); } catch {}
+  document.getElementById('provider').value = cfg.provider || '';
+  document.getElementById('model').value = cfg.model || '';
+  document.getElementById('key').value = cfg.key || '';
+  refreshStatus();
+}
+document.getElementById('save').onclick = () => {
+  cfg.provider = document.getElementById('provider').value;
+  cfg.model = document.getElementById('model').value.trim();
+  cfg.key = document.getElementById('key').value.trim();
+  localStorage.setItem('civics_cfg', JSON.stringify(cfg));
+  refreshStatus();
+};
+document.getElementById('addrule').onclick = addRule;
+document.getElementById('test').onclick = testIt;
+loadCfg();
+</script>
+</body>
+</html>

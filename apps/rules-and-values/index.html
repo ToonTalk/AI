@@ -1,0 +1,1227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Civics: rule debugger</title>
+<!--
+  Constructionist civics tool. Built from v0.html (the seed) per SPEC.md + PLAN.md.
+  Single file, no build step, BYO-key, multi-provider. Open it in a browser.
+
+  The load-bearing decision (SPEC "competence vs neutrality"):
+    - CODE owns DIRECTION: which axis and which side the next victim must come
+      from. This is the debiasing guarantee that keeps it civics, not persuasion.
+    - LLM owns the VICTIM: chooses + voices a real casualty WITHIN that
+      constraint, reading the learner's literal rule for maximum bite.
+
+  Band-swap rule (SPEC/PLAN M3): an "issue" is just a config block in BANDS.
+  The engine NEVER branches on band id; it only reads BANDS[S.band]. Swapping
+  bands swaps axes + referents + copy with zero engine changes.
+-->
+<style>
+  :root {
+    --b: #d8d6cd; --fg: #23231f; --mut: #6b6a63; --accent: #b5532f; --bg2: #f6f4ee;
+    --harm: #b5532f; --help: #3f7d57; --untouched: #9a988f; --panel: #fffefb;
+    --warn: #8a6d1f; --warnbg: #fbf3da;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.55 system-ui, -apple-system, sans-serif; color: var(--fg); background: #fff; }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--b); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0 8px 0 0; }
+  header .spacer { flex: 1; }
+  header select, header input, button { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--b); border-radius: 6px; background: #fff; }
+  header input[type=password] { width: 170px; }
+  button { cursor: pointer; background: var(--bg2); }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #9c4527; }
+  button.ghost { background: transparent; }
+  button:disabled { opacity: .5; cursor: default; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button { border-radius: 6px 6px 0 0; border-bottom: 0; }
+  .tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #status { font-size: 13px; color: var(--mut); padding: 6px 16px; border-bottom: 1px solid var(--b); background: var(--bg2); }
+  main { display: grid; grid-template-columns: 1fr 1.35fr 1fr; gap: 0; min-height: 72vh; }
+  main.phase2 { grid-template-columns: 1fr 1.4fr; }
+  section { padding: 14px 16px; border-right: 1px solid var(--b); min-width: 0; }
+  section:last-child { border-right: 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--mut); font-weight: 600; margin: 0 0 10px; }
+  h2 .sub { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--untouched); }
+  .rule { border: 1px solid var(--b); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; font-size: 15px; background: var(--panel); }
+  .rule .tag { font-size: 12px; color: var(--mut); margin-top: 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .rule .tag .pill { background: var(--bg2); border: 1px solid var(--b); border-radius: 999px; padding: 1px 7px; }
+  .rule .tag .mini { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  .rule.offlinecls { border-style: dashed; }
+  textarea { width: 100%; min-height: 64px; font: inherit; font-size: 15px; padding: 8px; border: 1px solid var(--b); border-radius: 6px; resize: vertical; background: var(--panel); }
+  .scene { border: 1px solid var(--b); border-radius: 8px; padding: 14px; background: var(--bg2); }
+  .scene .who { font-weight: 600; font-size: 16px; }
+  .scene .role { color: var(--mut); font-weight: 400; }
+  .scene .harm { margin: 8px 0; }
+  .scene .reading { font-size: 14px; color: #4a463d; border-left: 3px solid var(--accent); padding-left: 10px; margin: 10px 0; background: #fff; padding: 8px 10px; border-radius: 0 6px 6px 0; }
+  .scene .case { font-size: 13px; color: var(--mut); }
+  .scene .case.real { color: var(--fg); }
+  .note { font-size: 13px; border-radius: 6px; padding: 7px 10px; margin: 10px 0; }
+  .note.warn { background: var(--warnbg); color: var(--warn); border: 1px solid #e7d8a8; }
+  .note.info { background: #eef3ee; color: var(--help); border: 1px solid #cfe0d2; }
+  .fg-entry { border: 1px solid var(--b); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; font-size: 14px; background: var(--panel); }
+  .fg-entry .phrasing { font-style: italic; }
+  .fg-entry .name { color: var(--accent); font-weight: 600; }
+  .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .muted { color: var(--mut); font-size: 14px; }
+  .win { font-size: 14px; color: var(--mut); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--b); }
+  /* cast */
+  .cast { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 14px; }
+  .cast .member { display: flex; align-items: center; gap: 8px; font-size: 13.5px; border: 1px solid var(--b); border-radius: 6px; padding: 5px 8px; background: var(--panel); }
+  .cast .dot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
+  .cast .member .nm { flex: 1; min-width: 0; }
+  .cast .member .st { font-size: 12px; }
+  .dot.harmed { background: var(--harm); } .st.harmed { color: var(--harm); }
+  .dot.helped { background: var(--help); } .st.helped { color: var(--help); }
+  .dot.untouched { background: var(--untouched); } .st.untouched { color: var(--untouched); }
+  .member.onstage { box-shadow: 0 0 0 2px var(--accent); }
+  /* contest + extract panels */
+  .panel { border: 1px solid var(--accent); border-radius: 8px; padding: 14px; background: var(--panel); margin-top: 12px; }
+  .panel h3 { margin: 0 0 8px; font-size: 14px; }
+  .panel .verdict { font-weight: 600; margin: 8px 0; }
+  .verdict.concede { color: var(--help); } .verdict.defend { color: var(--accent); }
+  .log { margin-top: 14px; }
+  .log details { font-size: 13px; color: var(--mut); }
+  .log .entry { padding: 2px 0; border-top: 1px dotted var(--b); }
+  /* phase 2 */
+  .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .diff .col { border: 1px solid var(--b); border-radius: 8px; padding: 12px; background: var(--panel); }
+  .diff .col h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--mut); }
+  .diff .col.with { border-color: var(--accent); }
+  .bridge { border: 1px dashed var(--b); border-radius: 8px; padding: 12px; margin-top: 12px; background: var(--bg2); }
+  .bridge .out { margin-top: 8px; font-size: 14.5px; }
+  .hide { display: none !important; }
+  @media (max-width: 860px) { main, main.phase2 { grid-template-columns: 1fr; } section { border-right: 0; border-bottom: 1px solid var(--b); } .diff { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="apptitle">Rule debugger</h1>
+  <div class="tabs">
+    <button id="tab-rules" class="active" data-phase="rules">Rules</button>
+    <button id="tab-values" data-phase="values">Values</button>
+  </div>
+  <select id="band" title="Issue / band"></select>
+  <span class="spacer"></span>
+  <select id="provider" title="LLM provider">
+    <option value="">Offline (canned)</option>
+    <option value="anthropic">Anthropic</option>
+    <option value="openai">OpenAI</option>
+    <option value="gemini">Gemini</option>
+  </select>
+  <input id="model" placeholder="model id">
+  <input id="key" type="password" placeholder="API key (stored locally)">
+  <label style="font-size:13px;color:var(--mut);display:flex;align-items:center;gap:4px" title="AI-literacy mode: drop the neutrality constraint and let the model's tilt become the lesson.">
+    <input type="checkbox" id="unconstrained" style="width:auto"> roam
+  </label>
+  <button id="save">Save</button>
+</header>
+<div id="status"></div>
+
+<!-- ============================= PHASE 1: RULES ============================= -->
+<main id="phase-rules">
+  <section id="left">
+    <h2 id="constitution-h">Your constitution</h2>
+    <div id="rules"></div>
+    <textarea id="newrule"></textarea>
+    <div class="row">
+      <button id="addrule" class="primary">Add rule</button>
+      <button id="test">Test it</button>
+    </div>
+
+    <h2 style="margin-top:18px" id="cast-h">Your community</h2>
+    <div id="cast" class="cast"></div>
+
+    <div class="log">
+      <details>
+        <summary>Edit log</summary>
+        <div id="editlog"></div>
+      </details>
+    </div>
+  </section>
+
+  <section id="center">
+    <h2>What happens to someone</h2>
+    <div id="scene"><p class="muted" id="scene-empty"></p></div>
+  </section>
+
+  <section id="right">
+    <h2>Field guide <span class="sub">— the patterns you've named</span></h2>
+    <div id="fieldguide"><p class="muted" id="fg-empty"></p></div>
+    <div class="win" id="win"></div>
+  </section>
+</main>
+
+<!-- ============================= PHASE 2: VALUES ============================ -->
+<main id="phase-values" class="phase2 hide">
+  <section id="values-left">
+    <h2>Your values <span class="sub">— what you want the system to care about</span></h2>
+    <textarea id="newvalue"></textarea>
+    <div class="row">
+      <button id="addvalue" class="primary">Add value</button>
+    </div>
+    <div id="values" style="margin-top:10px"></div>
+
+    <div class="bridge" id="bridge">
+      <h2 style="margin:0 0 6px">The bridge</h2>
+      <p class="muted" style="margin:0 0 8px">A value is what you care about; a rule is what to do. Move between them.</p>
+      <div class="row">
+        <button id="compile">Compile a value down &rarr; a concrete test</button>
+        <button id="decompile">Decompile your rules up &rarr; the value</button>
+      </div>
+      <div class="out" id="bridge-out"></div>
+    </div>
+  </section>
+
+  <section id="values-right">
+    <h2>Ask the tool a question <span class="sub">— see it answered with and without your values</span></h2>
+    <select id="dilemma"></select>
+    <textarea id="question" style="min-height:48px;margin-top:8px"></textarea>
+    <div class="row">
+      <button id="answer" class="primary">Answer it</button>
+      <button id="strand">Who does a vague value strand?</button>
+    </div>
+    <div id="answer-out"></div>
+    <div id="values-scene"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* =========================================================================
+   BANDS — pure config. The engine reads BANDS[S.band] only. No engine code
+   branches on band id (PLAN M3 / harness assertion 5).
+   Each band supplies: axes, direction labels, vetted citable cases, the
+   concept glossary, a persistent cast (named citizens), a canned bank tagged
+   so offline selection reproduces regressions by STRUCTURE, and copy.
+   ========================================================================= */
+const BANDS = {
+  'free-speech': {
+    id: 'free-speech',
+    label: 'Free speech · 13+',
+    title: 'Rule debugger · free speech · 13+',
+    subject: 'speech',
+    axes: {
+      'criticism-vs-reputation': 'protecting reputation vs allowing open criticism',
+      'freedom-vs-safety': 'expressive freedom vs public safety',
+      'form': 'the form of the rule itself (too vague / too specific)'
+    },
+    directionLabels: { 'toward-restriction': 'restricts speech', 'toward-permission': 'permits speech' },
+    // Real cases the model is ALLOWED to cite. Everything else is hypothetical.
+    vettedCases: [
+      'Singh v. British Chiropractic Association (2008)',
+      'Brandenburg v. Ohio (1969)',
+      'New York Times Co. v. Sullivan (1964)'
+    ],
+    concepts: {
+      'defamation': 'False statements that damage someone’s reputation.',
+      'chilling effect': 'When fear of legal trouble silences speech that should be allowed.',
+      'incitement': 'Speech that directly pushes others toward violence.',
+      'overbreadth': 'A rule written so broadly it catches speech it was never meant to.',
+      'void for vagueness': 'A rule too unclear for anyone to know what it forbids.',
+      'letter vs spirit': 'When the exact words of a rule miss its obvious intent.'
+    },
+    // Persistent cast: each citizen is a casualty of exactly one (axis,direction)
+    // or form-subtype. Rule changes move these specific people, not strangers.
+    cast: [
+      { id: 'mara',  who: 'Mara Velez',     role: 'a café owner',       axis: 'criticism-vs-reputation', dir: 'toward-permission' },
+      { id: 'aron',  who: 'Dr. Aron Sethi', role: 'a science writer',         axis: 'criticism-vs-reputation', dir: 'toward-restriction' },
+      { id: 'omar',  who: 'Omar Haddad',    role: 'a corner-shop owner',      axis: 'freedom-vs-safety',       dir: 'toward-permission' },
+      { id: 'lena',  who: 'Lena Park',      role: 'a student organizer',      axis: 'freedom-vs-safety',       dir: 'toward-restriction' },
+      { id: 'ade',   who: 'Mr. Adeyemi',    role: 'a school librarian',       axis: 'form', subtype: 'too-vague' },
+      { id: 'priya', who: 'Priya Nair',     role: 'a nurse',                  axis: 'form', subtype: 'too-specific' }
+    ],
+    canned: [
+      { id: 'libel', castId: 'mara', axis: 'criticism-vs-reputation', harmed_by: 'toward-permission',
+        harm: 'A viral post falsely called her café a front for laundering money. Bookings collapsed, and nothing in your rules let her demand a correction.',
+        reading: 'Your rule lets any claim stand, true or false, so she has nothing to point to.',
+        realCase: null, concept: 'defamation',
+        defense: 'Your rule says people can say "anything." Nothing in those words carves out a knowingly false claim, so the laundering post is protected by your own wording.',
+        concedeIf: /(false|untrue|lie|correction|retract|defam|knowingly|verif)/i,
+        concedeMsg: 'Fair — once your rule limits itself to *true* statements, the laundering post is outside it. Mara can demand a correction. Keep the rule.' },
+      { id: 'singh', castId: 'aron', axis: 'criticism-vs-reputation', harmed_by: 'toward-restriction',
+        harm: 'He called a clinic’s treatment claims bogus in a newspaper column and was sued for libel. Defending it took two years and his savings, though he was telling the truth.',
+        reading: 'Your ban on false or harmful claims, read literally, lets a powerful body drag an honest critic through court before truth is ever decided.',
+        realCase: 'Singh v. British Chiropractic Association (2008)', concept: 'chilling effect',
+        defense: 'Your rule bans claims that "harm" someone. A truthful exposé still harms the clinic’s business, so on your wording Aron is fair game — the cost falls before any court decides he was right.',
+        concedeIf: /(true|truth|honest|opinion|public interest|fair comment|evidence)/i,
+        concedeMsg: 'Granted — if your rule protects truthful claims and fair comment, Aron is safe to publish. Keep the rule.' },
+      { id: 'incite', castId: 'omar', axis: 'freedom-vs-safety', harmed_by: 'toward-permission',
+        harm: 'A local figure spent weeks telling crowds that Omar’s community were vermin. The night after a rally, his shop was set on fire.',
+        reading: 'Your rule protects all speech, so the speeches that primed the crowd were untouchable until the moment of the fire.',
+        realCase: null, concept: 'incitement',
+        defense: 'You protected "all" speech with no exception. Speech that directly whips a crowd toward violence is still speech under your words, so nothing could touch it beforehand.',
+        concedeIf: /(violence|incite|imminent|threat|danger|directly|call to)/i,
+        concedeMsg: 'Right — once your rule excepts speech that directly incites violence, the rally chants fall outside protection. Keep the rule.' },
+      { id: 'overbroad', castId: 'lena', axis: 'freedom-vs-safety', harmed_by: 'toward-restriction',
+        harm: 'Her peaceful protest was shut down under your rule against speech that “could provoke disorder.” She was detained for leading a chant.',
+        reading: 'Your safety exception is broad enough that an official read "could provoke disorder" to cover ordinary dissent.',
+        realCase: 'Brandenburg v. Ohio (1969)', concept: 'overbreadth',
+        defense: 'Almost any lively protest "could provoke disorder." Your words hand an official that judgment, and they used it on a chant. The breadth is in your rule, not my reading.',
+        concedeIf: /(imminent|direct|likely|intend|specific|violence only|narrow)/i,
+        concedeMsg: 'Conceded — limited to speech *intended and likely* to cause imminent violence, your rule no longer reaches Lena’s chant. Keep the rule.' },
+      { id: 'vague', castId: 'ade', axis: 'form', subtype: 'too-vague',
+        harm: 'Told only to “keep things appropriate,” he pulled a history book a parent disliked. A student lost the one source she needed for her project.',
+        reading: 'Your rule gives the person enforcing it no standard, so their hunch became the law.',
+        realCase: null, concept: 'void for vagueness',
+        defense: 'Your rule never says what "appropriate" means. You handed Mr. Adeyemi a blank check and he filled it in with one parent’s taste. That gap is in the wording.',
+        concedeIf: /(specific|define|standard|criteria|list|clear|example|what counts)/i,
+        concedeMsg: 'Fair — with a concrete standard spelled out, Mr. Adeyemi has something to point to instead of a hunch. Keep the rule.' },
+      { id: 'overspecific', castId: 'priya', axis: 'form', subtype: 'too-specific',
+        harm: 'Someone posted her home address with “you know what to do.” Your rule listed banned words, and that post used none of them, so it was allowed.',
+        reading: 'Your rule names specific forbidden phrases, so a clear threat that dodged the list slipped through.',
+        realCase: null, concept: 'letter vs spirit',
+        defense: 'Your rule is a list of banned words. The post used none of them, so by the letter it’s fine — even though anyone can see the threat. The gap is that you legislated words, not the harm.',
+        concedeIf: /(intent|threat|harm|spirit|purpose|reasonable|effect|target)/i,
+        concedeMsg: 'Granted — a rule aimed at threatening *intent* rather than a word list catches the address post. Keep the rule.' }
+    ],
+    copy: {
+      ruleHint: "Write a speech rule in your own words, e.g. “People can say anything they want.”",
+      sceneEmpty: "Add a rule, then press Test it. Someone affected by your rule will show up here.",
+      fgEmpty: "When a fix of yours breaks something else, you’ll name the pattern. Your notes collect here.",
+      castNote: "These six share your society. Watch who your rule helps and who it hits.",
+      valueHint: "State a value in your own words, e.g. “People should be free to criticize the powerful.”",
+      dilemmas: [
+        { q: 'Should the school newspaper be allowed to print an unverified rumor about the principal?',
+          without: 'Default answer: lean toward caution. Unverified claims about a person can mislead and harm, so hold the story until it is checked.',
+          with: 'Shaped by your values: if you prize criticism of the powerful, you let it run as clearly-labelled allegation and demand a right of reply — you accept some risk of error to keep a check on authority.' },
+        { q: 'Should students be allowed to wear armbands protesting a war?',
+          without: 'Default answer: allow it unless it disrupts class — a cautious, order-first reading.',
+          with: 'Shaped by your values: protest at the edge of authority is exactly what you said to protect, so the bar for shutting it down is "real, imminent disruption," not discomfort.' }
+      ]
+    }
+  },
+
+  'playground': {
+    id: 'playground',
+    label: 'Playground · 8+',
+    title: 'Rule debugger · the playground · 8+',
+    subject: 'play',
+    axes: {
+      'fairness-vs-freedom': 'everyone gets a fair turn vs everyone plays how they like',
+      'safety-vs-fun': 'keeping bodies safe vs keeping the game fun',
+      'form': 'the form of the rule itself (too vague / too specific)'
+    },
+    directionLabels: { 'toward-restriction': 'limits play', 'toward-permission': 'allows play' },
+    vettedCases: [], // kids don't cite court cases; everything is a plausible story.
+    // Same transferable civics concepts, scaled to recess.
+    concepts: {
+      'free-riding': 'When grabbing for yourself leaves no turn for anyone else.',
+      'chilling effect': 'When fear of getting in trouble stops play that was fine.',
+      'spillover harm': 'When your fun lands on someone else’s body.',
+      'overbreadth': 'A rule so broad it bans the good stuff along with the bad.',
+      'void for vagueness': 'A rule so unclear nobody can know if they’re breaking it.',
+      'letter vs spirit': 'When the exact words of a rule miss what it was obviously for.'
+    },
+    cast: [
+      { id: 'sam',  who: 'Sam',  role: 'who never gets a turn',        axis: 'fairness-vs-freedom', dir: 'toward-permission' },
+      { id: 'kai',  who: 'Kai',  role: 'who invented a new game',      axis: 'fairness-vs-freedom', dir: 'toward-restriction' },
+      { id: 'rosa', who: 'Rosa', role: 'who got knocked over',         axis: 'safety-vs-fun',       dir: 'toward-permission' },
+      { id: 'theo', who: 'Theo', role: 'whose game got cancelled',     axis: 'safety-vs-fun',       dir: 'toward-restriction' },
+      { id: 'mia',  who: 'Mia',  role: 'on monitor duty',              axis: 'form', subtype: 'too-vague' },
+      { id: 'ben',  who: 'Ben',  role: 'who reads the rules closely',  axis: 'form', subtype: 'too-specific' }
+    ],
+    canned: [
+      { id: 'hog', castId: 'sam', axis: 'fairness-vs-freedom', harmed_by: 'toward-permission',
+        harm: 'Two big kids decided the ball was theirs for all of lunch. Your rule lets everyone play how they like, so Sam stood at the fence the whole time and never got a turn.',
+        reading: 'Your rule says anyone can play their own way, which lets the loudest few keep the ball for themselves.',
+        realCase: null, concept: 'free-riding',
+        defense: 'You said everyone plays how they like. "How they like" for the big kids is keeping the ball, and your words protect that, so Sam is shut out.',
+        concedeIf: /(turn|share|fair|everyone gets|rotate|time limit|take turns)/i,
+        concedeMsg: 'Good — once your rule guarantees turns, the big kids can’t keep the ball all lunch. Sam gets to play. Keep the rule.' },
+      { id: 'forceshare', castId: 'kai', axis: 'fairness-vs-freedom', harmed_by: 'toward-restriction',
+        harm: 'Kai built a careful marble track that only works one way. Your share-everything rule made him hand it to kids who knocked it apart, so he stopped building.',
+        reading: 'Your rule forces sharing of everything, with no room for a game that genuinely needs to stay whole.',
+        realCase: null, concept: 'chilling effect',
+        defense: 'Your rule shares everything, no exceptions. A marble track is a thing, so it gets shared and wrecked. The over-reach is in the word "everything."',
+        concedeIf: /(unless|except|build|project|finish|some things|in use|busy)/i,
+        concedeMsg: 'Fair — if things in active use are excepted, Kai can finish his track before sharing. Keep the rule.' },
+      { id: 'rough', castId: 'rosa', axis: 'safety-vs-fun', harmed_by: 'toward-permission',
+        harm: 'A new tag game let kids shove to tag. Your rule allows any game players agree to, so Rosa got knocked onto the asphalt and skinned both knees.',
+        reading: 'Your rule allows any agreed game, which left no line against a game whose whole point was shoving.',
+        realCase: null, concept: 'spillover harm',
+        defense: 'You allowed any game the players agree to. The shovers agreed, so by your words it’s allowed — even though it lands on Rosa’s body.',
+        concedeIf: /(hurt|safe|body|no pushing|gentle|hands off|injure|hit)/i,
+        concedeMsg: 'Right — once your rule draws a line at games that hurt other kids’ bodies, the shoving tag is out. Keep the rule.' },
+      { id: 'banall', castId: 'theo', axis: 'safety-vs-fun', harmed_by: 'toward-restriction',
+        harm: 'After one scrape, your rule banned “anything that could cause an accident.” A monitor read that to cancel Theo’s tag game entirely, so nobody ran at recess.',
+        reading: 'Your safety rule is broad enough that "could cause an accident" swallowed ordinary running-around.',
+        realCase: null, concept: 'overbreadth',
+        defense: 'Almost any game "could cause an accident." Your words hand the monitor that call, and tag got cancelled. The breadth is in your rule.',
+        concedeIf: /(shoving|pushing|specific|only|dangerous|on purpose|reckless|narrow)/i,
+        concedeMsg: 'Conceded — limited to shoving or reckless play, your rule leaves ordinary tag alone. Theo plays. Keep the rule.' },
+      { id: 'benice', castId: 'mia', axis: 'form', subtype: 'too-vague',
+        harm: 'Your only rule was “be nice.” Put on monitor duty, Mia had to guess what counted, sent a friend inside for something another kid does all the time, and got blamed for playing favorites.',
+        reading: 'Your rule gives the monitor no standard, so Mia’s mood became the rule and nobody could predict it.',
+        realCase: null, concept: 'void for vagueness',
+        defense: '"Be nice" never says what nice means. You handed Mia a blank rule and she had to fill it in, then took the blame. The gap is in the wording.',
+        concedeIf: /(specific|what counts|example|like|such as|define|clear|list)/i,
+        concedeMsg: 'Fair — with examples of what "nice" means, Mia has something to point to instead of her mood. Keep the rule.' },
+      { id: 'wordlist', castId: 'ben', axis: 'form', subtype: 'too-specific',
+        harm: 'Your rule banned three name-calling words. A kid froze Ben out for a week using none of them — just “we don’t want you” every day — and by the rule that was allowed.',
+        reading: 'Your rule lists exact banned words, so meanness that dodged the list counted as fine.',
+        realCase: null, concept: 'letter vs spirit',
+        defense: 'Your rule is three words long, literally. The freeze-out used none of them, so by the letter it’s allowed — even though everyone can see it’s the meanness you meant to stop.',
+        concedeIf: /(mean|exclude|leave out|on purpose|intent|hurt|treat|spirit|target)/i,
+        concedeMsg: 'Granted — a rule aimed at deliberately freezing someone out catches the "we don’t want you" too. Keep the rule.' }
+    ],
+    copy: {
+      ruleHint: "Write a playground rule in your own words, e.g. “Everyone can play however they want.”",
+      sceneEmpty: "Add a rule, then press Test it. A kid affected by your rule will show up here.",
+      fgEmpty: "When a fix of yours breaks something else, you’ll name the pattern. Your notes collect here.",
+      castNote: "These six share the playground. Watch who your rule helps and who it hits.",
+      valueHint: "State a value in your own words, e.g. “Everyone should get a fair turn.”",
+      dilemmas: [
+        { q: 'Two kids always grab the one good ball first. Should the monitor step in?',
+          without: 'Default answer: stay out of it unless someone breaks a rule — they got there first.',
+          with: 'Shaped by your values: if you prize a fair turn for everyone, the monitor sets up turns, because "first grab wins" is exactly the unfairness you named.' },
+        { q: 'A few kids invent a wild running game. Should it be allowed?',
+          without: 'Default answer: ban it to be safe — running games cause scrapes.',
+          with: 'Shaped by your values: if you prize fun and only draw the line at hurting others, you allow the game and only step in if it turns to shoving.' }
+      ]
+    }
+  }
+};
+
+/* =========================================================================
+   STATE  (SPEC "State shape")
+   ========================================================================= */
+const S = {
+  band: 'free-speech',
+  rules: [],            // {id, text, axis, direction, subtype?, offlineClassified?}
+  fieldGuide: [],       // {phrasing, concept, def}
+  surfaced: new Set(),  // concept names already taught -> bias new concepts away
+  fired: new Set(),     // canned case ids already shown (offline: don't repeat)
+  lastMove: null,       // {axis, direction, subtype?, regression}
+  lastFired: null,      // {axis, direction, subtype?} of the victim last shown (guard)
+  current: null,        // victim on screen
+  axisPosition: {},     // axis -> most recent direction (drives cast status)
+  formFlags: {},        // subtype -> currently present? (drives form cast status)
+  cleared: new Set(),   // cast ids the learner argued safe via a conceded contest
+  editLog: [],          // [{t, kind, detail}]
+  // phase 2
+  values: [],           // [{id, text}]
+  phase: 'rules'
+};
+const cfg = { provider: '', model: '', key: '', unconstrained: false };
+
+const band = () => BANDS[S.band];
+const opposite = d => d === 'toward-restriction' ? 'toward-permission' : 'toward-restriction';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function logEvent(kind, detail) { S.editLog.push({ t: Date.now(), kind, detail }); renderLog(); }
+
+/* =========================================================================
+   LLM PLUMBING  (BYO key, multi-provider) with typed errors + one retry.
+   Never a silent fail: callers surface errors; only an EMPTY provider uses
+   the canned bank as the intended offline mode (SPEC graceful degradation).
+   ========================================================================= */
+function llmError(kind, message) { const e = new Error(message); e.kind = kind; return e; }
+
+async function callLLM(system, user) {
+  if (!cfg.provider || !cfg.key) throw llmError('offline', 'offline');
+  let r, d;
+  try {
+    if (cfg.provider === 'anthropic') {
+      r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: cfg.model || 'claude-sonnet-4-6', max_tokens: 1024, system, messages: [{ role: 'user', content: user }] })
+      });
+    } else if (cfg.provider === 'openai') {
+      r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${cfg.key}` },
+        body: JSON.stringify({ model: cfg.model || 'gpt-4o', messages: [{ role: 'system', content: system }, { role: 'user', content: user }] })
+      });
+    } else if (cfg.provider === 'gemini') {
+      const m = cfg.model || 'gemini-2.0-flash';
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${cfg.key}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }] })
+      });
+    } else {
+      throw llmError('offline', 'offline');
+    }
+  } catch (netErr) {
+    if (netErr.kind) throw netErr;
+    throw llmError('net', 'Network error reaching ' + cfg.provider + '. Check your connection.');
+  }
+  try { d = await r.json(); } catch { throw llmError('parse', 'The provider returned something unreadable.'); }
+  if (!r.ok) {
+    const msg = (d && d.error && (d.error.message || d.error)) || ('HTTP ' + r.status);
+    if (r.status === 401 || r.status === 403) throw llmError('auth', 'Key rejected: ' + msg);
+    if (r.status === 429) throw llmError('rate', 'Rate limited: ' + msg);
+    throw llmError('net', String(msg));
+  }
+  if (cfg.provider === 'anthropic') return d.content.map(b => b.text || '').join('');
+  if (cfg.provider === 'openai') return d.choices[0].message.content;
+  return d.candidates[0].content.parts.map(p => p.text || '').join('');
+}
+
+function parseJSON(t) {
+  const cleaned = String(t).replace(/```json/gi, '').replace(/```/g, '').trim();
+  // tolerate prose around the JSON object
+  const a = cleaned.indexOf('{'), b = cleaned.lastIndexOf('}');
+  const slice = (a >= 0 && b > a) ? cleaned.slice(a, b + 1) : cleaned;
+  return JSON.parse(slice);
+}
+
+// Run an LLM call expecting JSON, with ONE retry on transient failures.
+async function llmJSON(system, user) {
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { return parseJSON(await callLLM(system, user)); }
+    catch (e) {
+      lastErr = e;
+      if (e.kind === 'offline') throw e;                       // not an error: caller goes canned
+      if (attempt === 0 && (e.kind === 'rate' || e.kind === 'parse' || e.kind === 'net')) { await sleep(700); continue; }
+      throw e;                                                  // auth / second failure: surface it
+    }
+  }
+  throw lastErr;
+}
+
+/* =========================================================================
+   LLM JOB A — classify the learner's edit as a single MOVE  (drives lastMove)
+   ========================================================================= */
+async function classifyEdit(ruleText, priorRules) {
+  const B = band();
+  if (!cfg.provider || !cfg.key) return { ...cannedClassify(ruleText), offlineClassified: false };
+  const sys =
+`You classify a proposed ${B.subject} rule as a single MOVE.
+Return ONLY JSON: {"axis": one of ${JSON.stringify(Object.keys(B.axes))}, "direction": "toward-restriction" or "toward-permission"}.
+"direction" means whether this rule RESTRICTS or PERMITS ${B.subject}.
+Use "form" as the axis ONLY when the problem is that the rule is too vague or too narrowly specific to apply; then also add "subtype": "too-vague" or "too-specific".`;
+  const usr = `Existing rules:\n${priorRules.map(r => '- ' + r.text).join('\n') || '(none)'}\n\nNew/edited rule:\n"${ruleText}"`;
+  try {
+    const m = await llmJSON(sys, usr);
+    if (!B.axes[m.axis]) m.axis = cannedClassify(ruleText).axis;
+    if (m.direction !== 'toward-restriction' && m.direction !== 'toward-permission') m.direction = cannedClassify(ruleText).direction;
+    return m;
+  } catch (e) {
+    // Low-stakes classify: fall back to keyword classifier, but LABEL it (not silent).
+    flash('Couldn’t reach ' + cfg.provider + ' to classify — used the offline classifier. ' + (e.message || ''));
+    return { ...cannedClassify(ruleText), offlineClassified: true };
+  }
+}
+
+// Crude offline classifier so the loop still moves with no key.
+function cannedClassify(text) {
+  const s = ' ' + text.toLowerCase() + ' ';
+  const restrict = /\b(no|not|ban|banned|forbid|prohibit|except|unless|can'?t|cannot|must not|don'?t|never|illegal|limit|restrict|remove|block)\b/.test(s);
+  const axes = Object.keys(band().axes);
+  let axis = axes[0];
+  if (band().id === 'free-speech') {
+    if (/\b(safe|safety|violence|violent|threat|hate|harm|riot|incite|danger|attack|fight|weapon)\b/.test(s)) axis = 'freedom-vs-safety';
+    else axis = 'criticism-vs-reputation';
+  } else {
+    if (/\b(safe|safety|hurt|injur|rough|shove|push|run|fall|body|accident|hit)\b/.test(s)) axis = 'safety-vs-fun';
+    else axis = 'fairness-vs-freedom';
+  }
+  return { axis, direction: restrict ? 'toward-restriction' : 'toward-permission' };
+}
+
+/* =========================================================================
+   CODE OWNS DIRECTION — what must the next victim be?  (SPEC core rule)
+   The victim is a casualty of the move the learner just made. In "roam"
+   (AI-literacy) mode the constraint is dropped on purpose so the model's
+   own tilt becomes the lesson.
+   ========================================================================= */
+function requiredConstraint() {
+  if (cfg.unconstrained) return { axis: null, direction: null, subtype: null, roam: true };
+  return { axis: S.lastMove.axis, direction: S.lastMove.direction, subtype: S.lastMove.subtype };
+}
+
+/* =========================================================================
+   LLM JOB B — summon ONE victim WITHIN the code-chosen constraint.
+   System prompt carries, every call: the hard axis+direction constraint and
+   why; "read literally, don't strawman"; the vetted allow-list + no-fabrication
+   rule; "explain your reading"; prefer an un-surfaced concept; voice a member
+   of the persistent cast when one fits.
+   ========================================================================= */
+async function summonVictim(c) {
+  const B = band();
+  if (!cfg.provider || !cfg.key) return cannedVictim(c);
+  const unsurfaced = Object.keys(B.concepts).filter(k => !S.surfaced.has(k));
+  // CODE owns which side: the constraint pins the eligible cast member(s).
+  const eligible = constraintCast(c);
+  const eligRoster = eligible.map(m => `${m.id}: ${m.who} (${m.role})`).join('; ');
+  const fullRoster = B.cast.map(m => `${m.id}: ${m.who} (${m.role})`).join('; ');
+  const constraintBlock = c.roam
+    ? `NO axis/direction constraint is imposed (AI-literacy mode). You may voice any of these people or a fresh person: ${fullRoster}.`
+    : `HARD CONSTRAINT — the side is chosen by code, not by you. Voice EXACTLY ONE of these people as a genuine casualty of moving "${c.direction}" (${B.directionLabels[c.direction]}) on "${B.axes[c.axis]}"${c.subtype ? ` (the rule is ${c.subtype})` : ''}: ${eligRoster}. Return that person's id as "castId". Do NOT choose anyone else, invent a new person, or switch to an easier or opposite harm.`;
+  // Anti-strawman: the harm must follow from the rule's LITERAL words, not from
+  // an enforcer acting beyond them. Over-enforcement of a vague term IS a bug --
+  // but it is the *too-vague* bug, and must be named as such, not smuggled in.
+  const literalBlock =
+`Read the rule's LITERAL words. The harm must follow from what the rule ACTUALLY SAYS — never from an enforcer doing something the words do not require, and never by assuming a stricter or more permissive rule than the one written. Honor every qualifier the learner wrote (e.g. "on purpose", "false", "only"). If the ONLY way to harm this person is for someone to act BEYOND the rule's letter, then the real bug is that the rule is too vague: say so plainly in "reading" and tie the harm to the missing definition, not to a power the rule never granted.`;
+  const sys =
+`You generate ONE realistic person harmed by the learner's most recent ${B.subject} rule change, for a civics lesson (no graphic detail).
+${constraintBlock}
+${literalBlock}
+${B.vettedCases.length
+  ? `You may cite a real legal case ONLY from this allow-list: ${JSON.stringify(B.vettedCases)}. For anything else present it as a plausible hypothetical and set realCase to null. NEVER invent case names, citations, or attribute words to real named people.`
+  : `Do NOT cite real legal cases or real named people. Everything is a plausible hypothetical; set realCase to null.`}
+Explain in "reading" exactly how you interpreted their wording to reach this harm.
+Suggest a "concept" the learner just bumped into${unsurfaced.length ? `, preferably from ${JSON.stringify(unsurfaced)}` : ''}, with a one-sentence "def".
+Return ONLY JSON: {"castId": string or null, "who":"Name", "role":"short role", "harm":"2-3 sentences", "reading":"1 sentence", "realCase": string or null, "concept":"name", "def":"one sentence"}.`;
+  const usr = `The learner's full ruleset:\n${S.rules.map(r => '- ' + r.text).join('\n')}`;
+
+  let v = sanitizeVictim(await llmJSON(sys, usr), c);   // may throw -> caller shows error panel
+  // Enforce the constraint in CODE, not just in the prompt. If the model voiced
+  // someone off the required side, correct it once, then fall back to the canned
+  // (structurally guaranteed) victim for this exact constraint.
+  if (!isOnConstraint(v, c)) {
+    const correction = `Your previous answer voiced "${v.who || v.castId || 'someone off-constraint'}", which is NOT on the required side. ${constraintBlock} Re-answer with JSON only.`;
+    try { v = sanitizeVictim(await llmJSON(sys + '\n\n' + correction, usr), c); } catch (e) { /* keep v; reconcile below */ }
+    v = reconcileVictim(v, c);
+  }
+  // a concept the band doesn't recognize -> snap to the slot's canonical concept
+  if (v.concept && !B.concepts[v.concept]) {
+    const slot = B.canned.find(x => x.castId === v.castId);
+    if (slot) { v.concept = slot.concept; v.def = B.concepts[slot.concept]; }
+  }
+  return v;
+}
+
+// Offline victim: pick the canned case that matches the constraint by STRUCTURE.
+function cannedVictim(c) {
+  const B = band();
+  let pool;
+  if (c.roam) {
+    pool = B.canned.filter(x => !S.fired.has(x.id));
+  } else if (c.axis === 'form') {
+    pool = B.canned.filter(x => !S.fired.has(x.id) && x.axis === 'form' && x.subtype === c.subtype);
+  } else {
+    pool = B.canned.filter(x => !S.fired.has(x.id) && x.axis === c.axis && x.harmed_by === c.direction);
+  }
+  // fall back within the same constraint family even if already fired (don't break the property)
+  let pick = pool[0];
+  if (!pick) {
+    if (c.roam) pick = B.canned[0];
+    else if (c.axis === 'form') pick = B.canned.find(x => x.axis === 'form' && x.subtype === c.subtype);
+    else pick = B.canned.find(x => x.axis === c.axis && x.harmed_by === c.direction);
+  }
+  pick = pick || B.canned[0];
+  S.fired.add(pick.id);
+  const m = B.cast.find(x => x.id === pick.castId) || {};
+  return sanitizeVictim({
+    castId: pick.castId, who: m.who || 'Someone', role: m.role || '',
+    harm: pick.harm, reading: pick.reading, realCase: pick.realCase,
+    concept: pick.concept, def: B.concepts[pick.concept],
+    _cannedId: pick.id, defense: pick.defense, concedeIf: pick.concedeIf, concedeMsg: pick.concedeMsg
+  }, c);
+}
+
+// INVIOLABLE guard: the model must never invent a precedent. Strip any cited
+// case not on the band's allow-list, and flag stray "X v. Y" patterns.
+function sanitizeVictim(v, c) {
+  const B = band();
+  v = Object.assign({}, v);
+  if (v.realCase && !B.vettedCases.includes(v.realCase)) {
+    v._strippedCase = v.realCase;
+    v.realCase = null;
+  }
+  // belt-and-suspenders: scan free text for a non-vetted "Foo v. Bar" citation
+  const cite = /\b[A-Z][\w.'-]+ v\.? [A-Z][\w.'-]+/;
+  for (const f of ['harm', 'reading']) {
+    if (v[f] && cite.test(v[f]) && !B.vettedCases.some(vc => v[f].includes(vc))) {
+      v._suspectText = true;
+    }
+  }
+  if (!v.def && v.concept && B.concepts[v.concept]) v.def = B.concepts[v.concept];
+  v._constraint = c;
+  return v;
+}
+
+/* Cast members eligible under the code-chosen constraint. With a 1:1 cast this
+   resolves to a single person; the helper still generalizes to several. This is
+   how CODE owns "which side" -- the constraint pins who may be voiced. */
+function constraintCast(c) {
+  const cast = band().cast;
+  if (!c || c.roam) return cast;
+  if (c.axis === 'form') return cast.filter(m => m.axis === 'form' && (!c.subtype || m.subtype === c.subtype));
+  return cast.filter(m => m.axis === c.axis && m.dir === c.direction);
+}
+// Does a (live) victim sit on the code-chosen side? roam imposes no side.
+function isOnConstraint(v, c) {
+  if (!c || c.roam) return true;
+  return !!v && constraintCast(c).some(m => m.id === v.castId);
+}
+// Structural backstop: if the live victim is off-side, substitute the canned
+// victim for this exact constraint, so the neutrality guarantee holds in CODE,
+// not merely in the prompt.
+function reconcileVictim(v, c) {
+  if (isOnConstraint(v, c)) return v;
+  const fb = cannedVictim(c);
+  fb._offConstraintFallback = true;
+  fb._rejected = (v && (v.who || v.castId)) || null;
+  return fb;
+}
+
+/* =========================================================================
+   REGRESSION GATING (SPEC/PLAN: extract only when a fix broke something else)
+   A move is a regression iff it reverses an earlier move on the same axis
+   (the learner fixed harm X and thereby opened harm Y), or it is a form bug
+   (the rule's own form failed). First stances are NOT regressions -> no card.
+   ========================================================================= */
+function isRegression(move, priorRules) {
+  if (move.axis === 'form') return true;
+  return priorRules.some(r => r.axis === move.axis && r.direction === opposite(move.direction));
+}
+
+/* =========================================================================
+   PERSISTENT CAST — status follows the current ruleset, so a rule change
+   visibly moves specific people (community stewardship, not whack-a-mole).
+   ========================================================================= */
+function recomputePositions() {
+  S.axisPosition = {};
+  S.formFlags = {};
+  for (const r of S.rules) {
+    if (r.axis === 'form') { if (r.subtype) S.formFlags[r.subtype] = true; }
+    else S.axisPosition[r.axis] = r.direction; // most recent rule on an axis wins
+  }
+}
+function castStatus(m) {
+  if (S.cleared.has(m.id)) return 'helped';               // learner argued the reading away
+  if (m.axis === 'form') return S.formFlags[m.subtype] ? 'harmed' : 'untouched';
+  const pos = S.axisPosition[m.axis];
+  if (!pos) return 'untouched';
+  return pos === m.dir ? 'harmed' : 'helped';
+}
+
+/* =========================================================================
+   RENDER
+   ========================================================================= */
+function renderRules() {
+  const el = document.getElementById('rules');
+  el.innerHTML = S.rules.map(r => {
+    const dirLabel = r.axis === 'form'
+      ? (r.subtype || 'form')
+      : band().directionLabels[r.direction];
+    return `<div class="rule${r.offlineClassified ? ' offlinecls' : ''}">${esc(r.text)}
+      <div class="tag"><span class="pill">${esc(r.axis)}</span><span class="pill">${esc(dirLabel)}</span>
+      <span class="mini" data-edit="${r.id}">revise</span></div></div>`;
+  }).join('');
+  el.querySelectorAll('.mini[data-edit]').forEach(b =>
+    b.onclick = () => startRevise(Number(b.getAttribute('data-edit'))));
+}
+
+function renderCast() {
+  const el = document.getElementById('cast');
+  const onstage = S.current && S.current.castId;
+  el.innerHTML = band().cast.map(m => {
+    const st = castStatus(m);
+    const label = st === 'harmed' ? 'harmed now' : st === 'helped' ? 'protected now' : 'untouched';
+    return `<div class="member${onstage === m.id ? ' onstage' : ''}">
+      <span class="dot ${st}"></span>
+      <span class="nm"><b>${esc(m.who)}</b> <span class="muted">${esc(m.role)}</span></span>
+      <span class="st ${st}">${label}</span></div>`;
+  }).join('');
+}
+
+function renderScene() {
+  const el = document.getElementById('scene');
+  const v = S.current;
+  if (!v) { el.innerHTML = `<p class="muted">${esc(band().copy.sceneEmpty)}</p>`; return; }
+  const reg = S.lastMove && S.lastMove.regression;
+  const pileOn = v._pileOn;
+  const caseLine = v.realCase
+    ? `<div class="case real">This really happened: ${esc(v.realCase)}.</div>`
+    : `<div class="case">(A plausible case, not a real person.)</div>`;
+  const roamNote = (v._constraint && v._constraint.roam)
+    ? `<div class="note warn">Roam mode: code did <b>not</b> constrain which side this victim comes from. Over several rounds, notice whether the model keeps showing you one kind of victim — and ask why an AI might.</div>` : '';
+  const pileNote = pileOn
+    ? `<div class="note warn">You’ve moved the same way twice in a row, so the harm lands on the same side again. That’s allowed — but notice you’re tightening one screw, not balancing two.</div>` : '';
+  const suspect = v._suspectText
+    ? `<div class="note warn">A case-like reference here couldn’t be verified against the allow-list, so treat it as hypothetical.</div>` : '';
+  const fallbackNote = v._offConstraintFallback
+    ? `<div class="note warn">The live model offered a victim from the wrong side${v._rejected ? ` (“${esc(v._rejected)}”)` : ''}, so the tool swapped in a vetted case that actually fits your last move. Code — not the model — owns which side the harm comes from.</div>` : '';
+  el.innerHTML = `
+    <div class="scene">
+      <div class="who">${esc(v.who)} ${v.role ? `<span class="role">— ${esc(v.role)}</span>` : ''}</div>
+      <div class="harm">${esc(v.harm)}</div>
+      <div class="reading"><b>How your rule was read:</b> ${esc(v.reading)}</div>
+      ${caseLine}
+      ${roamNote}${pileNote}${fallbackNote}${suspect}
+      <div class="row">
+        <button onclick="startRevise()">Revise a rule</button>
+        <button onclick="openContest()">That’s not a fair reading</button>
+        ${reg ? `<button class="primary" onclick="openExtract()">Name what just happened</button>` : ''}
+      </div>
+      ${!reg ? `<div class="muted" style="margin-top:8px">Fix this, and when your fix bites back you’ll get to name the pattern.</div>` : ''}
+    </div>
+    <div id="contest-panel"></div>
+    <div id="extract-panel"></div>`;
+  renderCast();
+}
+
+function renderFG() {
+  const el = document.getElementById('fieldguide');
+  if (!S.fieldGuide.length) { el.innerHTML = `<p class="muted">${esc(band().copy.fgEmpty)}</p>`; }
+  else {
+    el.innerHTML = S.fieldGuide.map(e =>
+      `<div class="fg-entry"><span class="phrasing">“${esc(e.phrasing)}”</span><br>
+        <span class="name">${esc(e.concept)}</span> — ${esc(e.def)}</div>`).join('');
+  }
+  document.getElementById('win').textContent = S.fieldGuide.length
+    ? `${S.fieldGuide.length} pattern${S.fieldGuide.length > 1 ? 's' : ''} named. You don’t win by writing a leak-free rule — there isn’t one. You win by choosing which errors you’ll accept, and knowing why.`
+    : '';
+}
+
+function renderLog() {
+  const el = document.getElementById('editlog');
+  if (!el) return;
+  el.innerHTML = S.editLog.slice().reverse().map(e => {
+    const time = new Date(e.t).toLocaleTimeString();
+    return `<div class="entry"><b>${esc(e.kind)}</b> · ${esc(e.detail)} <span class="muted">${time}</span></div>`;
+  }).join('') || '<div class="muted">No edits yet.</div>';
+}
+
+/* =========================================================================
+   LOOP ACTIONS  (Phase 1)
+   ========================================================================= */
+async function addRule() {
+  const ta = document.getElementById('newrule');
+  const text = ta.value.trim();
+  if (!text) return;
+  setBusy('Reading your rule…');
+  const move = await classifyEdit(text, S.rules);
+  move.regression = isRegression(move, S.rules);
+  S.cleared = new Set([...S.cleared].filter(id => {
+    const m = band().cast.find(x => x.id === id);
+    return m && m.axis !== move.axis;                 // a fresh move on an axis re-opens it
+  }));
+  S.rules.push({ id: Date.now(), text, axis: move.axis, direction: move.direction, subtype: move.subtype, offlineClassified: move.offlineClassified });
+  S.lastMove = move;
+  recomputePositions();
+  ta.value = '';
+  logEvent('add', `"${trim(text)}" → ${move.axis} / ${move.subtype || move.direction}`);
+  renderRules(); renderCast(); clearBusy();
+}
+
+let reviseId = null;
+function startRevise(id) {
+  const ta = document.getElementById('newrule');
+  if (id != null) {
+    const r = S.rules.find(x => x.id === id);
+    if (r) { ta.value = r.text; reviseId = id; }
+  }
+  ta.focus();
+  document.getElementById('addrule').textContent = reviseId != null ? 'Save revision' : 'Add rule';
+}
+async function commitRule() {
+  if (reviseId != null) {
+    const ta = document.getElementById('newrule');
+    const text = ta.value.trim();
+    if (!text) return;
+    setBusy('Re-reading your revised rule…');
+    const move = await classifyEdit(text, S.rules.filter(r => r.id !== reviseId));
+    move.regression = isRegression(move, S.rules.filter(r => r.id !== reviseId));
+    const r = S.rules.find(x => x.id === reviseId);
+    Object.assign(r, { text, axis: move.axis, direction: move.direction, subtype: move.subtype, offlineClassified: move.offlineClassified });
+    S.lastMove = move;
+    S.cleared.delete(band().cast.find(m => m.axis === move.axis && m.dir === move.direction)?.id);
+    recomputePositions();
+    ta.value = ''; reviseId = null;
+    document.getElementById('addrule').textContent = 'Add rule';
+    logEvent('revise', `"${trim(text)}" → ${move.axis} / ${move.subtype || move.direction}`);
+    renderRules(); renderCast(); clearBusy();
+  } else {
+    await addRule();
+  }
+}
+
+async function testIt() {
+  if (!S.rules.length) { flash('Add a rule first.'); return; }
+  const c = requiredConstraint();
+  setBusy('Finding someone your rule affects…');
+  try {
+    const v = await summonVictim(c);
+    // GUARD: no two same-direction victims in a row. We never flip the required
+    // direction (that's inviolable) -- we just flag the pile-up so the learner
+    // sees they're doubling down instead of balancing.
+    v._pileOn = !c.roam && S.lastFired &&
+      S.lastFired.axis === c.axis && S.lastFired.direction === c.direction && S.lastFired.subtype === c.subtype;
+    S.current = v;
+    S.lastFired = { axis: c.axis, direction: c.direction, subtype: c.subtype };
+    logEvent('test', `victim: ${v.who} (${c.roam ? 'roam' : c.axis + '/' + (c.subtype || c.direction)})${v._pileOn ? ' [same side again]' : ''}`);
+    renderScene(); clearBusy();
+  } catch (e) {
+    clearBusy();
+    showError(e, testIt);
+  }
+}
+
+function showError(e, retry) {
+  const el = document.getElementById('scene');
+  const kindMsg = {
+    auth: 'Your API key was rejected.', rate: 'The provider is rate-limiting you.',
+    net: 'Could not reach the provider.', parse: 'The provider sent back something unreadable.'
+  }[e.kind] || (e.message || 'Something went wrong.');
+  el.innerHTML = `<div class="scene">
+    <div class="note warn"><b>${esc(kindMsg)}</b><br>${esc(e.message || '')}</div>
+    <div class="row">
+      <button class="primary" id="err-retry">Retry</button>
+      <button id="err-offline">Use the canned case instead</button>
+    </div></div>`;
+  document.getElementById('err-retry').onclick = retry;
+  document.getElementById('err-offline').onclick = () => {
+    const c = requiredConstraint();
+    const v = cannedVictim(c);
+    v._pileOn = !c.roam && S.lastFired && S.lastFired.axis === c.axis && S.lastFired.direction === c.direction && S.lastFired.subtype === c.subtype;
+    S.current = v;
+    S.lastFired = { axis: c.axis, direction: c.direction, subtype: c.subtype };
+    logEvent('test', `victim (canned fallback): ${v.who}`);
+    renderScene();
+  };
+}
+
+/* ---- contest (PLAN M2): a real exchange. Model defends or concedes. ---- */
+function openContest() {
+  const v = S.current; if (!v) return;
+  const el = document.getElementById('contest-panel');
+  el.innerHTML = `<div class="panel">
+    <h3>Contest the reading</h3>
+    <p class="muted">The tool read your rule as: “${esc(v.reading)}”. If your wording does not actually open this edge, say why — quote your own words.</p>
+    <textarea id="objection" placeholder="e.g. My rule only bans *false* claims, and Aron was telling the truth, so it wouldn’t catch him."></textarea>
+    <div class="row">
+      <button class="primary" id="submit-objection">Submit rebuttal</button>
+      <button class="ghost" onclick="document.getElementById('contest-panel').innerHTML=''">Cancel</button>
+    </div>
+    <div id="contest-result"></div>
+  </div>`;
+  document.getElementById('objection').focus();
+  document.getElementById('submit-objection').onclick = submitContest;
+}
+
+async function submitContest() {
+  const v = S.current; if (!v) return;
+  const objection = document.getElementById('objection').value.trim();
+  if (!objection) { document.getElementById('objection').focus(); return; }
+  setBusy('Weighing your rebuttal…');
+  let res;
+  try {
+    res = await runContest(v, objection);
+  } catch (e) { clearBusy(); document.getElementById('contest-result').innerHTML = `<div class="note warn">${esc(e.message || 'Contest failed.')} Try again.</div>`; return; }
+  clearBusy();
+  logEvent('contest', `${res.verdict}: "${trim(objection)}"`);
+  const out = document.getElementById('contest-result');
+  if (res.verdict === 'concede') {
+    out.innerHTML = `<div class="verdict concede">The tool concedes.</div>
+      <p>${esc(res.message)}</p>
+      <button class="primary" id="keep-rule">Keep my rule — next round</button>`;
+    document.getElementById('keep-rule').onclick = () => concedeKeep(v);
+  } else {
+    out.innerHTML = `<div class="verdict defend">The tool holds its reading.</div>
+      <p>${esc(res.message)}</p>
+      <p class="muted">Ambiguity is itself a bug. If the reading still fits your words, tighten the rule until it can’t.</p>
+      <button id="revise-now" onclick="document.getElementById('contest-panel').innerHTML='';startRevise()">Revise the rule</button>`;
+  }
+}
+
+async function runContest(v, objection) {
+  const B = band();
+  if (!cfg.provider || !cfg.key) {
+    // Offline: concede if the objection introduces the narrowing the case is sensitive to.
+    const re = v.concedeIf;
+    if (re && re.test(objection)) return { verdict: 'concede', message: v.concedeMsg || 'Your narrower wording no longer reaches this person. Keep the rule.' };
+    return { verdict: 'defend', message: v.defense || 'Your wording, read literally, still opens this edge. Point to the words that rule it out.' };
+  }
+  const sys =
+`You are judging ONE reading of a learner's ${B.subject} rule in a civics lesson.
+Your earlier reading was: "${v.reading}". The harm was: "${v.harm}".
+Judge ONLY the rule's LITERAL words against the learner's rebuttal:
+- If the rebuttal points to wording that, read literally, rules out THIS harm scenario, you MUST CONCEDE. Do NOT move the goalposts to a different harm, and do NOT assume an enforcer acts beyond the words. Honor every qualifier they wrote (e.g. "on purpose", "false", "only").
+- DEFEND only if the SAME harm still follows from the literal words; then quote the exact words that open it.
+Conceding when the learner is right is the POINT of the lesson, not a loss.
+Return ONLY JSON: {"verdict":"concede" or "defend", "message":"2-3 sentences"}.`;
+  const usr = `Their full ruleset:\n${S.rules.map(r => '- ' + r.text).join('\n')}\n\nTheir rebuttal:\n"${objection}"`;
+  const res = await llmJSON(sys, usr);
+  if (res.verdict !== 'concede' && res.verdict !== 'defend') res.verdict = 'defend';
+  return res;
+}
+
+function concedeKeep(v) {
+  if (v.castId) S.cleared.add(v.castId);   // this person is no longer harmed by the rule as read
+  document.getElementById('contest-panel').innerHTML = '';
+  S.current = null;
+  renderScene(); renderCast();
+  flash('Reading withdrawn. Your rule stands — the ambiguity that produced this victim is gone.');
+}
+
+/* ---- extract (SPEC: experience first, label second; gated on regression) ---- */
+function openExtract() {
+  const v = S.current; if (!v) return;
+  if (!(S.lastMove && S.lastMove.regression)) return; // gate
+  const el = document.getElementById('extract-panel');
+  el.innerHTML = `<div class="panel">
+    <h3>Name what just happened</h3>
+    <p class="muted">Your fix solved one harm and opened another. In your OWN words, what’s the pattern? (You’ll get the formal name after.)</p>
+    <textarea id="phrasing" placeholder="Say it your way…"></textarea>
+    <div class="row">
+      <button class="primary" id="commit-extract">Add to field guide</button>
+      <button class="ghost" onclick="document.getElementById('extract-panel').innerHTML=''">Cancel</button>
+    </div>
+    <div id="extract-reveal"></div>
+  </div>`;
+  document.getElementById('phrasing').focus();
+  document.getElementById('commit-extract').onclick = commitExtract;
+}
+
+function commitExtract() {
+  const v = S.current; if (!v) return;
+  const phrasing = (document.getElementById('phrasing').value || '').trim() || '(left blank)';
+  // store the learner's phrasing FIRST, then attach the formal label
+  S.fieldGuide.push({ phrasing, concept: v.concept, def: v.def });
+  S.surfaced.add(v.concept);
+  logEvent('extract', `"${trim(phrasing)}" → ${v.concept}`);
+  const reveal = document.getElementById('extract-reveal');
+  reveal.innerHTML = `<div class="note info">You named it: “${esc(phrasing)}”.<br>
+    There’s a term for this — <b>${esc(v.concept)}</b>: ${esc(v.def)}. It’s in your field guide now.</div>`;
+  renderFG();
+  setTimeout(() => { const p = document.getElementById('extract-panel'); if (p) p.innerHTML = ''; }, 60);
+  // keep reveal visible by re-rendering scene afterwards only on next action
+}
+
+/* =========================================================================
+   PHASE 2 — VALUES surface + the bridge (PLAN M4).
+   Same victim engine underneath: a vague VALUE strands an enforcer exactly
+   as a vague rule does.
+   ========================================================================= */
+function addValue() {
+  const ta = document.getElementById('newvalue');
+  const text = ta.value.trim();
+  if (!text) return;
+  S.values.push({ id: Date.now(), text });
+  ta.value = '';
+  renderValues();
+  logEvent('value', `"${trim(text)}"`);
+}
+function renderValues() {
+  document.getElementById('values').innerHTML = S.values.map(v =>
+    `<div class="rule">${esc(v.text)}</div>`).join('') || `<p class="muted">No values yet.</p>`;
+}
+
+async function answerQuestion() {
+  const B = band();
+  const sel = document.getElementById('dilemma');
+  const custom = document.getElementById('question').value.trim();
+  const dilemma = B.copy.dilemmas[sel.value] || null;
+  const q = custom || (dilemma ? dilemma.q : '');
+  if (!q) { document.getElementById('question').focus(); return; }
+  const valuesText = S.values.map(v => v.text).join('; ') || '(none stated yet)';
+  const out = document.getElementById('answer-out');
+  setBusy('Answering with and without your values…');
+  let without, withv;
+  if (!cfg.provider || !cfg.key) {
+    if (custom || !dilemma) {
+      without = 'Default answer: with no values to steer it, the tool falls back to caution and the status quo — it avoids the choice that could go visibly wrong.';
+      withv = S.values.length
+        ? `Shaped by your values (${esc(valuesText)}): the tool now optimizes for what you said to care about, and accepts the costs that come with it.`
+        : 'You haven’t stated a value yet, so there’s nothing to shift the answer. Add one and ask again to see the diff.';
+    } else { without = dilemma.without; withv = dilemma.with; }
+  } else {
+    try {
+      const r = await llmJSON(
+        `You answer a ${B.subject} dilemma TWICE for a civics lesson: once with NO stated values (default/cautious), once shaped by the learner's values. Keep each to 2-3 sentences. Make the DIFFERENCE visible. Return ONLY JSON: {"without":"...","with":"..."}.`,
+        `Question: ${q}\nLearner's values: ${valuesText}`);
+      without = r.without; withv = r.with;
+    } catch (e) { clearBusy(); out.innerHTML = `<div class="note warn">${esc(e.message || 'Failed.')}</div>`; return; }
+  }
+  clearBusy();
+  out.innerHTML = `<div class="diff">
+    <div class="col"><h4>Without your values</h4><div>${esc(without)}</div></div>
+    <div class="col with"><h4>With your values</h4><div>${esc(withv)}</div></div>
+  </div>
+  <div class="muted" style="margin-top:8px">The diff is the point: your values are doing work here. Now — are they precise enough to enforce?</div>`;
+  logEvent('answer', trim(q));
+}
+
+// A vague value strands an enforcer: run the SAME victim engine on a value.
+async function strandValue() {
+  if (!S.values.length) { flash('Add a value first.'); return; }
+  const text = S.values[S.values.length - 1].text;
+  setBusy('Reading your value the way an enforcer would…');
+  const move = await classifyEdit(text, []);
+  // treat the value as a form-of-rule problem: a value is, almost by definition,
+  // under-specified for enforcement -> summon the too-vague casualty.
+  const c = { axis: 'form', direction: move.direction, subtype: 'too-vague' };
+  let v;
+  try { v = await summonVictim(c); }
+  catch (e) { clearBusy(); document.getElementById('values-scene').innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
+  clearBusy();
+  document.getElementById('values-scene').innerHTML = `<div class="scene" style="margin-top:12px">
+    <div class="who">${esc(v.who)} ${v.role ? `<span class="role">— ${esc(v.role)}</span>` : ''}</div>
+    <div class="harm">${esc(v.harm)}</div>
+    <div class="reading"><b>How your value was read:</b> ${esc(v.reading)}</div>
+    <div class="note info">A value tells people what to <i>care about</i>, not what to <i>do</i>. Handed to an enforcer as-is, it strands them — the same gap a too-vague rule opens. That’s the bridge you need.</div>
+  </div>`;
+  logEvent('strand', `value "${trim(text)}" → ${v.who}`);
+}
+
+// The bridge, both directions.
+async function compileDown() {
+  const out = document.getElementById('bridge-out');
+  if (!S.values.length) { out.innerHTML = `<div class="note warn">Add a value first.</div>`; return; }
+  const value = S.values[S.values.length - 1].text;
+  setBusy('Compiling your value down to a concrete test…');
+  let text;
+  if (!cfg.provider || !cfg.key) {
+    text = `Concrete test for “${value}”: pick the hardest real case where honoring it costs you something. Write the scenario, then the pass/fail line — e.g. “When <a specific situation> happens, the answer MUST be <X>; if it is <Y>, the value failed.” A value you can’t turn into a pass/fail line isn’t enforceable yet.`;
+  } else {
+    try {
+      const r = await llmJSON(
+        `Turn a value into ONE concrete, testable case for a ${band().subject} civics lesson: a specific scenario plus an explicit pass/fail condition. Force concreteness; do not restate the value vaguely. Return ONLY JSON: {"test":"3-4 sentences"}.`,
+        `Value: ${value}`);
+      text = r.test;
+    } catch (e) { clearBusy(); out.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
+  }
+  clearBusy();
+  out.innerHTML = `<div class="note info"><b>Value → test.</b> ${esc(text)}</div>`;
+  logEvent('compile', `value "${trim(value)}"`);
+}
+
+async function decompileUp() {
+  const out = document.getElementById('bridge-out');
+  if (!S.rules.length) { out.innerHTML = `<div class="note warn">Write some rules in the Rules tab first, then decompile them.</div>`; return; }
+  setBusy('Decompiling your rules up to the value beneath them…');
+  let text;
+  if (!cfg.provider || !cfg.key) {
+    const axesTouched = [...new Set(S.rules.map(r => r.axis))].map(a => band().axes[a]).join('; ');
+    text = `The value under your rules looks like a stance on: ${axesTouched}. Read together, your rules say you care most about whichever side you kept choosing. Name that in one sentence — that sentence is the value you’ve been writing all along, one rule at a time.`;
+  } else {
+    try {
+      const r = await llmJSON(
+        `Read a learner's ${band().subject} ruleset and state, in ONE sentence, the underlying VALUE it is animated by (what they care about most). Return ONLY JSON: {"value":"one sentence"}.`,
+        `Rules:\n${S.rules.map(r => '- ' + r.text).join('\n')}`);
+      text = r.value;
+    } catch (e) { clearBusy(); out.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
+  }
+  clearBusy();
+  out.innerHTML = `<div class="note info"><b>Rules → value.</b> ${esc(text)}</div>`;
+  logEvent('decompile', `${S.rules.length} rules`);
+}
+
+/* =========================================================================
+   STATUS / CONFIG / BANDS / TABS / WIRING
+   ========================================================================= */
+function setBusy(m) { document.getElementById('status').textContent = m; }
+function clearBusy() { refreshStatus(); }
+function flash(m) { setBusy(m); setTimeout(refreshStatus, 1800); }
+function trim(s, n = 42) { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+function refreshStatus() {
+  const live = cfg.provider && cfg.key;
+  const mode = cfg.unconstrained
+    ? 'Roam mode (AI-literacy): the neutrality constraint is OFF — watch the model’s tilt.'
+    : 'Code picks the victim’s side (a casualty of your last move); the model only voices it.';
+  document.getElementById('status').textContent = live
+    ? `Live: ${cfg.provider}${cfg.model ? ' (' + cfg.model + ')' : ''}. ${mode}`
+    : `Offline (canned cases). Add a key above for live, rule-specific victims. ${mode}`;
+}
+
+function applyBandCopy() {
+  const B = band();
+  document.getElementById('apptitle').textContent = B.title;
+  document.title = B.title;
+  document.getElementById('newrule').placeholder = B.copy.ruleHint;
+  document.getElementById('newvalue').placeholder = B.copy.valueHint;
+  document.getElementById('cast-h').textContent = B.id === 'playground' ? 'Your playground' : 'Your community';
+  // dilemmas
+  const sel = document.getElementById('dilemma');
+  sel.innerHTML = B.copy.dilemmas.map((d, i) => `<option value="${i}">${esc(d.q)}</option>`).join('') + `<option value="-1">— or type your own below —</option>`;
+}
+
+function setBand(id) {
+  if (!BANDS[id]) return;
+  S.band = id;
+  // reset per-issue state (engine code is identical; only config changed)
+  S.rules = []; S.fieldGuide = []; S.surfaced = new Set(); S.fired = new Set();
+  S.lastMove = null; S.lastFired = null; S.current = null;
+  S.axisPosition = {}; S.formFlags = {}; S.cleared = new Set(); S.editLog = [];
+  S.values = [];
+  document.getElementById('band').value = id;
+  applyBandCopy();
+  renderRules(); renderCast(); renderScene(); renderFG(); renderLog(); renderValues();
+  document.getElementById('answer-out').innerHTML = '';
+  document.getElementById('values-scene').innerHTML = '';
+  document.getElementById('bridge-out').innerHTML = '';
+  refreshStatus();
+}
+
+function setPhase(p) {
+  S.phase = p;
+  document.getElementById('phase-rules').classList.toggle('hide', p !== 'rules');
+  document.getElementById('phase-values').classList.toggle('hide', p !== 'values');
+  document.getElementById('tab-rules').classList.toggle('active', p === 'rules');
+  document.getElementById('tab-values').classList.toggle('active', p === 'values');
+}
+
+function loadCfg() {
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem('civics_cfg') || '{}')); } catch {}
+  document.getElementById('provider').value = cfg.provider || '';
+  document.getElementById('model').value = cfg.model || '';
+  document.getElementById('key').value = cfg.key || '';
+  document.getElementById('unconstrained').checked = !!cfg.unconstrained;
+  refreshStatus();
+}
+
+function wire() {
+  // band selector
+  const bandSel = document.getElementById('band');
+  bandSel.innerHTML = Object.values(BANDS).map(b => `<option value="${b.id}">${esc(b.label)}</option>`).join('');
+  bandSel.value = S.band;
+  bandSel.onchange = () => setBand(bandSel.value);
+  // tabs
+  document.getElementById('tab-rules').onclick = () => setPhase('rules');
+  document.getElementById('tab-values').onclick = () => setPhase('values');
+  // phase 1
+  document.getElementById('addrule').onclick = commitRule;
+  document.getElementById('test').onclick = testIt;
+  // phase 2
+  document.getElementById('addvalue').onclick = addValue;
+  document.getElementById('answer').onclick = answerQuestion;
+  document.getElementById('strand').onclick = strandValue;
+  document.getElementById('compile').onclick = compileDown;
+  document.getElementById('decompile').onclick = decompileUp;
+  // config
+  document.getElementById('save').onclick = () => {
+    cfg.provider = document.getElementById('provider').value;
+    cfg.model = document.getElementById('model').value.trim();
+    cfg.key = document.getElementById('key').value.trim();
+    cfg.unconstrained = document.getElementById('unconstrained').checked;
+    localStorage.setItem('civics_cfg', JSON.stringify(cfg));
+    refreshStatus();
+  };
+  document.getElementById('unconstrained').onchange = () => {
+    cfg.unconstrained = document.getElementById('unconstrained').checked; refreshStatus();
+  };
+}
+
+// init
+applyBandCopy();
+wire();
+loadCfg();
+renderRules(); renderCast(); renderScene(); renderFG(); renderLog(); renderValues();
+
+/* =========================================================================
+   TEST HOOKS — the Playwright harness asserts on STATE + DOM (PLAN), not
+   pixels. Expose the engine so tests can drive offline rounds deterministically.
+   ========================================================================= */
+window.__civics = {
+  S, BANDS, cfg,
+  band, setBand, setPhase,
+  addRule, commitRule, testIt, requiredConstraint, summonVictim, cannedVictim,
+  classifyEdit, cannedClassify, isRegression, sanitizeVictim, recomputePositions,
+  constraintCast, isOnConstraint, reconcileVictim,
+  runContest, concedeKeep, openExtract, commitExtract, castStatus, opposite
+};
+</script>
+</body>
+</html>
