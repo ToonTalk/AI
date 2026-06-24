@@ -14,11 +14,11 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       if (response && response.available) {
-        statusElement.innerHTML = `<div class="success">AI is available! (${response.details || ''})</div>`;
+        statusElement.innerHTML = `<div class="success">AI is available! (${response.detail || ''})</div>`;
       } else {
         let errorMessage = "AI is not available.";
-        if (response && response.details) {
-            errorMessage += ` ${response.details}.`;
+        if (response && response.detail) {
+            errorMessage += ` ${response.detail}.`;
         }
         errorMessage += " Ensure your browser and device meet all requirements."
         statusElement.innerHTML = `<div class="error">${errorMessage}</div>`;

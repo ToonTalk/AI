@@ -108,13 +108,7 @@ function showCustomPopup(word, meaning) {
   row.appendChild(closeBtn);
   popup.appendChild(row);
 
-  shadow.appendChild(p);
-
-  // NOTE: p was appended above to popup. Fix: append popup, not p.
-  // (Keep code correct below.)
-  popup.removeChild(p);
-  popup.insertBefore(p, row);
-
+  // popup already has title → p → row in correct order; just attach it.
   shadow.appendChild(popup);
 
   // Add to page

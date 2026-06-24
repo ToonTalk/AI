@@ -71,6 +71,16 @@ function randomId(prefix = 'id') {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
+// ===== Prompt with timeout =====
+// Gemini Nano hangs silently (rather than rejecting) when input exceeds its
+// context window. A timeout lets us surface the failure rather than waiting forever.
+async function promptWithTimeout(sess, prompt, timeoutMs = 20000) {
+  const timer = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`AI prompt timed out after ${timeoutMs}ms`)), timeoutMs)
+  );
+  return Promise.race([sess.prompt(prompt), timer]);
+}
+
 // ===== Full-text popup window (no external file needed) =====
 function openFullResultWindow(title, html) {
   const doc = `<!doctype html>
@@ -209,6 +219,14 @@ async function defineSelectedInContext(tab) {
 
     const sess = await getOrCreateSession();
 
+    // Truncate context to stay within Gemini Nano's input limits.
+    // Without this, container.closest('div') can match the entire article body,
+    // causing the model to hang silently instead of rejecting.
+    const MAX_PARA = 600;
+    const MAX_SENT = 300;
+    const truncParagraph = (paragraph || '').slice(0, MAX_PARA) + (paragraph.length > MAX_PARA ? '…' : '');
+    const truncSentence  = (sentence  || '').slice(0, MAX_SENT)  + (sentence.length  > MAX_SENT  ? '…' : '');
+
     const prompt = `
 You are a concise, accurate assistant that defines the selected word/phrase in its context.
 Return:
@@ -223,11 +241,11 @@ Selected: "${text}"
 Page title: "${title}"
 Heading: "${heading}"
 
-Sentence: "${sentence}"
-Paragraph (may include noise): "${paragraph}"
+Sentence: "${truncSentence}"
+Paragraph (may include noise): "${truncParagraph}"
 `.trim();
 
-    const result = await sess.prompt(prompt);
+    const result = await promptWithTimeout(sess, prompt);
 
     const markdown = `## Meaning (in context)\n${result}\n`;
     const plain = markdownToPlain(markdown);
@@ -262,6 +280,7 @@ Paragraph (may include noise): "${paragraph}"
       requireInteraction: true,
     });
   } catch (err) {
+    session = null; // force fresh session on next attempt
     console.error('Define error:', err);
     await chrome.notifications.create({
       type: 'basic',
