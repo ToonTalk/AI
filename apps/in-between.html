@@ -392,7 +392,7 @@
           <span class="field">min&nbsp;<input id="tmin" type="number" step="0.5" value="0" title="Left end of the slider's range."></span>
           <span class="field">max&nbsp;<input id="tmax" type="number" step="0.5" value="1" title="Right end of the slider's range."></span>
           <span class="field" title="How fast Play sweeps.">speed&nbsp;<input id="spd" type="range" min="0.25" max="4" step="0.25" value="1" style="width:96px;vertical-align:middle"><b id="spdv" style="min-width:34px;display:inline-block;color:var(--turtle-dark)">1×</b></span>
-          <span class="seg" id="lockSeg" style="margin-left:6px"><button id="lockFrame" aria-pressed="true" title="Hold the camera steady across the whole blend instead of refitting it every frame — lets you see the shape's true motion as it morphs (it will swim instead of staying centred). Turn off to auto-fit each frame.">&#8862;&nbsp;Lock view</button></span>
+          <span class="seg" id="lockSeg" style="margin-left:6px"><button id="lockFrame" title="The camera is locked steady, so the shape shows its real motion as it morphs (it may drift off-centre). Click to auto-fit — re-centre and rescale to the shape every frame.">&#8865;&nbsp;Auto-fit</button></span>
           <button class="play spacer" id="play" title="Animate the blend back and forth across the slider range.">&#9654;&nbsp;Play</button>
         </div>
 
@@ -843,7 +843,7 @@ function validPairs(p){
 function rebuild(){
   if(S.dim==='3d'){
     S.pairs=align3(canon3(parse3(tok3($('progA').value))), canon3(parse3(tok3($('progB').value))));
-    syncSwatches(); syncActiveChips(); renderBlendText(); if(!S.tuning){ buildTune('A'); buildTune('B'); buildColorTune('A'); buildColorTune('B'); } render(); return;
+    syncSwatches(); syncActiveChips(); renderBlendText(); if(!S.tuning){ buildTune('A'); buildTune('B'); buildColorTune('A'); buildColorTune('B'); } syncURL(); render(); return;
   }
   if(!S.forked){
     const a=splitPose(canon(parse(tokenize($('progA').value))));
@@ -863,6 +863,7 @@ function rebuild(){
   renderBlendText();
   if(!S.tuning){ buildTune('A'); buildTune('B'); buildColorTune('A'); buildColorTune('B'); }
   if(S.lockFrame) computeLockedVB();
+  syncURL();
   render();
 }
 function syncSwatches(){
@@ -1174,6 +1175,7 @@ function setT(t,fromSlider){
   $('tval').value=rnd(t,2);
   if(S.mode==='single') render(); else { $('tbadge').innerHTML=`family · ${rnd(S.min,1)} → ${rnd(S.max,1)}`; }
   if(S.dim==='3d'||S.view==='num') renderBlendText();
+  if(!S.playing) syncURL();
 }
 function setRange(mn,mx){
   if(mx<=mn) mx=mn+0.5;
@@ -1184,6 +1186,19 @@ function setRange(mn,mx){
   updateZones();
   if(S.lockFrame){ computeLockedVB(); if(S.mode==='single') render(); }
   if(S.mode==='family') render();
+  syncURL();
+}
+
+// The lock-view button is action-labelled: its text says what a click will do, not the current state.
+function updateLockLabel(){
+  const b=$('lockFrame'); if(!b) return;
+  if(S.lockFrame){
+    b.innerHTML='&#8865;&nbsp;Auto-fit';
+    b.title='The camera is locked steady, so the shape shows its real motion as it morphs (it may drift off-centre). Click to auto-fit — re-centre and rescale to the shape every frame.';
+  } else {
+    b.innerHTML='&#8862;&nbsp;Lock view';
+    b.title='The camera auto-fits the shape every frame, keeping it centred. Click to lock the camera steady and watch the shape\u2019s true motion.';
+  }
 }
 
 /* ---------- wiring ---------- */
@@ -1237,14 +1252,44 @@ function fork(){
   S.forked=true; $('forkBadge').style.display='inline-block'; $('resetBlend').style.display='inline-block';
 }
 
+// Reopen an exact morph from a shared link (?dim=&a=&b=&t=&min=&max=). Returns true if it applied.
+function loadFromURL(){
+  let q; try{ q=new URLSearchParams(location.search); }catch(e){ return false; }
+  const a=q.get('a'), b=q.get('b');
+  if(a==null && b==null) return false;
+  const dim=q.get('dim');
+  if(dim==='3d'||dim==='2d'){ S.dim=dim; document.body.classList.toggle('dim3d', dim==='3d');
+    $('d2d').setAttribute('aria-pressed',String(dim==='2d')); $('d3d').setAttribute('aria-pressed',String(dim==='3d')); }
+  if(a!=null) $('progA').value=a;
+  if(b!=null) $('progB').value=b;
+  const mn=parseFloat(q.get('min')), mx=parseFloat(q.get('max')), tt=parseFloat(q.get('t'));
+  if(!isNaN(mn)&&!isNaN(mx)&&mx>mn){ S.min=mn; S.max=mx; }
+  if(!isNaN(tt)) S.t=tt;
+  return true;
+}
+// Keep the address bar in sync with the current morph, so any state stays shareable by copying the URL.
+// No-op until the app is ready, skipped during autoplay, debounced, and harmless where history is sandboxed.
+let _urlReady=false, _urlTimer=null;
+function syncURL(){
+  if(!_urlReady) return;
+  if(_urlTimer) clearTimeout(_urlTimer);
+  _urlTimer=setTimeout(()=>{ try{
+    const q=new URLSearchParams();
+    q.set('dim',S.dim); q.set('a',$('progA').value); q.set('b',$('progB').value);
+    q.set('t',rnd(S.t,3)); q.set('min',rnd(S.min,3)); q.set('max',rnd(S.max,3));
+    history.replaceState(null,'','?'+q.toString());
+  }catch(e){} },200);
+}
 function init(){
   $('progA').value=STAR_OUTLINE; // 5-point star outline
   $('progB').value=DECAGON;      // decagon — every in-between stays closed
+  const fromLink=loadFromURL();  // a shared link may override dim / programs / range / t
   buildPresetChips();
   buildValueChips();
   updateZones();
   applyDimUI();
   rebuild();
+  if(fromLink){ setRange(S.min,S.max); setT(S.t,false); }
 
   // program edits
   $('progA').addEventListener('input',()=>{ if(S.forked) unfork(true); rebuild(); });
@@ -1298,7 +1343,8 @@ function init(){
 
   // play (ping-pong)
   $('play').onclick=()=>{ S.playing?stopPlay():startPlay(); };
-  $('lockFrame').onclick=()=>{ S.lockFrame=!S.lockFrame; $('lockFrame').setAttribute('aria-pressed',String(S.lockFrame)); if(S.lockFrame) computeLockedVB(); render(); };
+  $('lockFrame').onclick=()=>{ S.lockFrame=!S.lockFrame; updateLockLabel(); if(S.lockFrame) computeLockedVB(); render(); };
+  updateLockLabel();
   ['A','B'].forEach(w=>{ $('tuneTog'+w).onclick=()=>{
     S.tuneOpen[w]=!S.tuneOpen[w];
     $('tune'+w).style.display=S.tuneOpen[w]?'flex':'none';
@@ -1359,6 +1405,7 @@ function init(){
     e.preventDefault();
   });
   $('resetPos').onclick=()=>{ S.dragA={x:0,y:0}; S.dragB={x:0,y:0}; rebuild(); };
+  _urlReady=true;
 }
 
 /* ---------- toast + robust file save (sandbox-safe) ---------- */
@@ -1387,6 +1434,71 @@ function saveFile(name,text,mime){
   } else toast(downloaded?`Saved ${name}`:`Export blocked in this view`);
 }
 
+/* ---------- "how this was made" panel + back-links, shared by both exporters ---------- */
+// Where exported animations link back to. APP_URL is the always-on web app (you control it; no login needed)
+// and is the reliable always-latest, exact-morph link. ARTIFACT_URL points at a published Claude artifact.
+// Caveat: a publish may pin a fixed snapshot rather than update in place — if a re-publish mints a NEW URL,
+// already-exported files keep pointing at whichever snapshot was current when they were exported (still works,
+// just not the newest). So trust the web-app link for "latest"; the Claude link is a courtesy "open the tool
+// in Claude". Leave '' to hide it. (AI Make/ask inside a published artifact needs the viewer signed in to
+// Claude, unless they bring their own Gemini/OpenAI key.)
+const APP_URL='https://toontalk.github.io/AI/apps/in-between.html';
+const ARTIFACT_URL='https://claude.ai/public/artifacts/a3d7bf17-7954-4b92-a7ca-fc7565bf9191';
+function exportAppLink(base){
+  let qs='';
+  try{ const q=new URLSearchParams(); q.set('dim',S.dim); q.set('a',$('progA').value); q.set('b',$('progB').value); q.set('t',rnd(S.t,3)); q.set('min',rnd(S.min,3)); q.set('max',rnd(S.max,3)); qs='?'+q.toString(); }catch(e){}
+  return base+qs;
+}
+const _escHTML=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// a small info "i" button that lives in the control bar (toggles the panel)
+function howBtnHTML(){ return `<button id="howBtn" type="button" title="How was this made?" onclick="var w=document.getElementById('howWrap');w.style.display=w.style.display==='flex'?'none':'flex';">i</button>`; }
+function madeWithCSS(){
+  return `
+ #howBtn{flex:0 0 auto;width:30px;height:30px;border-radius:50%;border:1.5px solid #2E7D5B;background:#FBFCFA;color:#1F5C42;font:italic 700 16px Georgia,'Times New Roman',serif;cursor:pointer;line-height:1;padding:0}
+ #howBtn:hover{background:#EBEFE8}
+ #howWrap{position:fixed;inset:0;background:rgba(27,34,31,.34);display:none;align-items:center;justify-content:center;padding:18px;z-index:6}
+ #howCard{background:#FBFCFA;border:1px solid #D6DCD2;border-radius:16px;max-width:460px;width:100%;max-height:88vh;overflow:auto;padding:18px 20px;box-shadow:0 18px 50px rgba(27,34,31,.3);color:#1B221F}
+ .how-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:16px}
+ .how-h button{border:0;background:none;font-size:16px;color:#5E685F;cursor:pointer;line-height:1}
+ #howCard p{font-size:14px;line-height:1.55;color:#5E685F;margin:0 0 14px}
+ .how-shapes{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:4px}
+ .how-col,.how-prog{flex:1 1 150px;min-width:0}
+ .how-lab{font:700 11px 'Space Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#929C92}
+ .how-thumb{width:100%;height:108px;background:#F1F4EF;border:1px solid #D6DCD2;border-radius:8px;display:block;margin:3px 0}
+ .how-col pre,.how-prog pre{margin:3px 0 0;background:#EBEFE8;border:1px solid #D6DCD2;border-radius:8px;padding:8px 10px;font:12.5px/1.5 'Space Mono',monospace;color:#1B221F;white-space:pre-wrap;word-break:break-word}
+ .how-links{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px}
+ .how-link{display:inline-block;background:#2E7D5B;color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 14px;border-radius:9px}
+ .how-link:hover{background:#1F5C42}
+ .how-link2{background:#EBEFE8;color:#1F5C42}
+ .how-link2:hover{background:#D6DCD2}
+ .how-foot{font-size:12px;color:#929C92}`;
+}
+function madeWithPanel(withThumbs){
+  const aP=_escHTML($('progA').value), bP=_escHTML($('progB').value);
+  const webLink=_escHTML(exportAppLink(APP_URL));
+  const artLink=ARTIFACT_URL?_escHTML(exportAppLink(ARTIFACT_URL)):'';
+  const shapes = withThumbs
+    ? `<div class="how-shapes">
+  <div class="how-col"><span class="how-lab">Shape A</span><svg id="howA" class="how-thumb"></svg><pre>${aP}</pre></div>
+  <div class="how-col"><span class="how-lab">Shape B</span><svg id="howB" class="how-thumb"></svg><pre>${bP}</pre></div>
+ </div>`
+    : `<div class="how-shapes">
+  <div class="how-prog"><span class="how-lab">Shape A</span><pre>${aP}</pre></div>
+  <div class="how-prog"><span class="how-lab">Shape B</span><pre>${bP}</pre></div>
+ </div>`;
+  const links=`<div class="how-links"><a id="lnkApp" class="how-link" href="${webLink}" target="_blank" rel="noopener">Open in the web app &#8599;</a>`
+    + (artLink?`<a id="lnkArt" class="how-link how-link2" href="${artLink}" target="_blank" rel="noopener">Open in Claude &#8599;</a>`:'')
+    + `</div>`;
+  return `
+<div id="howWrap"><div id="howCard">
+ <div class="how-h"><b>How this was made</b><button type="button" onclick="document.getElementById('howWrap').style.display='none'">&#10005;</button></div>
+ <p>This animation is a live blend of two little <b>Logo turtle programs</b> — instructions telling a turtle to go forward and turn. What you see is shape A mixing into shape B step by step, and it can keep going past either end (that is <b>extrapolation</b>). Open it below to drag, extrapolate, and remix.</p>
+ ${shapes}
+ ${links}
+ <div class="how-foot">Made with <b>In-Between</b>, a turtle-graphics shape lab.</div>
+</div></div>`;
+}
+
 /* ---------- export: self-contained animated HTML built from the live engine ---------- */
 function export2HTML(){
   // serialise the actual engine (one source of truth) + the current programs/poses
@@ -1405,21 +1517,32 @@ function export2HTML(){
     rgb2lab.toString(), lab2rgb.toString(), oklabLerp.toString(),
     figureSteps.toString(), run.toString()
   ].join('\n');
-  const data=JSON.stringify({A:expandProgram($('progA').value), B:expandProgram($('progB').value), poseA:S.poseA, poseB:S.poseB, min:S.min, max:S.max});
+  const data=JSON.stringify({A:expandProgram($('progA').value), B:expandProgram($('progB').value), poseA:S.poseA, poseB:S.poseB, min:S.min, max:S.max, lock:S.lockFrame, dim:'2d', srcA:$('progA').value, srcB:$('progB').value, appUrl:APP_URL, artUrl:ARTIFACT_URL});
   const player = `
 const D=DATA;
 const A=splitPose(canon(parse(tokenize(D.A)))), B=splitPose(canon(parse(tokenize(D.B))));
 const pairs=align(A.body,B.body), pA=D.poseA, pB=D.poseB;
 const NS='http://www.w3.org/2000/svg', svg=document.getElementById('fig');
 const figSegs=t=>run(figureSteps(pairs,t), poseAt(pA,pB,t));
-let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
-for(let k=0;k<=48;k++){const t=D.min+(D.max-D.min)*k/48; figSegs(t).forEach(s=>{X0=Math.min(X0,s.x1,s.x2);Y0=Math.min(Y0,s.y1,s.y2);X1=Math.max(X1,s.x1,s.x2);Y1=Math.max(Y1,s.y1,s.y2);});}
-const SZ=Math.max(X1-X0,Y1-Y0,1)*1.14,CX=(X0+X1)/2,CY=(Y0+Y1)/2;
-svg.setAttribute('viewBox',(CX-SZ/2)+' '+(CY-SZ/2)+' '+SZ+' '+SZ);
+function vbOf(segs){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const s of segs){x0=Math.min(x0,s.x1,s.x2);y0=Math.min(y0,s.y1,s.y2);x1=Math.max(x1,s.x1,s.x2);y1=Math.max(y1,s.y1,s.y2);}if(x0>x1){x0=y0=-100;x1=y1=100;}const z=Math.max(x1-x0,y1-y0,1)*1.14,cx=(x0+x1)/2,cy=(y0+y1)/2;return (cx-z/2)+' '+(cy-z/2)+' '+z+' '+z;}
+let UX0=1e9,UY0=1e9,UX1=-1e9,UY1=-1e9;
+for(let k=0;k<=48;k++){const t=D.min+(D.max-D.min)*k/48; figSegs(t).forEach(s=>{UX0=Math.min(UX0,s.x1,s.x2);UY0=Math.min(UY0,s.y1,s.y2);UX1=Math.max(UX1,s.x1,s.x2);UY1=Math.max(UY1,s.y1,s.y2);});}
+const USZ=Math.max(UX1-UX0,UY1-UY0,1)*1.14,UCX=(UX0+UX1)/2,UCY=(UY0+UY1)/2;
+const LOCKVB=(UCX-USZ/2)+' '+(UCY-USZ/2)+' '+USZ+' '+USZ;
+svg.setAttribute('viewBox',LOCKVB);
+function fitStage(){var bar=document.querySelector('.bar');var h=bar?bar.getBoundingClientRect().height:56;svg.style.height=(window.innerHeight-(h+26))+'px';}
+fitStage();window.addEventListener('resize',fitStage);
+var encU=encodeURIComponent;
+function linkBase(u){return u+'?dim='+encU(D.dim)+'&a='+encU(D.srcA)+'&b='+encU(D.srcB)+'&min='+D.min+'&max='+D.max;}
+var BASE_APP=D.appUrl?linkBase(D.appUrl):'',BASE_ART=D.artUrl?linkBase(D.artUrl):'';
+var LNK_APP=document.getElementById('lnkApp'),LNK_ART=document.getElementById('lnkArt');
+function updateLinks(t){var tt=Math.round(t*1000)/1000;if(LNK_APP&&BASE_APP)LNK_APP.setAttribute('href',BASE_APP+'&t='+tt);if(LNK_ART&&BASE_ART)LNK_ART.setAttribute('href',BASE_ART+'&t='+tt);}
 function draw(t){
+  const segs=figSegs(t);
+  if(!D.lock) svg.setAttribute('viewBox',vbOf(segs));
   while(svg.firstChild)svg.removeChild(svg.firstChild);
   const f=document.createDocumentFragment();
-  for(const s of figSegs(t)){
+  for(const s of segs){
     const l=document.createElementNS(NS,'line');
     l.setAttribute('x1',s.x1);l.setAttribute('y1',s.y1);l.setAttribute('x2',s.x2);l.setAttribute('y2',s.y2);
     l.setAttribute('stroke','rgb('+s.col.join(',')+')');l.setAttribute('stroke-width',s.w);
@@ -1428,6 +1551,7 @@ function draw(t){
   }
   svg.appendChild(f);
   document.getElementById('tv').textContent='t = '+t.toFixed(2);
+  updateLinks(t);
 }
 let t=D.min,dir=1,playing=true,SP=1,last=performance.now();
 const sl=document.getElementById('sl'),pp=document.getElementById('pp'),sp=document.getElementById('sp');
@@ -1437,6 +1561,8 @@ function loop(now){const dt=(now-last)/1000;last=now;
 sl.addEventListener('input',e=>{playing=false;pp.textContent='▶';t=+e.target.value;draw(t);});
 pp.onclick=()=>{playing=!playing;pp.textContent=playing?'❚❚':'▶';last=performance.now();};
 sp.addEventListener('input',e=>{SP=+e.target.value;document.getElementById('spv').textContent=(+e.target.value).toFixed(2)+'×';});
+function drawInto(id,tt){var s=document.getElementById(id);if(!s)return;var sg=figSegs(tt);if(!sg.length)return;var x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;sg.forEach(function(g){x0=Math.min(x0,g.x1,g.x2);y0=Math.min(y0,g.y1,g.y2);x1=Math.max(x1,g.x1,g.x2);y1=Math.max(y1,g.y1,g.y2);});var z=Math.max(x1-x0,y1-y0,1)*1.16,cx=(x0+x1)/2,cy=(y0+y1)/2;s.setAttribute('viewBox',(cx-z/2)+' '+(cy-z/2)+' '+z+' '+z);var f=document.createDocumentFragment();sg.forEach(function(g){var l=document.createElementNS(NS,'line');l.setAttribute('x1',g.x1);l.setAttribute('y1',g.y1);l.setAttribute('x2',g.x2);l.setAttribute('y2',g.y2);l.setAttribute('stroke','rgb('+g.col.join(',')+')');l.setAttribute('stroke-width',g.w);l.setAttribute('stroke-linecap','round');l.setAttribute('vector-effect','non-scaling-stroke');f.appendChild(l);});s.appendChild(f);}
+drawInto('howA',0);drawInto('howB',1);
 draw(D.min);requestAnimationFrame(loop);`;
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1444,7 +1570,7 @@ draw(D.min);requestAnimationFrame(loop);`;
 <title>In-Between — morph</title>
 <style>
  html,body{margin:0;height:100%;background:#F1F4EF;font-family:system-ui,sans-serif}
- #fig{position:fixed;inset:0;width:100%;height:100%}
+ #fig{position:fixed;top:0;left:0;width:100vw;height:100vh}
  .bar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:94vw;
    background:rgba(251,252,250,.9);border:1px solid #D6DCD2;border-radius:18px;padding:8px 14px;box-shadow:0 6px 22px rgba(27,34,31,.1)}
  .bar button{border:0;background:#2E7D5B;color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:13px}
@@ -1452,11 +1578,13 @@ draw(D.min);requestAnimationFrame(loop);`;
  .lab{font-family:'Space Mono',monospace;font-size:12px;color:#1F5C42}
  #tv{font-family:'Space Mono',monospace;font-size:13px;color:#1F5C42;min-width:64px}
  /* This morph is two Logo turtle programs, blended live. Shape A: ${$('progA').value.replace(/\n/g,' / ').replace(/\*\//g,'* /')} | Shape B: ${$('progB').value.replace(/\n/g,' / ').replace(/\*\//g,'* /')} */
+${madeWithCSS()}
 </style></head><body>
 <svg id="fig"></svg>
+${madeWithPanel(true)}
 <div class="bar"><button id="pp">❚❚</button>
 <input id="sl" type="range" min="${S.min}" max="${S.max}" step="0.001" value="${S.min}"><span id="tv">t = 0.00</span>
-<span class="lab">speed</span><input id="sp" type="range" min="0.25" max="4" step="0.25" value="1"><span class="lab" id="spv">1.00×</span></div>
+<span class="lab">speed</span><input id="sp" type="range" min="0.25" max="4" step="0.25" value="1"><span class="lab" id="spv">1.00×</span>${howBtnHTML()}</div>
 <script>
 ${eng}
 const DATA=${data};
@@ -1636,11 +1764,18 @@ function export3HTML(){
   const vals=[`const NAMED=${JSON.stringify(NAMED)};`,`const DEF_COL=${JSON.stringify(DEF_COL)},DEF_W=${DEF_W};`,
     `const UP=${JSON.stringify(UP)},RIGHT=${JSON.stringify(RIGHT)},HEAD=${JSON.stringify(HEAD)};`];
   const eng=(vals.join('\n')+'\n'+Object.entries(asConst).map(([n,f])=>`const ${n}=${f.toString()};`).join('\n')+'\n'+asDecl.map(f=>f.toString()).join('\n')).replace(/\brawTok3\b/g,'tok3');
-  const data=JSON.stringify({A:expandProgram($('progA').value),B:expandProgram($('progB').value),min:S.min,max:S.max,mode:S.rmode,az:S.az,el:S.el});
+  const data=JSON.stringify({A:expandProgram($('progA').value),B:expandProgram($('progB').value),min:S.min,max:S.max,mode:S.rmode,az:S.az,el:S.el,dim:'3d',srcA:$('progA').value,srcB:$('progB').value,appUrl:APP_URL,artUrl:ARTIFACT_URL});
   const player=`
 const D=DATA, NS='http://www.w3.org/2000/svg', svg=document.getElementById('fig');
 const pairs=align3(canon3(parse3(tok3(D.A))),canon3(parse3(tok3(D.B))));
 let az=D.az,el=D.el;
+function fitStage(){var bar=document.querySelector('.bar');var h=bar?bar.getBoundingClientRect().height:56;svg.style.height=(window.innerHeight-(h+26))+'px';}
+fitStage();window.addEventListener('resize',fitStage);
+var encU=encodeURIComponent;
+function linkBase(u){return u+'?dim='+encU(D.dim)+'&a='+encU(D.srcA)+'&b='+encU(D.srcB)+'&min='+D.min+'&max='+D.max;}
+var BASE_APP=D.appUrl?linkBase(D.appUrl):'',BASE_ART=D.artUrl?linkBase(D.artUrl):'';
+var LNK_APP=document.getElementById('lnkApp'),LNK_ART=document.getElementById('lnkArt');
+function updateLinks(t){var tt=Math.round(t*1000)/1000;if(LNK_APP&&BASE_APP)LNK_APP.setAttribute('href',BASE_APP+'&t='+tt);if(LNK_ART&&BASE_ART)LNK_ART.setAttribute('href',BASE_ART+'&t='+tt);}
 function project(p){const ca=Math.cos(az),sa=Math.sin(az),ce=Math.cos(el),se=Math.sin(el);const x=p[0]*ca-p[1]*sa,y=p[0]*sa+p[1]*ca,z=p[2];return {x:x,y:-(y*se+z*ce),depth:y*ce-z*se};}
 function Ln(x1,y1,x2,y2,st,w,op){const l=document.createElementNS(NS,'line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);l.setAttribute('stroke',st);l.setAttribute('stroke-width',w);l.setAttribute('stroke-linecap','round');l.setAttribute('vector-effect','non-scaling-stroke');l.setAttribute('opacity',op);return l;}
 function draw(t){
@@ -1652,7 +1787,7 @@ function draw(t){
   svg.setAttribute('viewBox',(cx-sz/2)+' '+(cy-sz/2)+' '+sz+' '+sz);
   const f=document.createDocumentFragment(),dr=(dx-dn)||1;
   segs.forEach(s=>{const d=((s.a.depth+s.b.depth)/2-dn)/dr;f.appendChild(Ln(s.a.x.toFixed(2),s.a.y.toFixed(2),s.b.x.toFixed(2),s.b.y.toFixed(2),'rgb('+s.col.join(',')+')',(s.w*(0.7+0.5*d)).toFixed(2),(0.35+0.6*d).toFixed(2)));});
-  svg.appendChild(f);document.getElementById('tv').textContent='t = '+t.toFixed(2);
+  svg.appendChild(f);document.getElementById('tv').textContent='t = '+t.toFixed(2);updateLinks(t);
 }
 let t=D.min,dir=1,playing=true,SP=1,last=performance.now();
 const sl=document.getElementById('sl'),pp=document.getElementById('pp'),sp=document.getElementById('sp');
@@ -1666,13 +1801,15 @@ svg.addEventListener('pointerup',()=>od=null);
 draw(D.min);requestAnimationFrame(loop);`;
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%232E7D5B'/%3E%3Cpath%20d='M16%206L23%2025L16%2021L9%2025Z'%20fill='%23F1F4EF'/%3E%3C/svg%3E"><title>In-Between 3D — morph</title>
 <style>html,body{margin:0;height:100%;background:#F1F4EF;font-family:system-ui,sans-serif}
-#fig{position:fixed;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
+#fig{position:fixed;top:0;left:0;width:100vw;height:100vh;cursor:grab;touch-action:none}
 .bar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:94vw;background:rgba(251,252,250,.9);border:1px solid #D6DCD2;border-radius:18px;padding:8px 14px;box-shadow:0 6px 22px rgba(27,34,31,.1)}
 .bar button{border:0;background:#2E7D5B;color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer}
-.bar input[type=range]{width:200px}.lab,#tv{font-family:'Space Mono',monospace;font-size:12px;color:#1F5C42}</style></head><body>
+.bar input[type=range]{width:200px}.lab,#tv{font-family:'Space Mono',monospace;font-size:12px;color:#1F5C42}
+${madeWithCSS()}</style></head><body>
 <svg id="fig"></svg>
+${madeWithPanel(false)}
 <div class="bar"><button id="pp">❚❚</button><input id="sl" type="range" min="${S.min}" max="${S.max}" step="0.001" value="${S.min}"><span id="tv">t = 0.00</span>
-<span class="lab">speed</span><input id="sp" type="range" min="0.25" max="4" step="0.25" value="1"><span class="lab" id="spv">1.00×</span></div>
+<span class="lab">speed</span><input id="sp" type="range" min="0.25" max="4" step="0.25" value="1"><span class="lab" id="spv">1.00×</span>${howBtnHTML()}</div>
 <script>
 ${eng}
 const DATA=${data};
@@ -2029,7 +2166,7 @@ function applyDimUI(){
     : 'turtle commands: <b>forward</b> n · <b>right/left</b> n · <b>repeat</b> n […] · penup · pendown · setpencolour · penwidth';
   $('mainHint').innerHTML=is3
     ? 'A and B are the same octagon in <b>perpendicular planes</b> (flat vs upright). Slide to tilt one into the other. <b>Axis</b> (default) keeps each turn 45° and only swings its axis, so the octagon stays closed; switch to <b>Euler</b> to see the naive number-by-number blend open it up. <b>Drag the stage</b> to orbit.'
-    : 'The <b>green band</b> is <b>interpolation</b> — a mix of A (at 0) and B (at 1). Past the ends, in the striped zone, is <b>extrapolation</b>. Drag the <b>A</b> and <b>B</b> dots to place the shapes apart; <b>Family</b> then fans the whole family out between them.';
+    : 'The <b>green band</b> is <b>interpolation</b> — a mix of A (at 0) and B (at 1). Tap a striped <b>beyond</b> tab to open up <b>extrapolation</b>, where the same recipe keeps going. Drag the <b>A</b> and <b>B</b> dots to place the shapes apart; <b>Family</b> then fans the whole family out between them.';
   if(!is3){ ['Single','Family','Stack'].forEach(k=>$('m'+k).setAttribute('aria-pressed', String(k.toLowerCase()===S.mode))); }
 }
 function setDim(d){
