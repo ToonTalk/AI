@@ -1,0 +1,2057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>In-Between — a turtle shape lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%232E7D5B'/%3E%3Cpath%20d='M16%206L23%2025L16%2021L9%2025Z'%20fill='%23F1F4EF'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F1F4EF; --card:#FBFCFA; --card-2:#EBEFE8;
+    --ink:#1B221F; --ink-soft:#5E685F; --ink-faint:#929C92;
+    --turtle:#2E7D5B; --turtle-dark:#1F5C42; --turtle-glow:#9FD9BE;
+    --amber:#E0A43B; --amber-soft:#F4DDA8;
+    --line:#D6DCD2; --beyond:#D8C7A6;
+    --r:14px; --r-sm:9px;
+    --shadow:0 1px 2px rgba(27,34,31,.05), 0 6px 22px rgba(27,34,31,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:'Nunito',system-ui,sans-serif; color:var(--ink);
+    background:var(--paper);
+    background-image:radial-gradient(circle at 1px 1px, rgba(46,125,91,.07) 1px, transparent 0);
+    background-size:22px 22px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:18px 20px 60px}
+
+  /* header */
+  header{display:flex;align-items:center;gap:14px;padding:6px 2px 18px}
+  .mark{display:flex;align-items:center;gap:12px}
+  .mark svg{flex:none}
+  .title{font-family:'Fredoka',sans-serif;font-weight:600;font-size:26px;letter-spacing:.2px;line-height:1}
+  .eyebrow{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--turtle-dark);margin-bottom:4px}
+  .tagline{margin-left:auto;color:var(--ink-soft);font-size:14px;max-width:300px;text-align:right;line-height:1.35}
+  @media(max-width:720px){.tagline{display:none}}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:18px;align-items:start}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}.stage-col{order:-1}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+  .card + .card{margin-top:14px}
+  .card-h{display:flex;align-items:center;gap:8px;padding:11px 13px 9px}
+  .card-h .lbl{font-family:'Fredoka',sans-serif;font-weight:500;font-size:15px}
+  .swatch{width:13px;height:13px;border-radius:4px;border:1px solid rgba(0,0,0,.15);flex:none}
+  .card-b{padding:0 13px 13px}
+
+  /* preset chips */
+  .chips{display:flex;flex-wrap:nowrap;gap:5px;margin:0 0 9px;overflow-x:auto;overflow-y:hidden;padding-bottom:5px;scrollbar-width:thin}
+  .chips::-webkit-scrollbar{height:6px}
+  .chips::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .chips::-webkit-scrollbar-thumb:hover{background:var(--turtle-glow)}
+  .chips .chip{flex:0 0 auto}
+  .picker{width:100%;font-family:'Nunito';font-weight:700;font-size:12.5px;color:var(--ink);background:var(--card-2);border:1px solid var(--line);border-radius:9px;padding:7px 9px;margin:0 0 9px;cursor:pointer}
+  .picker:hover{border-color:var(--turtle-glow)}
+  .picker:focus-visible{outline:2px solid var(--turtle);outline-offset:2px}
+  .picker optgroup{font-weight:800;color:var(--ink-soft)}
+  .picker option{font-weight:600;color:var(--ink)}
+  .chip{font-family:'Nunito';font-weight:700;font-size:12px;border:1px solid var(--line);
+    background:var(--card-2);color:var(--ink-soft);border-radius:999px;padding:4px 10px;cursor:pointer;
+    transition:transform .08s, background .12s, color .12s, border-color .12s}
+  .chip:hover{background:#fff;color:var(--ink);border-color:var(--turtle-glow)}
+  .chip:active{transform:translateY(1px)}
+  .chip.on{background:var(--turtle);color:#fff;border-color:var(--turtle)}
+  .chip.on:hover{background:var(--turtle-dark);color:#fff}
+  .chip:focus-visible{outline:2px solid var(--turtle);outline-offset:2px}
+  .chip-gen{border-style:dashed;border-color:var(--turtle-glow);color:var(--turtle-dark)}
+  .chip-gen.on{border-style:solid}
+  .tune-toggle{font-family:'Nunito';font-weight:800;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;background:none;border:none;color:var(--turtle-dark);cursor:pointer;padding:5px 2px 2px;opacity:.78}
+  .tune-toggle:hover{opacity:1;text-decoration:underline}
+  .tune-panel{display:flex;flex-direction:column;gap:5px;max-height:172px;overflow-y:auto;padding:7px 4px 3px;margin-top:3px;border-top:1px dashed var(--line)}
+  .tune-row{display:grid;grid-template-columns:76px 1fr 40px;align-items:center;gap:8px;font-family:'Nunito';font-size:11px}
+  .tune-row .tlab{color:var(--ink-soft);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tune-row input[type=range]{width:100%;height:14px;accent-color:var(--turtle);cursor:pointer}
+  .tune-row .tval{color:var(--turtle-dark);font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+  .tune-empty{font-family:'Nunito';font-size:11px;color:var(--muted);padding:4px 2px}
+  .tune-row-toggles{display:flex;gap:16px;align-items:center}
+  .color-row{display:flex;align-items:center;gap:9px;font-family:'Nunito';font-size:11px;padding:1px 2px}
+  .color-row input[type=color]{width:36px;height:22px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
+  .color-row .clab{color:var(--ink-soft);font-weight:700}
+
+  textarea, pre.code{font-family:'Space Mono',monospace;font-size:12.5px;line-height:1.55;
+    width:100%;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff;color:var(--ink);
+    padding:9px 10px;resize:vertical;tab-size:2}
+  textarea{min-height:62px}
+  textarea:focus{outline:2px solid var(--turtle-glow);outline-offset:-1px;border-color:var(--turtle)}
+  pre.code{margin:0;white-space:pre;overflow:auto;max-height:280px;background:#FAFBF8}
+  .num{color:var(--turtle-dark);font-weight:700}
+  .kw{color:var(--ink-soft)}
+  .cmt{color:var(--ink-faint);font-style:italic}
+  .changed{background:var(--amber-soft);border-radius:3px;padding:0 1px}
+
+  /* blend header controls */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card-2)}
+  .seg button{font-family:'Nunito';font-weight:700;font-size:12px;border:0;background:transparent;
+    color:var(--ink-soft);padding:5px 12px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--turtle);color:#fff}
+  .seg button:focus-visible{outline:2px solid var(--turtle);outline-offset:-2px}
+  .badge{font-family:'Space Mono';font-size:10px;letter-spacing:.5px;text-transform:uppercase;
+    color:var(--amber);background:var(--amber-soft);padding:2px 7px;border-radius:999px;font-weight:700}
+  .mini{font-family:'Nunito';font-weight:700;font-size:12px;border:1px solid var(--line);background:var(--card-2);
+    color:var(--ink-soft);border-radius:999px;padding:4px 10px;cursor:pointer}
+  .mini:hover{color:var(--ink);background:#fff}
+  .mini:focus-visible{outline:2px solid var(--turtle);outline-offset:2px}
+  .spacer{margin-left:auto}
+
+  /* stage */
+  .stage-card{padding:0;overflow:hidden}
+  .stage-top{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line)}
+  #stage{display:block;width:100%;height:auto;aspect-ratio:1/1;background:
+    radial-gradient(circle at center, #FFFFFF 0%, #FAFCF9 70%, #F4F7F2 100%)}
+  .stage-wrap{position:relative}
+  .tbadge{position:absolute;top:12px;left:14px;font-family:'Space Mono';font-size:12px;
+    color:var(--ink-soft);background:rgba(251,252,250,.85);border:1px solid var(--line);
+    padding:3px 9px;border-radius:999px;pointer-events:none}
+  .tbadge b{color:var(--turtle-dark)}
+  .err{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    color:var(--ink-soft);font-weight:700;padding:30px;text-align:center}
+
+  /* slider */
+  .slider-card{padding:16px 16px 14px}
+  .slr-labels{display:flex;justify-content:space-between;font-family:'Space Mono';font-size:11px;
+    color:var(--ink-faint);margin-bottom:6px}
+  .slr-labels .home{color:var(--turtle-dark);font-weight:700}
+  .track-wrap{position:relative;height:34px;display:flex;align-items:center}
+  .track-row{display:flex;align-items:stretch;gap:8px}
+  .track-col{flex:1;min-width:0}
+  .beyond-tab{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:40px;padding:2px 6px;cursor:pointer;border:1px dashed var(--line);border-radius:7px;color:var(--ink-faint);font-family:'Space Mono',monospace;font-size:8.5px;font-weight:700;letter-spacing:.03em;line-height:1;background-image:repeating-linear-gradient(45deg,var(--beyond) 0 6px,#E7DBC4 6px 12px);opacity:.5;transition:opacity .15s,border-color .15s,color .15s}
+  .beyond-tab:hover{opacity:.95;color:var(--ink)}
+  .beyond-tab[aria-pressed="true"]{opacity:1;border-style:solid;border-color:var(--amber);color:var(--turtle-dark)}
+  .beyond-tab .bt-arrow{font-size:15px;line-height:.8}
+  .track-bg{position:absolute;left:0;right:0;height:10px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .zone-home{position:absolute;top:0;bottom:0;background:var(--turtle-glow);
+    box-shadow:inset 0 0 0 1px rgba(46,125,91,.25)}
+  .hatch{position:absolute;top:0;bottom:0;
+    background-image:repeating-linear-gradient(45deg, var(--beyond) 0 6px, #E7DBC4 6px 12px);opacity:.65}
+  input[type=range]{-webkit-appearance:none;appearance:none;position:relative;width:100%;height:34px;
+    background:transparent;margin:0;cursor:pointer}
+  input[type=range]:focus{outline:none}
+  input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px var(--turtle-glow)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:24px;height:24px;
+    border-radius:50%;background:var(--turtle);border:3px solid #fff;box-shadow:var(--shadow);cursor:grab}
+  input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--turtle);
+    border:3px solid #fff;box-shadow:var(--shadow);cursor:grab}
+  input[type=range]:active::-webkit-slider-thumb{cursor:grabbing}
+
+  .slr-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .field{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--ink-soft)}
+  .field input{font-family:'Space Mono';font-size:13px;width:64px;border:1px solid var(--line);
+    border-radius:var(--r-sm);padding:5px 7px;background:#fff;color:var(--ink);text-align:center}
+  .field input:focus{outline:2px solid var(--turtle-glow);outline-offset:-1px;border-color:var(--turtle)}
+  .field input#tval{width:78px;font-weight:700;color:var(--turtle-dark)}
+  .vchips{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px}
+  .vchip{font-family:'Space Mono';font-size:12px;border:1px solid var(--line);background:var(--card-2);
+    color:var(--ink-soft);border-radius:8px;padding:4px 9px;cursor:pointer}
+  .vchip:hover{background:#fff;color:var(--ink);border-color:var(--turtle-glow)}
+  .vchip:focus-visible{outline:2px solid var(--turtle);outline-offset:2px}
+  .play{display:inline-flex;align-items:center;gap:7px;font-family:'Fredoka';font-weight:500;font-size:14px;
+    border:0;background:var(--turtle);color:#fff;border-radius:999px;padding:7px 16px;cursor:pointer;
+    box-shadow:var(--shadow)}
+  .play:hover{background:var(--turtle-dark)}
+  .play:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .hint{margin-top:12px;font-size:12.5px;color:var(--ink-soft);line-height:1.4}
+  .hint b{color:var(--turtle-dark)}
+
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;font-weight:700;font-size:13px;padding:10px 16px;border-radius:999px;
+    box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;z-index:50;max-width:90vw}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .cmds{font-family:'Space Mono',monospace;font-size:11.5px;color:var(--ink-faint);line-height:1.55;margin:2px 2px 0;padding:8px 11px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm)}
+  .cmds b{color:var(--turtle-dark)}
+  .mini.on{background:var(--turtle-dark);color:#fff;border-color:var(--turtle-dark)}
+  .dimseg button{font-size:13px;padding:6px 16px;font-family:'Fredoka';font-weight:500}
+  .orbithint{position:absolute;bottom:12px;right:14px;font-family:'Space Mono';font-size:11px;color:var(--ink-faint);background:rgba(251,252,250,.82);border:1px solid var(--line);padding:3px 8px;border-radius:999px;pointer-events:none}
+  body.dim3d #stage{cursor:grab;touch-action:none}
+  body.dim3d #stage:active{cursor:grabbing}
+
+  .modal{position:fixed;inset:0;background:rgba(27,34,31,.4);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .modal-box{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);max-width:580px;width:100%;max-height:84vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);font-family:'Fredoka';font-size:16px;color:var(--ink)}
+  .modal-body{padding:6px 20px 20px;overflow:auto;font-size:13.5px;line-height:1.62;color:var(--ink)}
+  .modal-body p{margin:14px 0}
+  .modal-body code{font-family:'Space Mono',monospace;font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px;color:var(--turtle-dark)}
+  .modal-body a{color:var(--turtle-dark);text-decoration:underline;text-underline-offset:2px}
+  .tutor-box{max-width:600px}
+  .tutor-box .modal-body{flex:1 1 auto;min-height:120px}
+  .how-details{margin:2px 0 12px;font-size:12.5px;border:1px solid var(--line);border-radius:9px;padding:6px 12px;background:var(--card-2)}
+  .how-details>summary{cursor:pointer;font-weight:800;color:var(--turtle-dark);font-family:'Nunito';font-size:12px;list-style:none}
+  .how-details>summary::-webkit-details-marker{display:none}
+  .how-details>summary::before{content:'\25b8 ';font-size:10px}
+  .how-details[open]>summary::before{content:'\25be '}
+  .tutor-chat{display:flex;flex-direction:column;gap:10px}
+  .tutor-msg{max-width:88%;padding:9px 12px;border-radius:13px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+  .tutor-msg.user{align-self:flex-end;background:var(--turtle);color:#fff;border-bottom-right-radius:4px}
+  .tutor-msg.bot{align-self:flex-start;background:var(--card-2);color:var(--ink);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .tutor-msg.thinking{color:var(--muted);font-style:italic}
+  .tutor-foot{border-top:1px solid var(--line);padding:10px 16px 14px;display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
+  .tutor-suggest{display:flex;flex-wrap:wrap;gap:6px}
+  .tutor-suggest button{font-family:'Nunito';font-weight:700;font-size:11.5px;border:1px solid var(--line);background:var(--card-2);color:var(--turtle-dark);border-radius:999px;padding:4px 10px;cursor:pointer}
+  .tutor-suggest button:hover{background:#fff;border-color:var(--turtle-glow)}
+  .tutor-input-row{display:flex;gap:8px}
+  .tutor-input{flex:1;font-family:'Nunito';font-size:13.5px;border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:var(--card-2);color:var(--ink)}
+  .tutor-input:focus{outline:none;border-color:var(--turtle-glow)}
+  .tutor-send{font-family:'Nunito';font-weight:800;font-size:13px;background:var(--turtle);color:#fff;border:none;border-radius:9px;padding:0 16px;cursor:pointer}
+  .tutor-send:hover{background:var(--turtle-dark)}
+  .tutor-send:disabled{opacity:.5;cursor:default}
+  .modal-body b{color:var(--ink)}
+
+  .gen-row{display:flex;gap:6px;margin-top:8px}
+  .gen-in{flex:1;min-width:0;font-family:'Space Mono',monospace;font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+  .gen-in::placeholder{color:var(--ink-faint)}
+  .gen-in:focus{outline:none;border-color:var(--turtle)}
+  .gen-btn{font-family:'Fredoka',sans-serif;font-size:12.5px;padding:7px 12px;border:1px solid var(--turtle-dark);background:var(--turtle);color:#fff;border-radius:8px;cursor:pointer;white-space:nowrap}
+  .gen-btn:hover{background:var(--turtle-dark)}
+  .gen-btn:disabled{opacity:.55;cursor:default}
+  .key-toggle{margin:6px 2px 0}
+  .key-row{display:flex;gap:6px;align-items:center;margin:6px 0 0;flex-wrap:wrap}
+  .key-row input{flex:1;min-width:200px;font-family:'Space Mono',monospace;font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+  .prov-sel{font-family:'Nunito';font-weight:700;font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);cursor:pointer}
+  .key-eye{font-family:'Nunito';font-weight:700;font-size:11px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card-2);color:var(--turtle-dark);cursor:pointer}
+  .key-eye:hover{background:#fff;border-color:var(--turtle-glow)}
+  .key-hint,.muted{font-size:11px;color:var(--ink-faint)}
+  .linkbtn{background:none;border:none;color:var(--turtle-dark);font-size:11.5px;cursor:pointer;text-decoration:underline;padding:0;font-family:inherit}
+
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <path d="M20 7 C12 7 7 13 7 20 C7 28 13 33 20 33 C28 33 33 27 33 20 C33 12 27 7 20 7Z"
+              fill="none" stroke="var(--turtle)" stroke-width="2.4"/>
+        <path d="M20 7 L20 2 M33 20 L38 20 M20 33 L20 38 M7 20 L2 20
+                 M29.2 10.8 L32.7 7.3 M29.2 29.2 L32.7 32.7 M10.8 29.2 L7.3 32.7 M10.8 10.8 L7.3 7.3"
+              stroke="var(--turtle-dark)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="20" cy="20" r="4.4" fill="var(--amber)"/>
+      </svg>
+      <div>
+        <div class="eyebrow" id="eyebrow">turtle shape lab</div>
+        <div class="title">In&#8209;Between</div>
+      </div>
+    </div>
+    <span class="seg dimseg" id="dimSeg" role="group" aria-label="2D or 3D" style="margin-left:auto">
+      <button id="d2d" aria-pressed="true" title="2D turtle — shapes in the plane.">2D</button>
+      <button id="d3d" aria-pressed="false" title="3D beetle — a turtle that flies, with yaw, pitch and roll.">3D</button>
+    </span>
+    <div class="tagline" id="tagline" style="margin-left:16px">Slide one shape into another — then keep sliding, past the ends, into shapes that were never there.</div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: programs -->
+    <div class="prog-col">
+      <div class="card">
+        <div class="card-h"><span class="swatch" id="swA"></span><span class="lbl">Shape A</span>
+          <span class="badge" style="margin-left:auto">t = 0</span></div>
+        <div class="card-b">
+          <select class="picker" id="pickA" aria-label="Choose a shape for A"></select>
+          <textarea id="progA" spellcheck="false" aria-label="Shape A turtle program"></textarea>
+          <div class="tune-wrap">
+            <div class="tune-row-toggles">
+              <button class="tune-toggle" id="tuneTogA" aria-expanded="false" title="Sliders for every number in shape A — drag to reshape it live, including recursion parameters like depth and angle.">&#9656; tune numbers</button>
+              <button class="tune-toggle" id="colorTogA" aria-expanded="false" title="A colour picker for every pen colour in shape A.">&#9656; tune colours</button>
+            </div>
+            <div class="tune-panel" id="tuneA" style="display:none"></div>
+            <div class="tune-panel" id="colorA" style="display:none"></div>
+          </div>
+          <div class="gen-row">
+            <input class="gen-in" id="genA" placeholder="describe a shape to make…" spellcheck="false">
+            <button class="gen-btn" id="genBtnA" title="Generate this shape with AI">✨ Make A</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span class="swatch" id="swB"></span><span class="lbl">Shape B</span>
+          <span class="badge" style="margin-left:auto">t = 1</span></div>
+        <div class="card-b">
+          <select class="picker" id="pickB" aria-label="Choose a shape for B"></select>
+          <textarea id="progB" spellcheck="false" aria-label="Shape B turtle program"></textarea>
+          <div class="tune-wrap">
+            <div class="tune-row-toggles">
+              <button class="tune-toggle" id="tuneTogB" aria-expanded="false" title="Sliders for every number in shape B — drag to reshape it live, including recursion parameters like depth and angle.">&#9656; tune numbers</button>
+              <button class="tune-toggle" id="colorTogB" aria-expanded="false" title="A colour picker for every pen colour in shape B.">&#9656; tune colours</button>
+            </div>
+            <div class="tune-panel" id="tuneB" style="display:none"></div>
+            <div class="tune-panel" id="colorB" style="display:none"></div>
+          </div>
+          <div class="gen-row">
+            <input class="gen-in" id="genB" placeholder="describe a shape to make…" spellcheck="false">
+            <button class="gen-btn" id="genBtnB" title="Generate this shape with AI">✨ Make B</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="key-toggle"><button id="keyLink" class="linkbtn">set API key</button> <span class="muted">— picks the AI for ✨ Make &amp; ? ask; only needed outside Claude</span></div>
+      <div class="key-row" id="keyRow" style="display:none">
+        <select id="provSel" class="prov-sel" title="Which AI powers Make and Ask.">
+          <option value="claude">Claude</option>
+          <option value="gemini">Gemini</option>
+          <option value="openai">ChatGPT</option>
+        </select>
+        <input id="apiKey" type="password" placeholder="Anthropic key (sk-ant-…)" spellcheck="false">
+        <button id="keyShow" class="key-eye" type="button" aria-pressed="false" title="Show or hide the key">show</button>
+        <button id="keySave" class="gen-btn">Save</button>
+        <span class="key-hint">Stored only in this browser. <a id="keyGet" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get a Claude key ↗</a></span>
+      </div>
+
+      <div class="cmds" id="cmdref"></div>
+
+      <div class="card">
+        <div class="card-h">
+          <span class="lbl">Blend</span>
+          <span class="seg" id="blendSeg" role="group" aria-label="Blend view">
+            <button id="vNum" aria-pressed="true" title="The blend program with numbers filled in for the current t. Read-only; updates as you slide.">Numbers</button>
+            <button id="vForm" aria-pressed="false" title="The general blend program, using interpolate formulas. Edit this to change the blend — it will fork from A and B.">Formula</button>
+          </span>
+          <span class="badge" id="forkBadge" style="display:none" title="The blend has been hand-edited and no longer regenerates from A and B.">edited</span>
+          <button class="mini spacer" id="explainBtn" title="Open the tutor — see how this blend is computed and ask anything about it.">? ask</button>
+          <button class="mini" id="resetBlend" style="display:none" title="Throw away edits and rebuild the blend from shapes A and B.">&#8635; Reset</button>
+        </div>
+        <div class="card-b">
+          <pre class="code" id="blendNum" aria-live="polite"></pre>
+          <textarea id="blendForm" spellcheck="false" style="display:none;min-height:200px"
+            aria-label="Blend formula program (editable)"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: stage + slider -->
+    <div class="stage-col">
+      <div class="card stage-card">
+        <div class="stage-top">
+          <span class="lbl" id="stageLabel" style="font-family:'Fredoka';font-weight:500">Drawing</span>
+          <span class="seg spacer" id="viewSeg" role="group" aria-label="View mode">
+            <button id="mSingle" aria-pressed="true" title="Show one blended shape at the current t.">Single</button>
+            <button id="mFamily" aria-pressed="false" title="Overlay the whole family of blends across the slider range at one shared scale.">Family</button>
+            <button id="mStack" aria-pressed="false" title="2.5D: stack the family along a depth axis (z = t) and view it as a swept ribbon.">Stack</button>
+          </span>
+          <span class="seg" id="rmodeSeg" role="group" aria-label="Rotation interpolation" style="display:none">
+            <button id="rAxis" aria-pressed="true" title="Keep each turn's angle and swing its axis. Regular shapes (like the octagon) stay closed.">Axis</button>
+            <button id="rSlerp" aria-pressed="false" title="Rotate along the shortest arc between the two orientations.">Slerp</button>
+            <button id="rEuler" aria-pressed="false" title="Blend yaw, pitch and roll as separate numbers — the most literal generalisation of 2D, but it doesn't keep shapes closed.">Euler</button>
+          </span>
+          <button class="mini" id="resetPos" title="Recenter both shapes (clear any dragging).">&#10227; positions</button>
+          <button class="mini on" id="dotsBtn" title="Show or hide the draggable A and B position dots.">&#9678; dots</button>
+          <button class="mini" id="resetView" title="Reset the camera angle." style="display:none">&#10227; view</button>
+          <button class="mini" id="axesBtn" title="Show or hide the orientation axes." style="display:none">&#8862; axes</button>
+          <button class="mini" id="dlHtml" title="Export a self-contained, animated HTML file of this morph (keeps the Logo, stays interactive and extrapolatable).">&#8595; export</button>
+        </div>
+        <div class="stage-wrap">
+          <svg id="stage" viewBox="-150 -150 300 300" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="tbadge" id="tbadge">t = <b>0.50</b></div>
+          <div class="orbithint" id="orbitHint" style="display:none">drag to orbit</div>
+          <div class="err" id="err"></div>
+        </div>
+      </div>
+
+      <div class="card slider-card">
+        <div class="track-row">
+          <button class="beyond-tab" id="beyondL" type="button" aria-pressed="false" title="Open the extrapolation zone before A — the same recipe keeps going. Click again to tuck it away."><span class="bt-arrow">&#8249;</span><span>beyond</span></button>
+          <div class="track-col">
+            <div class="slr-labels">
+              <span id="lblMin">0</span>
+              <span class="home">A&nbsp;·&nbsp;0</span>
+              <span class="home">1&nbsp;·&nbsp;B</span>
+              <span id="lblMax">1</span>
+            </div>
+            <div class="track-wrap">
+              <div class="track-bg" id="trackBg">
+                <div class="hatch" id="hatchL"></div>
+                <div class="zone-home" id="zoneHome"></div>
+                <div class="hatch" id="hatchR"></div>
+              </div>
+              <input type="range" id="slider" min="0" max="1" step="0.001" value="0.5"
+                     aria-label="Blend amount t"
+                     title="Drag to blend. 0 = shape A, 1 = shape B. Past either end is extrapolation.">
+            </div>
+          </div>
+          <button class="beyond-tab" id="beyondR" type="button" aria-pressed="false" title="Open the extrapolation zone after B — the same recipe keeps going. Click again to tuck it away."><span class="bt-arrow">&#8250;</span><span>beyond</span></button>
+        </div>
+
+        <div class="slr-row">
+          <span class="field">t&nbsp;<input id="tval" type="number" step="0.01" value="0.5" title="Type any blend value, including ones outside the slider range (e.g. 25 or -3.14)."></span>
+          <span class="field">min&nbsp;<input id="tmin" type="number" step="0.5" value="0" title="Left end of the slider's range."></span>
+          <span class="field">max&nbsp;<input id="tmax" type="number" step="0.5" value="1" title="Right end of the slider's range."></span>
+          <span class="field" title="How fast Play sweeps.">speed&nbsp;<input id="spd" type="range" min="0.25" max="4" step="0.25" value="1" style="width:96px;vertical-align:middle"><b id="spdv" style="min-width:34px;display:inline-block;color:var(--turtle-dark)">1×</b></span>
+          <span class="seg" id="lockSeg" style="margin-left:6px"><button id="lockFrame" aria-pressed="true" title="Hold the camera steady across the whole blend instead of refitting it every frame — lets you see the shape's true motion as it morphs (it will swim instead of staying centred). Turn off to auto-fit each frame.">&#8862;&nbsp;Lock view</button></span>
+          <button class="play spacer" id="play" title="Animate the blend back and forth across the slider range.">&#9654;&nbsp;Play</button>
+        </div>
+
+        <div class="vchips" id="vchips"></div>
+
+        <div class="hint" id="mainHint">The <b>green band</b> is <b>interpolation</b> — a mix of A (at 0) and B (at 1).
+          Tap a striped <b>beyond</b> tab to open up <b>extrapolation</b>, where the same recipe keeps going past the ends.
+          Drag the <b>A</b> and <b>B</b> dots to place the shapes apart — in <b>Family</b> view the whole family then fans out between them.</div>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+
+  <div id="explainModal" class="modal" style="display:none">
+    <div class="modal-box tutor-box">
+      <div class="modal-h"><b>Ask about this blend</b><button class="mini" id="explainClose">&#10005; close</button></div>
+      <div class="modal-body" id="tutorBody">
+        <details id="howDetails" class="how-details"><summary>See how this blend is computed, step by step</summary><div id="explainBody"></div></details>
+        <div id="tutorChat" class="tutor-chat"></div>
+      </div>
+      <div class="tutor-foot">
+        <div id="tutorSuggest" class="tutor-suggest"></div>
+        <div class="tutor-input-row">
+          <input id="tutorInput" class="tutor-input" placeholder="Ask anything about this blend…" spellcheck="false">
+          <button id="tutorSend" class="tutor-send">Ask</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   In-Between — turtle interpolation engine (Kahn, Bridges 2006)
+   Verified against the paper's Table 1.
+   ============================================================ */
+
+/* ---------- tokenizer / parser ---------- */
+function rawTokenize(src){
+  src = src.replace(/;[^\n]*/g,' ');
+  const toks=[]; const re=/\[|\]|[-+]?\d*\.?\d+|:?[A-Za-z_]+/g; let m;
+  while((m=re.exec(src))) toks.push(m[0]);
+  return toks;
+}
+function tokenize(src){ return rawTokenize(expandProgram(src)); }
+
+/* ---------- recursion / procedures / conditionals ----------
+   Expands user-defined procedures, recursion, if/ifelse/stop, variables and
+   arithmetic into a flat string of primitive commands, which the existing
+   pipeline (parse -> unroll -> canon) then handles unchanged. Non-recursive
+   programs (no to/if/stop) pass straight through untouched. */
+function round4(n){ const v=Math.round(n*1e4)/1e4; return Object.is(v,-0)?0:v; }
+function rtok(src){ src=src.replace(/;[^\n]*/g,' ');
+  const re=/<=|>=|<>|[-+*/()\[\]=<>]|\d*\.?\d+|:?[A-Za-z_]\w*/g; const t=[]; let m;
+  while((m=re.exec(src))) t.push(m[0]); return t; }
+function expandProgram(src){
+  if(!/(?:^|\s)(?:to|if|ifelse|stop)\b/i.test(src)) return src;   // fast path: nothing to expand
+  const out=[]; const BUDGET=8000;
+  const emit=s=>{ out.push(s); if(out.length>BUDGET) throw {over:1}; };
+  try{
+    const toks=rtok(src); let i=0;
+    const peek=()=>toks[i], low=()=>(toks[i]||'').toLowerCase(), next=()=>toks[i++];
+    // pass 1: procedure arities
+    const arity={}; { let j=0; while(j<toks.length){ if((toks[j]||'').toLowerCase()==='to'){ const nm=(toks[j+1]||'').toLowerCase(); let k=j+2,c=0; while(k<toks.length&&toks[k][0]===':'){c++;k++;} arity[nm]=c; j=k; } else j++; } }
+    // expression / condition parsers
+    function pFactor(){ const w=peek();
+      if(w==='('){ next(); const e=pExpr(); if(peek()===')')next(); return e; }
+      if(w==='-'){ next(); return {e:'neg',x:pFactor()}; }
+      if(w==='+'){ next(); return pFactor(); }
+      if(w&&w[0]===':'){ next(); return {e:'var',n:w.slice(1).toLowerCase()}; }
+      if(w&&/^\d*\.?\d+$/.test(w)){ next(); return {e:'num',v:parseFloat(w)}; }
+      next(); return {e:'num',v:0}; }
+    function pTerm(){ let l=pFactor(); while(peek()==='*'||peek()==='/'){ const op=next(); l={e:'bin',op,l,r:pFactor()}; } return l; }
+    function pExpr(){ let l=pTerm(); while(peek()==='+'||peek()==='-'){ const op=next(); l={e:'bin',op,l,r:pTerm()}; } return l; }
+    function pCond(){ const l=pExpr(); const op=next(); const r=pExpr(); return {op,l,r}; }
+    function pColor(){ if(peek()==='['){ next(); const a=[]; while(peek()&&peek()!==']')a.push(next()); if(peek()===']')next(); return '['+a.join(' ')+']'; } return next(); }
+    function pBlock(){ const s=[]; if(peek()==='[')next(); while(peek()&&peek()!==']')s.push(pStmt()); if(peek()===']')next(); return s; }
+    function pStmt(){ const w=(next()||'').toLowerCase();
+      switch(w){
+        case 'forward':case 'fd':return {k:'p',c:'forward',a:pExpr()};
+        case 'back':case 'bk':return {k:'p',c:'back',a:pExpr()};
+        case 'right':case 'rt':return {k:'p',c:'right',a:pExpr()};
+        case 'left':case 'lt':return {k:'p',c:'left',a:pExpr()};
+        case 'up':case 'pitchup':return {k:'p',c:'up',a:pExpr()};
+        case 'down':case 'pitchdown':return {k:'p',c:'down',a:pExpr()};
+        case 'rollright':case 'rr':return {k:'p',c:'rollright',a:pExpr()};
+        case 'rollleft':case 'rl':return {k:'p',c:'rollleft',a:pExpr()};
+        case 'penup':case 'pu':return {k:'b',c:'penup'};
+        case 'pendown':case 'pd':return {k:'b',c:'pendown'};
+        case 'setpencolour':case 'setpencolor':case 'setpc':return {k:'col',a:pColor()};
+        case 'penwidth':case 'setpensize':case 'pw':return {k:'p',c:'penwidth',a:pExpr()};
+        case 'repeat':return {k:'rep',n:pExpr(),body:pBlock()};
+        case 'if':{ const cnd=pCond(); return {k:'if',cond:cnd,body:pBlock()}; }
+        case 'ifelse':{ const cnd=pCond(); const t=pBlock(); const e=pBlock(); return {k:'ife',cond:cnd,t,e}; }
+        case 'stop':return {k:'stop'};
+        case 'make':{ const v=(next()||'').replace(/^:/,'').toLowerCase(); return {k:'mk',n:v,a:pExpr()}; }
+        default: if(arity[w]!==undefined){ const args=[]; for(let a=0;a<arity[w];a++)args.push(pExpr()); return {k:'call',n:w,args}; } return {k:'nop'}; }
+    }
+    // parse procedures + main
+    const procs={}; const main=[]; i=0;
+    while(i<toks.length){
+      if(low()==='to'){ next(); const nm=(next()||'').toLowerCase(); const params=[]; while(peek()&&peek()[0]===':')params.push(next().slice(1).toLowerCase());
+        const body=[]; while(peek()&&low()!=='end')body.push(pStmt()); if(low()==='end')next(); procs[nm]={params,body}; }
+      else main.push(pStmt());
+    }
+    // interpret
+    const STOP={stop:1}; let depth=0;
+    const ev=(n,env)=>{ switch(n.e){ case 'num':return n.v; case 'var':return env[n.n]!==undefined?env[n.n]:0; case 'neg':return -ev(n.x,env);
+      case 'bin':{ const l=ev(n.l,env),r=ev(n.r,env); return n.op==='+'?l+r:n.op==='-'?l-r:n.op==='*'?l*r:(r?l/r:0); } } return 0; };
+    const test=(c,env)=>{ const l=ev(c.l,env),r=ev(c.r,env); switch(c.op){ case '=':return l===r; case '<':return l<r; case '>':return l>r; case '<=':return l<=r; case '>=':return l>=r; case '<>':return l!==r; } return false; };
+    function run(st,env){ for(const s of st){ switch(s.k){
+      case 'p': emit(s.c+' '+round4(ev(s.a,env))); break;
+      case 'b': emit(s.c); break;
+      case 'col': emit('setpencolour '+s.a); break;
+      case 'rep':{ let n=Math.round(ev(s.n,env)); if(n>BUDGET)n=BUDGET; for(let r=0;r<n;r++)run(s.body,env); } break;
+      case 'if': if(test(s.cond,env))run(s.body,env); break;
+      case 'ife': run(test(s.cond,env)?s.t:s.e,env); break;
+      case 'mk': env[s.n]=ev(s.a,env); break;
+      case 'stop': throw STOP;
+      case 'call':{ const pd=procs[s.n]; if(!pd)break; const args=s.args.map(a=>ev(a,env)); const ch={}; pd.params.forEach((p,k)=>ch[p]=args[k]!==undefined?args[k]:0);
+        if(depth>=600)throw {over:1}; depth++; try{ run(pd.body,ch); }catch(e){ if(e!==STOP)throw e; }finally{ depth--; } } break;
+    } } }
+    run(main,{});
+  }catch(e){ /* lenient: partial output on overflow / malformed-while-typing */ }
+  return out.join(' ');
+}
+const NAMED={red:[222,52,42],blue:[34,96,224],green:[42,170,74],yellow:[240,200,40],
+  orange:[240,140,30],purple:[150,60,200],pink:[235,110,170],black:[27,34,31],
+  white:[245,245,245],brown:[150,96,52],cyan:[36,186,196],magenta:[210,60,180],
+  gray:[140,140,150],grey:[140,140,150],teal:[24,150,140]};
+
+function parse(toks){
+  let i=0;
+  const num=()=>parseFloat(toks[i++]);
+  function color(){
+    if(toks[i]==='['){ i++; const a=[num(),num(),num()]; if(toks[i]===']')i++; return a; }
+    const name=(toks[i++]||'').toLowerCase(); return (NAMED[name]||[27,34,31]).slice();
+  }
+  function block(){ const l=[]; while(i<toks.length && toks[i]!==']') l.push(stmt()); return l; }
+  function stmt(){
+    const w=(toks[i++]||'').toLowerCase();
+    switch(w){
+      case 'forward':case 'fd':return {t:'fd',v:num()};
+      case 'back':case 'bk':return {t:'fd',v:-num()};
+      case 'right':case 'rt':return {t:'rt',v:num()};
+      case 'left':case 'lt':return {t:'rt',v:-num()};
+      case 'penup':case 'pu':return {t:'pu'};
+      case 'pendown':case 'pd':return {t:'pd'};
+      case 'setpencolour':case 'setpencolor':case 'setpc':return {t:'col',v:color()};
+      case 'penwidth':case 'setpensize':case 'pw':return {t:'pw',v:num()};
+      case 'repeat':{ const n=num(); if(toks[i]==='[')i++; const b=block(); if(toks[i]===']')i++; return {t:'rep',n,body:b}; }
+      default:return {t:'nop'};
+    }
+  }
+  const prog=[]; while(i<toks.length){ if(toks[i]===']'){i++;continue;} prog.push(stmt()); }
+  return prog;
+}
+function unroll(ast,out){
+  out=out||[];
+  for(const n of ast){
+    if(n.t==='rep'){ const c=Math.max(0,Math.round(n.n)); for(let k=0;k<c;k++) unroll(n.body,out); }
+    else if(n.t!=='nop') out.push(n);
+  }
+  return out;
+}
+const DEF_COL=[27,34,31], DEF_W=3;
+/* canonical flat steps, turn-AFTER-forward convention */
+function canon(ast){
+  const prims=unroll(ast);
+  const steps=[]; let pen=true,col=DEF_COL.slice(),w=DEF_W,lead=0,cur=null;
+  const push=()=>{ if(cur){steps.push(cur);cur=null;} };
+  for(const p of prims){
+    if(p.t==='fd'){ push(); cur={f:p.v,turn:0,pen,col:col.slice(),w}; }
+    else if(p.t==='rt'){ if(cur)cur.turn+=p.v; else lead+=p.v; }
+    else if(p.t==='pu') pen=false;
+    else if(p.t==='pd') pen=true;
+    else if(p.t==='col') col=p.v.slice();
+    else if(p.t==='pw') w=p.v;
+  }
+  push();
+  if(lead!==0) steps.unshift({f:0,turn:lead,pen:true,col:DEF_COL.slice(),w:DEF_W});
+  return steps;
+}
+const gcd=(a,b)=>{a=Math.abs(Math.round(a));b=Math.abs(Math.round(b));while(b){[a,b]=[b,a%b];}return a||1;};
+const lcm=(a,b)=>Math.abs(Math.round(a*b))/gcd(a,b);
+function subdivide(s,k){ const r=[]; for(let j=0;j<k;j++) r.push({f:s.f/k,turn:j===k-1?s.turn:0,pen:s.pen,col:s.col.slice(),w:s.w}); return r; }
+function align(A,B){
+  if(!A.length||!B.length) return [];
+  const la=A.length,lb=B.length,L=lcm(la,lb),ka=L/la,kb=L/lb,ea=[],eb=[];
+  A.forEach(s=>subdivide(s,ka).forEach(x=>ea.push(x)));
+  B.forEach(s=>subdivide(s,kb).forEach(x=>eb.push(x)));
+  const out=[];
+  for(let i=0;i<L;i++) out.push({f:[ea[i].f,eb[i].f],turn:[ea[i].turn,eb[i].turn],
+    col:[ea[i].col,eb[i].col],w:[ea[i].w,eb[i].w],pen:[ea[i].pen,eb[i].pen]});
+  return out;
+}
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ---------- OKLab colour interpolation ---------- */
+const s2l=c=>{c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);};
+const l2s=c=>{const v=c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055;return clamp(Math.round(v*255),0,255);};
+function rgb2lab([r,g,b]){
+  const lr=s2l(r),lg=s2l(g),lb=s2l(b);
+  const l=0.4122214708*lr+0.5363325363*lg+0.0514459929*lb;
+  const m=0.2119034982*lr+0.6806995451*lg+0.1073969566*lb;
+  const s=0.0883024619*lr+0.2817188376*lg+0.6299787005*lb;
+  const L=Math.cbrt(l),M=Math.cbrt(m),S=Math.cbrt(s);
+  return [0.2104542553*L+0.7936177850*M-0.0040720468*S,
+          1.9779984951*L-2.4285922050*M+0.4505937099*S,
+          0.0259040371*L+0.7827717662*M-0.8086757660*S];
+}
+function lab2rgb([L,a,b]){
+  const l_=L+0.3963377774*a+0.2158037573*b, m_=L-0.1055613458*a-0.0638541728*b, s_=L-0.0894841775*a-1.2914855480*b;
+  const l=l_**3,m=m_**3,s=s_**3;
+  return [l2s(4.0767416621*l-3.3077115913*m+0.2309699292*s),
+          l2s(-1.2684380046*l+2.6097574011*m-0.3413193965*s),
+          l2s(-0.0041960863*l-0.7034186147*m+1.7076147010*s)];
+}
+function oklabLerp(c1,c2,t){const a=rgb2lab(c1),b=rgb2lab(c2);
+  return lab2rgb([clamp(lerp(a[0],b[0],t),0,1),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]);}
+
+/* ---------- evaluate + turtle VM ---------- */
+function figureSteps(pairs,t){
+  return pairs.map(p=>({
+    f:lerp(p.f[0],p.f[1],t),
+    turn:lerp(p.turn[0],p.turn[1],t),
+    w:Math.max(0.3,lerp(p.w[0],p.w[1],t)),
+    pen: t<0.5?p.pen[0]:p.pen[1],
+    col: oklabLerp(p.col[0],p.col[1],t)
+  }));
+}
+/* heading 0 = up, +turn = clockwise (right) */
+function run(steps,pose){
+  let x=pose?pose.x:0, y=pose?pose.y:0, h=pose?pose.h:0; const segs=[];
+  for(const s of steps){
+    const r=h*Math.PI/180, nx=x+Math.sin(r)*s.f, ny=y-Math.cos(r)*s.f;
+    if(s.pen && s.f!==0) segs.push({x1:x,y1:y,x2:nx,y2:ny,w:s.w,col:s.col});
+    x=nx;y=ny;h+=s.turn;
+  }
+  return segs;
+}
+// split leading non-drawing steps (pen-up moves, pure rotations) into an initial pose
+function splitPose(steps){
+  let x=0,y=0,h=0,i=0;
+  while(i<steps.length){
+    const s=steps[i];
+    if(s.pen && Math.abs(s.f)>1e-9) break;
+    const r=h*Math.PI/180; x+=Math.sin(r)*s.f; y-=Math.cos(r)*s.f; h+=s.turn; i++;
+  }
+  return {pose:{x,y,h}, body:steps.slice(i)};
+}
+const poseAt=(pA,pB,t)=> (pA&&pB) ? {x:lerp(pA.x,pB.x,t),y:lerp(pA.y,pB.y,t),h:lerp(pA.h,pB.h,t)} : null;
+const figureSegments=(pairs,t,pA,pB)=>run(figureSteps(pairs,t), poseAt(pA,pB,t));
+// ordered vertices (constant count across t) + per-segment pen/colour — for 2.5D stacking
+function figureVerts(pairs,t,pA,pB){
+  const st=figureSteps(pairs,t), pose=poseAt(pA,pB,t);
+  let x=pose?pose.x:0,y=pose?pose.y:0,h=pose?pose.h:0;
+  const pts=[{x,y}], pen=[], col=[];
+  for(const s of st){ const r=h*Math.PI/180; x+=Math.sin(r)*s.f; y-=Math.cos(r)*s.f; pts.push({x,y}); pen.push(s.pen&&s.f!==0); col.push(s.col); h+=s.turn; }
+  return {pts,pen,col};
+}
+
+/* ============================================================
+   Text generation: concretised + parametric (Logo) views
+   ============================================================ */
+const rnd=(n,d=1)=>{const v=Number(n.toFixed(d));return Object.is(v,-0)?0:v;};
+const colEq=(a,b)=>a[0]===b[0]&&a[1]===b[1]&&a[2]===b[2];
+const reduceAngle=a=>{a=((a%360)+360)%360; return a;};   // [0,360): turn 823.4 -> 103.4
+
+// run-length / block detection: fold repeated command runs into repeat [...]
+function tokeq(a,b){ if(!a||!b)return false; if(a.k!==b.k)return false; return a.k==='col'?colEq(a.v,b.v):a.v===b.v; }
+function rollup(prims){
+  const out=[]; let i=0;
+  while(i<prims.length){
+    let best=null; const maxL=Math.floor((prims.length-i)/2);
+    for(let L=1;L<=maxL;L++){
+      let r=1;
+      for(;;){ let ok=true; for(let j=0;j<L;j++){ if(!tokeq(prims[i+j],prims[i+r*L+j])){ok=false;break;} } if(ok)r++; else break; }
+      if(r>=2 && (!best || r>best.r || (r===best.r && L<best.L))) best={L,r};
+    }
+    if(best){ out.push({rep:best.r, body:prims.slice(i,i+best.L)}); i+=best.L*best.r; }
+    else { out.push(prims[i]); i++; }
+  }
+  return out;
+}
+function tokText(t){
+  if(t.k==='fd')return `forward ${t.v}`;
+  if(t.k==='rt')return `right ${t.v}`;
+  if(t.k==='col')return `setpencolour [${t.v.join(' ')}]`;
+  if(t.k==='pw')return `penwidth ${t.v}`;
+  if(t.k==='pu')return 'penup'; if(t.k==='pd')return 'pendown';
+  return '';
+}
+function poseToLogo(p){
+  if(!p || (Math.abs(p.x)<0.5 && Math.abs(p.y)<0.5 && Math.abs(p.h)<0.5)) return '';
+  const A=rnd((((Math.atan2(p.x,-p.y)*180/Math.PI)%360)+360)%360,1);
+  const D=rnd(Math.hypot(p.x,p.y),1);
+  const B=rnd((((p.h-A)%360)+360)%360,1);
+  let s='  penup\n';
+  if(A!==0) s+=`  right ${A}\n`;
+  if(D!==0) s+=`  forward ${D}\n`;
+  if(B!==0) s+=`  right ${B}\n`;
+  return s+'  pendown\n';
+}
+function blendNumbersText(pairs,t,pA,pB){
+  const st=figureSteps(pairs,t);
+  const prims=[]; let lc=null,lw=null,lp=true;
+  for(const s of st){
+    if(!lc||!colEq(s.col,lc)){ prims.push({k:'col',v:s.col.slice()}); lc=s.col.slice(); }
+    if(lw===null||rnd(s.w)!==rnd(lw)){ prims.push({k:'pw',v:rnd(s.w)}); lw=s.w; }
+    if(s.pen!==lp){ prims.push({k:s.pen?'pd':'pu'}); lp=s.pen; }
+    prims.push({k:'fd',v:rnd(s.f)});
+    const a=rnd(reduceAngle(s.turn)); if(a!==0) prims.push({k:'rt',v:a});
+  }
+  const body=rollup(prims).map(b=> b.rep ? `  repeat ${b.rep} [${b.body.map(tokText).join(' ')}]`
+                                         : `  ${tokText(b)}`).join('\n');
+  const pose=poseToLogo(poseAt(pA,pB,t));
+  return `; blend at t = ${rnd(t,2)}  (angles reduced mod 360; runs folded into repeat)\nto blend\n${pose}${body}\nend`;
+}
+function blendFormulaText(pairs){
+  const arg=(a,b)=>Math.abs(a-b)<1e-9?`${rnd(a,2)}`:`interpolate :x ${rnd(a,2)} ${rnd(b,2)}`;
+  let out=`; interpolate between two values\nto interpolate :x :a :b\n  output :a + :x * (:b - :a)\nend\n\nto blend :x\n`;
+  let lc=null,lw=null,lp=true;
+  for(const p of pairs){
+    const cA=p.col[0],cB=p.col[1];
+    if(!lc||!colEq(cA,lc)||!colEq(cB,(lc.B||cA))){
+      if(colEq(cA,cB)) out+=`  setpencolour [${cA.join(' ')}]\n`;
+      else out+=`  setpencolour interpolate :x [${cA.join(' ')}] [${cB.join(' ')}]\n`;
+      lc=cA.slice(); lc.B=cB.slice();
+    }
+    if(lw===null || rnd(p.w[0])!==rnd((lw[0]??lw)) || rnd(p.w[1])!==rnd((lw[1]??lw))){
+      if(Math.abs(p.w[0]-p.w[1])<1e-9) out+=`  penwidth ${rnd(p.w[0])}\n`;
+      else out+=`  penwidth interpolate :x ${rnd(p.w[0])} ${rnd(p.w[1])}\n`;
+      lw=[p.w[0],p.w[1]];
+    }
+    if(p.pen[0]!==lp){ out+=`  ${p.pen[0]?'pendown':'penup'}\n`; lp=p.pen[0]; }
+    let ln=`  forward ${arg(p.f[0],p.f[1])}`;
+    if(!(Math.abs(p.turn[0])<1e-9&&Math.abs(p.turn[1])<1e-9)) ln+=`  right ${arg(p.turn[0],p.turn[1])}`;
+    out+=ln+'\n';
+  }
+  return out+'end';
+}
+/* parse an edited Formula program back into pairs (the fork path) */
+function parseBlend(text){
+  // drop the interpolate helper; keep body of "to blend :x ... end"
+  let body=text;
+  const bi=text.toLowerCase().indexOf('to blend');
+  if(bi>=0){ const after=text.slice(bi); const e=after.toLowerCase().indexOf('\nend');
+    body = e>=0 ? after.slice(0,e) : after; body=body.replace(/to\s+blend\s*:x/i,''); }
+  const toks=tokenize(body); let i=0;
+  const PAIR=()=>{
+    // either: number   OR   interpolate :x A B   OR  [r g b]  OR interpolate :x [..] [..]
+    if((toks[i]||'').toLowerCase()==='interpolate'){
+      i++; if(toks[i] && toks[i][0]===':') i++;  // skip the loop variable (:x)
+      const a=VAL(),b=VAL(); return [a,b,true];
+    }
+    const v=VAL(); return [v,v,false];
+  };
+  const VAL=()=>{
+    if(toks[i]==='['){ i++; const a=[parseFloat(toks[i++]),parseFloat(toks[i++]),parseFloat(toks[i++])]; if(toks[i]===']')i++; return a; }
+    const w=(toks[i]||'').toLowerCase();
+    if(NAMED[w]){ i++; return NAMED[w].slice(); }
+    return parseFloat(toks[i++]);
+  };
+  // walk, building steps (turn-after)
+  const steps=[]; let pen=true,col=[DEF_COL.slice(),DEF_COL.slice()],w=[DEF_W,DEF_W],cur=null,lead=null;
+  const push=()=>{ if(cur){steps.push(cur);cur=null;} };
+  while(i<toks.length){
+    const wd=(toks[i++]||'').toLowerCase();
+    if(wd==='forward'||wd==='fd'){ push(); const f=PAIR(); cur={f:[f[0],f[1]],turn:[0,0],pen:[pen,pen],col:[col[0].slice(),col[1].slice()],w:[w[0],w[1]]}; }
+    else if(wd==='back'||wd==='bk'){ push(); const f=PAIR(); cur={f:[-f[0],-f[1]],turn:[0,0],pen:[pen,pen],col:[col[0].slice(),col[1].slice()],w:[w[0],w[1]]}; }
+    else if(wd==='right'||wd==='rt'){ const a=PAIR(); if(cur){cur.turn[0]+=a[0];cur.turn[1]+=a[1];} else {lead=lead||[0,0];lead[0]+=a[0];lead[1]+=a[1];} }
+    else if(wd==='left'||wd==='lt'){ const a=PAIR(); if(cur){cur.turn[0]-=a[0];cur.turn[1]-=a[1];} else {lead=lead||[0,0];lead[0]-=a[0];lead[1]-=a[1];} }
+    else if(wd==='setpencolour'||wd==='setpencolor'||wd==='setpc'){ const c=PAIR(); col=[c[0],c[1]]; }
+    else if(wd==='penwidth'||wd==='setpensize'||wd==='pw'){ const ww=PAIR(); w=[ww[0],ww[1]]; }
+    else if(wd==='penup'||wd==='pu') pen=false;
+    else if(wd==='pendown'||wd==='pd') pen=true;
+  }
+  push();
+  if(lead) steps.unshift({f:[0,0],turn:[lead[0],lead[1]],pen:[true,true],col:[DEF_COL.slice(),DEF_COL.slice()],w:[DEF_W,DEF_W]});
+  return steps;
+}
+
+/* ============================================================
+   Presets
+   ============================================================ */
+// Default 2D pair: a 5-point star OUTLINE morphing into a decagon. Both are single-winding
+// and 5-fold symmetric, so by the gcd-closure result every in-between figure stays closed
+// (the points retract smoothly into a near-circle) — unlike square/triangle, which gap.
+const STAR_OUTLINE='setpencolour orange\nrepeat 5 [forward 92 right 144 forward 92 left 72]';
+const DECAGON='setpencolour purple\nrepeat 10 [forward 70 right 36]';
+const PRESETS=[
+  {n:'Square',   g:'Shapes', c:[34,96,224],  s:'setpencolour blue\nrepeat 4 [forward 100 right 90]'},
+  {n:'Triangle', g:'Shapes', c:[222,52,42],  s:'setpencolour red\nrepeat 3 [forward 115 right 120]'},
+  {n:'Pentagon', g:'Shapes', c:[42,170,74],  s:'setpencolour green\nrepeat 5 [forward 82 right 72]'},
+  {n:'Hexagon',  g:'Shapes', c:[150,60,200], s:'setpencolour purple\nrepeat 6 [forward 70 right 60]'},
+  {n:'Decagon',  g:'Shapes', c:[120,70,210], s:DECAGON},
+  {n:'Circle',   g:'Shapes', c:[36,186,196], s:'setpencolour cyan\nrepeat 36 [forward 18 right 10]'},
+  {n:'Star',     g:'Shapes', c:[240,140,30], s:STAR_OUTLINE},
+  {n:'Pentagram',g:'Shapes', c:[240,140,30], s:'setpencolour orange\nrepeat 5 [forward 145 right 144]'},
+  {n:'Star 9',   g:'Shapes', c:[210,60,180], s:'setpencolour magenta\nrepeat 9 [forward 98 right 80]'},
+  {n:'House',    g:'Shapes', c:[150,96,52],  s:'setpencolour brown\npenwidth 4\nforward 80 right 45 forward 56.57 right 90 forward 56.57 right 45 forward 80 right 90 forward 80'},
+  {n:'Rainbow',  g:'Shapes', c:[222,52,42],  s:'setpencolour red\nforward 70 right 60\nsetpencolour orange\nforward 70 right 60\nsetpencolour yellow\nforward 70 right 60\nsetpencolour green\nforward 70 right 60\nsetpencolour blue\nforward 70 right 60\nsetpencolour purple\nforward 70 right 60'},
+  {n:'Line',     g:'Lines',  c:[34,96,224],  s:'setpencolour blue\nforward 150'},
+  {n:'Color Line',g:'Lines', c:[240,140,30], s:'setpencolour red\nforward 30\nsetpencolour orange\nforward 30\nsetpencolour yellow\nforward 30\nsetpencolour green\nforward 30\nsetpencolour blue\nforward 30'},
+  {n:'Spiral',   g:'Fractals', c:[150,60,200], s:'setpencolour purple\nto spiral :length :angle :depth\n  if :depth = 0 [stop]\n  forward :length\n  right :angle\n  spiral :length + 4 :angle :depth - 1\nend\nspiral 4 24 30'},
+  {n:'Snowflake',g:'Fractals', c:[36,186,196], s:'setpencolour cyan\nto koch :length :depth\n  if :depth = 0 [forward :length stop]\n  koch :length / 3 :depth - 1\n  left 60\n  koch :length / 3 :depth - 1\n  right 120\n  koch :length / 3 :depth - 1\n  left 60\n  koch :length / 3 :depth - 1\nend\nrepeat 3 [koch 90 2 right 120]'},
+  {n:'Tree',     g:'Fractals', c:[42,170,74],  s:'setpencolour green\nto tree :length :depth\n  if :depth = 0 [stop]\n  forward :length\n  left 30\n  tree :length * 0.7 :depth - 1\n  right 60\n  tree :length * 0.7 :depth - 1\n  left 30\n  back :length\nend\ntree 55 5'},
+];
+
+// 3D beetle presets. Cube/Pyramid/Tetrahedron are Node-verified wireframes; the rest are parametric.
+// The two octagons (flat vs upright) are the default pair — same shape, perpendicular planes — the clearest Euler/Slerp demo.
+const PRESETS3=[
+  {n:'Octagon',   c:[34,96,224], s:'setpencolour blue\nrepeat 8 [forward 55 right 45]'},
+  {n:'Octagon ↑', c:[222,52,42], s:'setpencolour red\nrepeat 8 [forward 55 up 45]'},
+  {n:'Cube', c:[34,96,224], s:'setpencolour blue\nup 90 forward 100 right 180 forward 100 right 151.1 down 90 forward 100 right 90 up 61.1 forward 100 left 180 forward 100 left 156.9 down 90 forward 100 left 90 up 66.9 forward 100 left 180 forward 100 left 92.8 up 90 forward 100 left 90 down 2.8 forward 100 left 90 forward 100 right 90 up 90 forward 100 right 90 forward 100 right 90 forward 100 right 3.6 up 90 forward 100 right 90 up 86.4 forward 100'},
+  {n:'Pyramid', c:[240,140,30], s:'setpencolour orange\nright 45 up 57.3 forward 130.8 left 180 forward 130.8 right 118.4 down 36.5 forward 100 right 113.5 up 16.4 forward 130.8 left 180 forward 130.8 right 145 down 62.2 forward 100 right 123.7 up 46.4 forward 130.8 right 180 forward 130.8 right 125.4 down 48.7 forward 100 right 115.1 up 25.8 forward 130.8 forward 0 forward 0 forward 0 forward 0 right 180 forward 130.8 right 138.6 down 59.3 forward 100'},
+  {n:'Tetrahedron', c:[150,60,200], s:'setpencolour purple\nright 90 forward 130 left 150 up 54.7 forward 130 right 135 down 45 forward 130 left 180 forward 130 left 125.3 down 30 forward 130 left 121.5 up 16.8 forward 130 left 139.5 up 48.9 forward 130 left 127.6 down 35 forward 130'},
+  {n:'Helix',  c:[36,186,196], s:'setpencolour cyan\nrepeat 40 [forward 16 right 12 up 7]'},
+  {n:'Coil',   c:[42,170,74],  s:'setpencolour green\nrepeat 80 [forward 9 right 32 up 3]'},
+  {n:'Sphere', c:[24,150,140], s:'setpencolour teal\nrepeat 100 [forward 7 right 26 up 3.6]'},
+  {n:'Twist',  c:[210,60,180], s:'setpencolour magenta\nrepeat 16 [forward 45 right 30 rollright 22]'},
+];
+const genPresets={'2d':[],'3d':[]};
+try{ const raw=localStorage.getItem('inbetween_shapes'); if(raw){ const o=JSON.parse(raw)||{}; if(Array.isArray(o['2d']))genPresets['2d']=o['2d']; if(Array.isArray(o['3d']))genPresets['3d']=o['3d']; } }catch(e){}
+function saveGenPresets(){ try{ localStorage.setItem('inbetween_shapes', JSON.stringify(genPresets)); }catch(e){} }
+const curPresets=()=>(S.dim==='3d'?PRESETS3:PRESETS).concat(genPresets[S.dim]);
+
+/* ============================================================
+   App state + UI
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const S={t:0.5,min:0,max:1,mode:'single',view:'num',forked:false,pairs:[],playing:false,raf:0,speed:1,
+  dim:'2d', rmode:'axis', az:0.62, el:1.16, orbit:null, showAxes:false, showAnchors:true,
+  saved:{'2d':null,'3d':null},
+  dragA:{x:0,y:0}, dragB:{x:0,y:0}, poseA:{x:0,y:0,h:0}, poseB:{x:0,y:0,h:0}, dragging:null, frozenVB:null,
+  lockFrame:true, lockedVB:null,
+  tuning:false, tuneOpen:{A:false,B:false}, colorOpen:{A:false,B:false},
+  tutorHistory:[], tutorBusy:false};
+
+function validPairs(p){
+  return Array.isArray(p) && p.length>0 && p.every(s=>
+    Number.isFinite(s.f[0])&&Number.isFinite(s.f[1])&&
+    Number.isFinite(s.turn[0])&&Number.isFinite(s.turn[1]));
+}
+function rebuild(){
+  if(S.dim==='3d'){
+    S.pairs=align3(canon3(parse3(tok3($('progA').value))), canon3(parse3(tok3($('progB').value))));
+    syncSwatches(); syncActiveChips(); renderBlendText(); if(!S.tuning){ buildTune('A'); buildTune('B'); buildColorTune('A'); buildColorTune('B'); } render(); return;
+  }
+  if(!S.forked){
+    const a=splitPose(canon(parse(tokenize($('progA').value))));
+    const b=splitPose(canon(parse(tokenize($('progB').value))));
+    S.poseA={x:a.pose.x+S.dragA.x, y:a.pose.y+S.dragA.y, h:a.pose.h};
+    S.poseB={x:b.pose.x+S.dragB.x, y:b.pose.y+S.dragB.y, h:b.pose.h};
+    S.pairs=align(a.body, b.body);
+  } else {
+    try{ const p=parseBlend($('blendForm').value);
+      if(validPairs(p)){ S.pairs=p; S._lastGood=p; }   // keep last good while mid-edit
+    }catch(e){}
+    S.poseA={x:S.dragA.x,y:S.dragA.y,h:0};
+    S.poseB={x:S.dragB.x,y:S.dragB.y,h:0};
+  }
+  syncSwatches();
+  syncActiveChips();
+  renderBlendText();
+  if(!S.tuning){ buildTune('A'); buildTune('B'); buildColorTune('A'); buildColorTune('B'); }
+  if(S.lockFrame) computeLockedVB();
+  render();
+}
+function syncSwatches(){
+  const first=S.dim==='3d'
+    ? {a:canon3(parse3(tok3($('progA').value)))[0], b:canon3(parse3(tok3($('progB').value)))[0]}
+    : {a:canon(parse(tokenize($('progA').value)))[0], b:canon(parse(tokenize($('progB').value)))[0]};
+  if(first.a) $('swA').style.background=`rgb(${first.a.col.join(',')})`;
+  if(first.b) $('swB').style.background=`rgb(${first.b.col.join(',')})`;
+}
+
+/* ---------- tune sliders: one per numeric constant in a program ---------- */
+function constsOf(src){
+  const re=/<=|>=|<>|[-+*/()\[\]=<>]|\d*\.?\d+|:?[A-Za-z_]\w*/g;
+  const tk=[]; let m; while((m=re.exec(src))) tk.push({t:m[0], pos:m.index});
+  // collect procedure param names and mark the token span of each definition (its internals are NOT tunable)
+  const params={}; const inProc=new Array(tk.length).fill(false);
+  for(let i=0;i<tk.length;){
+    if(tk[i].t.toLowerCase()==='to'){
+      const nm=((tk[i+1]||{}).t||'').toLowerCase(); const ps=[]; let k=i+2;
+      while(k<tk.length && tk[k].t[0]===':'){ ps.push(tk[k].t.slice(1).toLowerCase()); k++; }
+      params[nm]=ps;
+      let e=i; while(e<tk.length && tk[e].t.toLowerCase()!=='end') e++;
+      for(let j=i;j<=e && j<tk.length;j++) inProc[j]=true;
+      i=e+1;
+    } else i++;
+  }
+  const isProc=n=>Object.prototype.hasOwnProperty.call(params,n);
+  const CMD={forward:'forward',fd:'forward',back:'back',bk:'back',right:'right',rt:'right',left:'left',lt:'left',up:'up',pitchup:'up',down:'down',pitchdown:'down',rollright:'roll right',rollleft:'roll left',rr:'roll right',rl:'roll left',penwidth:'pen width',pw:'pen width',setpensize:'pen width',repeat:'repeat'};
+  // walk only the main program, labelling each number by call-parameter or command
+  const out=[]; let mode='none', proc=null, idx=0, cmdLabel='';
+  for(let j=0;j<tk.length;j++){
+    if(inProc[j]) continue;
+    const w=tk[j].t, wl=w.toLowerCase(), isNum=/^\d*\.?\d+$/.test(w);
+    if(wl==='setpencolour'||wl==='setpencolor'||wl==='setpc'){ mode='none';
+      if(tk[j+1] && tk[j+1].t==='['){ let k=j+2; while(k<tk.length && tk[k].t!==']') k++; j=k; } continue; }
+    if(isNum){
+      let label='value';
+      if(mode==='call'){ label=(params[proc]||[])[idx]||'arg'; idx++; }
+      else if(mode==='cmd'){ label=cmdLabel; mode='none'; }
+      out.push({pos:tk[j].pos, txt:w, val:parseFloat(w), cmd:label});
+    } else if(isProc(wl)){ mode='call'; proc=wl; idx=0; }
+    else if(CMD[wl]!==undefined){ mode='cmd'; cmdLabel=CMD[wl]; }
+    else { mode='none'; }   // '[', ']', operators, :vars, colour names all end an argument run
+  }
+  return out;
+}
+function rangeFor(cmd,val){
+  const c=(cmd||'').toLowerCase();
+  const enc=(lo,hi)=>[Math.min(lo,Math.floor(val)),Math.max(hi,Math.ceil(val))];
+  const isAngle=/^(right|left|rt|lt|up|down|pitchup|pitchdown|rr|rl)$/.test(c)||/roll|ang|turn|deg|head|bear/.test(c);
+  const isLen=/^(forward|back|fd|bk|r)$/.test(c)||/len|size|dist|side|radius|width|height|step/.test(c);
+  const isCount=/^(repeat|n|depth|count|times|iter|level|levels|steps|num)$/.test(c)||/depth|count|times|iter|level/.test(c);
+  if(isAngle){ const[a,b]=enc(0,360); return{min:a,max:b,step:1}; }
+  if(isLen){ const[a,b]=enc(0,Math.max(200,val*2)); return{min:a,max:b,step:1}; }
+  if(isCount){ const[a,b]=enc(1,Math.max(40,val*2)); return{min:Math.max(0,a),max:b,step:1}; }
+  if(c==='pen width'){ return{min:0.3,max:Math.max(20,Math.ceil(val)),step:0.1}; }
+  if(!Number.isInteger(val)||Math.abs(val)<3){ const span=Math.max(2,Math.abs(val)*2); return{min:Math.min(0,Math.floor(val-1)),max:Math.max(3,Math.ceil(val+span)),step:0.05}; }
+  const[a,b]=enc(0,Math.max(40,val*2)); return{min:a,max:b,step:1};
+}
+function fmtNum(n){ return String(parseFloat(n.toFixed(2))); }
+function buildTune(which){
+  const host=$('tune'+which); if(!host||!S.tuneOpen[which]) return;
+  const cs=constsOf($('prog'+which).value);
+  host.innerHTML='';
+  if(!cs.length){ const e=document.createElement('div'); e.className='tune-empty'; e.textContent='No numbers in this program to tune.'; host.appendChild(e); return; }
+  cs.forEach((c,ord)=>{
+    const r=rangeFor(c.cmd,c.val);
+    const row=document.createElement('div'); row.className='tune-row';
+    const lab=document.createElement('span'); lab.className='tlab'; lab.textContent=c.cmd||'value'; lab.title=(c.cmd||'value')+' '+c.txt;
+    const inp=document.createElement('input'); inp.type='range'; inp.min=r.min; inp.max=r.max; inp.step=r.step; inp.value=c.val;
+    const vv=document.createElement('span'); vv.className='tval'; vv.textContent=fmtNum(c.val);
+    inp.addEventListener('input',()=>{ const v=parseFloat(inp.value); vv.textContent=fmtNum(v); setConst(which,ord,v); });
+    row.appendChild(lab); row.appendChild(inp); row.appendChild(vv); host.appendChild(row);
+  });
+}
+function setConst(which,ord,val){
+  const src=$('prog'+which).value; const cs=constsOf(src);
+  if(ord>=cs.length) return; const c=cs[ord];
+  $('prog'+which).value=src.slice(0,c.pos)+fmtNum(val)+src.slice(c.pos+c.txt.length);
+  S.tuning=true; if(S.forked) unfork(true); rebuild(); S.tuning=false;
+}
+
+/* ---------- tune colours: a colour picker per setpencolour ---------- */
+function rgb2hex(rgb){ return '#'+rgb.map(x=>Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join(''); }
+function hex2rgb(h){ const n=parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function colorsOf(src){
+  const re=/\[|\]|:?[A-Za-z_]\w*|\d*\.?\d+/g; const tk=[]; let m;
+  while((m=re.exec(src))) tk.push({t:m[0], pos:m.index});
+  const out=[];
+  for(let j=0;j<tk.length;j++){
+    const wl=tk[j].t.toLowerCase();
+    if(wl==='setpencolour'||wl==='setpencolor'||wl==='setpc'){
+      const nx=tk[j+1]; if(!nx) continue;
+      if(nx.t==='['){
+        let k=j+2, nums=[]; while(k<tk.length && tk[k].t!==']'){ if(/^\d*\.?\d+$/.test(tk[k].t)) nums.push(parseFloat(tk[k].t)); k++; }
+        if(k<tk.length){ out.push({pos:nx.pos, end:tk[k].pos+1, hex:rgb2hex([nums[0]||0,nums[1]||0,nums[2]||0])}); }
+      } else { out.push({pos:nx.pos, end:nx.pos+nx.t.length, hex:rgb2hex(NAMED[nx.t.toLowerCase()]||DEF_COL)}); }
+    }
+  }
+  return out;
+}
+function buildColorTune(which){
+  const host=$('color'+which); if(!host||!S.colorOpen[which]) return;
+  const cs=colorsOf($('prog'+which).value);
+  host.innerHTML='';
+  if(!cs.length){ const e=document.createElement('div'); e.className='tune-empty'; e.textContent='No colours in this program to tune.'; host.appendChild(e); return; }
+  cs.forEach((c,ord)=>{
+    const row=document.createElement('div'); row.className='color-row';
+    const sw=document.createElement('input'); sw.type='color'; sw.value=c.hex;
+    const lab=document.createElement('span'); lab.className='clab'; lab.textContent=cs.length>1?('colour '+(ord+1)):'pen colour';
+    sw.addEventListener('input',()=>setColor(which,ord,sw.value));
+    row.appendChild(sw); row.appendChild(lab); host.appendChild(row);
+  });
+}
+function setColor(which,ord,hex){
+  const src=$('prog'+which).value; const cs=colorsOf(src);
+  if(ord>=cs.length) return; const c=cs[ord];
+  $('prog'+which).value=src.slice(0,c.pos)+'['+hex2rgb(hex).join(' ')+']'+src.slice(c.end);
+  S.tuning=true; if(S.forked) unfork(true); rebuild(); S.tuning=false;
+}
+
+/* ---------- rendering ---------- */
+function computeLockedVB(){
+  if(S.dim==='3d'||!S.pairs.length){ S.lockedVB=null; return; }
+  const all=[]; const N=33;
+  for(let k=0;k<N;k++){ const tt=lerp(S.min,S.max,k/(N-1)); figureSegments(S.pairs,tt,S.poseA,S.poseB).forEach(s=>all.push(s)); }
+  const bb=bboxOf(all);
+  bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
+  bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y);
+  S.lockedVB=setViewBox(bb,0.12);
+}
+function bboxOf(list){
+  let a=1e9,b=1e9,c=-1e9,d=-1e9;
+  for(const s of list){a=Math.min(a,s.x1,s.x2);b=Math.min(b,s.y1,s.y2);c=Math.max(c,s.x1,s.x2);d=Math.max(d,s.y1,s.y2);}
+  if(a>c){return [-100,-100,100,100];}
+  return [a,b,c,d];
+}
+function setViewBox(bb,padFrac){
+  const [a,b,c,d]=bb; let w=c-a,h=d-b; const sz=Math.max(w,h,1);
+  const pad=sz*(padFrac??0.12);
+  const cx=(a+c)/2, cy=(b+d)/2, half=sz/2+pad;
+  const vb=`${cx-half} ${cy-half} ${half*2} ${half*2}`;
+  $('stage').setAttribute('viewBox',vb);
+  return [cx-half,cy-half,half*2,half*2];
+}
+const SVGNS='http://www.w3.org/2000/svg';
+function drawSegs(segs,opacity,widthMul){
+  const f=document.createDocumentFragment();
+  for(const s of segs){
+    const ln=document.createElementNS(SVGNS,'line');
+    ln.setAttribute('x1',s.x1.toFixed(2));ln.setAttribute('y1',s.y1.toFixed(2));
+    ln.setAttribute('x2',s.x2.toFixed(2));ln.setAttribute('y2',s.y2.toFixed(2));
+    ln.setAttribute('stroke',`rgb(${s.col.join(',')})`);
+    ln.setAttribute('stroke-width',(s.w*(widthMul||1)).toFixed(2));
+    ln.setAttribute('stroke-linecap','round');
+    ln.setAttribute('stroke-linejoin','round');
+    ln.setAttribute('vector-effect','non-scaling-stroke');
+    if(opacity!=null) ln.setAttribute('opacity',opacity);
+    f.appendChild(ln);
+  }
+  return f;
+}
+function shapeColor(which){
+  const v=$('prog'+which).value; const st=canon(parse(tokenize(v)))[0];
+  return st?`rgb(${st.col.join(',')})`:'rgb(46,125,91)';
+}
+function drawAnchor(which,pose,vbw){
+  const r=vbw*0.022, g=document.createElementNS(SVGNS,'g');
+  g.setAttribute('class','anchor'); g.setAttribute('data-which',which);
+  g.setAttribute('transform',`translate(${pose.x.toFixed(2)} ${pose.y.toFixed(2)})`);
+  g.style.cursor='grab';
+  const c=document.createElementNS(SVGNS,'circle');
+  c.setAttribute('r',r); c.setAttribute('fill',shapeColor(which));
+  c.setAttribute('fill-opacity','0.85'); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width',(r*0.18).toFixed(2));
+  const tx=document.createElementNS(SVGNS,'text');
+  tx.setAttribute('text-anchor','middle'); tx.setAttribute('dy',r*0.36); tx.setAttribute('fill','#fff');
+  tx.setAttribute('font-size',r*1.1); tx.setAttribute('font-family','Fredoka, sans-serif'); tx.setAttribute('font-weight','600');
+  tx.setAttribute('pointer-events','none'); tx.textContent=which;
+  g.appendChild(c); g.appendChild(tx);
+  return g;
+}
+function render(){
+  if(S.dim==='3d') return render3D();
+  const stage=$('stage'); const err=$('err');
+  while(stage.firstChild) stage.removeChild(stage.firstChild);
+  if(!S.pairs.length){ err.style.display='flex'; err.textContent='Nothing to draw yet — add some forward / right commands.'; return; }
+  err.style.display='none';
+  let vb;
+
+  if(S.mode==='single'){
+    const segs=figureSegments(S.pairs,S.t,S.poseA,S.poseB);
+    if(S.lockFrame && S.lockedVB){
+      vb=S.lockedVB; stage.setAttribute('viewBox',vb.join(' '));
+    } else if(S.dragging && S.frozenVB){
+      vb=S.frozenVB; stage.setAttribute('viewBox',vb.join(' '));
+    } else {
+      const bb=bboxOf(segs); bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
+      bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y);
+      vb=setViewBox(bb,0.12);
+    }
+    stage.appendChild(drawSegs(segs,null));
+  } else if(S.mode==='family'){
+    const N=44, all=[]; const fams=[];
+    for(let k=0;k<N;k++){ const tt=lerp(S.min,S.max,k/(N-1)); const sg=figureSegments(S.pairs,tt,S.poseA,S.poseB); fams.push({tt,sg}); sg.forEach(s=>all.push(s)); }
+    const bb=bboxOf(all); bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
+    bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y);
+    vb = S.dragging&&S.frozenVB ? S.frozenVB : setViewBox(bb,0.06);
+    if(S.dragging&&S.frozenVB) $('stage').setAttribute('viewBox',S.frozenVB.join(' '));
+    const frag=document.createDocumentFragment();
+    fams.forEach(({tt,sg})=>{
+      const out = tt<0 ? -tt : (tt>1 ? tt-1 : 0);
+      const op = tt>=0&&tt<=1 ? 0.6 : Math.max(0.08, 0.6 - 0.32*out);
+      frag.appendChild(drawSegs(sg, op, 0.55));
+    });
+    stage.appendChild(frag);
+  } else {
+    // STACK (2.5D): each family member offset along a depth axis z = t, oblique-projected.
+    const N=24, samples=[];
+    for(let k=0;k<N;k++){ const tt=lerp(S.min,S.max,k/(N-1)); samples.push({tt, ...figureVerts(S.pairs,tt,S.poseA,S.poseB)}); }
+    // depth direction & scale from figure size
+    const mid=samples[Math.floor(N/2)].pts;
+    let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9; mid.forEach(p=>{mnx=Math.min(mnx,p.x);mny=Math.min(mny,p.y);mxx=Math.max(mxx,p.x);mxy=Math.max(mxy,p.y);});
+    const fsz=Math.max(mxx-mnx,mxy-mny,1), ang=32*Math.PI/180, depth=fsz*1.6;
+    const ZX=Math.cos(ang)*depth, ZY=-Math.sin(ang)*depth;
+    const zf=tt=>(tt-S.min)/((S.max-S.min)||1);                     // 0..1 across range
+    const proj=(p,tt)=>({x:p.x+zf(tt)*ZX, y:p.y+zf(tt)*ZY});
+    // viewBox over all projected points
+    let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
+    samples.forEach(sm=>sm.pts.forEach(p=>{const q=proj(p,sm.tt);X0=Math.min(X0,q.x);Y0=Math.min(Y0,q.y);X1=Math.max(X1,q.x);Y1=Math.max(Y1,q.y);}));
+    vb=setViewBox([X0,Y0,X1,Y1],0.08);
+    const frag=document.createDocumentFragment();
+    const P=samples[0].pts.length;
+    // longitudinal flow lines: how each point travels through the morph (the swept surface)
+    for(let i=0;i<P;i++){
+      for(let k=0;k<N-1;k++){
+        const a=proj(samples[k].pts[i],samples[k].tt), b=proj(samples[k+1].pts[i],samples[k+1].tt);
+        const col=samples[k].col[Math.min(i,P-2)]||DEF_COL;
+        const ln=document.createElementNS(SVGNS,'line');
+        ln.setAttribute('x1',a.x.toFixed(2));ln.setAttribute('y1',a.y.toFixed(2));
+        ln.setAttribute('x2',b.x.toFixed(2));ln.setAttribute('y2',b.y.toFixed(2));
+        ln.setAttribute('stroke',`rgb(${col.join(',')})`); ln.setAttribute('stroke-width','1');
+        ln.setAttribute('vector-effect','non-scaling-stroke'); ln.setAttribute('opacity','0.32');
+        frag.appendChild(ln);
+      }
+    }
+    // transverse outlines: the actual shape at each depth slice (front = brighter)
+    samples.forEach((sm,k)=>{
+      const depthOp=0.35+0.55*(k/(N-1));
+      for(let i=0;i<sm.pen.length;i++){
+        if(!sm.pen[i])continue;
+        const a=proj(sm.pts[i],sm.tt), b=proj(sm.pts[i+1],sm.tt);
+        const ln=document.createElementNS(SVGNS,'line');
+        ln.setAttribute('x1',a.x.toFixed(2));ln.setAttribute('y1',a.y.toFixed(2));
+        ln.setAttribute('x2',b.x.toFixed(2));ln.setAttribute('y2',b.y.toFixed(2));
+        ln.setAttribute('stroke',`rgb(${sm.col[i].join(',')})`); ln.setAttribute('stroke-width',(sm.col?1.6:1.6));
+        ln.setAttribute('stroke-linecap','round'); ln.setAttribute('vector-effect','non-scaling-stroke');
+        ln.setAttribute('opacity',depthOp.toFixed(2));
+        frag.appendChild(ln);
+      }
+    });
+    stage.appendChild(frag);
+  }
+  // draggable A/B anchors (hidden in 2.5D, where positions are projected)
+  const vbw=vb[2];
+  if(S.mode!=='stack' && S.showAnchors){ stage.appendChild(drawAnchor('A',S.poseA,vbw)); stage.appendChild(drawAnchor('B',S.poseB,vbw)); }
+  $('tbadge').innerHTML = S.mode==='single' ? `t = <b>${rnd(S.t,2)}</b>`
+    : S.mode==='stack' ? `2.5D · depth = t · ${rnd(S.min,1)} → ${rnd(S.max,1)}`
+    : `family · ${rnd(S.min,1)} → ${rnd(S.max,1)}`;
+}
+
+/* ---------- blend text panes ---------- */
+function highlight(code){
+  return code
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/(;[^\n]*)/g,'<span class="cmt">$1</span>')
+    .replace(/\b(forward|right|left|back|repeat|setpencolour|penwidth|penup|pendown|to|end|output|interpolate)\b/g,'<span class="kw">$1</span>')
+    .replace(/(-?\d+\.?\d*)/g,'<span class="num">$1</span>');
+}
+let prevNum='';
+function renderBlendText(){
+  if(S.dim==='3d'){ $('blendNum').innerHTML=highlight(blend3Text(S.pairs,S.t,S.rmode)); prevNum=''; return; }
+  if(S.view==='num'){
+    const txt=blendNumbersText(S.pairs,S.t,S.poseA,S.poseB);
+    // highlight digits that changed since last frame (the "shape = numbers" effect)
+    $('blendNum').innerHTML=highlight(txt);
+    prevNum=txt;
+  } else if(!S.forked){
+    $('blendForm').value=blendFormulaText(S.pairs);
+  }
+}
+
+/* ---------- slider zones ---------- */
+function updateZones(){
+  const total=S.max-S.min||1;
+  const hs=clamp((0-S.min)/total,0,1), he=clamp((1-S.min)/total,0,1);
+  $('hatchL').style.left='0%'; $('hatchL').style.width=(hs*100)+'%';
+  $('zoneHome').style.left=(hs*100)+'%'; $('zoneHome').style.width=((he-hs)*100)+'%';
+  $('hatchR').style.left=(he*100)+'%'; $('hatchR').style.width=((1-he)*100)+'%';
+  $('lblMin').textContent=rnd(S.min,1); $('lblMax').textContent=rnd(S.max,1);
+  const bl=$('beyondL'), br=$('beyondR');
+  if(bl) bl.setAttribute('aria-pressed', S.min<0?'true':'false');
+  if(br) br.setAttribute('aria-pressed', S.max>1?'true':'false');
+}
+
+/* ---------- setters ---------- */
+function setT(t,fromSlider){
+  S.t=t;
+  if(!fromSlider){ $('slider').value=clamp(t,S.min,S.max); }
+  $('tval').value=rnd(t,2);
+  if(S.mode==='single') render(); else { $('tbadge').innerHTML=`family · ${rnd(S.min,1)} → ${rnd(S.max,1)}`; }
+  if(S.dim==='3d'||S.view==='num') renderBlendText();
+}
+function setRange(mn,mx){
+  if(mx<=mn) mx=mn+0.5;
+  S.min=mn;S.max=mx;
+  $('tmin').value=rnd(mn,2);$('tmax').value=rnd(mx,2);
+  $('slider').min=mn;$('slider').max=mx;
+  $('slider').value=clamp(S.t,mn,mx);
+  updateZones();
+  if(S.lockFrame){ computeLockedVB(); if(S.mode==='single') render(); }
+  if(S.mode==='family') render();
+}
+
+/* ---------- wiring ---------- */
+const PICK_GROUPS=['Shapes','Lines','Fractals'];
+function syncActiveChips(){   // keep the name; now syncs the dropdowns
+  ['A','B'].forEach(w=>{
+    const sel=$('pick'+w); if(!sel) return;
+    const cur=$('prog'+w).value.trim();
+    const match=curPresets().find(p=>p.s.trim()===cur);
+    sel.value = match ? match.s : '__custom__';
+  });
+}
+function buildPresetChips(){   // keep the name; now builds the dropdowns
+  ['A','B'].forEach(w=>{
+    const sel=$('pick'+w); if(!sel) return;
+    sel.innerHTML='';
+    const custom=document.createElement('option'); custom.value='__custom__'; custom.textContent='\u270e edited shape'; sel.appendChild(custom);
+    const base=(S.dim==='3d'?PRESETS3:PRESETS);
+    PICK_GROUPS.forEach(g=>{
+      const items=base.filter(p=>(p.g||'Shapes')===g);
+      if(!items.length) return;
+      const og=document.createElement('optgroup'); og.label=g;
+      items.forEach(p=>{ const o=document.createElement('option'); o.value=p.s; o.textContent=p.n; og.appendChild(o); });
+      sel.appendChild(og);
+    });
+    const gens=genPresets[S.dim];
+    if(gens.length){ const og=document.createElement('optgroup'); og.label='Yours';
+      gens.forEach(p=>{ const o=document.createElement('option'); o.value=p.s; o.textContent='\u2728 '+p.n; og.appendChild(o); });
+      sel.appendChild(og); }
+  });
+  syncActiveChips();
+}
+function buildValueChips(){
+  const VALS=[['0',0],['½',0.5],['1',1],['2',2],['−1',-1],['10',10],['−10',-10],['π',Math.PI],['−π',-Math.PI]];
+  VALS.forEach(([lbl,v])=>{
+    const b=document.createElement('button'); b.className='vchip'; b.textContent=lbl;
+    b.title=`Jump to t = ${rnd(v,2)}.`;
+    b.onclick=()=>{
+      if(v<S.min) setRange(v-1,S.max); if(v>S.max) setRange(S.min,v+1);
+      setT(v,false);
+    };
+    $('vchips').appendChild(b);
+  });
+}
+function unfork(silent){
+  S.forked=false; $('forkBadge').style.display='none'; $('resetBlend').style.display='none';
+  if(!silent){ rebuild(); }
+}
+function fork(){
+  if(S.forked) return;
+  S.forked=true; $('forkBadge').style.display='inline-block'; $('resetBlend').style.display='inline-block';
+}
+
+function init(){
+  $('progA').value=STAR_OUTLINE; // 5-point star outline
+  $('progB').value=DECAGON;      // decagon — every in-between stays closed
+  buildPresetChips();
+  buildValueChips();
+  updateZones();
+  applyDimUI();
+  rebuild();
+
+  // program edits
+  $('progA').addEventListener('input',()=>{ if(S.forked) unfork(true); rebuild(); });
+  $('progB').addEventListener('input',()=>{ if(S.forked) unfork(true); rebuild(); });
+
+  // slider
+  $('slider').addEventListener('input',e=>{ stopPlay(); setT(parseFloat(e.target.value),true); });
+  $('tval').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)){ if(v<S.min)setRange(v,S.max); if(v>S.max)setRange(S.min,v); setT(v,false);} });
+  $('tmin').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)) setRange(v,S.max); });
+  $('tmax').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)) setRange(S.min,v); });
+  $('beyondL').onclick=()=>{ setRange(S.min<0?0:-0.5, S.max); };
+  $('beyondR').onclick=()=>{ setRange(S.min, S.max>1?1:1.5); };
+  $('spd').addEventListener('input',e=>{ S.speed=parseFloat(e.target.value)||1; $('spdv').textContent=rnd(S.speed,2)+'×'; });
+
+  // view toggle
+  $('vNum').onclick=()=>{ S.view='num'; $('vNum').setAttribute('aria-pressed','true'); $('vForm').setAttribute('aria-pressed','false');
+    $('blendNum').style.display='block'; $('blendForm').style.display='none'; renderBlendText(); };
+  $('vForm').onclick=()=>{ S.view='form'; $('vForm').setAttribute('aria-pressed','true'); $('vNum').setAttribute('aria-pressed','false');
+    $('blendNum').style.display='none'; $('blendForm').style.display='block'; if(!S.forked) $('blendForm').value=blendFormulaText(S.pairs); };
+
+  // formula edits -> fork
+  $('blendForm').addEventListener('input',()=>{ fork(); rebuild(); });
+  $('resetBlend').onclick=()=>{ unfork(false); $('blendForm').value=blendFormulaText(S.pairs); };
+
+  // explain modal
+  $('explainBtn').onclick=openTutor;
+  $('tutorSend').onclick=()=>tutorAsk($('tutorInput').value);
+  $('tutorInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); tutorAsk($('tutorInput').value); } });
+  $('explainClose').onclick=()=>{ $('explainModal').style.display='none'; };
+  $('explainModal').addEventListener('pointerdown',e=>{ if(e.target.id==='explainModal') $('explainModal').style.display='none'; });
+
+  // LLM generator + API key
+  $('genBtnA').onclick=()=>generateShape('A');
+  $('genBtnB').onclick=()=>generateShape('B');
+  $('genA').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); generateShape('A'); } });
+  $('genB').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); generateShape('B'); } });
+  $('keyLink').onclick=()=>{ const r=$('keyRow'); const show=r.style.display==='none'; r.style.display=show?'flex':'none'; if(show){ syncKeyUI(); $('apiKey').focus(); } };
+  $('provSel').onchange=e=>{ setProvider(e.target.value); };
+  $('keyShow').onclick=()=>{ const i=$('apiKey'), b=$('keyShow'), hidden=i.type==='password'; i.type=hidden?'text':'password'; b.textContent=hidden?'hide':'show'; b.setAttribute('aria-pressed',hidden?'true':'false'); i.focus(); };
+  $('keySave').onclick=()=>{ saveKey($('apiKey').value); $('keyRow').style.display='none'; toast(keyFor()? PROVIDERS[PROVIDER].label+' key saved' : PROVIDERS[PROVIDER].label+' key cleared'); };
+  $('apiKey').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('keySave').click(); } });
+  syncKeyUI();
+
+  // mode toggle
+  const setMode=m=>{ if(m!=='single')stopPlay(); S.mode=m;
+    ['Single','Family','Stack'].forEach(k=>$('m'+k).setAttribute('aria-pressed', String(k.toLowerCase()===m)));
+    render(); };
+  $('mSingle').onclick=()=>setMode('single');
+  $('mFamily').onclick=()=>setMode('family');
+  $('mStack').onclick=()=>setMode('stack');
+
+  // play (ping-pong)
+  $('play').onclick=()=>{ S.playing?stopPlay():startPlay(); };
+  $('lockFrame').onclick=()=>{ S.lockFrame=!S.lockFrame; $('lockFrame').setAttribute('aria-pressed',String(S.lockFrame)); if(S.lockFrame) computeLockedVB(); render(); };
+  ['A','B'].forEach(w=>{ $('tuneTog'+w).onclick=()=>{
+    S.tuneOpen[w]=!S.tuneOpen[w];
+    $('tune'+w).style.display=S.tuneOpen[w]?'flex':'none';
+    $('tuneTog'+w).setAttribute('aria-expanded',String(S.tuneOpen[w]));
+    $('tuneTog'+w).innerHTML=(S.tuneOpen[w]?'\u25be':'\u25b8')+' tune numbers';
+    if(S.tuneOpen[w]) buildTune(w);
+  }; });
+  ['A','B'].forEach(w=>{ $('colorTog'+w).onclick=()=>{
+    S.colorOpen[w]=!S.colorOpen[w];
+    $('color'+w).style.display=S.colorOpen[w]?'flex':'none';
+    $('colorTog'+w).setAttribute('aria-expanded',String(S.colorOpen[w]));
+    $('colorTog'+w).innerHTML=(S.colorOpen[w]?'\u25be':'\u25b8')+' tune colours';
+    if(S.colorOpen[w]) buildColorTune(w);
+  }; });
+  ['A','B'].forEach(w=>{ $('pick'+w).onchange=()=>{ const v=$('pick'+w).value; if(v==='__custom__') return; $('prog'+w).value=v; if(S.forked) unfork(true); rebuild(); }; });
+
+  // export standalone animated HTML (keeps the Logo + engine, stays interactive)
+  $('dlHtml').onclick=()=>saveFile(S.dim==='3d'?'in-between-3d-morph.html':'in-between-morph.html', exportHTML(), 'text/html');
+
+  // dim toggle (2D / 3D)
+  $('d2d').onclick=()=>setDim('2d');
+  $('d3d').onclick=()=>setDim('3d');
+  // rotation-interpolation toggle (3D)
+  const setRmode=m=>{ S.rmode=m; ['Axis','Slerp','Euler'].forEach(k=>$('r'+k).setAttribute('aria-pressed',String(k.toLowerCase()===m))); render(); renderBlendText(); };
+  $('rAxis').onclick=()=>setRmode('axis');
+  $('rSlerp').onclick=()=>setRmode('slerp');
+  $('rEuler').onclick=()=>setRmode('euler');
+  $('resetView').onclick=()=>{ S.az=0.62; S.el=1.16; render(); };
+  $('axesBtn').onclick=()=>{ S.showAxes=!S.showAxes; $('axesBtn').classList.toggle('on',S.showAxes); render(); };
+  $('dotsBtn').onclick=()=>{ S.showAnchors=!S.showAnchors; $('dotsBtn').classList.toggle('on',S.showAnchors); render(); };
+
+  // ---- drag A/B anchors to position the shapes (pose interpolation) ----
+  const stage=$('stage');
+  stage.addEventListener('pointerdown',e=>{
+    if(S.dim==='3d'){   // orbit the camera
+      S.orbit={x:e.clientX,y:e.clientY,az:S.az,el:S.el}; stage.setPointerCapture(e.pointerId);
+      const mv=ev=>{ S.az=S.orbit.az+(ev.clientX-S.orbit.x)*0.01; S.el=clamp(S.orbit.el-(ev.clientY-S.orbit.y)*0.01,0.08,1.5); render(); };
+      const up=()=>{ stage.removeEventListener('pointermove',mv); stage.removeEventListener('pointerup',up); S.orbit=null; };
+      stage.addEventListener('pointermove',mv); stage.addEventListener('pointerup',up); e.preventDefault(); return;
+    }
+    const g=e.target.closest && e.target.closest('.anchor'); if(!g) return;
+    const which=g.getAttribute('data-which');
+    const rect=stage.getBoundingClientRect();
+    const vb=stage.viewBox.baseVal;
+    const sx=vb.width/rect.width, sy=vb.height/rect.height;
+    const start={mx:e.clientX,my:e.clientY, dx:S['drag'+which].x, dy:S['drag'+which].y, sx,sy};
+    S.dragging=which; S.frozenVB=[vb.x,vb.y,vb.width,vb.height];
+    g.style.cursor='grabbing'; stage.setPointerCapture(e.pointerId);
+    const move=ev=>{
+      S['drag'+which]={x: start.dx+(ev.clientX-start.mx)*start.sx, y: start.dy+(ev.clientY-start.my)*start.sy};
+      rebuild();
+    };
+    const up=ev=>{
+      stage.removeEventListener('pointermove',move); stage.removeEventListener('pointerup',up);
+      S.dragging=null; S.frozenVB=null; if(S.lockFrame) computeLockedVB(); render();
+    };
+    stage.addEventListener('pointermove',move); stage.addEventListener('pointerup',up);
+    e.preventDefault();
+  });
+  $('resetPos').onclick=()=>{ S.dragA={x:0,y:0}; S.dragB={x:0,y:0}; rebuild(); };
+}
+
+/* ---------- toast + robust file save (sandbox-safe) ---------- */
+let toastTimer=0;
+function toast(msg){
+  const el=$('toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),3200);
+}
+function saveFile(name,text,mime){
+  let downloaded=false;
+  try{
+    const blob=new Blob([text],{type:mime});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=name; a.target='_blank'; a.rel='noopener';   // never navigate this frame
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    downloaded=true;
+  }catch(e){}
+  // clipboard backup — the reliable path inside a sandboxed iframe
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(
+      ()=>toast(downloaded?`Saved ${name} — also copied to clipboard as backup`:`Download blocked here — copied ${name} to clipboard instead`),
+      ()=>toast(downloaded?`Saved ${name}`:`Couldn't export — try opening the app in its own tab`)
+    );
+  } else toast(downloaded?`Saved ${name}`:`Export blocked in this view`);
+}
+
+/* ---------- export: self-contained animated HTML built from the live engine ---------- */
+function export2HTML(){
+  // serialise the actual engine (one source of truth) + the current programs/poses
+  const eng=[
+    `const NAMED=${JSON.stringify(NAMED)};`,
+    `const DEF_COL=${JSON.stringify(DEF_COL)},DEF_W=${DEF_W};`,
+    `const lerp=${lerp.toString()};`,
+    `const clamp=${clamp.toString()};`,
+    `const gcd=${gcd.toString()};`,
+    `const lcm=${lcm.toString()};`,
+    `const s2l=${s2l.toString()};`,
+    `const l2s=${l2s.toString()};`,
+    `const poseAt=${poseAt.toString()};`,
+    rawTokenize.toString().replace(/rawTokenize/,'tokenize'), parse.toString(), unroll.toString(), canon.toString(),
+    subdivide.toString(), align.toString(), splitPose.toString(),
+    rgb2lab.toString(), lab2rgb.toString(), oklabLerp.toString(),
+    figureSteps.toString(), run.toString()
+  ].join('\n');
+  const data=JSON.stringify({A:expandProgram($('progA').value), B:expandProgram($('progB').value), poseA:S.poseA, poseB:S.poseB, min:S.min, max:S.max});
+  const player = `
+const D=DATA;
+const A=splitPose(canon(parse(tokenize(D.A)))), B=splitPose(canon(parse(tokenize(D.B))));
+const pairs=align(A.body,B.body), pA=D.poseA, pB=D.poseB;
+const NS='http://www.w3.org/2000/svg', svg=document.getElementById('fig');
+const figSegs=t=>run(figureSteps(pairs,t), poseAt(pA,pB,t));
+let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
+for(let k=0;k<=48;k++){const t=D.min+(D.max-D.min)*k/48; figSegs(t).forEach(s=>{X0=Math.min(X0,s.x1,s.x2);Y0=Math.min(Y0,s.y1,s.y2);X1=Math.max(X1,s.x1,s.x2);Y1=Math.max(Y1,s.y1,s.y2);});}
+const SZ=Math.max(X1-X0,Y1-Y0,1)*1.14,CX=(X0+X1)/2,CY=(Y0+Y1)/2;
+svg.setAttribute('viewBox',(CX-SZ/2)+' '+(CY-SZ/2)+' '+SZ+' '+SZ);
+function draw(t){
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  const f=document.createDocumentFragment();
+  for(const s of figSegs(t)){
+    const l=document.createElementNS(NS,'line');
+    l.setAttribute('x1',s.x1);l.setAttribute('y1',s.y1);l.setAttribute('x2',s.x2);l.setAttribute('y2',s.y2);
+    l.setAttribute('stroke','rgb('+s.col.join(',')+')');l.setAttribute('stroke-width',s.w);
+    l.setAttribute('stroke-linecap','round');l.setAttribute('vector-effect','non-scaling-stroke');
+    f.appendChild(l);
+  }
+  svg.appendChild(f);
+  document.getElementById('tv').textContent='t = '+t.toFixed(2);
+}
+let t=D.min,dir=1,playing=true,SP=1,last=performance.now();
+const sl=document.getElementById('sl'),pp=document.getElementById('pp'),sp=document.getElementById('sp');
+function loop(now){const dt=(now-last)/1000;last=now;
+  if(playing){const rate=(D.max-D.min)/(3/SP); t+=dir*rate*dt; if(t>=D.max){t=D.max;dir=-1;}else if(t<=D.min){t=D.min;dir=1;} sl.value=t; draw(t);}
+  requestAnimationFrame(loop);}
+sl.addEventListener('input',e=>{playing=false;pp.textContent='▶';t=+e.target.value;draw(t);});
+pp.onclick=()=>{playing=!playing;pp.textContent=playing?'❚❚':'▶';last=performance.now();};
+sp.addEventListener('input',e=>{SP=+e.target.value;document.getElementById('spv').textContent=(+e.target.value).toFixed(2)+'×';});
+draw(D.min);requestAnimationFrame(loop);`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%232E7D5B'/%3E%3Cpath%20d='M16%206L23%2025L16%2021L9%2025Z'%20fill='%23F1F4EF'/%3E%3C/svg%3E">
+<title>In-Between — morph</title>
+<style>
+ html,body{margin:0;height:100%;background:#F1F4EF;font-family:system-ui,sans-serif}
+ #fig{position:fixed;inset:0;width:100%;height:100%}
+ .bar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:94vw;
+   background:rgba(251,252,250,.9);border:1px solid #D6DCD2;border-radius:18px;padding:8px 14px;box-shadow:0 6px 22px rgba(27,34,31,.1)}
+ .bar button{border:0;background:#2E7D5B;color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:13px}
+ .bar input[type=range]{width:200px}
+ .lab{font-family:'Space Mono',monospace;font-size:12px;color:#1F5C42}
+ #tv{font-family:'Space Mono',monospace;font-size:13px;color:#1F5C42;min-width:64px}
+ /* This morph is two Logo turtle programs, blended live. Shape A: ${$('progA').value.replace(/\n/g,' / ').replace(/\*\//g,'* /')} | Shape B: ${$('progB').value.replace(/\n/g,' / ').replace(/\*\//g,'* /')} */
+</style></head><body>
+<svg id="fig"></svg>
+<div class="bar"><button id="pp">❚❚</button>
+<input id="sl" type="range" min="${S.min}" max="${S.max}" step="0.001" value="${S.min}"><span id="tv">t = 0.00</span>
+<span class="lab">speed</span><input id="sp" type="range" min="0.25" max="4" step="0.25" value="1"><span class="lab" id="spv">1.00×</span></div>
+<script>
+${eng}
+const DATA=${data};
+${player}
+<\/script></body></html>`;
+}
+let dir=1, last=0;
+function startPlay(){
+  if(S.mode!=='single') $('mSingle').click();
+  S.playing=true; $('play').innerHTML='&#10073;&#10073;&nbsp;Pause'; last=performance.now();
+  const step=now=>{
+    if(!S.playing) return;
+    const dt=(now-last)/1000; last=now;
+    const rate=(S.max-S.min)/(3/S.speed);
+    let v=S.t+dir*rate*dt;
+    if(v>=S.max){v=S.max;dir=-1;} else if(v<=S.min){v=S.min;dir=1;}
+    setT(v,false); S.raf=requestAnimationFrame(step);
+  };
+  S.raf=requestAnimationFrame(step);
+}
+function stopPlay(){ if(!S.playing)return; S.playing=false; cancelAnimationFrame(S.raf); $('play').innerHTML='&#9654;&nbsp;Play'; }
+
+/* ============================================================
+   3D beetle engine + rendering + dim switching
+   Reuses 2D lerp/clamp/gcd/lcm/oklabLerp/NAMED/DEF_COL/DEF_W/SVGNS/rnd.
+   Frame: heading +Y, up +Z, right +X.  q=[w,x,y,z] body->world.
+   ============================================================ */
+const qmul=(a,b)=>[a[0]*b[0]-a[1]*b[1]-a[2]*b[2]-a[3]*b[3],a[0]*b[1]+a[1]*b[0]+a[2]*b[3]-a[3]*b[2],a[0]*b[2]-a[1]*b[3]+a[2]*b[0]+a[3]*b[1],a[0]*b[3]+a[1]*b[2]-a[2]*b[1]+a[3]*b[0]];
+const qaa=(ax,deg)=>{const h=deg*Math.PI/360,s=Math.sin(h);return [Math.cos(h),ax[0]*s,ax[1]*s,ax[2]*s];};
+const qrot=(q,v)=>{const t=[2*(q[2]*v[2]-q[3]*v[1]),2*(q[3]*v[0]-q[1]*v[2]),2*(q[1]*v[1]-q[2]*v[0])];return [v[0]+q[0]*t[0]+q[2]*t[2]-q[3]*t[1],v[1]+q[0]*t[1]+q[3]*t[0]-q[1]*t[2],v[2]+q[0]*t[2]+q[1]*t[1]-q[2]*t[0]];};
+const qconj=q=>[q[0],-q[1],-q[2],-q[3]];
+const qnorm=q=>{const m=Math.hypot(q[0],q[1],q[2],q[3])||1;return [q[0]/m,q[1]/m,q[2]/m,q[3]/m];};
+function qpow(q,t){q=qnorm(q);let w=Math.max(-1,Math.min(1,q[0]));const ang=Math.acos(w),s=Math.sin(ang);if(s<1e-9)return [1,0,0,0];const ax=[q[1]/s,q[2]/s,q[3]/s],na=ang*t,ns=Math.sin(na);return [Math.cos(na),ax[0]*ns,ax[1]*ns,ax[2]*ns];}
+const qslerp=(a,b,t)=>qmul(a,qpow(qmul(qconj(a),b),t));
+const UP=[0,0,1],RIGHT=[1,0,0],HEAD=[0,1,0];
+const qYPR=(yaw,pit,rol)=>qmul(qmul(qaa(UP,-yaw),qaa(RIGHT,pit)),qaa(HEAD,rol));
+function qmat(q){const w=q[0],x=q[1],y=q[2],z=q[3];return [[1-2*(y*y+z*z),2*(x*y-w*z),2*(x*z+w*y)],[2*(x*y+w*z),1-2*(x*x+z*z),2*(y*z-w*x)],[2*(x*z-w*y),2*(y*z+w*x),1-2*(x*x+y*y)]];}
+// inverse of qYPR: M = Rz(-yaw)Rx(pit)Ry(rol); handles gimbal lock at pit=±90
+function yprFromQ(q){const M=qmat(q);const D=180/Math.PI;
+  const sp=Math.max(-1,Math.min(1,M[2][1])),pit=Math.asin(sp),cp=Math.cos(pit);let yaw,rol;
+  if(Math.abs(cp)>1e-6){yaw=Math.atan2(M[0][1],M[1][1]);rol=Math.atan2(-M[2][0],M[2][2]);}
+  else{rol=0;yaw=-Math.atan2(sp*M[0][2],M[0][0]);}
+  return {yaw:yaw*D,pit:pit*D,rol:rol*D};}
+// axis-angle interpolation: lerp the turn ANGLE, slerp its AXIS. Keeps equal-angle shapes closed.
+function toAxisAngle(q){if(q[0]<0)q=[-q[0],-q[1],-q[2],-q[3]];const w=clamp(q[0],-1,1),s=Math.sqrt(Math.max(0,1-w*w));return {ax:s<1e-9?[0,0,1]:[q[1]/s,q[2]/s,q[3]/s], ang:2*Math.acos(w)};}
+function vslerp(a,b,t){let d=clamp(a[0]*b[0]+a[1]*b[1]+a[2]*b[2],-1,1);
+  if(d>0.9999)return a.slice();
+  if(d<-0.9999){const p=Math.abs(a[0])<0.9?[1,0,0]:[0,1,0];const ax=[a[1]*p[2]-a[2]*p[1],a[2]*p[0]-a[0]*p[2],a[0]*p[1]-a[1]*p[0]];const m=Math.hypot(ax[0],ax[1],ax[2])||1;return [ax[0]/m,ax[1]/m,ax[2]/m];}
+  const O=Math.acos(d),so=Math.sin(O),c0=Math.sin((1-t)*O)/so,c1=Math.sin(t*O)/so;
+  const v=[c0*a[0]+c1*b[0],c0*a[1]+c1*b[1],c0*a[2]+c1*b[2]];const m=Math.hypot(v[0],v[1],v[2])||1;return [v[0]/m,v[1]/m,v[2]/m];}
+function axisAngleInterp(qA,qB,t){
+  if(t<=0)return qA.slice(); if(t>=1)return qB.slice();
+  const A=toAxisAngle(qA),B=toAxisAngle(qB);
+  let axA=A.ax,axB=B.ax;if(A.ang<1e-6)axA=axB;if(B.ang<1e-6)axB=axA;
+  // opposite axes (esp. the 180° antipodal case) make angle-lerp pass through 0° and fling the path off; use shortest-arc there
+  if(axA[0]*axB[0]+axA[1]*axB[1]+axA[2]*axB[2] < -0.001) return qslerp(qA,qB,t);
+  const ang=lerp(A.ang,B.ang,t),ax=vslerp(axA,axB,t),h=ang/2,s=Math.sin(h);return [Math.cos(h),ax[0]*s,ax[1]*s,ax[2]*s];}
+
+function rawTok3(src){src=src.replace(/;[^\n]*/g,' ');const t=[];const re=/\[|\]|[-+]?\d*\.?\d+|:?[A-Za-z_]+/g;let m;while((m=re.exec(src)))t.push(m[0]);return t;}
+function tok3(src){ return rawTok3(expandProgram(src)); }
+function parse3(t){let i=0;const num=()=>parseFloat(t[i++]);
+  function color(){if(t[i]==='['){i++;const a=[num(),num(),num()];if(t[i]===']')i++;return a;}const n=(t[i++]||'').toLowerCase();return (NAMED[n]||DEF_COL).slice();}
+  function block(){const l=[];while(i<t.length&&t[i]!==']')l.push(stmt());return l;}
+  function stmt(){const w=(t[i++]||'').toLowerCase();switch(w){
+    case 'forward':case 'fd':return {t:'f',v:num()};case 'back':case 'bk':return {t:'f',v:-num()};
+    case 'right':case 'rt':return {t:'yaw',v:num()};case 'left':case 'lt':return {t:'yaw',v:-num()};
+    case 'up':case 'pitchup':return {t:'pit',v:num()};case 'down':case 'pitchdown':return {t:'pit',v:-num()};
+    case 'rollright':case 'rr':return {t:'rol',v:num()};case 'rollleft':case 'rl':return {t:'rol',v:-num()};
+    case 'penup':case 'pu':return {t:'pu'};case 'pendown':case 'pd':return {t:'pd'};
+    case 'setpencolour':case 'setpencolor':case 'setpc':return {t:'col',v:color()};
+    case 'penwidth':case 'pw':return {t:'w',v:num()};
+    case 'repeat':{const n=num();if(t[i]==='[')i++;const b=block();if(t[i]===']')i++;return {t:'rep',n,body:b};}
+    default:return {t:'nop'};}}
+  const p=[];while(i<t.length){if(t[i]===']'){i++;continue;}p.push(stmt());}return p;}
+function unroll3(a,o){o=o||[];for(const n of a){if(n.t==='rep'){const c=Math.max(0,Math.round(n.n));for(let k=0;k<c;k++)unroll3(n.body,o);}else if(n.t!=='nop')o.push(n);}return o;}
+function canon3(ast){const prims=unroll3(ast);const steps=[];let pen=true,col=DEF_COL.slice(),w=DEF_W,cur=null,leadq=[1,0,0,0],led=false;
+  const fold=(q,p)=> p.t==='yaw'?qmul(q,qaa(UP,-p.v)) : p.t==='pit'?qmul(q,qaa(RIGHT,p.v)) : qmul(q,qaa(HEAD,p.v));
+  const push=()=>{if(cur){cur.ypr=yprFromQ(cur.q);steps.push(cur);cur=null;}};
+  for(const p of prims){
+    if(p.t==='f'){push();cur={f:p.v,q:[1,0,0,0],pen,col:col.slice(),w};}
+    else if(p.t==='yaw'||p.t==='pit'||p.t==='rol'){if(cur)cur.q=fold(cur.q,p);else{leadq=fold(leadq,p);led=true;}}
+    else if(p.t==='pu')pen=false;else if(p.t==='pd')pen=true;
+    else if(p.t==='col')col=p.v.slice();else if(p.t==='w')w=p.v;}
+  push();
+  if(led)steps.unshift({f:0,q:leadq,ypr:yprFromQ(leadq),pen:true,col:DEF_COL.slice(),w:DEF_W});
+  return steps;}
+function subdiv3(s,k){const r=[],I=[1,0,0,0],Z={yaw:0,pit:0,rol:0};for(let j=0;j<k;j++)r.push({f:s.f/k,q:j===k-1?s.q:I,ypr:j===k-1?s.ypr:Z,pen:s.pen,col:s.col.slice(),w:s.w});return r;}
+function align3(A,B){if(!A.length||!B.length)return [];const L=lcm(A.length,B.length),ka=L/A.length,kb=L/B.length,ea=[],eb=[];
+  A.forEach(s=>subdiv3(s,ka).forEach(x=>ea.push(x)));B.forEach(s=>subdiv3(s,kb).forEach(x=>eb.push(x)));
+  const out=[];for(let i=0;i<L;i++)out.push({A:ea[i],B:eb[i]});return out;}
+function evalStep3(p,t,mode){
+  const f=lerp(p.A.f,p.B.f,t);
+  let q;
+  if(mode==='slerp'){ q=qslerp(p.A.q,p.B.q,t); }
+  else if(mode==='axis'){ q=axisAngleInterp(p.A.q,p.B.q,t); }
+  else { const a=p.A.ypr,b=p.B.ypr; q=qYPR(lerp(a.yaw,b.yaw,t),lerp(a.pit,b.pit,t),lerp(a.rol,b.rol,t)); }
+  return {f,q,pen:t<0.5?p.A.pen:p.B.pen,w:Math.max(0.3,lerp(p.A.w,p.B.w,t)),col:oklabLerp(p.A.col,p.B.col,t)};
+}
+function run3(pairs,t,mode){
+  let p=[0,0,0],q=[1,0,0,0];const segs=[];
+  for(const pr of pairs){const s=evalStep3(pr,t,mode);const h=qrot(q,HEAD);
+    const np=[p[0]+h[0]*s.f,p[1]+h[1]*s.f,p[2]+h[2]*s.f];
+    if(s.pen&&s.f!==0)segs.push({a:p,b:np,w:s.w,col:s.col});
+    p=np;q=qmul(q,s.q);}
+  return segs;
+}
+
+function project3(p){
+  const ca=Math.cos(S.az),sa=Math.sin(S.az),ce=Math.cos(S.el),se=Math.sin(S.el);
+  const x=p[0]*ca-p[1]*sa, y=p[0]*sa+p[1]*ca, z=p[2];
+  return {x:x, y:-(y*se+z*ce), depth:y*ce-z*se};
+}
+function mkLine(x1,y1,x2,y2,stroke,w,op){
+  const l=document.createElementNS(SVGNS,'line');
+  l.setAttribute('x1',(+x1).toFixed(2));l.setAttribute('y1',(+y1).toFixed(2));l.setAttribute('x2',(+x2).toFixed(2));l.setAttribute('y2',(+y2).toFixed(2));
+  l.setAttribute('stroke',stroke);l.setAttribute('stroke-width',w);l.setAttribute('stroke-linecap','round');l.setAttribute('vector-effect','non-scaling-stroke');l.setAttribute('opacity',op);
+  return l;
+}
+function render3D(){
+  const stage=$('stage'), err=$('err');
+  while(stage.firstChild) stage.removeChild(stage.firstChild);
+  if(!S.pairs.length){ err.style.display='flex'; err.textContent='Nothing to draw yet — add some forward / right commands.'; return; }
+  err.style.display='none';
+  const segs=run3(S.pairs,S.t,S.rmode);
+  const proj=segs.map(s=>({a:project3(s.a),b:project3(s.b),w:s.w,col:s.col}));
+  let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9,dn=1e9,dx=-1e9;
+  proj.forEach(s=>[s.a,s.b].forEach(q=>{X0=Math.min(X0,q.x);Y0=Math.min(Y0,q.y);X1=Math.max(X1,q.x);Y1=Math.max(Y1,q.y);dn=Math.min(dn,q.depth);dx=Math.max(dx,q.depth);}));
+  if(X0>X1){ stage.setAttribute('viewBox','-150 -150 300 300'); return; }
+  const sz=Math.max(X1-X0,Y1-Y0,1)*1.16, cx=(X0+X1)/2, cy=(Y0+Y1)/2;
+  stage.setAttribute('viewBox',`${cx-sz/2} ${cy-sz/2} ${sz} ${sz}`);
+  const frag=document.createDocumentFragment();
+  if(S.showAxes){
+    const al=sz*0.16, O=project3([0,0,0]);
+    [[[al,0,0],'rgba(200,70,60,.5)'],[[0,al,0],'rgba(60,150,80,.5)'],[[0,0,al],'rgba(70,110,200,.55)']].forEach(([v,c])=>{
+      const e=project3(v); frag.appendChild(mkLine(O.x,O.y,e.x,e.y,c,1.2,1));
+    });
+  }
+  const dr=(dx-dn)||1;
+  proj.forEach(s=>{ const d=((s.a.depth+s.b.depth)/2-dn)/dr;
+    frag.appendChild(mkLine(s.a.x,s.a.y,s.b.x,s.b.y,`rgb(${s.col.join(',')})`,(s.w*(0.7+0.5*d)).toFixed(2),(0.35+0.6*d).toFixed(2))); });
+  stage.appendChild(frag);
+  $('tbadge').innerHTML=`t = <b>${rnd(S.t,2)}</b> · ${S.rmode}`;
+}
+
+// read-only concretized blend. Euler -> real commands; Slerp -> axis-angle of the slerped rotation.
+function blend3Text(pairs,t,mode){
+  if(!pairs.length) return '(add some forward / right commands)';
+  const c0=oklabLerp(pairs[0].A.col,pairs[0].B.col,t);
+  const chunk=pr=>{ const out=[]; const f=lerp(pr.A.f,pr.B.f,t);
+    if(Math.abs(f)>1e-6) out.push(`forward ${rnd(f,1)}`);
+    if(mode==='euler'){
+      const a=pr.A.ypr,b=pr.B.ypr;
+      const yaw=lerp(a.yaw,b.yaw,t),pit=lerp(a.pit,b.pit,t),rol=lerp(a.rol,b.rol,t);
+      if(Math.abs(yaw)>0.1) out.push(yaw>0?`right ${rnd(yaw,1)}`:`left ${rnd(-yaw,1)}`);
+      if(Math.abs(pit)>0.1) out.push(pit>0?`up ${rnd(pit,1)}`:`down ${rnd(-pit,1)}`);
+      if(Math.abs(rol)>0.1) out.push(rol>0?`rollright ${rnd(rol,1)}`:`rollleft ${rnd(-rol,1)}`);
+    } else {
+      const q = mode==='axis'?axisAngleInterp(pr.A.q,pr.B.q,t):qslerp(pr.A.q,pr.B.q,t);
+      let w=clamp(q[0],-1,1); const sgn=w<0?-1:1; w*=sgn;
+      const s=Math.sqrt(Math.max(0,1-w*w)); const ang=2*Math.acos(w)*180/Math.PI;
+      if(ang>0.1 && s>1e-6) out.push(`rotate ${rnd(ang,1)} about [${[q[1]*sgn/s,q[2]*sgn/s,q[3]*sgn/s].map(x=>rnd(x,2)).join(' ')}]`);
+    }
+    return out; };
+  const chunks=pairs.map(chunk);
+  const lines=[]; let i=0;
+  while(i<chunks.length){ const body=chunks[i].join(' ');
+    if(!body){ i++; continue; }
+    let j=i+1; while(j<chunks.length && chunks[j].join(' ')===body) j++;
+    const n=j-i; lines.push(n>1?`repeat ${n} [${body}]`:body); i=j; }
+  return `setpencolour [${c0.join(' ')}]\n`+lines.join('\n');
+}
+
+function exportHTML(){ return S.dim==='3d'?export3HTML():export2HTML(); }
+function export3HTML(){
+  const asConst={qmul,qaa,qrot,qconj,qnorm,qslerp,qYPR,s2l,l2s,lerp,clamp,gcd,lcm};
+  const asDecl=[qpow,rgb2lab,lab2rgb,oklabLerp,qmat,yprFromQ,toAxisAngle,vslerp,axisAngleInterp,rawTok3,parse3,unroll3,canon3,subdiv3,align3,evalStep3,run3];
+  const vals=[`const NAMED=${JSON.stringify(NAMED)};`,`const DEF_COL=${JSON.stringify(DEF_COL)},DEF_W=${DEF_W};`,
+    `const UP=${JSON.stringify(UP)},RIGHT=${JSON.stringify(RIGHT)},HEAD=${JSON.stringify(HEAD)};`];
+  const eng=(vals.join('\n')+'\n'+Object.entries(asConst).map(([n,f])=>`const ${n}=${f.toString()};`).join('\n')+'\n'+asDecl.map(f=>f.toString()).join('\n')).replace(/\brawTok3\b/g,'tok3');
+  const data=JSON.stringify({A:expandProgram($('progA').value),B:expandProgram($('progB').value),min:S.min,max:S.max,mode:S.rmode,az:S.az,el:S.el});
+  const player=`
+const D=DATA, NS='http://www.w3.org/2000/svg', svg=document.getElementById('fig');
+const pairs=align3(canon3(parse3(tok3(D.A))),canon3(parse3(tok3(D.B))));
+let az=D.az,el=D.el;
+function project(p){const ca=Math.cos(az),sa=Math.sin(az),ce=Math.cos(el),se=Math.sin(el);const x=p[0]*ca-p[1]*sa,y=p[0]*sa+p[1]*ca,z=p[2];return {x:x,y:-(y*se+z*ce),depth:y*ce-z*se};}
+function Ln(x1,y1,x2,y2,st,w,op){const l=document.createElementNS(NS,'line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);l.setAttribute('stroke',st);l.setAttribute('stroke-width',w);l.setAttribute('stroke-linecap','round');l.setAttribute('vector-effect','non-scaling-stroke');l.setAttribute('opacity',op);return l;}
+function draw(t){
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  const segs=run3(pairs,t,D.mode).map(s=>({a:project(s.a),b:project(s.b),w:s.w,col:s.col}));
+  let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9,dn=1e9,dx=-1e9;
+  segs.forEach(s=>[s.a,s.b].forEach(q=>{X0=Math.min(X0,q.x);Y0=Math.min(Y0,q.y);X1=Math.max(X1,q.x);Y1=Math.max(Y1,q.y);dn=Math.min(dn,q.depth);dx=Math.max(dx,q.depth);}));
+  if(X0>X1)return;const sz=Math.max(X1-X0,Y1-Y0,1)*1.16,cx=(X0+X1)/2,cy=(Y0+Y1)/2;
+  svg.setAttribute('viewBox',(cx-sz/2)+' '+(cy-sz/2)+' '+sz+' '+sz);
+  const f=document.createDocumentFragment(),dr=(dx-dn)||1;
+  segs.forEach(s=>{const d=((s.a.depth+s.b.depth)/2-dn)/dr;f.appendChild(Ln(s.a.x.toFixed(2),s.a.y.toFixed(2),s.b.x.toFixed(2),s.b.y.toFixed(2),'rgb('+s.col.join(',')+')',(s.w*(0.7+0.5*d)).toFixed(2),(0.35+0.6*d).toFixed(2)));});
+  svg.appendChild(f);document.getElementById('tv').textContent='t = '+t.toFixed(2);
+}
+let t=D.min,dir=1,playing=true,SP=1,last=performance.now();
+const sl=document.getElementById('sl'),pp=document.getElementById('pp'),sp=document.getElementById('sp');
+function loop(now){const dt=(now-last)/1000;last=now;if(playing){const r=(D.max-D.min)/(3/SP);t+=dir*r*dt;if(t>=D.max){t=D.max;dir=-1;}else if(t<=D.min){t=D.min;dir=1;}sl.value=t;draw(t);}requestAnimationFrame(loop);}
+sl.addEventListener('input',e=>{playing=false;pp.textContent='▶';t=+e.target.value;draw(t);});
+pp.onclick=()=>{playing=!playing;pp.textContent=playing?'❚❚':'▶';last=performance.now();};
+sp.addEventListener('input',e=>{SP=+e.target.value;document.getElementById('spv').textContent=(+e.target.value).toFixed(2)+'×';});
+let od=null;svg.addEventListener('pointerdown',e=>{od={x:e.clientX,y:e.clientY,az,el};svg.setPointerCapture(e.pointerId);});
+svg.addEventListener('pointermove',e=>{if(!od)return;az=od.az+(e.clientX-od.x)*0.01;el=Math.max(0.08,Math.min(1.5,od.el-(e.clientY-od.y)*0.01));draw(t);});
+svg.addEventListener('pointerup',()=>od=null);
+draw(D.min);requestAnimationFrame(loop);`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%232E7D5B'/%3E%3Cpath%20d='M16%206L23%2025L16%2021L9%2025Z'%20fill='%23F1F4EF'/%3E%3C/svg%3E"><title>In-Between 3D — morph</title>
+<style>html,body{margin:0;height:100%;background:#F1F4EF;font-family:system-ui,sans-serif}
+#fig{position:fixed;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
+.bar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:94vw;background:rgba(251,252,250,.9);border:1px solid #D6DCD2;border-radius:18px;padding:8px 14px;box-shadow:0 6px 22px rgba(27,34,31,.1)}
+.bar button{border:0;background:#2E7D5B;color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer}
+.bar input[type=range]{width:200px}.lab,#tv{font-family:'Space Mono',monospace;font-size:12px;color:#1F5C42}</style></head><body>
+<svg id="fig"></svg>
+<div class="bar"><button id="pp">❚❚</button><input id="sl" type="range" min="${S.min}" max="${S.max}" step="0.001" value="${S.min}"><span id="tv">t = 0.00</span>
+<span class="lab">speed</span><input id="sp" type="range" min="0.25" max="4" step="0.25" value="1"><span class="lab" id="spv">1.00×</span></div>
+<script>
+${eng}
+const DATA=${data};
+${player}
+<\/script></body></html>`;
+}
+
+const wiki=(text,page)=>`<a href="https://en.wikipedia.org/wiki/${page}" target="_blank" rel="noopener">${text}</a>`;
+function explainBlend(){ return S.dim==='3d'?explain3():explain2(); }
+function explain2(){
+  const A=canon(parse(tokenize($('progA').value))), B=canon(parse(tokenize($('progB').value)));
+  const nA=A.length,nB=B.length,L=S.pairs.length||lcm(nA,nB),t=S.t,p0=S.pairs[0];
+  const ex=p0?`length = <b>${rnd(lerp(p0.f[0],p0.f[1],t),1)}</b> (blending ${rnd(p0.f[0],1)} and ${rnd(p0.f[1],1)}), turn = <b>${rnd(lerp(p0.turn[0],p0.turn[1],t),1)}°</b> (blending ${rnd(p0.turn[0],1)}° and ${rnd(p0.turn[1],1)}°)`:'';
+  return `
+<p><b>1 · Read the programs.</b> Each program is unrolled — every <code>repeat</code> expanded — into a flat list of turtle steps, where a step is a <code>forward</code> together with the turn that follows it. Shape A becomes <b>${nA}</b> step${nA===1?'':'s'}; Shape B becomes <b>${nB}</b>.</p>
+<p><b>2 · Match them up.</b> To blend step-for-step, both lists are stretched to a common length: ${wiki('LCM','Least_common_multiple')}(${nA}, ${nB}) = <b>${L}</b>. A step is split by dividing its <code>forward</code> distance into equal pieces and putting the whole turn on the last piece — so the drawn shape is unchanged, just described in more steps.</p>
+<p><b>3 · Blend every number</b> at the current t = <b>${rnd(t,2)}</b>. For each step, length = (1−t)·A + t·B and turn = (1−t)·A + t·B; colour is blended in ${wiki('OKLab','Oklab_color_space')} (perceptually even). Step 1 right now: ${ex}.</p>
+<p><b>4 · Draw by walking the turtle.</b> From the origin each step goes forward then turns, and the next step begins exactly where this one ended — so the figure is always a single connected path.</p>
+<p><b>Ends &amp; beyond.</b> At t = 0 every blend equals A; at t = 1, exactly B. Outside 0–1 the same formulas keep going, which is the extrapolation in the striped zone.</p>`;
+}
+function explain3(){
+  const A=canon3(parse3(tok3($('progA').value))), B=canon3(parse3(tok3($('progB').value)));
+  const nA=A.length,nB=B.length,L=S.pairs.length||lcm(nA,nB),t=S.t,m=S.rmode;
+  const modeName=m==='axis'?'Axis':m==='slerp'?'Slerp':'Euler';
+  let modeExpl;
+  if(m==='axis') modeExpl=`Each turn is described as an ${wiki('angle about an axis','Axis%E2%80%93angle_representation')}. The blended angle is (1−t)·A + t·B, and the axis is ${wiki('slerped','Slerp')} — swung along the unit sphere — from A's to B's. Keeping the angle while only turning the axis is what lets a regular closed shape, like this octagon, stay closed as it tilts.`;
+  else if(m==='slerp') modeExpl=`The two end orientations are points on the sphere of rotations, and the blend rotates along the ${wiki('shortest arc','Slerp')} between them. Smooth, but the per-step angle changes along the way, so closed shapes generally open up.`;
+  else modeExpl=`Each rotation is broken into <b>yaw, pitch and roll</b>, and those three numbers are blended separately, then recombined — the most literal generalisation of the 2D method. But 3D rotations don't commute, so blending them this way doesn't preserve closure (watch a closed shape come apart).`;
+  return `
+<p><b>1 · Read the programs.</b> Each program is unrolled into a flat list of beetle steps — a <code>forward</code> paired with the 3D rotation that follows it, stored as a ${wiki('quaternion','Quaternions_and_spatial_rotation')}. Shape A becomes <b>${nA}</b> step${nA===1?'':'s'}; Shape B, <b>${nB}</b>.</p>
+<p><b>2 · Match them up.</b> Both lists are stretched to ${wiki('LCM','Least_common_multiple')}(${nA}, ${nB}) = <b>${L}</b> steps, exactly as in 2D.</p>
+<p><b>3 · Blend each turn</b> at t = <b>${rnd(t,2)}</b>, using <b>${modeName}</b> mode. ${modeExpl}</p>
+<p><b>4 · Fly the beetle.</b> Each step moves forward then applies its blended rotation; the next starts where this one ended, so the path stays connected. The 3D path is projected to the screen with the current camera angle (drag to orbit).</p>
+<p><b>Ends &amp; beyond.</b> t = 0 is exactly A, t = 1 exactly B; outside 0–1 the rotations and lengths keep extending past the ends.</p>`;
+}
+/* ---------- Tutor: a grounded conversational explainer (keyless in a Claude artifact; else uses the saved key) ---------- */
+function tutorFacts(){
+  const strip=h=>h.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').trim();
+  let closure='';
+  try{
+    if(S.dim!=='3d'){
+      const A=canon(parse(tokenize($('progA').value))), B=canon(parse(tokenize($('progB').value)));
+      const tA=A.reduce((s,x)=>s+(x.turn||0),0), tB=B.reduce((s,x)=>s+(x.turn||0),0);
+      closure=`\nShape A turns a total of ${rnd(tA)}°; Shape B turns ${rnd(tB)}°. A turtle figure returns to its start (closes) only when its total turning is a whole number of 360°. The in-between figure's total turning is the blend of these two, so it usually only closes exactly at the ends unless both shapes share a common symmetry.`;
+    }
+  }catch(e){}
+  return `View: ${S.dim==='3d'?'3D beetle':'2D turtle'}, ${S.mode} mode${S.dim==='3d'?', '+S.rmode+' rotation blending':''}. Blend slider t = ${rnd(S.t,2)} (slider runs ${rnd(S.min,1)} to ${rnd(S.max,1)}; t=0 is shape A, t=1 is shape B, outside that is extrapolation).
+
+Shape A program:
+${$('progA').value}
+
+Shape B program:
+${$('progB').value}
+
+How the blend is being computed: ${strip(explainBlend())}${closure}`;
+}
+function tutorSystem(){
+  return `You are a warm, encouraging tutor living inside a children's turtle-graphics app called "In-Between", where a learner morphs one shape into another by blending two Logo turtle programs.
+
+Answer their questions grounded in the ACTUAL state below — use the real numbers, shapes and programs shown, never invented ones. You also know what the app's controls do (see THE CONTROLS), so you can answer "what does X do?" questions. If a question can't be answered from any of this, say so briefly and suggest something to try.
+
+Voice: friendly and plain, for a curious 10-to-15-year-old. Keep answers short — 2 to 4 sentences unless they ask for more. One idea at a time, concrete, no condescension. You may teach turtle/Logo and geometry ideas (forward, turn, repeat, recursion, interpolation, why a shape closes or leaves a gap, extrapolation). Define any term you use. Be honest about what's uncertain. Do NOT use markdown headers, bullet lists, or code fences; a short inline snippet like  forward 100 right 90  is fine. Never invent program lines that aren't there.
+
+THE CONTROLS (what each part of the app does):
+- The big t slider blends the two shapes: t=0 draws shape A, t=1 draws shape B, and in between you get a mix of the two (interpolation). The striped zones past each end — reached with the "beyond" tabs beside the slider — keep the same recipe going further (extrapolation), so shapes can grow, get spikier, or turn inside out.
+- "Tune numbers" gives a slider for each number in that shape's program — or, when the program defines a procedure with named inputs, sliders for the numbers you call it with — so you can change sizes, counts and angles and watch the shape and the blend update live.
+- "Tune colours" gives a colour picker for each pen colour in that shape's program. The in-between line colour is blended between A's and B's colours, so changing one colour shifts the whole colour blend.
+- Each shape box has a dropdown to pick a ready-made shape, and you can also type a Logo program straight into the box.
+- "✨ Make" writes a brand-new shape from a few words you type, using an AI. "? ask" opens you, the tutor.
+- Views: single shows just the current blend; Family overlays the whole row of in-between shapes across the slider range at once; Stack piles them up in 2.5D with t as depth. "Lock view" holds the camera still so you can see the shape truly move as it morphs.
+- The 2D/3D toggle switches between flat drawings and a 3D "beetle" that can also go up/down and roll. "export" saves the current morph as its own HTML file.
+
+CURRENT STATE (your ground truth):
+${tutorFacts()}`;
+}
+function tutorGreeting(){
+  return "Hi! I can explain what's happening with this blend — why it looks the way it does, what the slider is doing, or what would change if you tweaked a number. Ask me anything, or tap a question below.";
+}
+function tutorSuggestions(){
+  const recursive=/(?:^|\s)to\s/i.test($('progA').value)||/(?:^|\s)to\s/i.test($('progB').value);
+  const out=['What does the t slider do?'];
+  if(recursive) out.push('How does the recursion draw this shape?');
+  else out.push(S.dim==='3d'?'Why do some shapes stay closed and others open up?':'Why does my shape leave a gap (or not)?');
+  out.push('What happens if I change a number?');
+  return out.slice(0,3);
+}
+function renderTutorSuggest(){
+  const host=$('tutorSuggest'); host.innerHTML='';
+  tutorSuggestions().forEach(q=>{ const b=document.createElement('button'); b.textContent=q; b.onclick=()=>tutorAsk(q); host.appendChild(b); });
+}
+function renderTutor(){
+  const c=$('tutorChat'); c.innerHTML='';
+  const g=document.createElement('div'); g.className='tutor-msg bot'; g.textContent=tutorGreeting(); c.appendChild(g);
+  S.tutorHistory.forEach(m=>{ const d=document.createElement('div'); d.className='tutor-msg '+(m.role==='user'?'user':'bot'); d.textContent=m.content; c.appendChild(d); });
+  if(S.tutorBusy){ const d=document.createElement('div'); d.className='tutor-msg bot thinking'; d.textContent='thinking…'; c.appendChild(d); }
+  $('tutorSend').disabled=S.tutorBusy;
+  const body=$('tutorBody'); body.scrollTop=body.scrollHeight;
+}
+async function tutorAsk(q){
+  q=(q||'').trim(); if(!q||S.tutorBusy) return;
+  $('tutorInput').value='';
+  S.tutorHistory.push({role:'user',content:q});
+  if(!llmReady()){
+    S.tutorHistory.push({role:'assistant',content:'To answer here I need an API key for '+PROVIDERS[PROVIDER].label+'. Close this, tap “set API key” under the shape boxes, paste a key (or switch to Claude, which works without one inside the Claude app), then ask me again.'});
+    revealKeyUI(); renderTutor(); return;
+  }
+  S.tutorBusy=true; renderTutor();
+  try{
+    const reply=await callLLM(tutorSystem(), S.tutorHistory.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.content})), 700);
+    S.tutorHistory.push({role:'assistant',content:reply||'I had trouble putting that into words — try asking a different way?'});
+  }catch(e){
+    const prob=llmProblem(e);
+    if(prob.kind==='auth') revealKeyUI();
+    S.tutorHistory.push({role:'assistant',content:prob.msg});
+  }
+  S.tutorBusy=false; renderTutor();
+}
+function openTutor(){
+  $('explainBody').innerHTML=explainBlend();
+  $('howDetails').open=false;
+  S.tutorHistory=[]; S.tutorBusy=false;
+  renderTutor(); renderTutorSuggest();
+  $('explainModal').style.display='flex';
+  setTimeout(()=>{ try{ $('tutorInput').focus(); }catch(e){} },60);
+}
+/* ---------- LLM providers: Claude (keyless inside a Claude artifact), Gemini, ChatGPT.
+   Each uses that provider's current small model. Key + provider choice persist in the browser. ---------- */
+async function httpErr(res){ const t=await res.text().catch(()=>''); const e=new Error('HTTP '+res.status); e.status=res.status; e.body=t; return e; }
+function pickText(parts){ return (parts||[]).map(p=>p&&p.text||'').join(''); }
+
+const PROVIDERS={
+  claude:{
+    label:'Claude', placeholder:'Anthropic key (sk-ant-…)', getURL:'https://console.anthropic.com/settings/keys',
+    keyless:true,  // works with no key inside a Claude artifact
+    async call(system,messages,maxTokens,key){
+      const headers={'content-type':'application/json'};
+      const model = key ? 'claude-haiku-4-5' : 'claude-sonnet-4-6';   // keyless path must use Sonnet
+      if(key){ headers['x-api-key']=key; headers['anthropic-version']='2023-06-01'; headers['anthropic-dangerous-direct-browser-access']='true'; }
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers,
+        body:JSON.stringify({model,max_tokens:maxTokens||1024,system,messages})});
+      if(!res.ok) throw await httpErr(res);
+      const d=await res.json();
+      return (d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    }
+  },
+  gemini:{
+    label:'Gemini', placeholder:'Google AI key (AIza…)', getURL:'https://aistudio.google.com/apikey',
+    keyless:false,
+    async call(system,messages,maxTokens,key){
+      const model='gemini-flash-latest';   // alias tracking the current Flash model
+      const body={ contents: messages.map(m=>({role: m.role==='assistant'?'model':'user', parts:[{text:m.content}]})),
+                   generationConfig:{ maxOutputTokens:maxTokens||1024 } };
+      if(system) body.systemInstruction={parts:[{text:system}]};
+      const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(key),
+        {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+      if(!res.ok) throw await httpErr(res);
+      const d=await res.json();
+      const cand=d.candidates&&d.candidates[0];
+      return pickText(cand&&cand.content&&cand.content.parts).trim();
+    }
+  },
+  openai:{
+    label:'ChatGPT', placeholder:'OpenAI key (sk-…)', getURL:'https://platform.openai.com/api-keys',
+    keyless:false,
+    async call(system,messages,maxTokens,key){
+      const body={ model:'gpt-5.4-mini', input: messages.map(m=>({role:m.role,content:m.content})),
+                   max_output_tokens: Math.max(maxTokens||1024,1024) };
+      if(system) body.instructions=system;
+      const res=await fetch('https://api.openai.com/v1/responses',
+        {method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},body:JSON.stringify(body)});
+      if(!res.ok) throw await httpErr(res);
+      const d=await res.json();
+      if(typeof d.output_text==='string' && d.output_text) return d.output_text.trim();
+      const txt=(d.output||[]).flatMap(o=>o.content||[]).map(c=>c.text||'').join('');
+      return txt.trim();
+    }
+  }
+};
+
+let PROVIDER='claude'; try{ const p=localStorage.getItem('inbetween_provider'); if(p&&PROVIDERS[p]) PROVIDER=p; }catch(e){}
+let KEYS={claude:'',gemini:'',openai:''};
+try{ const raw=localStorage.getItem('inbetween_keys'); if(raw){ const o=JSON.parse(raw)||{}; for(const k in KEYS) if(typeof o[k]==='string') KEYS[k]=o[k]; } }catch(e){}
+const keyFor=(p)=>KEYS[p||PROVIDER]||'';
+function saveKey(k){ KEYS[PROVIDER]=(k||'').trim(); try{ localStorage.setItem('inbetween_keys',JSON.stringify(KEYS)); }catch(e){} }
+function setProvider(p){ if(!PROVIDERS[p])return; PROVIDER=p; try{ localStorage.setItem('inbetween_provider',p); }catch(e){} syncKeyUI(); }
+// a provider is ready if it has a key, or it is Claude (which can run keyless inside a Claude artifact)
+const llmReady=()=> !!keyFor() || !!PROVIDERS[PROVIDER].keyless;
+
+async function callLLM(system,messages,maxTokens){
+  return PROVIDERS[PROVIDER].call(system,messages,maxTokens,keyFor());
+}
+
+// reflect the current provider + its stored key into the key panel
+function syncKeyUI(){
+  const p=PROVIDERS[PROVIDER];
+  const sel=$('provSel'); if(sel) sel.value=PROVIDER;
+  const inp=$('apiKey'); if(inp){ inp.value=keyFor(); inp.placeholder=p.placeholder; }
+  const get=$('keyGet'); if(get){ get.href=p.getURL; get.textContent='Get a '+p.label+' key ↗'; }
+}
+function revealKeyUI(prov){ if(prov&&prov!==PROVIDER) setProvider(prov); $('keyRow').style.display='flex'; syncKeyUI(); try{ $('apiKey').focus(); }catch(e){} }
+
+// human-readable diagnosis of an LLM failure → {kind, msg}. kind 'auth' tells callers to open the key panel.
+function llmProblem(e){
+  const p=PROVIDERS[PROVIDER], st=e&&e.status, hasKey=!!keyFor();
+  // Claude runs keyless ONLY inside a Claude artifact. If a keyless Claude call fails at all
+  // (a 401, or a CORS/network error on a hosted page), the real fix is to add a key here.
+  if(PROVIDER==='claude' && !hasKey) return {kind:'auth', msg:'Claude only runs without a key inside the Claude app. On this page, open “set API key” and add a Claude key — or pick Gemini or ChatGPT and add one of theirs — then try again.'};
+  if(st===401||st===403) return {kind:'auth', msg: hasKey? p.label+' rejected that API key — check it and try again.' : p.label+' needs an API key here. Open “set API key”, paste a '+p.label+' key, and try again.'};
+  if(st===429) return {kind:'rate', msg:p.label+' is rate-limited right now — wait a moment and retry.'};
+  if(!st) return {kind:'network', msg: PROVIDER==='openai'
+        ? 'Couldn’t reach ChatGPT. Browsers often block OpenAI calls (CORS) — Claude and Gemini work reliably here; ChatGPT may need a small proxy.'
+        : 'Couldn’t reach '+p.label+' — check your connection and try again.'};
+  return {kind:'other', msg:p.label+' call failed ('+st+').'};
+}
+
+function genSystem(is3){
+  const common=`You write short Logo turtle programs for a children's shape-blending app. Output ONLY the program — no explanation, no markdown, no code fences, no comments.
+
+Rules:
+- Start with one setpencolour line. Colour is a name (red blue green yellow orange purple pink black white brown cyan magenta gray teal) or [R G B] with values 0-255.
+- Prefer keeping the pen DOWN the whole way. A single closed outline that finishes where it began blends most smoothly — but self-similar shapes (spirals, fractal curves, ferns) need not close, and that is fine. Avoid penup unless truly unavoidable.
+- Use  repeat N [ ... ]  for simple regular repetition.
+- The canvas is about 400 units across, so use move lengths roughly 10-160.
+- Use full descriptive names for any procedure or input — :length not :len, :angle not :ang, :depth not :n, :size not :s.
+- Favour PROCEDURAL ABSTRACTION. When a shape has natural dimensions — size, width, height, number of sides or points, a key angle — define a procedure with a named input for each, then call it with numbers. The numbers in that call line become the app's labelled "tune number" sliders, so the shape stays meaningfully adjustable; keep fixed details (like a constant small turn) inside the procedure body, and put the quantities worth adjusting in the call. Do this even for simple shapes.
+- Keep it short.
+
+Use PROCEDURES with named inputs generously — both for parametric shapes (an oval, a polygon, a star with a chosen size or number of points) and for self-similar or branching shapes via recursion (spirals, snowflakes, ferns, trees, fractals):
+  to NAME :input1 :input2
+     ... commands; use an input as :input1; call NAME for recursion, or call other procedures ...
+  end
+  if CONDITION [ ... ]               run the bracket only if true; CONDITION compares with  =  <  >  <=  >=  <>
+  ifelse CONDITION [ ... ] [ ... ]
+  stop                              return early from a procedure
+Inputs combine with arithmetic: :length * 0.7 , :depth - 1 , :length / 3   (operators + - * / and parentheses).
+Example — a parametric oval (the two numbers in the call become "wide" and "tall" tune sliders, while the fixed turn stays inside):
+setpencolour red
+to oval :wide :tall
+  repeat 2 [repeat 18 [forward :wide right 5] repeat 18 [forward :tall right 5]]
+end
+oval 10 3
+When you use recursion:
+- ALWAYS include a base case so it stops, e.g.  if :depth = 0 [stop]  — without one, nothing will draw.
+- After the  to ... end  definition(s) you MUST call a procedure to actually draw, e.g.  tree 60 5.
+- Keep recursion shallow (depth about 2 to 5) and starting sizes moderate.
+Example — a recursive tree:
+setpencolour green
+to tree :length :depth
+  if :depth = 0 [stop]
+  forward :length
+  left 30
+  tree :length * 0.7 :depth - 1
+  right 60
+  tree :length * 0.7 :depth - 1
+  left 30
+  back :length
+end
+tree 60 5`;
+  if(is3) return common+`
+
+This is a 3D "beetle". Movement commands (usable inside procedures too):
+  forward N , back N        move
+  right N , left N          yaw (turn left / right)
+  up N , down N             pitch (nose up / down)
+  rollright N , rollleft N  roll
+  penup , pendown
+  setpencolour COLOUR
+  penwidth N
+  repeat N [ ... ]
+Shapes that blend beautifully in 3D: spirals, helices, coils, rings, closed 3D polygons. A helix is  repeat 40 [forward 16 right 12 up 7].
+Recursion works the same with these 3D commands. A recursive coil:
+setpencolour blue
+to coil :length :depth
+  if :depth = 0 [stop]
+  forward :length
+  right 18
+  up 9
+  coil :length :depth - 1
+end
+coil 14 40`;
+  return common+`
+
+This is a 2D turtle that starts facing up. Movement commands (usable inside procedures too):
+  forward N , back N        move
+  right N , left N          turn N degrees
+  penup , pendown
+  setpencolour COLOUR
+  penwidth N
+  repeat N [ ... ]
+A five-pointed star is  repeat 5 [forward 145 right 144].`;
+}
+
+function cleanProgram(text){
+  let s=(text||'').trim();
+  s=s.replace(/^```[A-Za-z]*\s*/,'').replace(/```\s*$/,'').trim();
+  return s;
+}
+function validProgram(prog,is3){
+  try{ const steps=is3?canon3(parse3(tok3(prog))):canon(parse(tokenize(prog)));
+    return steps.filter(s=>s.f&&Math.abs(s.f)>1e-6).length>=2; }catch(e){ return false; }
+}
+
+function tidyName(desc){ let s=(desc||'').trim().replace(/^(a|an|the)\s+/i,''); if(s.length>16)s=s.slice(0,15)+'…'; return s||'shape'; }
+function progColor(prog,is3){ try{ const st=is3?canon3(parse3(tok3(prog))):canon(parse(tokenize(prog))); for(const s of st){ if(s.col)return s.col.slice(); } }catch(e){} return DEF_COL.slice(); }
+function addGeneratedPreset(desc,prog){
+  const dim=S.dim;
+  if(genPresets[dim].some(p=>p.s.trim()===prog.trim())) return; // dedupe
+  genPresets[dim].push({n:tidyName(desc), c:progColor(prog,dim==='3d'), s:prog, gen:true});
+  saveGenPresets(); buildPresetChips();
+}
+
+async function generateShape(which){
+  const is3=S.dim==='3d';
+  const inp=$('gen'+which), btn=$('genBtn'+which);
+  const desc=inp.value.trim(); if(!desc) return;
+  if(!llmReady()){ revealKeyUI(); toast(PROVIDERS[PROVIDER].label+' needs an API key first — set it just below.'); return; }
+  const label=btn.textContent; btn.disabled=true; btn.textContent='✨ …';
+  try{
+    let prog=null, lastErr='';
+    for(let a=0;a<2&&!prog;a++){
+      const user=a===0 ? `Draw: ${desc}` : `Draw: ${desc}\n(Your previous attempt was not a valid program: ${lastErr}. Return only a corrected program.)`;
+      const out=cleanProgram(await callLLM(genSystem(is3),[{role:'user',content:user}],1024));
+      if(validProgram(out,is3)) prog=out; else lastErr='did not parse or drew nothing';
+    }
+    if(prog){ $('prog'+which).value=prog; addGeneratedPreset(desc,prog); if(S.forked) unfork(true); rebuild(); inp.value=''; toast('Made "'+tidyName(desc)+'" ✨'); }
+    else toast('Could not make that — try rephrasing.');
+  }catch(e){
+    const prob=llmProblem(e);
+    if(prob.kind==='auth') revealKeyUI();
+    toast(prob.msg);
+  }finally{ btn.disabled=false; btn.textContent=label; }
+}
+
+function applyDimUI(){
+  const is3=S.dim==='3d';
+  $('rmodeSeg').style.display=is3?'inline-flex':'none';
+  $('viewSeg').style.display=is3?'none':'inline-flex';
+  $('resetPos').style.display=is3?'none':'inline-block';
+  $('dotsBtn').style.display=is3?'none':'inline-block';
+  $('dotsBtn').classList.toggle('on', S.showAnchors);
+  $('resetView').style.display=is3?'inline-block':'none';
+  $('axesBtn').style.display=is3?'inline-block':'none';
+  $('axesBtn').classList.toggle('on', S.showAxes);
+  $('orbitHint').style.display=is3?'block':'none';
+  $('blendSeg').style.display=is3?'none':'inline-flex';
+  $('lockSeg').style.display=is3?'none':'inline-flex';
+  $('blendForm').style.display='none';
+  $('blendNum').style.display='block';
+  if(is3){ $('forkBadge').style.display='none'; $('resetBlend').style.display='none'; }
+  $('stageLabel').textContent=is3?'Beetle':'Drawing';
+  $('eyebrow').textContent=is3?'beetle shape lab':'turtle shape lab';
+  $('cmdref').innerHTML=is3
+    ? 'beetle commands: <b>forward</b> n · <b>right/left</b> n (yaw) · <b>up/down</b> n (pitch) · <b>rollright/rollleft</b> n · <b>repeat</b> n […] · penup · pendown · setpencolour · penwidth'
+    : 'turtle commands: <b>forward</b> n · <b>right/left</b> n · <b>repeat</b> n […] · penup · pendown · setpencolour · penwidth';
+  $('mainHint').innerHTML=is3
+    ? 'A and B are the same octagon in <b>perpendicular planes</b> (flat vs upright). Slide to tilt one into the other. <b>Axis</b> (default) keeps each turn 45° and only swings its axis, so the octagon stays closed; switch to <b>Euler</b> to see the naive number-by-number blend open it up. <b>Drag the stage</b> to orbit.'
+    : 'The <b>green band</b> is <b>interpolation</b> — a mix of A (at 0) and B (at 1). Past the ends, in the striped zone, is <b>extrapolation</b>. Drag the <b>A</b> and <b>B</b> dots to place the shapes apart; <b>Family</b> then fans the whole family out between them.';
+  if(!is3){ ['Single','Family','Stack'].forEach(k=>$('m'+k).setAttribute('aria-pressed', String(k.toLowerCase()===S.mode))); }
+}
+function setDim(d){
+  if(d===S.dim) return;
+  stopPlay();
+  S.saved[S.dim]={A:$('progA').value, B:$('progB').value};
+  S.dim=d;
+  document.body.classList.toggle('dim3d', d==='3d');
+  const sv=S.saved[d];
+  if(sv){ $('progA').value=sv.A; $('progB').value=sv.B; }
+  else if(d==='3d'){ $('progA').value=PRESETS3[0].s; $('progB').value=PRESETS3[1].s; }  // Octagon / Octagon ↑
+  else { $('progA').value=STAR_OUTLINE; $('progB').value=DECAGON; }
+  if(d==='3d'){ S.mode='single'; S.view='num'; if(S.forked) unfork(true); S.dragA={x:0,y:0}; S.dragB={x:0,y:0};
+    $('vNum').setAttribute('aria-pressed','true'); $('vForm').setAttribute('aria-pressed','false'); }
+  $('d2d').setAttribute('aria-pressed', String(d==='2d'));
+  $('d3d').setAttribute('aria-pressed', String(d==='3d'));
+  buildPresetChips();
+  applyDimUI();
+  rebuild();
+}
+
+init();
+</script>
+</body>
+</html>
