@@ -112,9 +112,10 @@
   /* stage */
   .stage-card{padding:0;overflow:hidden}
   .stage-top{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line)}
-  #stage{display:block;width:100%;height:auto;aspect-ratio:1/1;background:
+  #stage{display:block;width:100%;height:100%;background:
     radial-gradient(circle at center, #FFFFFF 0%, #FAFCF9 70%, #F4F7F2 100%)}
-  .stage-wrap{position:relative}
+  .stage-wrap{position:relative;height:clamp(300px,58vh,720px);min-height:240px;resize:vertical;overflow:hidden}
+  .stage-wrap::after{content:"";position:absolute;right:4px;bottom:4px;width:11px;height:11px;border-right:2px solid var(--ink-faint);border-bottom:2px solid var(--ink-faint);opacity:.45;pointer-events:none}
   .tbadge{position:absolute;top:12px;left:14px;font-family:'Space Mono';font-size:12px;
     color:var(--ink-soft);background:rgba(251,252,250,.85);border:1px solid var(--line);
     padding:3px 9px;border-radius:999px;pointer-events:none}
@@ -353,7 +354,8 @@
           <button class="mini on" id="dotsBtn" title="Show or hide the draggable A and B position dots.">&#9678; dots</button>
           <button class="mini" id="resetView" title="Reset the camera angle." style="display:none">&#10227; view</button>
           <button class="mini" id="axesBtn" title="Show or hide the orientation axes." style="display:none">&#8862; axes</button>
-          <button class="mini" id="dlHtml" title="Export a self-contained, animated HTML file of this morph (keeps the Logo, stays interactive and extrapolatable).">&#8595; export</button>
+          <button class="mini" id="dlHtml" title="Export a self-contained, animated HTML file of this morph (keeps the Logo, stays interactive and extrapolatable).">&#8595; HTML</button>
+          <button class="mini" id="dlGif" title="Export an animated GIF of this morph that loops back and forth across the slider range. 2D only.">&#8595; GIF</button>
         </div>
         <div class="stage-wrap">
           <svg id="stage" viewBox="-150 -150 300 300" preserveAspectRatio="xMidYMid meet"></svg>
@@ -391,7 +393,7 @@
           <span class="field">t&nbsp;<input id="tval" type="number" step="0.01" value="0.5" title="Type any blend value, including ones outside the slider range (e.g. 25 or -3.14)."></span>
           <span class="field">min&nbsp;<input id="tmin" type="number" step="0.5" value="0" title="Left end of the slider's range."></span>
           <span class="field">max&nbsp;<input id="tmax" type="number" step="0.5" value="1" title="Right end of the slider's range."></span>
-          <span class="field" title="How fast Play sweeps.">speed&nbsp;<input id="spd" type="range" min="0.25" max="4" step="0.25" value="1" style="width:96px;vertical-align:middle"><b id="spdv" style="min-width:34px;display:inline-block;color:var(--turtle-dark)">1×</b></span>
+          <span class="field" id="incField"><b id="incLabel">sweep</b>&nbsp;<input id="incInput" type="number" step="0.5" value="3" style="width:54px"></span>
           <span class="seg" id="lockSeg" style="margin-left:6px"><button id="lockFrame" title="The camera is locked steady, so the shape shows its real motion as it morphs (it may drift off-centre). Click to auto-fit — re-centre and rescale to the shape every frame.">&#8865;&nbsp;Auto-fit</button></span>
           <button class="play spacer" id="play" title="Animate the blend back and forth across the slider range.">&#9654;&nbsp;Play</button>
         </div>
@@ -613,17 +615,21 @@ function lab2rgb([L,a,b]){
           l2s(-1.2684380046*l+2.6097574011*m-0.3413193965*s),
           l2s(-0.0041960863*l-0.7034186147*m+1.7076147010*s)];
 }
+// colour + width phase for the slider: identity on [0,1], then a triangle wave (B->A->B...) so that
+// EXTRAPOLATION keeps changing gradually and never washes out. Geometry still uses the raw (un-phased) t.
+function cycPhase(t){ let p=t%2; if(p<0)p+=2; return p<=1?p:2-p; }
 function oklabLerp(c1,c2,t){const a=rgb2lab(c1),b=rgb2lab(c2);
   return lab2rgb([clamp(lerp(a[0],b[0],t),0,1),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]);}
 
 /* ---------- evaluate + turtle VM ---------- */
 function figureSteps(pairs,t){
+  const cp=cycPhase(t);   // colour + width cycle gradually under extrapolation; geometry keeps raw t
   return pairs.map(p=>({
     f:lerp(p.f[0],p.f[1],t),
     turn:lerp(p.turn[0],p.turn[1],t),
-    w:Math.max(0.3,lerp(p.w[0],p.w[1],t)),
+    w:Math.max(0.3,lerp(p.w[0],p.w[1],cp)),
     pen: t<0.5?p.pen[0]:p.pen[1],
-    col: oklabLerp(p.col[0],p.col[1],t)
+    col: oklabLerp(p.col[0],p.col[1],cp)
   }));
 }
 /* heading 0 = up, +turn = clockwise (right) */
@@ -652,9 +658,9 @@ const figureSegments=(pairs,t,pA,pB)=>run(figureSteps(pairs,t), poseAt(pA,pB,t))
 function figureVerts(pairs,t,pA,pB){
   const st=figureSteps(pairs,t), pose=poseAt(pA,pB,t);
   let x=pose?pose.x:0,y=pose?pose.y:0,h=pose?pose.h:0;
-  const pts=[{x,y}], pen=[], col=[];
-  for(const s of st){ const r=h*Math.PI/180; x+=Math.sin(r)*s.f; y-=Math.cos(r)*s.f; pts.push({x,y}); pen.push(s.pen&&s.f!==0); col.push(s.col); h+=s.turn; }
-  return {pts,pen,col};
+  const pts=[{x,y}], pen=[], col=[], w=[];
+  for(const s of st){ const r=h*Math.PI/180; x+=Math.sin(r)*s.f; y-=Math.cos(r)*s.f; pts.push({x,y}); pen.push(s.pen&&s.f!==0); col.push(s.col); w.push(s.w); h+=s.turn; }
+  return {pts,pen,col,w};
 }
 
 /* ============================================================
@@ -806,8 +812,11 @@ const PRESETS=[
 ];
 
 // 3D beetle presets. Cube/Pyramid/Tetrahedron are Node-verified wireframes; the rest are parametric.
-// The two octagons (flat vs upright) are the default pair — same shape, perpendicular planes — the clearest Euler/Slerp demo.
+// Disc → Globe is the default pair: a flat ring of stacked circles that fan out into a real wireframe sphere.
+// The only difference between them is the pitch between circles (0 → 40) — the clearest "same program, one number" 3D demo.
 const PRESETS3=[
+  {n:'Disc',      c:[0,160,140],  s:'setpencolour [0 160 140]\nrepeat 9 [repeat 24 [forward 3 right 15] up 0]'},
+  {n:'Globe',     c:[150,40,200], s:'setpencolour [150 40 200]\nrepeat 9 [repeat 24 [forward 3 right 15] up 40]'},
   {n:'Octagon',   c:[34,96,224], s:'setpencolour blue\nrepeat 8 [forward 55 right 45]'},
   {n:'Octagon ↑', c:[222,52,42], s:'setpencolour red\nrepeat 8 [forward 55 up 45]'},
   {n:'Cube', c:[34,96,224], s:'setpencolour blue\nup 90 forward 100 right 180 forward 100 right 151.1 down 90 forward 100 right 90 up 61.1 forward 100 left 180 forward 100 left 156.9 down 90 forward 100 left 90 up 66.9 forward 100 left 180 forward 100 left 92.8 up 90 forward 100 left 90 down 2.8 forward 100 left 90 forward 100 right 90 up 90 forward 100 right 90 forward 100 right 90 forward 100 right 3.6 up 90 forward 100 right 90 up 86.4 forward 100'},
@@ -815,7 +824,8 @@ const PRESETS3=[
   {n:'Tetrahedron', c:[150,60,200], s:'setpencolour purple\nright 90 forward 130 left 150 up 54.7 forward 130 right 135 down 45 forward 130 left 180 forward 130 left 125.3 down 30 forward 130 left 121.5 up 16.8 forward 130 left 139.5 up 48.9 forward 130 left 127.6 down 35 forward 130'},
   {n:'Helix',  c:[36,186,196], s:'setpencolour cyan\nrepeat 40 [forward 16 right 12 up 7]'},
   {n:'Coil',   c:[42,170,74],  s:'setpencolour green\nrepeat 80 [forward 9 right 32 up 3]'},
-  {n:'Sphere', c:[24,150,140], s:'setpencolour teal\nrepeat 100 [forward 7 right 26 up 3.6]'},
+  {n:'Spiral', c:[200,90,30], s:'setpencolour [200 90 30]\nto shell :n :len\n  if :n > 80 [stop]\n  forward :len right 24 up 0\n  shell :n + 1 :len * 0.96\nend\nshell 0 16'},
+  {n:'Shell',  c:[200,90,30], s:'setpencolour [200 90 30]\nto shell :n :len\n  if :n > 80 [stop]\n  forward :len right 24 up 8\n  shell :n + 1 :len * 0.96\nend\nshell 0 16'},
   {n:'Twist',  c:[210,60,180], s:'setpencolour magenta\nrepeat 16 [forward 45 right 30 rollright 22]'},
 ];
 const genPresets={'2d':[],'3d':[]};
@@ -827,7 +837,8 @@ const curPresets=()=>(S.dim==='3d'?PRESETS3:PRESETS).concat(genPresets[S.dim]);
    App state + UI
    ============================================================ */
 const $=id=>document.getElementById(id);
-const S={t:0.5,min:0,max:1,mode:'single',view:'num',forked:false,pairs:[],playing:false,raf:0,speed:1,
+const S={t:0.5,min:0,max:1,mode:'single',view:'num',forked:false,pairs:[],playing:false,raf:0,
+  familyN:44, stackN:24, playSecs:3,
   dim:'2d', rmode:'axis', az:0.62, el:1.16, orbit:null, showAxes:false, showAnchors:true,
   saved:{'2d':null,'3d':null},
   dragA:{x:0,y:0}, dragB:{x:0,y:0}, poseA:{x:0,y:0,h:0}, poseB:{x:0,y:0,h:0}, dragging:null, frozenVB:null,
@@ -991,8 +1002,8 @@ function computeLockedVB(){
   const all=[]; const N=33;
   for(let k=0;k<N;k++){ const tt=lerp(S.min,S.max,k/(N-1)); figureSegments(S.pairs,tt,S.poseA,S.poseB).forEach(s=>all.push(s)); }
   const bb=bboxOf(all);
-  bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
-  bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y);
+  if(S.showAnchors){ bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
+    bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y); }
   S.lockedVB=setViewBox(bb,0.12);
 }
 function bboxOf(list){
@@ -1001,13 +1012,20 @@ function bboxOf(list){
   if(a>c){return [-100,-100,100,100];}
   return [a,b,c,d];
 }
+function aspectFit(cx,cy,cw,ch){
+  const el=$('stage'); const aw=el.clientWidth||1, ah=el.clientHeight||1;
+  const aspect=(aw>0&&ah>0)?aw/ah:1;
+  let w=Math.max(cw,1e-6), h=Math.max(ch,1e-6);
+  if(w/h < aspect) w=h*aspect; else h=w/aspect;
+  return [cx-w/2, cy-h/2, w, h];
+}
 function setViewBox(bb,padFrac){
   const [a,b,c,d]=bb; let w=c-a,h=d-b; const sz=Math.max(w,h,1);
   const pad=sz*(padFrac??0.12);
-  const cx=(a+c)/2, cy=(b+d)/2, half=sz/2+pad;
-  const vb=`${cx-half} ${cy-half} ${half*2} ${half*2}`;
-  $('stage').setAttribute('viewBox',vb);
-  return [cx-half,cy-half,half*2,half*2];
+  const cx=(a+c)/2, cy=(b+d)/2;
+  const box=aspectFit(cx,cy, w+2*pad, h+2*pad);
+  $('stage').setAttribute('viewBox',box.join(' '));
+  return box;
 }
 const SVGNS='http://www.w3.org/2000/svg';
 function drawSegs(segs,opacity,widthMul){
@@ -1060,28 +1078,29 @@ function render(){
     } else if(S.dragging && S.frozenVB){
       vb=S.frozenVB; stage.setAttribute('viewBox',vb.join(' '));
     } else {
-      const bb=bboxOf(segs); bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
-      bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y);
+      const bb=bboxOf(segs);
+      if(S.showAnchors){ bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
+        bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y); }
       vb=setViewBox(bb,0.12);
     }
     stage.appendChild(drawSegs(segs,null));
   } else if(S.mode==='family'){
-    const N=44, all=[]; const fams=[];
+    const N=S.familyN, all=[]; const fams=[];
     for(let k=0;k<N;k++){ const tt=lerp(S.min,S.max,k/(N-1)); const sg=figureSegments(S.pairs,tt,S.poseA,S.poseB); fams.push({tt,sg}); sg.forEach(s=>all.push(s)); }
-    const bb=bboxOf(all); bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
-    bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y);
+    const bb=bboxOf(all);
+    if(S.showAnchors){ bb[0]=Math.min(bb[0],S.poseA.x,S.poseB.x); bb[1]=Math.min(bb[1],S.poseA.y,S.poseB.y);
+      bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y); }
     vb = S.dragging&&S.frozenVB ? S.frozenVB : setViewBox(bb,0.06);
     if(S.dragging&&S.frozenVB) $('stage').setAttribute('viewBox',S.frozenVB.join(' '));
     const frag=document.createDocumentFragment();
     fams.forEach(({tt,sg})=>{
-      const out = tt<0 ? -tt : (tt>1 ? tt-1 : 0);
-      const op = tt>=0&&tt<=1 ? 0.6 : Math.max(0.08, 0.6 - 0.32*out);
-      frag.appendChild(drawSegs(sg, op, 0.55));
+      const op = 0.7;   // uniform: extrapolated curves stay as visible as in-range ones (the slider zones already mark "beyond"). Was distance-faded to ~0.08, which made wide-range families ghostly.
+      frag.appendChild(drawSegs(sg, op));
     });
     stage.appendChild(frag);
   } else {
     // STACK (2.5D): each family member offset along a depth axis z = t, oblique-projected.
-    const N=24, samples=[];
+    const N=S.stackN, samples=[];
     for(let k=0;k<N;k++){ const tt=lerp(S.min,S.max,k/(N-1)); samples.push({tt, ...figureVerts(S.pairs,tt,S.poseA,S.poseB)}); }
     // depth direction & scale from figure size
     const mid=samples[Math.floor(N/2)].pts;
@@ -1093,7 +1112,8 @@ function render(){
     // viewBox over all projected points
     let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
     samples.forEach(sm=>sm.pts.forEach(p=>{const q=proj(p,sm.tt);X0=Math.min(X0,q.x);Y0=Math.min(Y0,q.y);X1=Math.max(X1,q.x);Y1=Math.max(Y1,q.y);}));
-    vb=setViewBox([X0,Y0,X1,Y1],0.08);
+    vb = S.dragging&&S.frozenVB ? S.frozenVB : setViewBox([X0,Y0,X1,Y1],0.08);
+    if(S.dragging&&S.frozenVB) $('stage').setAttribute('viewBox',S.frozenVB.join(' '));
     const frag=document.createDocumentFragment();
     const P=samples[0].pts.length;
     // longitudinal flow lines: how each point travels through the morph (the swept surface)
@@ -1118,16 +1138,22 @@ function render(){
         const ln=document.createElementNS(SVGNS,'line');
         ln.setAttribute('x1',a.x.toFixed(2));ln.setAttribute('y1',a.y.toFixed(2));
         ln.setAttribute('x2',b.x.toFixed(2));ln.setAttribute('y2',b.y.toFixed(2));
-        ln.setAttribute('stroke',`rgb(${sm.col[i].join(',')})`); ln.setAttribute('stroke-width',(sm.col?1.6:1.6));
+        ln.setAttribute('stroke',`rgb(${sm.col[i].join(',')})`); ln.setAttribute('stroke-width',(sm.w[i]||1).toFixed(2));
         ln.setAttribute('stroke-linecap','round'); ln.setAttribute('vector-effect','non-scaling-stroke');
         ln.setAttribute('opacity',depthOp.toFixed(2));
         frag.appendChild(ln);
       }
     });
+    if(S.showAnchors){
+      // A sits at the start of its own slice (t=0), B at the start of its slice (t=1), projected into the stack
+      const aP=proj(S.poseA,0), bP=proj(S.poseB,1), vbw=Math.min(vb[2],vb[3]);
+      frag.appendChild(drawAnchor('A',{x:aP.x,y:aP.y,h:0},vbw));
+      frag.appendChild(drawAnchor('B',{x:bP.x,y:bP.y,h:0},vbw));
+    }
     stage.appendChild(frag);
   }
-  // draggable A/B anchors (hidden in 2.5D, where positions are projected)
-  const vbw=vb[2];
+  // flat-view A/B anchors (Stack draws its own, projected into the depth scene above)
+  const vbw=Math.min(vb[2],vb[3]);
   if(S.mode!=='stack' && S.showAnchors){ stage.appendChild(drawAnchor('A',S.poseA,vbw)); stage.appendChild(drawAnchor('B',S.poseB,vbw)); }
   $('tbadge').innerHTML = S.mode==='single' ? `t = <b>${rnd(S.t,2)}</b>`
     : S.mode==='stack' ? `2.5D · depth = t · ${rnd(S.min,1)} → ${rnd(S.max,1)}`
@@ -1185,8 +1211,19 @@ function setRange(mn,mx){
   $('slider').value=clamp(S.t,mn,mx);
   updateZones();
   if(S.lockFrame){ computeLockedVB(); if(S.mode==='single') render(); }
-  if(S.mode==='family') render();
+  if(S.mode!=='single') render();
   syncURL();
+}
+
+// One contextual field: how finely each view samples the range (curves / slices), or how long Play sweeps.
+function updateIncField(){
+  const lab=$('incLabel'), inp=$('incInput'); if(!lab||!inp) return;
+  if(S.mode==='family'){ lab.textContent='curves'; inp.min=2; inp.max=150; inp.step=1; inp.value=S.familyN;
+    inp.title='How many blended shapes Family draws across the range.'; }
+  else if(S.mode==='stack'){ lab.textContent='slices'; inp.min=2; inp.max=60; inp.step=1; inp.value=S.stackN;
+    inp.title='How many depth slices Stack draws across the range.'; }
+  else { lab.textContent='sweep'; inp.min=0.3; inp.max=120; inp.step=0.5; inp.value=S.playSecs;
+    inp.title='Seconds for Play to sweep the range once at 1× speed (the speed slider multiplies this).'; }
 }
 
 // The lock-view button is action-labelled: its text says what a click will do, not the current state.
@@ -1302,7 +1339,12 @@ function init(){
   $('tmax').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)) setRange(S.min,v); });
   $('beyondL').onclick=()=>{ setRange(S.min<0?0:-0.5, S.max); };
   $('beyondR').onclick=()=>{ setRange(S.min, S.max>1?1:1.5); };
-  $('spd').addEventListener('input',e=>{ S.speed=parseFloat(e.target.value)||1; $('spdv').textContent=rnd(S.speed,2)+'×'; });
+  $('incInput').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(isNaN(v))return;
+    if(S.mode==='family'){ S.familyN=clamp(Math.round(v),2,150); render(); }
+    else if(S.mode==='stack'){ S.stackN=clamp(Math.round(v),2,60); render(); }
+    else { S.playSecs=clamp(v,0.3,120); } });
+  $('incInput').addEventListener('change',()=>updateIncField());  // normalise the shown value on blur
+  updateIncField();
 
   // view toggle
   $('vNum').onclick=()=>{ S.view='num'; $('vNum').setAttribute('aria-pressed','true'); $('vForm').setAttribute('aria-pressed','false');
@@ -1336,7 +1378,7 @@ function init(){
   // mode toggle
   const setMode=m=>{ if(m!=='single')stopPlay(); S.mode=m;
     ['Single','Family','Stack'].forEach(k=>$('m'+k).setAttribute('aria-pressed', String(k.toLowerCase()===m)));
-    render(); };
+    updateIncField(); render(); };
   $('mSingle').onclick=()=>setMode('single');
   $('mFamily').onclick=()=>setMode('family');
   $('mStack').onclick=()=>setMode('stack');
@@ -1363,6 +1405,7 @@ function init(){
 
   // export standalone animated HTML (keeps the Logo + engine, stays interactive)
   $('dlHtml').onclick=()=>saveFile(S.dim==='3d'?'in-between-3d-morph.html':'in-between-morph.html', exportHTML(), 'text/html');
+  $('dlGif').onclick=()=>exportGIF();
 
   // dim toggle (2D / 3D)
   $('d2d').onclick=()=>setDim('2d');
@@ -1405,6 +1448,8 @@ function init(){
     e.preventDefault();
   });
   $('resetPos').onclick=()=>{ S.dragA={x:0,y:0}; S.dragB={x:0,y:0}; rebuild(); };
+  // re-fit the drawing whenever the user drags the stage area to a new size
+  if(window.ResizeObserver){ let _roT; new ResizeObserver(()=>{ clearTimeout(_roT); _roT=setTimeout(()=>render(),60); }).observe($('stage')); }
   _urlReady=true;
 }
 
@@ -1432,6 +1477,146 @@ function saveFile(name,text,mime){
       ()=>toast(downloaded?`Saved ${name}`:`Couldn't export — try opening the app in its own tab`)
     );
   } else toast(downloaded?`Saved ${name}`:`Export blocked in this view`);
+}
+function saveBinary(name,bytes,mime){
+  try{
+    const blob=new Blob([bytes],{type:mime});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=name; a.target='_blank'; a.rel='noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    toast(`Saved ${name} — ${(bytes.length/1024).toFixed(0)} KB`);
+  }catch(e){ toast("Couldn't save the GIF here — try opening the app in its own tab"); }
+}
+
+/* ---------- self-contained animated-GIF export (2D morph, zero dependencies) ----------
+   Rasterises the sweep to frames, median-cut quantises to a shared 256-colour palette,
+   LZW-encodes (GIF early-change), and assembles a looping GIF89a. No CDN / worker. */
+const GIF_SIZE=380;
+// square padded bbox for a set of segments (one frame, or the whole sweep for a locked frame)
+function boxOfSegs(segs){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const s of segs){ x0=Math.min(x0,s.x1,s.x2); y0=Math.min(y0,s.y1,s.y2); x1=Math.max(x1,s.x1,s.x2); y1=Math.max(y1,s.y1,s.y2); }
+  if(x0>x1){ x0=y0=-100; x1=y1=100; }
+  const z=Math.max(x1-x0,y1-y0,1)*1.16, cx=(x0+x1)/2, cy=(y0+y1)/2;
+  return {x:cx-z/2,y:cy-z/2,z};
+}
+function gifDrawSegs(ctx,vb,segs){
+  ctx.fillStyle='#FBFCFA'; ctx.fillRect(0,0,GIF_SIZE,GIF_SIZE);   // matches --card paper
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  const sc=GIF_SIZE/vb.z;
+  for(const s of segs){
+    ctx.strokeStyle='rgb('+s.col[0]+','+s.col[1]+','+s.col[2]+')';
+    ctx.lineWidth=Math.max(0.6,s.w);     // app uses non-scaling-stroke -> width is in px
+    ctx.beginPath();
+    ctx.moveTo((s.x1-vb.x)*sc,(s.y1-vb.y)*sc);
+    ctx.lineTo((s.x2-vb.x)*sc,(s.y2-vb.y)*sc);
+    ctx.stroke();
+  }
+}
+// median-cut -> {pal:Uint8Array(768), index:(r,g,b)->0..255}
+function gifPalette(frames){
+  const hist=new Map();
+  for(const px of frames) for(let i=0;i<px.length;i+=4){ const k=(px[i]<<16)|(px[i+1]<<8)|px[i+2]; hist.set(k,(hist.get(k)||0)+1); }
+  const colors=[]; hist.forEach((n,k)=>colors.push([(k>>16)&255,(k>>8)&255,k&255,n]));
+  const mkBox=cs=>{ let r0=255,r1=0,g0=255,g1=0,b0=255,b1=0; for(const c of cs){ if(c[0]<r0)r0=c[0]; if(c[0]>r1)r1=c[0]; if(c[1]<g0)g0=c[1]; if(c[1]>g1)g1=c[1]; if(c[2]<b0)b0=c[2]; if(c[2]>b1)b1=c[2]; }
+    const dr=r1-r0,dg=g1-g0,db=b1-b0,rng=Math.max(dr,dg,db); return {cs,rng,ax:dr>=dg&&dr>=db?0:(dg>=db?1:2)}; };
+  let boxes=[mkBox(colors)];
+  while(boxes.length<256){
+    let bi=-1,best=0; for(let i=0;i<boxes.length;i++) if(boxes[i].cs.length>1&&boxes[i].rng>best){ best=boxes[i].rng; bi=i; }
+    if(bi<0) break;
+    const b=boxes[bi],ax=b.ax; b.cs.sort((p,q)=>p[ax]-q[ax]);
+    const mid=b.cs.length>>1;   // median by COUNT-AGNOSTIC index: keeps a high-contrast minority (e.g. dark ink on paper) from being swallowed by the dominant background, and never makes an empty box
+    boxes.splice(bi,1,mkBox(b.cs.slice(0,mid)),mkBox(b.cs.slice(mid)));
+  }
+  const pal=new Uint8Array(768), reps=[];
+  boxes.forEach((b,i)=>{ let r=0,g=0,bl=0,n=0; for(const c of b.cs){ r+=c[0]*c[3]; g+=c[1]*c[3]; bl+=c[2]*c[3]; n+=c[3]; }
+    r=Math.round(r/n); g=Math.round(g/n); bl=Math.round(bl/n); pal[i*3]=r; pal[i*3+1]=g; pal[i*3+2]=bl; reps.push([r,g,bl]); });
+  const cache=new Map();
+  const index=(r,g,bl)=>{ const key=(r<<16)|(g<<8)|bl, hit=cache.get(key); if(hit!==undefined) return hit;
+    let bd=1e12,bx=0; for(let i=0;i<reps.length;i++){ const dr=r-reps[i][0],dg=g-reps[i][1],db=bl-reps[i][2],d=dr*dr+dg*dg+db*db; if(d<bd){ bd=d; bx=i; } }
+    cache.set(key,bx); return bx; };
+  return {pal,index};
+}
+// GIF-flavoured LZW (variable width, early change, clear at 4096)
+function gifLZW(indices,minCode){
+  const clear=1<<minCode, eoi=clear+1, out=[];
+  let width,next,dict,cur=0,nb=0;
+  const emit=c=>{ cur|=c<<nb; nb+=width; while(nb>=8){ out.push(cur&255); cur>>=8; nb-=8; } };
+  const reset=()=>{ dict=new Map(); for(let i=0;i<clear;i++) dict.set(""+i,i); next=clear+2; width=minCode+1; };
+  reset(); emit(clear);
+  let prefix=""+indices[0];
+  for(let i=1;i<indices.length;i++){ const k=indices[i], cand=prefix+","+k;
+    if(dict.has(cand)) prefix=cand;
+    else {
+      emit(dict.get(prefix));
+      if(next===4096){ emit(clear); reset(); }                  // table full: clear and start over
+      else { if(next>=(1<<width)&&width<12) width++; dict.set(cand,next++); }  // early change BEFORE assigning the wider code
+      prefix=""+k;
+    } }
+  emit(dict.get(prefix)); emit(eoi);
+  if(nb>0) out.push(cur&255);
+  return out;
+}
+function gifAssemble(idxFrames,pal,delayCs){
+  const b=[]; const u16=v=>b.push(v&255,(v>>8)&255); const str=s=>{ for(const c of s) b.push(c.charCodeAt(0)); };
+  str("GIF89a"); u16(GIF_SIZE); u16(GIF_SIZE); b.push(0xF7,0,0);       // 256-colour 8-bit global table
+  for(let i=0;i<768;i++) b.push(pal[i]);
+  b.push(0x21,0xFF,0x0B); str("NETSCAPE2.0"); b.push(0x03,0x01,0,0,0x00); // loop forever
+  for(const idx of idxFrames){
+    b.push(0x21,0xF9,0x04,0x04); u16(delayCs); b.push(0x00,0x00);      // GCE: disposal=1, delay
+    b.push(0x2C,0,0,0,0); u16(GIF_SIZE); u16(GIF_SIZE); b.push(0x00);  // image descriptor (full frame, no local table)
+    b.push(0x08);                                                      // LZW min code size
+    const lzw=gifLZW(idx,8);
+    for(let i=0;i<lzw.length;i+=255){ const n=Math.min(255,lzw.length-i); b.push(n); for(let j=0;j<n;j++) b.push(lzw[i+j]); }
+    b.push(0x00);                                                      // sub-block terminator
+  }
+  b.push(0x3B);                                                        // trailer
+  return new Uint8Array(b);
+}
+// Project the live 3D morph at parameter t to flat {x1,y1,x2,y2,w,col} segments for the GIF, using the
+// current orbit angle (S.az/S.el). Depth fade is baked into the colour (blended toward paper) so each still
+// frame reads as 3D the way the live view does.
+function projSegs3(t){
+  const segs=run3(S.pairs,t,S.rmode);
+  if(!segs.length) return [];
+  const proj=segs.map(s=>({a:project3(s.a),b:project3(s.b),w:s.w,col:s.col}));
+  let dn=1e9,dx=-1e9;
+  proj.forEach(s=>{ dn=Math.min(dn,s.a.depth,s.b.depth); dx=Math.max(dx,s.a.depth,s.b.depth); });
+  const dr=(dx-dn)||1;
+  return proj.map(s=>{ const d=((s.a.depth+s.b.depth)/2-dn)/dr, op=0.35+0.6*d;
+    const col=[Math.round(s.col[0]*op+251*(1-op)),Math.round(s.col[1]*op+252*(1-op)),Math.round(s.col[2]*op+250*(1-op))];
+    return {x1:s.a.x,y1:s.a.y,x2:s.b.x,y2:s.b.y,w:s.w*(0.7+0.5*d),col}; });
+}
+function exportGIF(){
+  if(!S.pairs||!S.pairs.length){ toast('Nothing to export yet.'); return; }
+  toast('Rendering GIF…');
+  setTimeout(()=>{ try{
+    const cv=document.createElement('canvas'); cv.width=GIF_SIZE; cv.height=GIF_SIZE;
+    const ctx=cv.getContext('2d',{willReadFrequently:true});
+    // frame count tracks the sweep time so motion stays ~20fps (smooth, like Play), capped so files stay reasonable.
+    // delay is then derived to keep the forward sweep == sweep seconds, so the GIF runs at Play's speed.
+    const fwd=Math.min(60,Math.max(20,Math.round(S.playSecs*20)));
+    const delay=Math.max(2,Math.round(S.playSecs*100/fwd));
+    const tAt=k=>lerp(S.min,S.max,k/(fwd-1));
+    const ts=[]; for(let k=0;k<fwd;k++) ts.push(tAt(k));
+    for(let k=fwd-2;k>=1;k--) ts.push(tAt(k));   // ping-pong back for a seamless loop
+    // 3D renders the morph from the current orbit angle (fixed camera); 2D uses the flat figure
+    const is3=S.dim==='3d';
+    const segsAt = is3 ? (tt=>projSegs3(tt)) : (tt=>figureSegments(S.pairs,tt,S.poseA,S.poseB));
+    // Lock view framing: 2D locked -> union bbox (stable). 3D locked -> fixed union SCALE but re-centre each
+    // frame on its own centroid, so an inflating shape (disc -> globe) grows in place instead of sliding across.
+    // Unlocked (either) -> per-frame fit that follows each shape.
+    let lockVB=null,lockZ=null;
+    if(S.lockFrame){ let all=[]; for(let k=0;k<fwd;k++) all=all.concat(segsAt(tAt(k))); const ub=boxOfSegs(all); if(is3) lockZ=ub.z; else lockVB=ub; }
+    const vbFor=segs=>{ if(lockVB) return lockVB; if(lockZ!=null){ const bb=boxOfSegs(segs); return {x:bb.x+(bb.z-lockZ)/2,y:bb.y+(bb.z-lockZ)/2,z:lockZ}; } return boxOfSegs(segs); };
+    const raw=ts.map(tt=>{ const segs=segsAt(tt); gifDrawSegs(ctx, vbFor(segs), segs); return ctx.getImageData(0,0,GIF_SIZE,GIF_SIZE).data; });
+    const {pal,index}=gifPalette(raw);
+    const frames=raw.map(px=>{ const idx=new Uint8Array(GIF_SIZE*GIF_SIZE); for(let i=0,p=0;i<px.length;i+=4,p++) idx[p]=index(px[i],px[i+1],px[i+2]); return idx; });
+    const bytes=gifAssemble(frames,pal,delay);
+    saveBinary('in-between-morph.gif',bytes,'image/gif');
+  }catch(e){ toast('GIF export failed: '+e.message); } },30);
 }
 
 /* ---------- "how this was made" panel + back-links, shared by both exporters ---------- */
@@ -1515,7 +1700,7 @@ function export2HTML(){
     rawTokenize.toString().replace(/rawTokenize/,'tokenize'), parse.toString(), unroll.toString(), canon.toString(),
     subdivide.toString(), align.toString(), splitPose.toString(),
     rgb2lab.toString(), lab2rgb.toString(), oklabLerp.toString(),
-    figureSteps.toString(), run.toString()
+    cycPhase.toString(), figureSteps.toString(), run.toString()
   ].join('\n');
   const data=JSON.stringify({A:expandProgram($('progA').value), B:expandProgram($('progB').value), poseA:S.poseA, poseB:S.poseB, min:S.min, max:S.max, lock:S.lockFrame, dim:'2d', srcA:$('progA').value, srcB:$('progB').value, appUrl:APP_URL, artUrl:ARTIFACT_URL});
   const player = `
@@ -1598,7 +1783,7 @@ function startPlay(){
   const step=now=>{
     if(!S.playing) return;
     const dt=(now-last)/1000; last=now;
-    const rate=(S.max-S.min)/(3/S.speed);
+    const rate=(S.max-S.min)/S.playSecs;
     let v=S.t+dir*rate*dt;
     if(v>=S.max){v=S.max;dir=-1;} else if(v<=S.min){v=S.min;dir=1;}
     setT(v,false); S.raf=requestAnimationFrame(step);
@@ -1636,7 +1821,6 @@ function vslerp(a,b,t){let d=clamp(a[0]*b[0]+a[1]*b[1]+a[2]*b[2],-1,1);
   const O=Math.acos(d),so=Math.sin(O),c0=Math.sin((1-t)*O)/so,c1=Math.sin(t*O)/so;
   const v=[c0*a[0]+c1*b[0],c0*a[1]+c1*b[1],c0*a[2]+c1*b[2]];const m=Math.hypot(v[0],v[1],v[2])||1;return [v[0]/m,v[1]/m,v[2]/m];}
 function axisAngleInterp(qA,qB,t){
-  if(t<=0)return qA.slice(); if(t>=1)return qB.slice();
   const A=toAxisAngle(qA),B=toAxisAngle(qB);
   let axA=A.ax,axB=B.ax;if(A.ang<1e-6)axA=axB;if(B.ang<1e-6)axB=axA;
   // opposite axes (esp. the 180° antipodal case) make angle-lerp pass through 0° and fling the path off; use shortest-arc there
@@ -1681,7 +1865,8 @@ function evalStep3(p,t,mode){
   if(mode==='slerp'){ q=qslerp(p.A.q,p.B.q,t); }
   else if(mode==='axis'){ q=axisAngleInterp(p.A.q,p.B.q,t); }
   else { const a=p.A.ypr,b=p.B.ypr; q=qYPR(lerp(a.yaw,b.yaw,t),lerp(a.pit,b.pit,t),lerp(a.rol,b.rol,t)); }
-  return {f,q,pen:t<0.5?p.A.pen:p.B.pen,w:Math.max(0.3,lerp(p.A.w,p.B.w,t)),col:oklabLerp(p.A.col,p.B.col,t)};
+  const cp=cycPhase(t);
+  return {f,q,pen:t<0.5?p.A.pen:p.B.pen,w:Math.max(0.3,lerp(p.A.w,p.B.w,cp)),col:oklabLerp(p.A.col,p.B.col,cp)};
 }
 function run3(pairs,t,mode){
   let p=[0,0,0],q=[1,0,0,0];const segs=[];
@@ -1714,7 +1899,7 @@ function render3D(){
   proj.forEach(s=>[s.a,s.b].forEach(q=>{X0=Math.min(X0,q.x);Y0=Math.min(Y0,q.y);X1=Math.max(X1,q.x);Y1=Math.max(Y1,q.y);dn=Math.min(dn,q.depth);dx=Math.max(dx,q.depth);}));
   if(X0>X1){ stage.setAttribute('viewBox','-150 -150 300 300'); return; }
   const sz=Math.max(X1-X0,Y1-Y0,1)*1.16, cx=(X0+X1)/2, cy=(Y0+Y1)/2;
-  stage.setAttribute('viewBox',`${cx-sz/2} ${cy-sz/2} ${sz} ${sz}`);
+  stage.setAttribute('viewBox',aspectFit(cx,cy,sz,sz).join(' '));
   const frag=document.createDocumentFragment();
   if(S.showAxes){
     const al=sz*0.16, O=project3([0,0,0]);
@@ -1760,7 +1945,7 @@ function blend3Text(pairs,t,mode){
 function exportHTML(){ return S.dim==='3d'?export3HTML():export2HTML(); }
 function export3HTML(){
   const asConst={qmul,qaa,qrot,qconj,qnorm,qslerp,qYPR,s2l,l2s,lerp,clamp,gcd,lcm};
-  const asDecl=[qpow,rgb2lab,lab2rgb,oklabLerp,qmat,yprFromQ,toAxisAngle,vslerp,axisAngleInterp,rawTok3,parse3,unroll3,canon3,subdiv3,align3,evalStep3,run3];
+  const asDecl=[cycPhase,qpow,rgb2lab,lab2rgb,oklabLerp,qmat,yprFromQ,toAxisAngle,vslerp,axisAngleInterp,rawTok3,parse3,unroll3,canon3,subdiv3,align3,evalStep3,run3];
   const vals=[`const NAMED=${JSON.stringify(NAMED)};`,`const DEF_COL=${JSON.stringify(DEF_COL)},DEF_W=${DEF_W};`,
     `const UP=${JSON.stringify(UP)},RIGHT=${JSON.stringify(RIGHT)},HEAD=${JSON.stringify(HEAD)};`];
   const eng=(vals.join('\n')+'\n'+Object.entries(asConst).map(([n,f])=>`const ${n}=${f.toString()};`).join('\n')+'\n'+asDecl.map(f=>f.toString()).join('\n')).replace(/\brawTok3\b/g,'tok3');
@@ -2177,7 +2362,7 @@ function setDim(d){
   document.body.classList.toggle('dim3d', d==='3d');
   const sv=S.saved[d];
   if(sv){ $('progA').value=sv.A; $('progB').value=sv.B; }
-  else if(d==='3d'){ $('progA').value=PRESETS3[0].s; $('progB').value=PRESETS3[1].s; }  // Octagon / Octagon ↑
+  else if(d==='3d'){ $('progA').value=PRESETS3[0].s; $('progB').value=PRESETS3[1].s; }  // Disc / Globe — flat ring fanning into a sphere
   else { $('progA').value=STAR_OUTLINE; $('progB').value=DECAGON; }
   if(d==='3d'){ S.mode='single'; S.view='num'; if(S.forked) unfork(true); S.dragA={x:0,y:0}; S.dragB={x:0,y:0};
     $('vNum').setAttribute('aria-pressed','true'); $('vForm').setAttribute('aria-pressed','false'); }
