@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- In-Between — published build 2026-06-30 (v4). Identical behaviour to the working file; fresh artifact identity for the public URL c45a3f80. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -394,8 +395,9 @@
           <span class="field">min&nbsp;<input id="tmin" type="number" step="0.5" value="0" title="Left end of the slider's range."></span>
           <span class="field">max&nbsp;<input id="tmax" type="number" step="0.5" value="1" title="Right end of the slider's range."></span>
           <span class="field" id="incField"><b id="incLabel">sweep</b>&nbsp;<input id="incInput" type="number" step="0.5" value="3" style="width:54px"></span>
+          <span class="field" id="trailField" style="display:none"><b>trail</b>&nbsp;<input id="trailInput" type="range" min="0.08" max="1" step="0.01" value="1" style="width:78px" title="When Play animates Family or Stack: how long each blend lingers. Right = hold (all stay), left = a short fading trail of recent ones."></span>
           <span class="seg" id="lockSeg" style="margin-left:6px"><button id="lockFrame" title="The camera is locked steady, so the shape shows its real motion as it morphs (it may drift off-centre). Click to auto-fit — re-centre and rescale to the shape every frame.">&#8865;&nbsp;Auto-fit</button></span>
-          <button class="play spacer" id="play" title="Animate the blend back and forth across the slider range.">&#9654;&nbsp;Play</button>
+          <button class="play spacer" id="play" title="Animate the blend: in Single it sweeps t back and forth; in Family and Stack it builds the shapes on, one after another (with an optional fading trail).">&#9654;&nbsp;Play</button>
         </div>
 
         <div class="vchips" id="vchips"></div>
@@ -838,7 +840,7 @@ const curPresets=()=>(S.dim==='3d'?PRESETS3:PRESETS).concat(genPresets[S.dim]);
    ============================================================ */
 const $=id=>document.getElementById(id);
 const S={t:0.5,min:0,max:1,mode:'single',view:'num',forked:false,pairs:[],playing:false,raf:0,
-  familyN:44, stackN:24, playSecs:3,
+  familyN:44, stackN:24, playSecs:3, trailFrac:1, famGroups:[],
   dim:'2d', rmode:'axis', az:0.62, el:1.16, orbit:null, showAxes:false, showAnchors:true,
   saved:{'2d':null,'3d':null},
   dragA:{x:0,y:0}, dragB:{x:0,y:0}, poseA:{x:0,y:0,h:0}, poseB:{x:0,y:0,h:0}, dragging:null, frozenVB:null,
@@ -1092,10 +1094,11 @@ function render(){
       bb[2]=Math.max(bb[2],S.poseA.x,S.poseB.x); bb[3]=Math.max(bb[3],S.poseA.y,S.poseB.y); }
     vb = S.dragging&&S.frozenVB ? S.frozenVB : setViewBox(bb,0.06);
     if(S.dragging&&S.frozenVB) $('stage').setAttribute('viewBox',S.frozenVB.join(' '));
-    const frag=document.createDocumentFragment();
-    fams.forEach(({tt,sg})=>{
+    const frag=document.createDocumentFragment(); S.famGroups=[];
+    fams.forEach(({tt,sg},k)=>{
       const op = 0.7;   // uniform: extrapolated curves stay as visible as in-range ones (the slider zones already mark "beyond"). Was distance-faded to ~0.08, which made wide-range families ghostly.
-      frag.appendChild(drawSegs(sg, op));
+      const g=document.createElementNS(SVGNS,'g'); g.setAttribute('data-k',k); g.setAttribute('data-base',op); g.setAttribute('opacity',op);
+      g.appendChild(drawSegs(sg,null)); frag.appendChild(g); S.famGroups.push(g);
     });
     stage.appendChild(frag);
   } else {
@@ -1114,24 +1117,30 @@ function render(){
     samples.forEach(sm=>sm.pts.forEach(p=>{const q=proj(p,sm.tt);X0=Math.min(X0,q.x);Y0=Math.min(Y0,q.y);X1=Math.max(X1,q.x);Y1=Math.max(Y1,q.y);}));
     vb = S.dragging&&S.frozenVB ? S.frozenVB : setViewBox([X0,Y0,X1,Y1],0.08);
     if(S.dragging&&S.frozenVB) $('stage').setAttribute('viewBox',S.frozenVB.join(' '));
-    const frag=document.createDocumentFragment();
+    const frag=document.createDocumentFragment(); S.famGroups=[];
     const P=samples[0].pts.length;
-    // longitudinal flow lines: how each point travels through the morph (the swept surface)
-    for(let i=0;i<P;i++){
-      for(let k=0;k<N-1;k++){
+    // longitudinal flow lines: how each point travels through the morph (the swept surface),
+    // bundled by the slice they lead INTO so a build reveals each flow together with its destination slice.
+    for(let k=0;k<N-1;k++){
+      const base=0.32, g=document.createElementNS(SVGNS,'g');
+      g.setAttribute('data-k',k+1); g.setAttribute('data-base',base); g.setAttribute('opacity',base);
+      for(let i=0;i<P;i++){
         const a=proj(samples[k].pts[i],samples[k].tt), b=proj(samples[k+1].pts[i],samples[k+1].tt);
         const col=samples[k].col[Math.min(i,P-2)]||DEF_COL;
         const ln=document.createElementNS(SVGNS,'line');
         ln.setAttribute('x1',a.x.toFixed(2));ln.setAttribute('y1',a.y.toFixed(2));
         ln.setAttribute('x2',b.x.toFixed(2));ln.setAttribute('y2',b.y.toFixed(2));
         ln.setAttribute('stroke',`rgb(${col.join(',')})`); ln.setAttribute('stroke-width','1');
-        ln.setAttribute('vector-effect','non-scaling-stroke'); ln.setAttribute('opacity','0.32');
-        frag.appendChild(ln);
+        ln.setAttribute('vector-effect','non-scaling-stroke');
+        g.appendChild(ln);
       }
+      frag.appendChild(g); S.famGroups.push(g);
     }
     // transverse outlines: the actual shape at each depth slice (front = brighter)
     samples.forEach((sm,k)=>{
       const depthOp=0.35+0.55*(k/(N-1));
+      const g=document.createElementNS(SVGNS,'g');
+      g.setAttribute('data-k',k); g.setAttribute('data-base',depthOp.toFixed(3)); g.setAttribute('opacity',depthOp.toFixed(3));
       for(let i=0;i<sm.pen.length;i++){
         if(!sm.pen[i])continue;
         const a=proj(sm.pts[i],sm.tt), b=proj(sm.pts[i+1],sm.tt);
@@ -1140,9 +1149,9 @@ function render(){
         ln.setAttribute('x2',b.x.toFixed(2));ln.setAttribute('y2',b.y.toFixed(2));
         ln.setAttribute('stroke',`rgb(${sm.col[i].join(',')})`); ln.setAttribute('stroke-width',(sm.w[i]||1).toFixed(2));
         ln.setAttribute('stroke-linecap','round'); ln.setAttribute('vector-effect','non-scaling-stroke');
-        ln.setAttribute('opacity',depthOp.toFixed(2));
-        frag.appendChild(ln);
+        g.appendChild(ln);
       }
+      frag.appendChild(g); S.famGroups.push(g);
     });
     if(S.showAnchors){
       // A sits at the start of its own slice (t=0), B at the start of its slice (t=1), projected into the stack
@@ -1158,6 +1167,22 @@ function render(){
   $('tbadge').innerHTML = S.mode==='single' ? `t = <b>${rnd(S.t,2)}</b>`
     : S.mode==='stack' ? `2.5D · depth = t · ${rnd(S.min,1)} → ${rnd(S.max,1)}`
     : `family · ${rnd(S.min,1)} → ${rnd(S.max,1)}`;
+}
+
+// ---- animated build of Family/Stack: reveal members up to a moving frontier, with an optional fading trail ----
+// frontier f advances 0..N over the sweep; member k appears once f>=k. trailFrac=1 holds revealed members;
+// lower values fade older ones over a window, so new blends replace old (a comet sweeping the morph).
+function frontierOpacity(k, frontier, N){
+  const age=frontier-k;
+  if(age < -0.001) return 0;                 // not revealed yet
+  if(S.trailFrac>=1) return 1;               // hold: everything revealed stays at full
+  const L=Math.max(1, S.trailFrac*N);        // fade window, in members
+  return Math.max(0, 1 - age/L);
+}
+function applyFrontier(frontier){
+  const N=(S.mode==='family')?S.familyN:S.stackN;
+  for(const g of S.famGroups){ const k=+g.getAttribute('data-k'), base=+g.getAttribute('data-base');
+    g.setAttribute('opacity',(base*frontierOpacity(k,frontier,N)).toFixed(3)); }
 }
 
 /* ---------- blend text panes ---------- */
@@ -1199,7 +1224,9 @@ function setT(t,fromSlider){
   S.t=t;
   if(!fromSlider){ $('slider').value=clamp(t,S.min,S.max); }
   $('tval').value=rnd(t,2);
-  if(S.mode==='single') render(); else { $('tbadge').innerHTML=`family · ${rnd(S.min,1)} → ${rnd(S.max,1)}`; }
+  if(S.mode==='single'||S.dim==='3d') render();
+  else if(S.mode==='stack') $('tbadge').innerHTML=`2.5D · t = <b>${rnd(t,2)}</b>`;
+  else $('tbadge').innerHTML=`family · t = <b>${rnd(t,2)}</b>`;
   if(S.dim==='3d'||S.view==='num') renderBlendText();
   if(!S.playing) syncURL();
 }
@@ -1223,7 +1250,8 @@ function updateIncField(){
   else if(S.mode==='stack'){ lab.textContent='slices'; inp.min=2; inp.max=60; inp.step=1; inp.value=S.stackN;
     inp.title='How many depth slices Stack draws across the range.'; }
   else { lab.textContent='sweep'; inp.min=0.3; inp.max=120; inp.step=0.5; inp.value=S.playSecs;
-    inp.title='Seconds for Play to sweep the range once at 1× speed (the speed slider multiplies this).'; }
+    inp.title='Seconds for Play to sweep the range once.'; }
+  const tf=$('trailField'); if(tf){ tf.style.display = S.mode==='single' ? 'none' : 'flex'; const ti=$('trailInput'); if(ti) ti.value=S.trailFrac; }
 }
 
 // The lock-view button is action-labelled: its text says what a click will do, not the current state.
@@ -1344,6 +1372,7 @@ function init(){
     else if(S.mode==='stack'){ S.stackN=clamp(Math.round(v),2,60); render(); }
     else { S.playSecs=clamp(v,0.3,120); } });
   $('incInput').addEventListener('change',()=>updateIncField());  // normalise the shown value on blur
+  $('trailInput').addEventListener('input',e=>{ S.trailFrac=parseFloat(e.target.value); });  // applies on the next Play of Family/Stack
   updateIncField();
 
   // view toggle
@@ -1376,7 +1405,7 @@ function init(){
   syncKeyUI();
 
   // mode toggle
-  const setMode=m=>{ if(m!=='single')stopPlay(); S.mode=m;
+  const setMode=m=>{ stopPlay(); S.mode=m;
     ['Single','Family','Stack'].forEach(k=>$('m'+k).setAttribute('aria-pressed', String(k.toLowerCase()===m)));
     updateIncField(); render(); };
   $('mSingle').onclick=()=>setMode('single');
@@ -1628,7 +1657,7 @@ function exportGIF(){
 // in Claude". Leave '' to hide it. (AI Make/ask inside a published artifact needs the viewer signed in to
 // Claude, unless they bring their own Gemini/OpenAI key.)
 const APP_URL='https://toontalk.github.io/AI/apps/in-between.html';
-const ARTIFACT_URL='https://claude.ai/public/artifacts/a3d7bf17-7954-4b92-a7ca-fc7565bf9191';
+const ARTIFACT_URL='https://claude.ai/public/artifacts/c45a3f80-b44e-4100-b690-d6c544fcf0ab';
 function exportAppLink(base){
   let qs='';
   try{ const q=new URLSearchParams(); q.set('dim',S.dim); q.set('a',$('progA').value); q.set('b',$('progB').value); q.set('t',rnd(S.t,3)); q.set('min',rnd(S.min,3)); q.set('max',rnd(S.max,3)); qs='?'+q.toString(); }catch(e){}
@@ -1674,10 +1703,17 @@ function madeWithPanel(withThumbs){
   const links=`<div class="how-links"><a id="lnkApp" class="how-link" href="${webLink}" target="_blank" rel="noopener">Open in the web app &#8599;</a>`
     + (artLink?`<a id="lnkArt" class="how-link how-link2" href="${artLink}" target="_blank" rel="noopener">Open in Claude &#8599;</a>`:'')
     + `</div>`;
+  const fs = (S.dim==='2d' && S.mode!=='single');
+  const trailOn = fs && S.trailFrac < 1;
+  let explain;
+  if(!fs) explain = `What you see is shape A mixing into shape B step by step, and it can keep going past either end (that is <b>extrapolation</b>).`;
+  else if(S.mode==='family') explain = `Instead of a single blend, this shows a whole <b>family</b> of in-between shapes at once — many blends of A and B drawn across the range and built up one after another. The range can reach past either end, so some members are <b>extrapolations</b> beyond A or B.`;
+  else explain = `This shows a <b>stack</b> of blends between A and B, set along a depth axis so the whole morph reads as one swept, 2.5D form, built up slice by slice. The range can reach past either end, so the far slices may be <b>extrapolations</b> beyond A or B.`;
+  if(trailOn) explain += ` A <b>trail</b> is switched on, so each shape fades as newer ones appear — a moving comet rather than the whole set held on screen.`;
   return `
 <div id="howWrap"><div id="howCard">
  <div class="how-h"><b>How this was made</b><button type="button" onclick="document.getElementById('howWrap').style.display='none'">&#10005;</button></div>
- <p>This animation is a live blend of two little <b>Logo turtle programs</b> — instructions telling a turtle to go forward and turn. What you see is shape A mixing into shape B step by step, and it can keep going past either end (that is <b>extrapolation</b>). Open it below to drag, extrapolate, and remix.</p>
+ <p>This animation is a live blend of two little <b>Logo turtle programs</b> — instructions telling a turtle to go forward and turn. ${explain} Open it below to drag, extrapolate, and remix.</p>
  ${shapes}
  ${links}
  <div class="how-foot">Made with <b>In-Between</b>, a turtle-graphics shape lab.</div>
@@ -1700,10 +1736,10 @@ function export2HTML(){
     rawTokenize.toString().replace(/rawTokenize/,'tokenize'), parse.toString(), unroll.toString(), canon.toString(),
     subdivide.toString(), align.toString(), splitPose.toString(),
     rgb2lab.toString(), lab2rgb.toString(), oklabLerp.toString(),
-    cycPhase.toString(), figureSteps.toString(), run.toString()
+    cycPhase.toString(), figureSteps.toString(), figureVerts.toString(), run.toString()
   ].join('\n');
-  const data=JSON.stringify({A:expandProgram($('progA').value), B:expandProgram($('progB').value), poseA:S.poseA, poseB:S.poseB, min:S.min, max:S.max, lock:S.lockFrame, dim:'2d', srcA:$('progA').value, srcB:$('progB').value, appUrl:APP_URL, artUrl:ARTIFACT_URL});
-  const player = `
+  const data=JSON.stringify({A:expandProgram($('progA').value), B:expandProgram($('progB').value), poseA:S.poseA, poseB:S.poseB, min:S.min, max:S.max, lock:S.lockFrame, dim:'2d', mode:S.mode, familyN:S.familyN, stackN:S.stackN, trail:S.trailFrac, srcA:$('progA').value, srcB:$('progB').value, appUrl:APP_URL, artUrl:ARTIFACT_URL});
+  const singlePlayer = `
 const D=DATA;
 const A=splitPose(canon(parse(tokenize(D.A)))), B=splitPose(canon(parse(tokenize(D.B))));
 const pairs=align(A.body,B.body), pA=D.poseA, pB=D.poseB;
@@ -1749,6 +1785,71 @@ sp.addEventListener('input',e=>{SP=+e.target.value;document.getElementById('spv'
 function drawInto(id,tt){var s=document.getElementById(id);if(!s)return;var sg=figSegs(tt);if(!sg.length)return;var x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;sg.forEach(function(g){x0=Math.min(x0,g.x1,g.x2);y0=Math.min(y0,g.y1,g.y2);x1=Math.max(x1,g.x1,g.x2);y1=Math.max(y1,g.y1,g.y2);});var z=Math.max(x1-x0,y1-y0,1)*1.16,cx=(x0+x1)/2,cy=(y0+y1)/2;s.setAttribute('viewBox',(cx-z/2)+' '+(cy-z/2)+' '+z+' '+z);var f=document.createDocumentFragment();sg.forEach(function(g){var l=document.createElementNS(NS,'line');l.setAttribute('x1',g.x1);l.setAttribute('y1',g.y1);l.setAttribute('x2',g.x2);l.setAttribute('y2',g.y2);l.setAttribute('stroke','rgb('+g.col.join(',')+')');l.setAttribute('stroke-width',g.w);l.setAttribute('stroke-linecap','round');l.setAttribute('vector-effect','non-scaling-stroke');f.appendChild(l);});s.appendChild(f);}
 drawInto('howA',0);drawInto('howB',1);
 draw(D.min);requestAnimationFrame(loop);`;
+  const fsPlayer=`
+const D=DATA;
+const A=splitPose(canon(parse(tokenize(D.A)))), B=splitPose(canon(parse(tokenize(D.B))));
+const pairs=align(A.body,B.body), pA=D.poseA, pB=D.poseB;
+const NS='http://www.w3.org/2000/svg', svg=document.getElementById('fig');
+const figSegs=t=>run(figureSteps(pairs,t), poseAt(pA,pB,t));
+function fitStage(){var bar=document.querySelector('.bar');var h=bar?bar.getBoundingClientRect().height:56;svg.style.height=(window.innerHeight-(h+26))+'px';}
+fitStage();window.addEventListener('resize',fitStage);
+var encU=encodeURIComponent;
+function linkBase(u){return u+'?dim='+encU(D.dim)+'&a='+encU(D.srcA)+'&b='+encU(D.srcB)+'&min='+D.min+'&max='+D.max;}
+var BASE_APP=D.appUrl?linkBase(D.appUrl):'',BASE_ART=D.artUrl?linkBase(D.artUrl):'';
+var LNK_APP=document.getElementById('lnkApp'),LNK_ART=document.getElementById('lnkArt');
+function updateLinks(t){var tt=Math.round(t*1000)/1000;if(LNK_APP&&BASE_APP)LNK_APP.setAttribute('href',BASE_APP+'&t='+tt);if(LNK_ART&&BASE_ART)LNK_ART.setAttribute('href',BASE_ART+'&t='+tt);}
+const sl=document.getElementById('sl'),pp=document.getElementById('pp'),sp=document.getElementById('sp');
+var FN=D.mode==='family'?D.familyN:D.stackN;
+let dir=1,playing=true,SP=1,last=performance.now(),f=0;
+sp.addEventListener('input',e=>{SP=+e.target.value;document.getElementById('spv').textContent=(+e.target.value).toFixed(2)+'×';});
+function mkLine(x1,y1,x2,y2,col,w){var l=document.createElementNS(NS,'line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);l.setAttribute('stroke','rgb('+col.join(',')+')');l.setAttribute('stroke-width',w);l.setAttribute('stroke-linecap','round');l.setAttribute('vector-effect','non-scaling-stroke');return l;}
+function tAtK(k){return D.min+(D.max-D.min)*(FN>1?k/(FN-1):0);}
+function buildFamily(){
+  var X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9,mem=[];
+  for(var k=0;k<FN;k++){var sg=figSegs(tAtK(k));mem.push(sg);sg.forEach(function(s){X0=Math.min(X0,s.x1,s.x2);Y0=Math.min(Y0,s.y1,s.y2);X1=Math.max(X1,s.x1,s.x2);Y1=Math.max(Y1,s.y1,s.y2);});}
+  if(X0>X1){X0=Y0=-100;X1=Y1=100;}
+  var z=Math.max(X1-X0,Y1-Y0,1)*1.1,cx=(X0+X1)/2,cy=(Y0+Y1)/2;
+  svg.setAttribute('viewBox',(cx-z/2)+' '+(cy-z/2)+' '+z+' '+z);
+  var groups=[];
+  for(var k=0;k<FN;k++){var g=document.createElementNS(NS,'g'),base=0.7;g.setAttribute('opacity',base);var fr=document.createDocumentFragment();mem[k].forEach(function(s){fr.appendChild(mkLine(s.x1,s.y1,s.x2,s.y2,s.col,s.w));});g.appendChild(fr);svg.appendChild(g);groups.push({g:g,k:k,base:base});}
+  return groups;
+}
+function buildStack(){
+  var samples=[];
+  for(var k=0;k<FN;k++){var v=figureVerts(pairs,tAtK(k),pA,pB);v.tt=tAtK(k);samples.push(v);}
+  var mid=samples[Math.floor(FN/2)].pts,mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  mid.forEach(function(p){mnx=Math.min(mnx,p.x);mny=Math.min(mny,p.y);mxx=Math.max(mxx,p.x);mxy=Math.max(mxy,p.y);});
+  var fsz=Math.max(mxx-mnx,mxy-mny,1),ang=32*Math.PI/180,depth=fsz*1.6,ZX=Math.cos(ang)*depth,ZY=-Math.sin(ang)*depth;
+  var zf=function(tt){return (tt-D.min)/((D.max-D.min)||1);};
+  var proj=function(p,tt){return {x:p.x+zf(tt)*ZX,y:p.y+zf(tt)*ZY};};
+  var X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
+  samples.forEach(function(sm){sm.pts.forEach(function(p){var q=proj(p,sm.tt);X0=Math.min(X0,q.x);Y0=Math.min(Y0,q.y);X1=Math.max(X1,q.x);Y1=Math.max(Y1,q.y);});});
+  var z=Math.max(X1-X0,Y1-Y0,1)*1.08,cx=(X0+X1)/2,cy=(Y0+Y1)/2;
+  svg.setAttribute('viewBox',(cx-z/2)+' '+(cy-z/2)+' '+z+' '+z);
+  var groups=[],P=samples[0].pts.length;
+  for(var k=0;k<FN-1;k++){var g=document.createElementNS(NS,'g'),base=0.32;g.setAttribute('opacity',base);
+    for(var i=0;i<P;i++){var a=proj(samples[k].pts[i],samples[k].tt),b=proj(samples[k+1].pts[i],samples[k+1].tt);var col=samples[k].col[Math.min(i,P-2)]||DEF_COL;g.appendChild(mkLine(a.x,a.y,b.x,b.y,col,1));}
+    svg.appendChild(g);groups.push({g:g,k:k+1,base:base});}
+  samples.forEach(function(sm,k){var depthOp=0.35+0.55*(k/(FN-1));var g=document.createElementNS(NS,'g');g.setAttribute('opacity',depthOp);
+    for(var i=0;i<sm.pen.length;i++){if(!sm.pen[i])continue;var a=proj(sm.pts[i],sm.tt),b=proj(sm.pts[i+1],sm.tt);g.appendChild(mkLine(a.x,a.y,b.x,b.y,sm.col[i],(sm.w[i]||1)));}
+    svg.appendChild(g);groups.push({g:g,k:k,base:depthOp});});
+  return groups;
+}
+var GROUPS=D.mode==='family'?buildFamily():buildStack();
+function frontOp(k,ff){var age=ff-k;if(age<-0.001)return 0;if(D.trail>=1)return 1;var L=Math.max(1,D.trail*FN);return Math.max(0,1-age/L);}
+function applyFront(ff){for(var i=0;i<GROUPS.length;i++){var G=GROUPS[i];G.g.setAttribute('opacity',(G.base*frontOp(G.k,ff)).toFixed(3));}}
+function tAtF(ff){return D.min+(D.max-D.min)*(FN>1?Math.min(1,ff/(FN-1)):0);}
+function loop(now){var dt=(now-last)/1000;last=now;
+  if(playing){var rate=FN/(3/SP);f+=dir*rate*dt;if(f>=FN){f=FN;dir=-1;}else if(f<=0){f=0;dir=1;}sl.value=f/FN;applyFront(f);document.getElementById('tv').textContent='t = '+tAtF(f).toFixed(2);updateLinks(tAtF(f));}
+  requestAnimationFrame(loop);}
+sl.min=0;sl.max=1;sl.step=0.001;sl.value=0;
+sl.addEventListener('input',function(e){playing=false;pp.textContent='▶';f=(+e.target.value)*FN;applyFront(f);document.getElementById('tv').textContent='t = '+tAtF(f).toFixed(2);});
+pp.onclick=function(){playing=!playing;pp.textContent=playing?'❚❚':'▶';last=performance.now();};
+function drawInto(id,tt){var s=document.getElementById(id);if(!s)return;var sg=figSegs(tt);if(!sg.length)return;var x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;sg.forEach(function(g){x0=Math.min(x0,g.x1,g.x2);y0=Math.min(y0,g.y1,g.y2);x1=Math.max(x1,g.x1,g.x2);y1=Math.max(y1,g.y1,g.y2);});var z=Math.max(x1-x0,y1-y0,1)*1.16,cx=(x0+x1)/2,cy=(y0+y1)/2;s.setAttribute('viewBox',(cx-z/2)+' '+(cy-z/2)+' '+z+' '+z);var fr=document.createDocumentFragment();sg.forEach(function(g){fr.appendChild(mkLine(g.x1,g.y1,g.x2,g.y2,g.col,g.w));});s.appendChild(fr);}
+drawInto('howA',0);drawInto('howB',1);
+applyFront(0);requestAnimationFrame(loop);
+`;
+  const player = S.mode==='single' ? singlePlayer : fsPlayer;
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%232E7D5B'/%3E%3Cpath%20d='M16%206L23%2025L16%2021L9%2025Z'%20fill='%23F1F4EF'/%3E%3C/svg%3E">
@@ -1778,19 +1879,38 @@ ${player}
 }
 let dir=1, last=0;
 function startPlay(){
-  if(S.mode!=='single') $('mSingle').click();
   S.playing=true; $('play').innerHTML='&#10073;&#10073;&nbsp;Pause'; last=performance.now();
-  const step=now=>{
-    if(!S.playing) return;
-    const dt=(now-last)/1000; last=now;
-    const rate=(S.max-S.min)/S.playSecs;
-    let v=S.t+dir*rate*dt;
-    if(v>=S.max){v=S.max;dir=-1;} else if(v<=S.min){v=S.min;dir=1;}
-    setT(v,false); S.raf=requestAnimationFrame(step);
-  };
-  S.raf=requestAnimationFrame(step);
+  if(S.mode==='single'||S.dim==='3d'){
+    const step=now=>{
+      if(!S.playing) return;
+      const dt=(now-last)/1000; last=now;
+      const rate=(S.max-S.min)/S.playSecs;
+      let v=S.t+dir*rate*dt;
+      if(v>=S.max){v=S.max;dir=-1;} else if(v<=S.min){v=S.min;dir=1;}
+      setT(v,false); S.raf=requestAnimationFrame(step);
+    };
+    S.raf=requestAnimationFrame(step);
+  } else {
+    // Family/Stack: ping-pong a reveal frontier across the members, painting them on (a full build takes
+    // playSecs), with older ones fading per the trail control. t tracks the frontier so the slider and blend code follow.
+    render();
+    const N=(S.mode==='family')?S.familyN:S.stackN; let f=0; dir=1;
+    const step=now=>{
+      if(!S.playing) return;
+      const dt=(now-last)/1000; last=now;
+      const rate=N/Math.max(0.2,S.playSecs);   // members per second → one full build in playSecs
+      f+=dir*rate*dt;
+      if(f>=N){f=N;dir=-1;} else if(f<=0){f=0;dir=1;}
+      applyFrontier(f);
+      setT(lerp(S.min,S.max,clamp(N>1?f/(N-1):0,0,1)), false);   // sync t readout, slider and blend code to the frontier
+      S.raf=requestAnimationFrame(step);
+    };
+    S.raf=requestAnimationFrame(step);
+  }
 }
-function stopPlay(){ if(!S.playing)return; S.playing=false; cancelAnimationFrame(S.raf); $('play').innerHTML='&#9654;&nbsp;Play'; }
+function stopPlay(){ if(!S.playing)return; S.playing=false; cancelAnimationFrame(S.raf); $('play').innerHTML='&#9654;&nbsp;Play';
+  for(const g of S.famGroups){ const b=g.getAttribute('data-base'); if(b!=null) g.setAttribute('opacity',b); }  // restore full static Family/Stack
+}
 
 /* ============================================================
    3D beetle engine + rendering + dim switching
@@ -2054,18 +2174,21 @@ How the blend is being computed: ${strip(explainBlend())}${closure}`;
 function tutorSystem(){
   return `You are a warm, encouraging tutor living inside a children's turtle-graphics app called "In-Between", where a learner morphs one shape into another by blending two Logo turtle programs.
 
-Answer their questions grounded in the ACTUAL state below — use the real numbers, shapes and programs shown, never invented ones. You also know what the app's controls do (see THE CONTROLS), so you can answer "what does X do?" questions. If a question can't be answered from any of this, say so briefly and suggest something to try.
+Answer their questions grounded in the ACTUAL state below — use the real numbers, shapes and programs shown, never invented ones. You also know what the app's controls do (see THE CONTROLS), so you can answer "what does X do?" questions. If a question can't be answered from any of this, say so briefly and suggest something to try. If you are unsure whether the app can do something, do NOT assert that it can't — say you are not certain and suggest they look for the control; never tell them to work around a limitation that may not be real.
 
 Voice: friendly and plain, for a curious 10-to-15-year-old. Keep answers short — 2 to 4 sentences unless they ask for more. One idea at a time, concrete, no condescension. You may teach turtle/Logo and geometry ideas (forward, turn, repeat, recursion, interpolation, why a shape closes or leaves a gap, extrapolation). Define any term you use. Be honest about what's uncertain. Do NOT use markdown headers, bullet lists, or code fences; a short inline snippet like  forward 100 right 90  is fine. Never invent program lines that aren't there.
 
 THE CONTROLS (what each part of the app does):
-- The big t slider blends the two shapes: t=0 draws shape A, t=1 draws shape B, and in between you get a mix of the two (interpolation). The striped zones past each end — reached with the "beyond" tabs beside the slider — keep the same recipe going further (extrapolation), so shapes can grow, get spikier, or turn inside out.
+- The big t slider blends the two shapes: t=0 draws shape A, t=1 draws shape B, and in between you get a mix of the two (interpolation). The striped zones past each end — reached with the "beyond" tabs beside the slider — keep the same recipe going further (extrapolation), so shapes can grow, get spikier, or turn inside out. The Play button animates the morph by sweeping t across the range.
+- The two dots labelled A and B on the drawing are draggable handles for where each shape sits. Drag the A dot to move where shape A is drawn and the B dot for shape B; the in-between shapes slide between those two positions as t changes. The turtle always starts each program from one fixed origin, so these dots are how you reposition a shape WITHOUT editing its program — you do not need to add penup/forward. The "dots" button shows or hides them.
 - "Tune numbers" gives a slider for each number in that shape's program — or, when the program defines a procedure with named inputs, sliders for the numbers you call it with — so you can change sizes, counts and angles and watch the shape and the blend update live.
 - "Tune colours" gives a colour picker for each pen colour in that shape's program. The in-between line colour is blended between A's and B's colours, so changing one colour shifts the whole colour blend.
 - Each shape box has a dropdown to pick a ready-made shape, and you can also type a Logo program straight into the box.
 - "✨ Make" writes a brand-new shape from a few words you type, using an AI. "? ask" opens you, the tutor.
-- Views: single shows just the current blend; Family overlays the whole row of in-between shapes across the slider range at once; Stack piles them up in 2.5D with t as depth. "Lock view" holds the camera still so you can see the shape truly move as it morphs.
-- The 2D/3D toggle switches between flat drawings and a 3D "beetle" that can also go up/down and roll. "export" saves the current morph as its own HTML file.
+- Views: single shows just the current blend; Family overlays the whole row of in-between shapes across the slider range at once; Stack piles them up in 2.5D with t as depth. The small number field beside the view buttons sets how long the Play sweep lasts (single), how many overlaid copies Family draws, or how many slices Stack piles.
+- The view-framing button (it reads either "Auto-fit" or "Lock view") toggles how the view is held: "Lock view" keeps the camera steady so the shape shows its real motion as it morphs (it may drift off-centre), and "Auto-fit" re-centres and rescales to the shape every frame so it always fills the view. The button shows whichever option you are NOT currently using, so clicking it switches modes.
+- The 2D/3D toggle switches between flat drawings and a 3D "beetle" that can also pitch up/down and roll. In 3D you drag on the drawing to orbit the camera; the "axes" button shows the x/y/z arrows; and three buttons — Axis, Slerp, Euler — choose how a turn is blended in 3D (Axis turns straight between the two headings and keeps equal-angle shapes closed, Slerp takes the shortest arc, Euler blends yaw, pitch and roll separately). The 3D pairing opens on a flat ring that fans out into a wireframe globe.
+- "↓ HTML" saves the current morph as its own self-contained, still-interactive HTML file. "↓ GIF" saves it as a looping animated GIF — in 2D directly, and in 3D rendered from whatever angle you have orbited to.
 
 CURRENT STATE (your ground truth):
 ${tutorFacts()}`;
