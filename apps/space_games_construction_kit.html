@@ -1,0 +1,1895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>First Day at the Game Studio — Prototype</title>
+  <!-- Build: gauge-visible-in-canvas-2026-06-05 -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0f1f'/%3E%3Ccircle cx='32' cy='32' r='23' fill='%2316213f' stroke='%237bdff2' stroke-width='3'/%3E%3Cpath d='M18 38c10-3 18-10 24-23 7 9 7 20-1 27-7 6-16 5-23-4z' fill='%23f7d774'/%3E%3Ccircle cx='28' cy='25' r='5' fill='%23eef4ff'/%3E%3Cpath d='M36 42l12 8-4-14z' fill='%23ff9cae'/%3E%3C/svg%3E" />
+  <style>
+    :root{
+      --bg:#080d1c; --panel:#111a33; --panel2:#16213f; --panel3:#22335f;
+      --ink:#eef4ff; --muted:#b7c5e8; --line:rgba(255,255,255,.14);
+      --accent:#7bdff2; --gold:#f7d774; --good:#9cf6b2; --bad:#ff9cae; --warn:#ffd08a;
+      --shadow:0 18px 55px rgba(0,0,0,.38); --radius:18px;
+      font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;color:var(--ink);background:radial-gradient(circle at 16% 0%,rgba(123,223,242,.16),transparent 34%),radial-gradient(circle at 78% 12%,rgba(247,215,116,.11),transparent 35%),var(--bg)}
+    button,input,textarea,select{font:inherit}
+    button{border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:9px 12px;color:var(--ink);background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.06));cursor:pointer;transition:transform .08s ease,border-color .12s ease,background .12s ease}
+    button:hover{transform:translateY(-1px);border-color:rgba(123,223,242,.55)} button:active{transform:translateY(0)} button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+    button.primary{color:#06111f;background:linear-gradient(180deg,#aaf4ff,#65d4ea);border-color:rgba(255,255,255,.5);font-weight:850}
+    button.gold{color:#1c1500;background:linear-gradient(180deg,#fff2a8,#f1c64f);border-color:rgba(255,255,255,.5);font-weight:850}
+    button.danger{background:linear-gradient(180deg,rgba(255,94,128,.26),rgba(255,94,128,.12));border-color:rgba(255,156,174,.45)}
+    button.ghost{background:rgba(255,255,255,.04)}
+    input,textarea,select{width:100%;color:var(--ink);background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 10px}
+    textarea{min-height:108px;resize:vertical;line-height:1.35;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+    .ai-freeform{grid-column:1/-1;margin-top:10px;border:1px solid rgba(123,223,242,.24);border-radius:16px;background:rgba(123,223,242,.055);padding:10px}.ai-question{min-height:78px;font-family:inherit;font-size:13px}.ai-answer{margin-top:8px;padding:9px 10px;border-radius:12px;background:rgba(0,0,0,.20);border-left:3px solid var(--accent);line-height:1.42}.ai-transcript{display:grid;gap:8px;margin-top:10px}.ai-q{color:var(--accent);font-size:12px;margin-bottom:4px}.ai-prompt{margin-top:9px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(0,0,0,.18);overflow:hidden}.ai-prompt summary{cursor:pointer;color:var(--gold);font-size:12px;padding:8px 10px}.ai-prompt pre{margin:0;padding:9px 10px;border-top:1px solid rgba(255,255,255,.10);white-space:pre-wrap;word-break:break-word;color:var(--muted);font-size:11px;line-height:1.35;max-height:260px;overflow:auto}.api-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.api-grid .full{grid-column:1/-1}.api-note{border:1px dashed rgba(255,208,138,.42);background:rgba(247,215,116,.08);border-radius:14px;padding:10px 12px;color:var(--muted);font-size:13px;line-height:1.4}.settings-row{display:flex;gap:8px;align-items:center;margin-top:8px}.settings-row input[type="checkbox"]{width:auto}
+    .app{max-width:1520px;margin:0 auto;padding:16px}
+    header{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;margin-bottom:14px}
+    h1{margin:0;font-size:clamp(25px,3.2vw,42px);line-height:1.05;letter-spacing:-.035em}.subtitle{color:var(--muted);max-width:930px;margin-top:8px;line-height:1.45}.top-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .layout{display:grid;grid-template-columns:minmax(320px,420px) minmax(520px,1fr) minmax(320px,420px);gap:14px;align-items:start}.layout.prestudio{grid-template-columns:minmax(330px,470px) minmax(540px,1fr)}.layout.prestudio #rightPanel{display:none}.layout.prestudio #stageWrap,.layout.prestudio #feedbackPanel{display:none}.layout.prestudio #storyGatePanel{display:block}.layout.studio #storyGatePanel{display:none}.layout.studio #stageWrap{display:block}
+    .panel{background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.04));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}.panel-head{padding:14px 16px;background:rgba(0,0,0,.16);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.panel h2,.panel h3{margin:0;letter-spacing:-.015em}.panel-body{padding:14px}.tabs{display:flex;gap:8px;padding:8px;background:rgba(0,0,0,.18);border-bottom:1px solid var(--line)}.tabs button{flex:1;padding:8px 10px;border-radius:11px;font-size:13px}.tabs button.active{color:#06111f;background:var(--accent);font-weight:900}
+    .small{color:var(--muted);font-size:12px;line-height:1.35}.tiny{color:var(--muted);font-size:11px;line-height:1.3}.tag{font-size:11px;color:#06111f;background:var(--gold);border-radius:999px;padding:3px 8px;white-space:nowrap;font-weight:900}.tag.green{background:var(--good)}.tag.red{background:var(--bad)}.tag.blue{background:var(--accent)}.tag.warn{background:var(--warn)}
+    .note-card,.team-card,.resource-card,.behavior-card,.feedback-card{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:12px}.team-grid,.resource-list,.behavior-list,.feedback-list,.milestones{display:grid;gap:10px}.team-card{display:grid;grid-template-columns:46px 1fr;gap:10px}.team-card.active{border-color:rgba(123,223,242,.6);background:rgba(123,223,242,.09)}.team-avatar{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:rgba(123,223,242,.12);border:1px solid rgba(123,223,242,.23);font-size:25px}.team-card h3{font-size:15px;margin-bottom:3px}.team-card p{margin:0 0 8px;color:var(--muted);font-size:13px;line-height:1.35}.button-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.button-row.tight{margin-top:7px}.resource-title,.behavior-title{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-weight:850;margin-bottom:5px}.locked{opacity:.62;background:rgba(0,0,0,.16)}.warn-card{border-color:rgba(255,208,138,.42);background:rgba(247,215,116,.055)}
+    .dialog-box{grid-column:1/-1;margin-top:10px;border-left:4px solid rgba(247,215,116,.78);border-radius:0 14px 14px 0;background:rgba(0,0,0,.20);padding:10px 12px;line-height:1.42}.dialog-box strong{color:var(--gold)}.dialog-player{color:var(--accent);font-size:12px;margin-bottom:5px}.dialog-options{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.dialog-options button{font-size:12px;padding:7px 9px}.inline-hint{border:1px dashed rgba(247,215,116,.35);background:rgba(247,215,116,.08);border-radius:14px;padding:10px 12px;color:var(--muted);font-size:13px;line-height:1.4;margin-top:10px}
+    .milestone{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:start;color:var(--muted);font-size:13px}.check{width:22px;height:22px;border-radius:999px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.2);color:transparent}.milestone.done{color:var(--ink)}.milestone.done .check{background:var(--good);border-color:rgba(255,255,255,.55);color:#071223;font-weight:900}
+    .stage-wrap{display:none}.stage-toolbar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px;background:rgba(0,0,0,.16);border-bottom:1px solid var(--line)}.stage-toolbar .group{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.project-switch button.active{color:#06111f;background:var(--gold);font-weight:900}.stat-pill{border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.22);border-radius:999px;padding:8px 10px;color:var(--muted);font-size:13px;white-space:nowrap}.stat-pill strong{color:var(--ink)}canvas{width:100%;aspect-ratio:5/3;display:block;background:#050817;cursor:crosshair}.hint-row{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:12px;line-height:1.3;padding:8px 10px;border-top:1px solid var(--line)}
+    .object-buttons{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}.object-buttons button.active{color:#06111f;background:var(--gold);font-weight:900}.side-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px}.side-toggle button.active{color:#06111f;background:var(--accent);font-weight:900}.row{display:grid;grid-template-columns:1fr 118px;gap:10px;align-items:center;margin:8px 0}.row label{color:var(--muted);font-size:12px}.row input{text-align:right}.code-label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 0 6px;color:var(--muted);font-size:12px}.empty-state{color:var(--muted);padding:16px;border:1px dashed rgba(255,255,255,.18);border-radius:16px;text-align:center;line-height:1.4;background:rgba(0,0,0,.14)}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.64);display:none;align-items:center;justify-content:center;z-index:20;padding:18px}.modal-backdrop.show{display:flex}.modal{max-width:840px;width:min(840px,100%);max-height:90vh;overflow:auto;background:#101a33;border:1px solid rgba(255,255,255,.18);border-radius:22px;box-shadow:var(--shadow);padding:20px}.modal h2{margin:0 0 8px}.modal p,.modal li{color:var(--muted);line-height:1.5}.modal code{background:rgba(0,0,0,.25);padding:2px 5px;border-radius:6px;color:var(--gold)}.export-textarea{min-height:310px;white-space:pre}.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(8,14,30,.96);color:var(--ink);padding:10px 14px;border:1px solid rgba(255,255,255,.2);border-radius:999px;box-shadow:var(--shadow);display:none;z-index:30;max-width:min(760px,calc(100vw - 24px));text-align:center;font-size:13px}.toast.show{display:block}a{color:var(--accent)}
+    @media (max-width:1180px){.layout,.layout.prestudio{grid-template-columns:1fr}header{grid-template-columns:1fr}.top-actions{justify-content:flex-start}.row{grid-template-columns:1fr}.hint-row{display:block}.layout.prestudio #rightPanel{display:none}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>First Day at the Game Studio</h1>
+      <div class="subtitle">A client-side metagame prototype: talk with an AI-shaped team, collect ideas, ask the programmer to turn those ideas into transparent behaviour cards, then attach behaviours to sprites and playtest. Optional live AI can be enabled from the Live AI setup button.</div>
+    </div>
+    <div class="top-actions">
+      <button id="aiSettingsBtn" class="gold">Live AI setup</button>
+      <button id="helpBtn" class="ghost">How to play</button>
+      <button id="exportBtn" class="ghost">Export JSON</button>
+      <button id="importBtn" class="ghost">Import JSON</button>
+      <button id="resetAllBtn" class="danger">Reset prototype</button>
+    </div>
+  </header>
+
+  <main class="layout prestudio" id="mainLayout">
+    <section class="panel" id="leftPanel">
+      <div class="tabs">
+        <button id="tabTeam" class="active">Team room</button>
+        <button id="tabBrief">Brief & milestones</button>
+      </div>
+      <div class="panel-body" id="leftContent"></div>
+    </section>
+
+    <section class="panel" id="centerPanel">
+      <div class="panel-head">
+        <div>
+          <h2 id="centerTitle">Story</h2>
+          <div class="small" id="centerSub"></div>
+        </div>
+        <span class="tag blue" id="projectTag">Pre-studio</span>
+      </div>
+      <div class="panel-body" id="storyGatePanel"></div>
+      <div class="stage-wrap" id="stageWrap">
+        <div class="stage-toolbar">
+          <div class="group">
+            <button id="runBtn" class="primary">Run</button>
+            <button id="pauseBtn" class="ghost">Pause</button>
+            <button id="resetBtn" class="ghost">Reset playtest</button>
+          </div>
+          <div class="group project-switch" id="projectSwitch" aria-label="Switch project"></div>
+          <div class="group" id="statsPills"></div>
+        </div>
+        <canvas id="stage" width="1000" height="600" aria-label="Game creation stage"></canvas>
+        <div class="hint-row">
+          <span id="controlHint"></span>
+          <span id="selectedHint">Selected: —</span>
+        </div>
+      </div>
+      <div class="panel-body" id="feedbackPanel"></div>
+    </section>
+
+    <section class="panel" id="rightPanel">
+      <div class="tabs">
+        <button id="tabResources" class="active">Resources</button>
+        <button id="tabInspector">Selected object</button>
+      </div>
+      <div class="panel-body" id="rightContent"></div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="helpModal">
+  <div class="modal">
+    <h2>How to play this prototype</h2>
+    <p><strong>First project:</strong> make a simple astronaut rescue game. Start with the boss, then consult teammates. Specialists provide ideas; the programmer turns those ideas into behaviour cards.</p>
+    <p><strong>Second project:</strong> after a safe rescue, ask the boss to start Lunar Lander. The path is explicit: scientist for vertical motion and gravity, designer for safe touchdown, programmer for behaviour cards.</p>
+    <p>Behaviour cards are deliberately transparent. You can attach even the “wrong” card to an object. The prototype lets mistakes happen because they are useful material for discussion and revision.</p>
+    <p><strong>Optional live AI:</strong> use the gold <em>Live AI setup</em> button to enter your own OpenAI, Gemini, or Claude API key. Live answers are advisory; the scripted buttons still control resource unlocks so the learning path remains stable.</p>
+    <div class="button-row"><button class="primary" id="closeHelpBtn">Close</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="exportModal">
+  <div class="modal">
+    <h2>Project JSON export</h2>
+    <p>The JSON is shown here and offered as a download.</p>
+    <div class="button-row">
+      <a id="downloadExportLink" href="#" download="first-day-game-studio-project.json"><button class="primary" type="button">Download JSON</button></a>
+      <button id="copyExportBtn" class="ghost">Copy JSON</button>
+      <button id="closeExportBtn" class="ghost">Close</button>
+    </div>
+    <textarea id="exportText" class="export-textarea" readonly></textarea>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="importModal">
+  <div class="modal">
+    <h2>Project JSON import</h2>
+    <p>Paste a saved export or choose a JSON file. Importing replaces the current prototype state, but it does not affect cached live-AI API keys.</p>
+    <div class="button-row">
+      <label class="ghost" style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:9px 12px;cursor:pointer">Choose JSON file
+        <input id="importFile" type="file" accept="application/json,.json" style="display:none">
+      </label>
+      <button id="applyImportBtn" class="primary">Import into prototype</button>
+      <button id="closeImportBtn" class="ghost">Close</button>
+    </div>
+    <div id="importStatus" class="small" style="margin:8px 0 10px"></div>
+    <textarea id="importText" class="export-textarea" placeholder="Paste exported JSON here"></textarea>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="aiModal">
+  <div class="modal">
+    <h2>Live AI teammate settings</h2>
+    <p>Use your own provider key for free-form questions to the boss or any teammate. Keys are never included in the project JSON export. If you enable caching, the key is stored in this browser's localStorage.</p>
+    <div class="api-note">Browser-only API calls are convenient for prototyping, but they are not production security. Anyone with access to this browser profile can potentially read cached keys. For a deployed classroom version, use a small server-side proxy instead.</div>
+    <div class="api-grid" style="margin-top:12px">
+      <div>
+        <label class="small" for="aiProvider">Provider</label>
+        <select id="aiProvider">
+          <option value="openai">OpenAI</option>
+          <option value="gemini">Gemini</option>
+          <option value="anthropic">Claude / Anthropic</option>
+        </select>
+      </div>
+      <div>
+        <label class="small" for="aiModel">Model</label>
+        <input id="aiModel" list="aiModelDefaults" autocomplete="off">
+        <datalist id="aiModelDefaults">
+          <option value="gpt-5-mini"></option>
+          <option value="gemini-2.5-flash"></option>
+          <option value="claude-haiku-4-5"></option>
+        </datalist>
+      </div>
+      <div class="full">
+        <label class="small" for="aiApiKey">API key</label>
+        <input id="aiApiKey" type="password" autocomplete="off" placeholder="Paste key here">
+        <div class="settings-row"><input id="aiCacheKey" type="checkbox"><label for="aiCacheKey" class="small">Cache this key in browser storage</label></div>
+      </div>
+    </div>
+    <div class="button-row">
+      <button id="saveAiSettingsBtn" class="primary">Save settings</button>
+      <button id="clearAiKeyBtn" class="danger">Clear saved key</button>
+      <button id="testAiBtn" class="ghost">Test connection</button>
+      <button id="closeAiBtn" class="ghost">Close</button>
+    </div>
+    <div id="aiSettingsStatus" class="small" style="margin-top:10px"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const APP_STORAGE_KEY = "first-day-game-studio-state-v22-gauge-visible";
+const APP_VERSION = 22;
+const DEBUG_ALL_UNLOCKED = false;
+
+const PROJECTS = {
+  rescue: { id:"rescue", name:"Astronaut Rescue", tag:"Project 1", objects:["astronaut","ship"], defaultSelected:"astronaut", hint:"Rescue controls: Left/Right Arrow throw rocks if Horizontal rock thrower are attached." },
+  lunar: { id:"lunar", name:"Lunar Lander", tag:"Project 2", objects:["lander","pad"], defaultSelected:"lander", hint:"Lunar controls: Up/W thrusts upward; Left/Right or A/D nudge sideways if Lander thrusters are attached." }
+};
+
+const TEAM = {
+  boss:{title:"Boss",icon:"🧑‍💼",summary:"Gives briefs, sets milestones, and asks for playtest evidence."},
+  scientist:{title:"Scientist",icon:"🧪",summary:"Explains motion, momentum, gravity, and what should be measured."},
+  programmer:{title:"Programmer",icon:"💻",summary:"Turns team ideas into composable behaviours with parameters and pseudocode."},
+  designer:{title:"Assistant game designer",icon:"🎮",summary:"Turns simulations into games with goals, constraints, feedback, and difficulty."},
+  historian:{title:"Historian",icon:"📚",summary:"Supplies historical context and deeper links."},
+  artist:{title:"Artist / animator",icon:"🎨",summary:"Provides placeholder art now and art prompts later."},
+  sound:{title:"Sound / music",icon:"🎧",summary:"Adds feedback sounds and later music cues."}
+};
+
+const RESOURCE_NAMES = {
+  missionBrief:"Mission brief", placeholderArt:"Placeholder rescue art", lunarArt:"Placeholder Lunar art",
+  physicsIdea:"Scientist: inertia idea", momentumIdea:"Scientist: rock throwing idea", telemetryIdea:"Scientist: measurement idea",
+  designGoalIdea:"Designer: safe-rescue rule idea", pressureIdea:"Designer: oxygen-pressure idea", historyNotes:"Historical context note",
+  lunarMotionIdea:"Scientist: vertical motion idea", lunarGravityIdea:"Scientist: gravity idea", lunarTelemetryIdea:"Scientist: telemetry idea", lunarDesignIdea:"Designer: safe-touchdown idea"
+};
+
+const LLM_CONFIG_KEY = "first-day-game-studio-llm-config-v1";
+const LLM_DEFAULT_MODELS = {openai:"gpt-5-mini", gemini:"gemini-2.5-flash", anthropic:"claude-haiku-4-5"};
+const LLM_PROVIDER_LABELS = {openai:"OpenAI", gemini:"Gemini", anthropic:"Claude"};
+let llmConfig = loadLLMConfig();
+let sessionApiKeys = {};
+const DEBUG_ATTACH = false;
+function dbgAttach(label, detail){
+  if(!DEBUG_ATTACH) return;
+  try { console.debug(`[First Day Studio attach] ${label}`, detail); }
+  catch { console.debug(`[First Day Studio attach] ${label}`); }
+}
+
+function initialObjects(){
+  return {
+    astronaut:{id:"astronaut",project:"rescue",name:"Astronaut",emoji:"🧑‍🚀",prompt:"A small readable 2D astronaut sprite in a white suit, friendly game style, transparent background.",x:90,y:300,vx:0,vy:0,r:25,mass:80,behaviors:[]},
+    ship:{id:"ship",project:"rescue",name:"Rescue ship",emoji:"🚀",prompt:"A simple 2D rescue spaceship, readable at small size, friendly game style, transparent background.",x:850,y:300,vx:0,vy:0,r:38,mass:1000,behaviors:[]},
+    lander:{id:"lander",project:"lunar",name:"Lunar lander",emoji:"🛸",prompt:"A small readable 2D lunar lander sprite with landing legs, friendly game style, transparent background.",x:450,y:90,vx:0,vy:0,r:30,mass:650,behaviors:[]},
+    pad:{id:"pad",project:"lunar",name:"Landing pad",emoji:"▰",prompt:"A flat moon landing pad with simple warning stripes, transparent background.",x:450,y:522,vx:0,vy:0,r:52,mass:100000,behaviors:[]}
+  };
+}
+
+function DEFAULT_STATE(){
+  return {
+    appVersion:APP_VERSION,currentProject:"rescue",tabLeft:"team",tabRight:"resources",selected:"astronaut",inspectSide:"back",
+    briefAccepted:false,studioOpen:false,lunarUnlocked:false,lunarBriefAccepted:false,activeSpeaker:"boss",currentExchange:null,
+    rightMessage:null,feedbackGiven:false,playtestMode:false,aiChats:{},aiBusyRole:null,unlocked:{missionBrief:false,placeholderArt:false,lunarArt:false,soundPack:false,historyNotes:false},
+    ideas:{},visits:{},log:[{who:"System",text:"Welcome. The boss is waiting. Accept the brief, then meet the team before the studio opens."}],
+    objects:initialObjects(),
+    runtime:{rescue:defaultRuntime("rescue"),lunar:defaultRuntime("lunar")}
+  };
+}
+function defaultRuntime(project){return project==="lunar"?{running:false,t:0,result:null,detail:"",fuel:100,particles:[],lastX:450}:{running:false,t:0,result:null,detail:"",oxygen:30,rocks:8,particles:[],lastX:90};}
+let state = loadState() || DEFAULT_STATE();
+let keyState = {}; let lastFrame = null; let audioCtx = null; let exportBlobUrl = null;
+const stars = Array.from({length:155},()=>({x:Math.random()*1000,y:Math.random()*600,s:Math.random()*1.8+.3,a:Math.random()*.65+.2}));
+
+const BEHAVIORS = {
+  horizontalMotion:{id:"horizontalMotion",name:"Horizontal motion",project:"both",role:"Scientist → Programmer",recommended:["astronaut","lander","ship"],blurb:"Updates x-position from horizontal velocity every simulation tick.",defaultParams:{startVx:0},params:[{key:"startVx",label:"Starting horizontal velocity",min:-140,max:140,step:1,unit:"px/s"}],pseudocode:"On reset:\n  set horizontal velocity to starting horizontal velocity\n\nEvery tick:\n  change x position by horizontal velocity × time step",onReset(obj,p){obj.vx=Number(p.startVx||0);},update(obj,p,dt){obj.x += obj.vx*dt;}},
+  rockThrower:{id:"rockThrower",name:"Horizontal rock thrower",project:"rescue",role:"Scientist → Programmer",recommended:["astronaut"],blurb:"Left/Right Arrow throw rocks sideways; the astronaut changes velocity the other way by conservation of momentum.",defaultParams:{totalRockMass:8,rockMass:1,rockSpeed:34},params:[{key:"totalRockMass",label:"Total rock mass",min:1,max:50,step:1,unit:"kg"},{key:"rockMass",label:"Mass per thrown rock",min:.25,max:10,step:.25,unit:"kg"},{key:"rockSpeed",label:"Rock throw speed",min:5,max:120,step:1,unit:"px/s"}],pseudocode:"When Right Arrow is pressed:\n  if rocks remain:\n    throw one rock left\n    increase my velocity rightward\n\nWhen Left Arrow is pressed:\n  throw one rock right\n  increase my velocity leftward",onReset(obj,p){if(obj.id!=="astronaut")return; const m=Math.max(.01,Number(p.rockMass||1)); state.runtime.rescue.rocks=Math.floor(Number(p.totalRockMass||0)/m);}},
+  reachShipRule:{id:"reachShipRule",name:"Reach ship safely rule",project:"rescue",role:"Designer → Programmer",recommended:["astronaut"],blurb:"Distinguishes safe docking from a too-fast collision.",defaultParams:{dockingRadius:60,safeSpeed:24},params:[{key:"dockingRadius",label:"Docking distance",min:20,max:140,step:1,unit:"px"},{key:"safeSpeed",label:"Maximum safe speed",min:1,max:100,step:1,unit:"px/s"}],pseudocode:"Every tick:\n  if distance to ship is small enough:\n    if speed is below safe speed: rescue succeeds\n    otherwise: crash",update(obj,p){if(state.currentProject!=="rescue")return; const rt=state.runtime.rescue; if(rt.result)return; const ship=state.objects.ship; const d=distance(obj,ship); const speed=Math.hypot(obj.vx,obj.vy); if(d<=Number(p.dockingRadius||60)){ if(speed<=Number(p.safeSpeed||24)) endPlaytest("success",`Safe rescue. Arrival speed ${speed.toFixed(1)} px/s.`); else endPlaytest("crash",`Arrived too fast: ${speed.toFixed(1)} px/s. Safe limit is ${Number(p.safeSpeed||24)} px/s.`);}},},
+  oxygenTimer:{id:"oxygenTimer",name:"Oxygen timer",project:"rescue",role:"Designer → Programmer",recommended:["astronaut"],blurb:"Adds time pressure so drifting forever is not optimal.",defaultParams:{maxOxygen:30},params:[{key:"maxOxygen",label:"Oxygen seconds",min:5,max:120,step:1,unit:"s"}],pseudocode:"On reset:\n  oxygen = maximum oxygen\n\nEvery tick:\n  oxygen decreases\n  if oxygen is zero: mission fails",onReset(obj,p){if(obj.id==="astronaut")state.runtime.rescue.oxygen=Number(p.maxOxygen||30);},update(obj,p,dt){if(state.currentProject!=="rescue")return; const rt=state.runtime.rescue; if(rt.result)return; rt.oxygen-=dt; if(rt.oxygen<=0){rt.oxygen=0; endPlaytest("lost","Oxygen ran out before rescue.");}}},
+  velocityGauge:{id:"velocityGauge",name:"Horizontal velocity gauge",project:"rescue",role:"Scientist → Programmer",recommended:["astronaut"],blurb:"Draws a visible horizontal velocity gauge next to the attached object and also adds a top telemetry pill.",defaultParams:{maxSpeed:80},params:[{key:"maxSpeed",label:"Gauge full-scale speed",min:10,max:240,step:5,unit:"px/s"}],pseudocode:"Every frame:\n  read horizontal velocity\n  show it in the telemetry strip above the stage\n  draw a left/right bar next to the object"},
+  soundPack:{id:"soundPack",name:"Tiny sound feedback pack",project:"both",role:"Sound designer → Programmer",recommended:["astronaut","lander"],blurb:"Small audio cues for thrust, success, crash, and warning.",defaultParams:{volume:.18},params:[{key:"volume",label:"Volume",min:0,max:1,step:.05,unit:""}],pseudocode:"When thrust occurs: play a short blip\nWhen success occurs: play an upward cue\nWhen failure occurs: play a lower cue"},
+  verticalMotion:{id:"verticalMotion",name:"Vertical motion",project:"lunar",role:"Scientist → Programmer",recommended:["lander"],blurb:"Updates y-position from vertical velocity. This is the path from rescue motion to falling/landing.",defaultParams:{startVy:0},params:[{key:"startVy",label:"Starting vertical velocity",min:-120,max:160,step:1,unit:"px/s"}],pseudocode:"On reset:\n  set vertical velocity to starting vertical velocity\n\nEvery tick:\n  change y position by vertical velocity × time step",onReset(obj,p){obj.vy=Number(p.startVy||0);},update(obj,p,dt){obj.y += obj.vy*dt;}},
+  lunarGravity:{id:"lunarGravity",name:"Lunar gravity",project:"lunar",role:"Scientist → Programmer",recommended:["lander"],blurb:"Each tick changes vertical velocity downward by lunar gravity.",defaultParams:{gravity:38},params:[{key:"gravity",label:"Gravity",min:5,max:100,step:1,unit:"px/s²"}],pseudocode:"Every tick:\n  change vertical velocity downward by gravity × time step",update(obj,p,dt){if(state.currentProject!=="lunar")return; obj.vy += Number(p.gravity||38)*dt;}},
+  landerThrusters:{id:"landerThrusters",name:"Lander thrusters",project:"lunar",role:"Scientist + Designer → Programmer",recommended:["lander"],blurb:"Uses limited fuel to change velocity. Up/W thrusts upward; Left/Right nudges sideways.",defaultParams:{thrust:95,sideThrust:55,fuel:100},params:[{key:"thrust",label:"Upward thrust",min:20,max:220,step:1,unit:"px/s²"},{key:"sideThrust",label:"Side thrust",min:10,max:140,step:1,unit:"px/s²"},{key:"fuel",label:"Starting fuel",min:10,max:300,step:1,unit:"units"}],pseudocode:"When Up or W is pressed and fuel remains:\n  change vertical velocity upward\n  spend fuel\n\nWhen Left/Right is pressed:\n  change horizontal velocity\n  spend fuel",onReset(obj,p){if(obj.id==="lander")state.runtime.lunar.fuel=Number(p.fuel||100);},update(obj,p,dt){if(state.currentProject!=="lunar")return; const rt=state.runtime.lunar; if(rt.result || rt.fuel<=0)return; let used=false; if(keyState.ArrowUp||keyState.w||keyState.W||keyState[" "]){obj.vy-=Number(p.thrust||95)*dt; rt.fuel-=18*dt; used=true; spawnFlame(obj,0,1);} if(keyState.ArrowLeft||keyState.a||keyState.A){obj.vx-=Number(p.sideThrust||55)*dt; rt.fuel-=8*dt; used=true; spawnFlame(obj,1,0);} if(keyState.ArrowRight||keyState.d||keyState.D){obj.vx+=Number(p.sideThrust||55)*dt; rt.fuel-=8*dt; used=true; spawnFlame(obj,-1,0);} if(used) playSound("throw",.035); if(rt.fuel<0)rt.fuel=0;}},
+  safeTouchdownRule:{id:"safeTouchdownRule",name:"Safe touchdown rule",project:"lunar",role:"Designer → Programmer",recommended:["lander"],blurb:"Checks pad alignment and landing speed at contact.",defaultParams:{safeVerticalSpeed:28,safeHorizontalSpeed:22,padWidth:150},params:[{key:"safeVerticalSpeed",label:"Max vertical speed",min:5,max:80,step:1,unit:"px/s"},{key:"safeHorizontalSpeed",label:"Max horizontal speed",min:5,max:80,step:1,unit:"px/s"},{key:"padWidth",label:"Pad width",min:60,max:260,step:5,unit:"px"}],pseudocode:"When lander reaches the surface:\n  if over the pad and vertical/horizontal speeds are safe:\n    landing succeeds\n  otherwise:\n    crash",update(obj,p){if(state.currentProject!=="lunar")return; const rt=state.runtime.lunar; if(rt.result)return; const pad=state.objects.pad; const groundY=532-obj.r; if(obj.y>=groundY){obj.y=groundY; const overPad=Math.abs(obj.x-pad.x)<=Number(p.padWidth||150)/2; const safeV=Math.abs(obj.vy)<=Number(p.safeVerticalSpeed||28); const safeH=Math.abs(obj.vx)<=Number(p.safeHorizontalSpeed||22); if(overPad&&safeV&&safeH) endPlaytest("success",`Safe touchdown. Vertical speed ${Math.abs(obj.vy).toFixed(1)}, horizontal speed ${Math.abs(obj.vx).toFixed(1)}.`); else endPlaytest("crash",`Crash. ${overPad?"Over pad":"Missed pad"}; vertical ${Math.abs(obj.vy).toFixed(1)}, horizontal ${Math.abs(obj.vx).toFixed(1)}.`); obj.vx=0; obj.vy=0;}}},
+  landerTelemetry:{id:"landerTelemetry",name:"Lander telemetry gauge",project:"lunar",role:"Scientist → Programmer",recommended:["lander"],blurb:"Adds clean top telemetry pills for altitude, vertical speed, horizontal speed, and fuel. No duplicate in-canvas gauge.",defaultParams:{},params:[],pseudocode:"Every frame:\n  show altitude\n  show vertical speed\n  show horizontal speed\n  show fuel"}
+};
+
+function optionsFor(roleId){
+  const p=state.currentProject;
+  if(roleId==="boss"){
+    const opts=[];
+    if(!state.briefAccepted) opts.push(["acceptBrief","Accept the astronaut-rescue assignment"]);
+    opts.push(["bossStatus",state.studioOpen?"What should I do next?":"Am I ready for the studio?"]);
+    if(state.lunarUnlocked && !state.lunarBriefAccepted) opts.push(["startLunar","Start the Lunar Lander brief"]);
+    if(state.lunarBriefAccepted) opts.push(["lunarStatus","What is the Lunar Lander handoff chain?"]);
+    return opts;
+  }
+  if(roleId==="artist") return p==="lunar" ? [["lunarArt","Can you give me placeholder Lunar Lander art?"],["artDirection","How should player-created art work later?"]] : [["placeholderArt","Can you give me placeholder art?"],["artDirection","How should player-created art work later?"]];
+  if(roleId==="scientist") return p==="lunar" ? [["lunarVertical","Why do we need vertical motion?"],["lunarGravity","What should gravity do?"],["lunarTelemetry","What telemetry matters for landing?"]] : [["rescueMotion","How does motion work in empty space?"],["rescueMomentum","How can the astronaut steer without an engine?"],["rescueTelemetry","What should the player measure?"]];
+  if(roleId==="designer") return p==="lunar" ? [["lunarChallenge","What is the core Lunar Lander challenge?"],["lunarFeedback","What feedback should the player get after crashing?"]] : [["rescueGoal","What makes this simulation into a game?"],["rescuePressure","How do we stop the game being too easy?"],["rescueCritique","What should I ask myself after playtesting?"]];
+  if(roleId==="programmer") return [["makeBehavior","Create the next behaviour from the team’s ideas"],["explainBackside","Why put behaviours on the backside?"]];
+  if(roleId==="historian") return [["historyContext","Give me the historical context"],["historyLinks","What should deeper links eventually cover?"]];
+  if(roleId==="sound") return [["soundPack","Add the first sound feedback pack"],["soundDesign","What should sound communicate?"]];
+  return [];
+}
+
+function answer(roleId, optionId){
+  let player=(optionsFor(roleId).find(o=>o[0]===optionId)||["",optionId])[1];
+  let reply="";
+  if(roleId!=="boss" && !state.briefAccepted){
+    reply="I need the boss’s brief first. Talk to the boss, then come back with a concrete project.";
+  } else if(roleId==="boss"){
+    if(optionId==="acceptBrief"){unlock("missionBrief"); state.briefAccepted=true; reply="First assignment: rescue an astronaut who has drifted away from the ship. Do not open the studio yet. First get placeholder art and the scientist’s motion/momentum ideas, then ask the programmer for the first two behaviour cards. You can return to the rest of the team after a rough playtest shows what is missing.";}
+    else if(optionId==="bossStatus"){reply=readyForStudio()?"You have enough for the first rough construction pass. Open the studio, attach Horizontal motion and Horizontal rock thrower to the astronaut, then playtest. The point of that first test is to discover what rules and feedback are still missing.":"Not yet. This is the first chain: accept the brief → get placeholder art → ask the scientist about motion and rock momentum → ask the programmer for the first two behaviour cards.";}
+    else if(optionId==="startLunar"){state.currentProject="lunar"; state.lunarBriefAccepted=true; state.studioOpen=true; state.selected="lander"; state.tabLeft="team"; state.tabRight="resources"; unlock("lunarArt"); resetPlaytest(false); reply="Second project: Lunar Lander. Start with the scientist: ask why vertical motion is needed and what gravity does. Then go to the programmer for Vertical motion and Lunar gravity. After that, ask the designer about safe touchdown and return to the programmer for thrusters, landing rule, and telemetry.";}
+    else if(optionId==="lunarStatus"){reply="Lunar path: Scientist explains vertical motion and gravity → Programmer creates Vertical motion and Lunar gravity → Designer defines safe touchdown and fuel constraints → Programmer creates Thrusters, Safe touchdown rule, and Telemetry.";}
+  } else if(roleId==="artist"){
+    if(optionId==="lunarArt"){unlock("lunarArt"); reply="Lunar placeholder art is ready: a readable lander and a clear landing pad. Generated art can replace these later without changing the behaviour logic.";}
+    else if(optionId==="placeholderArt"){unlock("placeholderArt"); reply="Placeholder astronaut and ship art are ready. They are deliberately simple: readable mechanics first, polish later.";}
+    else reply="Player-created game art should eventually come from prompts or local uploads. The metagame art can stay simple and iconic; the player’s game art can become personally expressive.";
+  } else if(roleId==="scientist"){
+    if(optionId==="rescueMotion"){state.ideas.physicsIdea=true; reply="In near-empty space, nothing keeps slowing the astronaut down. If she has horizontal velocity, she keeps changing position. Take this to the programmer as a Horizontal motion behaviour.";}
+    else if(optionId==="rescueMomentum"){state.ideas.momentumIdea=true; reply="The astronaut and rock start as one system. Throw a rock left and the rock carries momentum left, so the astronaut gains momentum right. Take this to the programmer as Horizontal rock thrower.";}
+    else if(optionId==="rescueTelemetry"){state.ideas.telemetryIdea=true; reply="Measure velocity. Reaching the ship is not enough if the astronaut is moving too fast to dock safely. Take this to the programmer as a clean top telemetry gauge.";}
+    else if(optionId==="lunarVertical"){state.ideas.lunarMotionIdea=true; reply="Lunar Lander needs vertical motion because altitude changes. Keep it separate from gravity: vertical motion says position changes because vertical velocity exists.";}
+    else if(optionId==="lunarGravity"){state.ideas.lunarGravityIdea=true; reply="Gravity should not teleport the lander downward. It changes vertical velocity downward every tick. Then vertical motion changes position. That two-step chain is important.";}
+    else if(optionId==="lunarTelemetry"){state.ideas.lunarTelemetryIdea=true; reply="A good landing needs evidence: altitude, vertical speed, horizontal speed, and fuel. Without telemetry, the player is guessing.";}
+  } else if(roleId==="designer"){
+    if(optionId==="rescueGoal"){state.ideas.designGoalIdea=true; reply="A simulation becomes a game when success and failure matter. Your rough version may let the astronaut drift forever or merely touch the ship. Add a safe-rescue rule: reaching the ship only counts if the astronaut arrives slowly enough.";}
+    else if(optionId==="rescuePressure"){state.ideas.pressureIdea=true; reply="Add pressure, but not arbitrary noise. An oxygen timer rewards efficient control while keeping the physics honest.";}
+    else if(optionId==="rescueCritique"){reply="After each playtest ask: can I control it, is the rule clear, is failure informative, and do I know what to improve next?";}
+    else if(optionId==="lunarChallenge"){state.ideas.lunarDesignIdea=true; reply="Lunar Lander is controlled descent under constraint: gravity pulls, thrust costs fuel, the pad is narrow, and safe speed thresholds define success.";}
+    else if(optionId==="lunarFeedback"){state.ideas.lunarDesignIdea=true; reply="A failed landing should say why: missed pad, vertical speed too high, horizontal speed too high, or fuel strategy poor. 'Crash' alone teaches little.";}
+  } else if(roleId==="programmer"){
+    if(optionId==="explainBackside"){reply="The backside metaphor makes behaviour visible without making code the first barrier. Cards can be attached, removed, inspected, tuned, or mistakenly attached to the wrong object for debugging.";}
+    else { const made=createNextBehavior(); reply=made.length?`I created: ${made.map(id=>BEHAVIORS[id].name).join(", ")}. You can attach the cards from Resources and inspect their pseudocode on the object’s back.`:"I do not have a new specialist idea to implement yet. For the first pass, talk to the scientist. For game rules and pressure, talk to the assistant game designer."; }
+  } else if(roleId==="historian"){
+    unlock("historyNotes"); reply=optionId==="historyLinks"?"Deeper links should eventually cover Lunar Lander, Apollo navigation, Logo microworlds, constructionism, conservation of momentum, Newtonian mechanics, and early educational game-making systems.":"This sits in a lineage: Lunar Lander, Logo microworlds, constructionism, Newtonian mechanics, and learners building models rather than only consuming explanations.";
+  } else if(roleId==="sound"){
+    if(optionId==="soundPack"){unlock("soundPack"); reply="Sound pack unlocked: small thrust/throw blips, success cue, and failure cue. Browser audio starts after the first click or playtest.";}
+    else reply="Sound should mark meaningful state changes: thrust used, oxygen warning, safe docking, crash, touchdown. It should reinforce causality, not decorate randomly.";
+  }
+  state.visits[roleId]=(state.visits[roleId]||0)+1;
+  state.currentExchange={roleId,player,reply};
+  addLog("You",player); addLog(TEAM[roleId].title,reply);
+  if(readyForStudio()&&!state.studioOpen) addLog("Boss","You have enough resources to enter the game creation area.");
+  saveState(); renderAll();
+}
+
+function createNextBehavior(){
+  const made=[];
+  function maybe(id,cond){ if(cond && !isUnlocked(id)){unlock(id); made.push(id);} }
+  if(state.currentProject==="rescue"){
+    // First construction pass: motion + rock-throwing controls from the scientist.
+    // Design-rule cards come later, after the player discovers that a simulation
+    // needs goals, pressure, and feedback to become a game.
+    maybe("horizontalMotion",state.ideas.physicsIdea);
+    maybe("rockThrower",state.ideas.momentumIdea);
+    maybe("reachShipRule",state.ideas.designGoalIdea);
+    maybe("oxygenTimer",state.ideas.pressureIdea);
+    // Safe rescue depends on speed, so the horizontal velocity gauge is also useful
+    // once the designer introduces the safe-rescue rule. It can still be requested
+    // explicitly through the scientist telemetry path.
+    maybe("velocityGauge",state.ideas.telemetryIdea || state.ideas.designGoalIdea);
+  } else {
+    maybe("verticalMotion",state.ideas.lunarMotionIdea);
+    maybe("lunarGravity",state.ideas.lunarGravityIdea);
+    maybe("landerThrusters",state.ideas.lunarGravityIdea && state.ideas.lunarDesignIdea);
+    maybe("safeTouchdownRule",state.ideas.lunarDesignIdea);
+    maybe("landerTelemetry",state.ideas.lunarTelemetryIdea);
+  }
+  return made;
+}
+
+function unlock(id){ if(!state.unlocked[id]) state.unlocked[id]=true; }
+function isUnlocked(id){return DEBUG_ALL_UNLOCKED || !!state.unlocked[id];}
+function readyForStudio(){return DEBUG_ALL_UNLOCKED || (state.briefAccepted&&isUnlocked("placeholderArt")&&isUnlocked("horizontalMotion")&&isUnlocked("rockThrower"));}
+function hasFirstRescueCards(){return isUnlocked("horizontalMotion")&&isUnlocked("rockThrower");}
+function hasRescueRuleCards(){return isUnlocked("reachShipRule")&&isUnlocked("oxygenTimer");}
+function readableResourceList(keys){
+  return keys.map(k=>RESOURCE_NAMES[k]||BEHAVIORS[k]?.name||k).join(", ") || "none";
+}
+function nextStepForPrompt(){
+  const astronaut=state.objects.astronaut, lander=state.objects.lander;
+  const has=(obj,id)=>!!(obj&&obj.behaviors||[]).find(b=>b.id===id);
+  if(state.currentProject==="rescue"){
+    if(!state.briefAccepted) return 'Click “Talk to boss”, then choose “Accept the astronaut-rescue assignment”.';
+    const missingTeam=[];
+    if(!isUnlocked("placeholderArt")) missingTeam.push("Artist for placeholder astronaut and rescue-ship art");
+    if(!state.ideas.physicsIdea || !state.ideas.momentumIdea) missingTeam.push("Scientist for motion in empty space and rock-throwing momentum");
+    if(missingTeam.length){
+      return 'Meet the Artist and Scientist in any order before the first construction pass. Still useful: '+missingTeam.join('; ')+'. The Assistant game designer, Historian, and Sound teammate can be visited later when the first rough version reveals what is missing.';
+    }
+    if(!hasFirstRescueCards()) return 'Take the art and science ideas to the Programmer and ask for the first two behaviour cards: Horizontal motion and Horizontal rock thrower.';
+    if(!state.studioOpen) return 'Open the game creation area. Start with motion and rock-throwing controls. After a rough playtest, return to the team for goals, oxygen pressure, telemetry, and sound.';
+    if(!has(astronaut,"horizontalMotion")) return 'Attach Horizontal motion to the back of the Astronaut.';
+    if(!has(astronaut,"rockThrower")) return 'Attach Horizontal rock thrower to the back of the Astronaut.';
+    if(!hasRescueRuleCards()) return 'Run a rough playtest with motion and rock throwing. It will show that the game still needs a goal rule and pressure; then talk to the Assistant game designer.';
+    if(!has(astronaut,"reachShipRule")) return 'Attach Reach ship safely rule to the back of the Astronaut.';
+    if(!has(astronaut,"oxygenTimer")) return 'Attach Oxygen timer to the back of the Astronaut, then run a playtest.';
+    if(!state.runtime.rescue.result) return 'Run the rescue playtest. Use Left/Right Arrow to throw rocks and change the astronaut’s velocity.';
+    if(state.runtime.rescue.result==="success" && !state.lunarBriefAccepted) return 'Talk to the Boss and start the Lunar Lander brief.';
+    return 'Use the playtest result as critique: decide whether to add oxygen, telemetry, sound, or move on to Lunar Lander.';
+  }
+  if(!state.lunarBriefAccepted) return 'Talk to the Boss and start the Lunar Lander brief.';
+  const missingLunar=[];
+  if(!state.ideas.lunarMotionIdea || !state.ideas.lunarGravityIdea) missingLunar.push("Scientist for vertical motion and gravity");
+  if(!state.ideas.lunarDesignIdea) missingLunar.push("Assistant game designer for the safe-touchdown challenge");
+  if(missingLunar.length){
+    return 'For Lunar Lander, talk to the remaining teammates in any order. Still useful: '+missingLunar.join('; ')+'. Then ask the Programmer for the matching behaviour cards.';
+  }
+  if(!isUnlocked("verticalMotion")||!isUnlocked("lunarGravity")) return 'Talk to the Programmer and ask for Vertical motion and Lunar gravity behaviour cards.';
+  if(!isUnlocked("landerThrusters")||!isUnlocked("safeTouchdownRule")||!isUnlocked("landerTelemetry")) return 'Talk to the Programmer for thrusters, safe touchdown, and telemetry behaviour cards.';
+  if(!has(lander,"verticalMotion")) return 'Attach Vertical motion to the back of the Lunar lander.';
+  if(!has(lander,"lunarGravity")) return 'Attach Lunar gravity to the back of the Lunar lander.';
+  if(!has(lander,"landerThrusters")) return 'Attach Lander thrusters to the back of the Lunar lander.';
+  if(!has(lander,"safeTouchdownRule")) return 'Attach Safe touchdown rule to the back of the Lunar lander, then run a playtest.';
+  return 'Run the Lunar Lander playtest. Use thrust sparingly and watch the top telemetry.';
+}
+
+function loadState(){try{const raw=localStorage.getItem(APP_STORAGE_KEY); if(!raw)return null; const s=JSON.parse(raw); if(s.appVersion!==APP_VERSION)return null; return s;}catch{return null;}}
+function saveState(){try{localStorage.setItem(APP_STORAGE_KEY,JSON.stringify(state));}catch{}}
+function applyDebugStartupState(){
+  if(!DEBUG_ALL_UNLOCKED) return;
+  state.briefAccepted=true;
+  state.studioOpen=true;
+  state.lunarUnlocked=true;
+  state.lunarBriefAccepted=true;
+  state.tabRight=state.tabRight||"resources";
+  state.inspectSide=state.inspectSide||"back";
+  state.unlocked=state.unlocked||{};
+  const ids=[...Object.keys(RESOURCE_NAMES),...Object.keys(BEHAVIORS),"missionBrief","placeholderArt","lunarArt","soundPack","historyNotes"];
+  ids.forEach(id=>state.unlocked[id]=true);
+  state.ideas={...(state.ideas||{}),physicsIdea:true,momentumIdea:true,telemetryIdea:true,designGoalIdea:true,pressureIdea:true,lunarMotionIdea:true,lunarGravityIdea:true,lunarTelemetryIdea:true,lunarDesignIdea:true};
+  state.log=state.log||[];
+  if(!state.log.some(x=>x && x.who==="Debug")) state.log.push({who:"Debug",text:"Debug mode is on: the studio is open from startup and all behaviour cards for both projects are unlocked."});
+  if(!state.currentExchange) state.currentExchange={roleId:"boss",player:"Debug mode",reply:"Debug mode is on. The studio is open and every behaviour card for both Astronaut Rescue and Lunar Lander is available immediately."};
+}
+function resetAll(){localStorage.removeItem(APP_STORAGE_KEY); state=DEFAULT_STATE(); applyDebugStartupState(); keyState={}; lastFrame=null; saveState(); renderAll();}
+function addLog(who,text){state.log.push({who,text}); if(state.log.length>80) state.log.shift();}
+function escapeHtml(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+function escapeAttr(s){return escapeHtml(s).replace(/'/g,"&#39;");}
+function currentRuntime(){return state.runtime[state.currentProject];}
+function currentObjects(){return PROJECTS[state.currentProject].objects.map(id=>state.objects[id]);}
+function selectedObject(){return state.objects[state.selected]||state.objects[PROJECTS[state.currentProject].defaultSelected];}
+function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function hasBehavior(obj,id){return !!(obj && Array.isArray(obj.behaviors) && obj.behaviors.some(b=>b && b.id===id));}
+function objectsWithBehavior(id, objects=currentObjects()){return objects.filter(o=>hasBehavior(o,id));}
+function shortObjectName(obj){
+  if(!obj)return "object";
+  if(obj.id==="astronaut")return "astronaut";
+  if(obj.id==="ship")return "ship";
+  if(obj.id==="lander")return "lander";
+  if(obj.id==="pad")return "pad";
+  return String(obj.name||obj.id||"object").toLowerCase();
+}
+function getBehavior(obj,id){return obj && Array.isArray(obj.behaviors) ? obj.behaviors.find(b=>b && b.id===id) : null;}
+
+function renderAll(){renderLayout();renderLeft();renderCenter();renderRight();renderFeedback();renderCanvasSafe();}
+function renderLayout(){
+  const layout=document.getElementById("mainLayout"); layout.className="layout "+(state.studioOpen?"studio":"prestudio");
+  document.getElementById("tabTeam").classList.toggle("active",state.tabLeft==="team"); document.getElementById("tabBrief").classList.toggle("active",state.tabLeft==="brief");
+  document.getElementById("tabResources").classList.toggle("active",state.tabRight==="resources"); document.getElementById("tabInspector").classList.toggle("active",state.tabRight==="inspector");
+}
+function renderLeft(){
+  const el=document.getElementById("leftContent");
+  if(state.tabLeft==="brief"){el.innerHTML=briefMarkup(); wireLeft(el); return;}
+  const cards=Object.entries(TEAM).map(([id,t])=>teamCard(id,t)).join("");
+  el.innerHTML=`<div class="team-grid">${cards}</div>`; wireLeft(el);
+}
+function teamCard(id,t){
+  const active=state.activeSpeaker===id; const exchange=state.currentExchange&&state.currentExchange.roleId===id?state.currentExchange:null;
+  const blocked=id!=="boss"&&!state.briefAccepted;
+  const greeting=blocked?"I need the project brief first. Talk to the boss, then come back.":greetingFor(id);
+  const opts=optionsFor(id).map(([oid,label])=>`<button data-answer-role="${id}" data-answer="${oid}" ${blocked?"disabled":""}>${escapeHtml(label)}</button>`).join("");
+  return `<div class="team-card ${active?"active":""}" id="team-${id}"><div class="team-avatar">${t.icon}</div><div><h3>${escapeHtml(t.title)}</h3><p>${escapeHtml(t.summary)}</p><div class="button-row tight"><button data-open-role="${id}" class="${active?"gold":""}">Talk to ${id==="boss"?"boss":t.title.split(" ")[0].toLowerCase()}</button></div>${active?`<div class="dialog-box"><strong>${escapeHtml(t.title)}:</strong> ${escapeHtml(exchange?exchange.reply:greeting)}${exchange?`<div class="dialog-player">You asked: ${escapeHtml(exchange.player)}</div>`:""}<div class="dialog-options">${opts}</div></div>${aiFreeformMarkup(id)}`:""}</div></div>`;
+}
+function greetingFor(id){
+  if(id==="boss") return state.lunarUnlocked&&!state.lunarBriefAccepted?"Good rescue. I have a second assignment when you are ready: Lunar Lander.":"Welcome. First assignment: rescue an untethered astronaut. Meet the team before you open the studio.";
+  if(id==="scientist") return state.currentProject==="lunar"?"For Lunar Lander we need vertical motion, gravity, and telemetry. I explain the ideas; the programmer writes the behaviours.":"For rescue, start with inertia and momentum. I explain the physics; the programmer writes the behaviours.";
+  if(id==="programmer") return "Bring me an idea from the scientist or designer and I will turn it into a transparent behaviour card.";
+  if(id==="designer") return state.currentProject==="lunar"?"For Lunar Lander, the challenge is safe controlled descent under fuel and speed constraints.":"A simulation is not yet a game. We need a goal, failure conditions, and feedback.";
+  if(id==="artist") return "I can supply placeholder art now so mechanics are not blocked by asset production.";
+  if(id==="historian") return "I can connect this to Lunar Lander, Logo microworlds, constructionism, and the history of learning through game making.";
+  return "I can add small feedback sounds once there are meaningful state changes to mark.";
+}
+function aiFreeformMarkup(roleId){
+  const chats=(state.aiChats&&state.aiChats[roleId]||[]).slice(-4).reverse();
+  const busy=state.aiBusyRole===roleId;
+  const provider=LLM_PROVIDER_LABELS[llmConfig.provider]||"AI";
+  const model=currentLLMModel();
+  const promptBlock=c=>c.systemPrompt||c.userPrompt?`<details class="ai-prompt"><summary>Show prompt sent to AI</summary><pre><strong>System prompt</strong>
+${escapeHtml(c.systemPrompt||"")}
+
+<strong>User prompt</strong>
+${escapeHtml(c.userPrompt||"")}</pre></details>`:"";
+  const transcript=chats.length?`<div class="ai-transcript">${chats.map(c=>`<div class="ai-answer"><div class="ai-q">You: ${escapeHtml(c.q)}</div><strong>${escapeHtml(TEAM[roleId]?.title||"Teammate")} ${c.provider?`(${escapeHtml(c.provider)} / ${escapeHtml(c.model||"")})`:""}:</strong> ${escapeHtml(c.a)}${promptBlock(c)}</div>`).join("")}</div>`:"";
+  return `<div class="ai-freeform"><div class="resource-title"><span>Free-form live AI question</span><span class="tag blue">optional</span></div><p class="tiny">Provider: ${escapeHtml(provider)} · model: ${escapeHtml(model)}. These answers do not unlock resources; use the scripted handoff buttons for that.</p><textarea class="ai-question" data-ai-question-role="${roleId}" placeholder="Ask ${escapeAttr(TEAM[roleId]?.title||"this teammate")} anything about the game, physics, design, code, art, history, or project management."></textarea><div class="button-row"><button class="primary" data-ask-ai-role="${roleId}" ${busy?"disabled":""}>${busy?"Thinking…":"Ask with live AI"}</button><button class="ghost" data-ai-settings>AI settings</button></div>${transcript}</div>`;
+}
+function wireLeft(el){
+  el.querySelectorAll("[data-open-role]").forEach(b=>b.addEventListener("click",()=>{state.activeSpeaker=b.dataset.openRole; state.tabLeft="team"; saveState(); renderAll();}));
+  el.querySelectorAll("[data-answer-role]").forEach(b=>b.addEventListener("click",()=>answer(b.dataset.answerRole,b.dataset.answer)));
+  el.querySelectorAll("[data-ask-ai-role]").forEach(b=>b.addEventListener("click",()=>{const role=b.dataset.askAiRole; const ta=el.querySelector(`[data-ai-question-role="${role}"]`); askRoleAI(role,ta?ta.value:"");}));
+  el.querySelectorAll("[data-ai-settings]").forEach(b=>b.addEventListener("click",showAISettings));
+  el.querySelectorAll("[data-open-studio]").forEach(b=>b.addEventListener("click",()=>{if(readyForStudio()){state.studioOpen=true; state.tabRight="resources"; state.selected="astronaut"; resetPlaytest(false); addLog("Studio","Studio opened. Attach the first motion/control behaviours to the astronaut, run a rough playtest, then return to the team for missing game rules."); saveState(); renderAll();}else toast("Finish the pre-studio handoff chain first.");}));
+  el.querySelectorAll("[data-switch-project]").forEach(b=>b.addEventListener("click",()=>switchProject(b.dataset.switchProject)));
+}
+function briefMarkup(){
+  const items=state.currentProject==="rescue"?[
+    [state.briefAccepted,"Accept the rescue brief from the boss"],[isUnlocked("placeholderArt"),"Get placeholder art from the artist"],[state.ideas.physicsIdea,"Ask the scientist about motion in empty space"],[state.ideas.momentumIdea,"Ask the scientist about rock-throw momentum"],[hasFirstRescueCards(),"Ask the programmer to create the first two motion/control behaviour cards"],[state.studioOpen,"Open the game creation area for a rough first build"],[state.ideas.designGoalIdea,"After a rough playtest, ask the designer what turns it into a game"],[hasRescueRuleCards(),"Ask the programmer for safe-rescue and oxygen-pressure cards"],[isUnlocked("velocityGauge"),"Add a horizontal velocity gauge so safe rescue is visible"],[state.lunarUnlocked,"Complete a safe rescue and unlock Lunar Lander"]
+  ]:[
+    [state.lunarBriefAccepted,"Accept the Lunar Lander brief from the boss"],[state.ideas.lunarMotionIdea,"Ask scientist: why vertical motion is needed"],[state.ideas.lunarGravityIdea,"Ask scientist: what gravity should do"],[isUnlocked("verticalMotion")&&isUnlocked("lunarGravity"),"Ask programmer for Vertical motion and Lunar gravity"],[state.ideas.lunarDesignIdea,"Ask designer about safe touchdown"],[state.ideas.lunarTelemetryIdea,"Ask scientist about telemetry"],[isUnlocked("landerThrusters")&&isUnlocked("safeTouchdownRule")&&isUnlocked("landerTelemetry"),"Ask programmer for thrusters, touchdown rule, and telemetry"]
+  ];
+  return `<div class="note-card"><div class="resource-title"><span>${PROJECTS[state.currentProject].name} brief</span><span class="tag blue">${state.currentProject==="rescue"?"first assignment":"second assignment"}</span></div><p class="small">${state.currentProject==="rescue"?"Build a rough rescue simulation first, then improve it into a game with safety rules, pressure, and feedback.":"Build a Lunar Lander where gravity, thrust, fuel, telemetry, and safe touchdown all matter."}</p><div class="milestones">${items.map(([done,text])=>`<div class="milestone ${done?"done":""}"><div class="check">✓</div><div>${escapeHtml(text)}</div></div>`).join("")}</div><div class="button-row"><button class="primary" data-open-studio ${readyForStudio()?"":"disabled"}>Open game creation area</button>${state.currentProject!=="rescue"?`<button data-switch-project="rescue" class="ghost">Switch to Astronaut Rescue</button>`:""}${state.currentProject!=="lunar"?`<button data-switch-project="lunar" class="ghost" ${(state.lunarUnlocked||state.lunarBriefAccepted||isUnlocked("lunarArt"))?"":"disabled"}>Switch to Lunar Lander</button>`:""}</div>${isUnlocked("historyNotes")?`<div class="inline-hint"><strong>Historian note:</strong> This belongs in a lineage of Lunar Lander, Logo microworlds, constructionism, Newtonian mechanics, and learning through game making.</div>`:""}</div>`;
+}
+function renderCenter(){
+  document.getElementById("centerTitle").textContent=state.studioOpen?PROJECTS[state.currentProject].name:"Story first";
+  document.getElementById("centerSub").textContent=DEBUG_ALL_UNLOCKED?"DEBUG MODE: game area is open from startup; all behaviour cards for both games are unlocked.":(state.studioOpen?"Select an object, attach behaviour cards to its backside, then run playtests.":"The game creation area appears only after the brief/team handoff is concrete.");
+  document.getElementById("projectTag").textContent=DEBUG_ALL_UNLOCKED?"Debug mode":(state.studioOpen?PROJECTS[state.currentProject].tag:"Pre-studio");
+  document.getElementById("storyGatePanel").innerHTML=storyGateMarkup();
+  renderProjectSwitch();
+  renderStats(); document.getElementById("controlHint").textContent=PROJECTS[state.currentProject].hint; document.getElementById("selectedHint").textContent="Selected: "+selectedObject().name;
+}
+function renderProjectSwitch(){
+  const el=document.getElementById("projectSwitch");
+  if(!el)return;
+  if(!state.studioOpen){el.innerHTML="";return;}
+  const lunarAvailable=!!(state.lunarUnlocked||state.lunarBriefAccepted||isUnlocked("lunarArt"));
+  const parts=[`<span class="stat-pill"><strong>Project</strong></span>`];
+  if(state.currentProject!=="rescue"){
+    parts.push(`<button data-switch-project="rescue">Astronaut Rescue</button>`);
+  }
+  if(state.currentProject!=="lunar"){
+    const disabled=lunarAvailable ? "" : "disabled";
+    const title=lunarAvailable ? "" : 'title="Unlock Lunar Lander after a safe rescue."';
+    parts.push(`<button data-switch-project="lunar" ${disabled} ${title}>Lunar Lander</button>`);
+  }
+  el.innerHTML=parts.length>1 ? parts.join("\n") : `<span class="stat-pill"><strong>${PROJECTS[state.currentProject].name}</strong></span>`;
+}
+function switchProject(project){
+  if(!PROJECTS[project])return;
+  if(project==="lunar" && !(state.lunarUnlocked||state.lunarBriefAccepted||isUnlocked("lunarArt"))){
+    toast("Lunar Lander unlocks after a safe rescue or the Lunar brief.");
+    return;
+  }
+  const previous=state.currentProject;
+  state.currentProject=project;
+  state.studioOpen=true;
+  state.playtestMode=false;
+  state.selected=PROJECTS[project].defaultSelected;
+  state.inspectSide="back";
+  if(!["resources","inspector"].includes(state.tabRight))state.tabRight="resources";
+  resetPlaytest(false);
+  saveState();
+  renderAll();
+  if(previous!==project) toast(`Switched to ${PROJECTS[project].name}.`);
+}
+
+function storyGateMarkup(){
+  const ready=readyForStudio();
+  return `<div class="note-card"><h2>Your first day</h2><p class="small">The boss has a rescue-game brief, but you should not begin construction cold. Meet the team first. The important chain is specialist idea → programmer behaviour → playtest → critique.</p><div class="button-row"><button class="primary" data-story-role="boss">Talk to boss</button><button class="gold" data-story-ai-settings>Live AI setup</button><button data-story-tab="team">Go to team room</button><button data-story-tab="brief">See checklist</button></div>${state.currentExchange?`<div class="dialog-box"><strong>${escapeHtml(TEAM[state.currentExchange.roleId]?.title||"Team")}:</strong> ${escapeHtml(state.currentExchange.reply)}</div>`:""}<div class="inline-hint"><strong>Optional:</strong> use Live AI setup to ask free-form questions of the boss or any teammate with your own API key. Status: ${ready?"Ready to open the studio.":"Not ready yet. Get art, the two science ideas, and the first two programmer-created behaviour cards first."}</div></div>`;
+}
+function renderRight(){
+  const el=document.getElementById("rightContent");
+  if(!state.studioOpen){el.innerHTML="";return;}
+  if(state.tabRight==="inspector") el.innerHTML=inspectorMarkup(); else el.innerHTML=resourcesMarkup();
+  wireRight(el);
+}
+function resourcesMarkup(){
+  const selected=selectedObject();
+  const debugNote=DEBUG_ALL_UNLOCKED?`<div class="inline-hint"><strong>Debug mode:</strong> all behaviour cards for both games are available. Use the project switcher above the stage to switch projects.</div>`:"";
+  const artCards=`<div class="resource-card ${isUnlocked("placeholderArt")||isUnlocked("lunarArt")?"":"locked"}"><div class="resource-title"><span>Artwork</span><span class="tag ${(isUnlocked("placeholderArt")||isUnlocked("lunarArt"))?"green":"red"}">${(isUnlocked("placeholderArt")||isUnlocked("lunarArt"))?"unlocked":"locked"}</span></div><div class="small">Placeholder sprites for testing. Later, this can be generated or uploaded art.</div><div class="button-row"><button data-consult="artist">Talk to artist</button></div></div>`;
+  const behaviorCards=availableBehaviors().map(def=>behaviorResourceCard(def,selected)).join("");
+  return `${debugNote}${artCards}<div style="height:12px"></div><h3>Behaviour cards</h3><p class="small">Selected object: <strong>${escapeHtml(selected.name)}</strong>. Mistakes are allowed: non-recommended attachments are marked experimental, not blocked.</p><div class="behavior-list">${behaviorCards}</div>`;
+}
+function availableBehaviors(){return DEBUG_ALL_UNLOCKED ? Object.values(BEHAVIORS) : Object.values(BEHAVIORS).filter(d=>d.project==="both"||d.project===state.currentProject||isUnlocked(d.id));}
+function behaviorResourceCard(def,selected){
+  const unlocked=isUnlocked(def.id), already=hasBehavior(selected,def.id), rec=def.recommended.includes(selected.id); const msg=state.rightMessage&&state.rightMessage.behaviorId===def.id?state.rightMessage.text:null;
+  const targetId=selected.id;
+  return `<div class="behavior-card ${unlocked?"":"locked"} ${unlocked&&!rec?"warn-card":""}"><div class="behavior-title"><span>${escapeHtml(def.name)}</span><span class="tag ${unlocked?"green":"red"}">${unlocked?"unlocked":"locked"}</span></div><div class="small">${escapeHtml(def.blurb)}</div><div class="tiny">From: ${escapeHtml(def.role)}${rec?"":" · experimental on selected object"}</div><div class="button-row"><button data-attach="${def.id}" data-attach-target="${escapeAttr(targetId)}" ${!unlocked||already?"disabled":""}>${already?"Attached":rec?`Attach to ${escapeHtml(selected.name)}`:`Attach experimentally to ${escapeHtml(selected.name)}`}</button><button data-explain-behavior="${def.id}">Ask programmer</button></div>${msg?`<div class="dialog-box"><strong>Programmer:</strong> ${escapeHtml(msg)}</div>`:""}</div>`;
+}
+function inspectorMarkup(){const obj=selectedObject(); return `<div class="object-buttons">${currentObjects().map(o=>`<button data-select="${o.id}" class="${state.selected===o.id?"active":""}">${escapeHtml(o.name)}</button>`).join("")}</div><h2>${escapeHtml(obj.name)}</h2><div class="side-toggle"><button data-side="front" class="${state.inspectSide==="front"?"active":""}">Front: image</button><button data-side="back" class="${state.inspectSide==="back"?"active":""}">Back: behaviours</button></div>${state.inspectSide==="front"?frontMarkup(obj):backMarkup(obj)}`;}
+function frontMarkup(obj){return `<div class="note-card"><div class="row"><label>Name</label><input data-obj-field="name" value="${escapeAttr(obj.name)}"></div><div class="row"><label>Fallback emoji</label><input data-obj-field="emoji" value="${escapeAttr(obj.emoji)}"></div><div class="code-label"><span>Text-to-image prompt / art direction</span></div><textarea data-obj-field="prompt">${escapeHtml(obj.prompt)}</textarea></div>`;}
+function backMarkup(obj){if(!obj.behaviors.length)return `<div class="empty-state">No behaviours attached yet. Go to Resources, select this object, and attach one of the starter cards to its backside.</div>`; return `<div class="behavior-list">${obj.behaviors.map((b,i)=>{const def=BEHAVIORS[b.id]; const rec=def.recommended.includes(obj.id); return `<div class="behavior-card ${rec?"":"warn-card"}"><div class="behavior-title"><span>${escapeHtml(def.name)}</span><span class="tag ${rec?"blue":"warn"}">${rec?"backside card":"experimental"}</span></div><div class="small">${escapeHtml(def.blurb)}</div>${def.params.map(p=>paramMarkup(i,b,p)).join("")}<div class="code-label"><span>Transparent pseudocode</span><span>${b.reviewed?"reviewed":"editable"}</span></div><textarea data-code-index="${i}">${escapeHtml(b.code)}</textarea><div class="button-row"><button data-reviewed="${i}">${b.reviewed?"Reviewed ✓":"Mark reviewed"}</button><button class="danger" data-remove-index="${i}">Remove</button></div></div>`;}).join("")}</div>`;}
+function paramMarkup(index,b,p){const val=b.params[p.key]; return `<div class="row"><label>${escapeHtml(p.label)} <span class="tiny">${escapeHtml(p.unit||"")}</span></label><input type="number" step="${p.step}" min="${p.min}" max="${p.max}" value="${escapeAttr(val)}" data-param-index="${index}" data-param-key="${p.key}"></div>`;}
+function wireRight(el){
+  // Attachment clicks are handled by a single delegated listener on #rightContent.
+  el.querySelectorAll("[data-explain-behavior]").forEach(btn=>btn.addEventListener("click",()=>explainBehavior(btn.dataset.explainBehavior)));
+  el.querySelectorAll("[data-consult]").forEach(btn=>btn.addEventListener("click",()=>{state.activeSpeaker=btn.dataset.consult; state.tabLeft="team"; toast(`Opened ${TEAM[state.activeSpeaker].title} in the Team room.`); saveState(); renderAll();}));
+  el.querySelectorAll("[data-select]").forEach(btn=>btn.addEventListener("click",()=>{state.selected=btn.dataset.select; saveState(); renderAll();}));
+  el.querySelectorAll("[data-side]").forEach(btn=>btn.addEventListener("click",()=>{state.inspectSide=btn.dataset.side; saveState(); renderAll();}));
+  el.querySelectorAll("[data-param-index]").forEach(input=>input.addEventListener("change",()=>{const obj=selectedObject(); const b=obj.behaviors[Number(input.dataset.paramIndex)]; b.params[input.dataset.paramKey]=Number(input.value); resetPlaytest(false); saveState(); renderAll();}));
+  el.querySelectorAll("[data-code-index]").forEach(t=>t.addEventListener("input",()=>{const obj=selectedObject(); obj.behaviors[Number(t.dataset.codeIndex)].code=t.value; saveState();}));
+  el.querySelectorAll("[data-reviewed]").forEach(btn=>btn.addEventListener("click",()=>{const obj=selectedObject(); const b=obj.behaviors[Number(btn.dataset.reviewed)]; b.reviewed=!b.reviewed; saveState(); renderAll();}));
+  el.querySelectorAll("[data-remove-index]").forEach(btn=>btn.addEventListener("click",()=>{const obj=selectedObject(); obj.behaviors.splice(Number(btn.dataset.removeIndex),1); resetPlaytest(false); saveState(); renderAll();}));
+  el.querySelectorAll("[data-obj-field]").forEach(input=>input.addEventListener("change",()=>{selectedObject()[input.dataset.objField]=input.value; saveState(); renderAll();}));
+}
+function attachBehavior(objId,behaviorId){
+  const def=BEHAVIORS[behaviorId];
+  let obj=state.objects[objId];
+  dbgAttach("attachBehavior called", {objId, behaviorId, selected:state.selected, objectFound:!!obj, defFound:!!def, unlocked:def?isUnlocked(behaviorId):false});
+  if(!obj && state.selected && state.objects[state.selected]) {
+    dbgAttach("target object missing, falling back to selected", {fallback:state.selected});
+    obj=state.objects[state.selected];
+  }
+  if(!obj||!def){dbgAttach("attach aborted: missing object or definition", {objId, behaviorId, objects:Object.keys(state.objects||{})}); toast("I could not find that object or behaviour card."); return;}
+  if(!Array.isArray(obj.behaviors)) obj.behaviors=[];
+  dbgAttach("before attach", {object:obj.id, behaviors:obj.behaviors.map(b=>b.id)});
+  if(!isUnlocked(behaviorId)){dbgAttach("attach aborted: locked behaviour", {behaviorId}); toast(`${def.name} is still locked. Ask the team first.`); return;}
+  if(hasBehavior(obj,behaviorId)){
+    state.selected=obj.id;
+    state.inspectSide="back";
+    state.tabRight="inspector";
+    toast(`${def.name} is already on ${obj.name}'s back.`);
+    saveState();
+    renderAll();
+    return;
+  }
+  const newCard={id:behaviorId,params:{...def.defaultParams},code:def.pseudocode,reviewed:false};
+  obj.behaviors=[...obj.behaviors,newCard];
+  state.objects[obj.id]=obj;
+  dbgAttach("after attach before reset", {object:obj.id, behaviors:obj.behaviors.map(b=>b.id)});
+  state.selected=obj.id;
+  state.inspectSide="back";
+  state.tabRight="inspector";
+  state.rightMessage=null;
+  resetPlaytest(false);
+  dbgAttach("after resetPlaytest", {object:obj.id, behaviors:(state.objects[obj.id]?.behaviors||[]).map(b=>b.id), selected:state.selected, tabRight:state.tabRight, inspectSide:state.inspectSide});
+  addLog("Studio",`${def.name} attached to ${obj.name}${def.recommended.includes(obj.id)?"":" experimentally"}.`);
+  toast(`${def.name} attached to ${obj.name}.`);
+  saveState();
+  renderAll();
+}
+function explainBehavior(id){const def=BEHAVIORS[id]; state.rightMessage={behaviorId:id,text:`${def.name} is a ${def.role} card. It is ${def.recommended.join(", ")} that I would normally attach it to, but the studio deliberately allows wrong-object experiments. During playtest, behaviour labels are hidden; inspect the back side here when you are editing.`}; state.activeSpeaker="programmer"; state.tabLeft="team"; toast("Programmer response shown on the card."); saveState(); renderAll();}
+
+function defaultLLMConfig(){return {provider:"openai",models:{...LLM_DEFAULT_MODELS},cacheKey:false,keys:{}};}
+function loadLLMConfig(){try{const raw=localStorage.getItem(LLM_CONFIG_KEY); const cfg=raw?JSON.parse(raw):defaultLLMConfig(); return {...defaultLLMConfig(),...cfg,models:{...LLM_DEFAULT_MODELS,...(cfg.models||{})},keys:cfg.keys||{}};}catch{return defaultLLMConfig();}}
+function saveLLMConfig(){try{localStorage.setItem(LLM_CONFIG_KEY,JSON.stringify(llmConfig));}catch{}}
+function currentLLMModel(){return (llmConfig.models&&llmConfig.models[llmConfig.provider])||LLM_DEFAULT_MODELS[llmConfig.provider]||"";}
+function currentAIKey(){return sessionApiKeys[llmConfig.provider] || (llmConfig.cacheKey&&llmConfig.keys?llmConfig.keys[llmConfig.provider]:"") || "";}
+function showAISettings(){
+  const modal=document.getElementById("aiModal");
+  document.getElementById("aiProvider").value=llmConfig.provider;
+  document.getElementById("aiModel").value=currentLLMModel();
+  document.getElementById("aiApiKey").value=currentAIKey();
+  document.getElementById("aiCacheKey").checked=!!llmConfig.cacheKey;
+  document.getElementById("aiSettingsStatus").textContent=`Default models: OpenAI ${LLM_DEFAULT_MODELS.openai}, Gemini ${LLM_DEFAULT_MODELS.gemini}, Claude ${LLM_DEFAULT_MODELS.anthropic}.`;
+  modal.classList.add("show");
+}
+function persistAISettings(){
+  const provider=document.getElementById("aiProvider").value;
+  const model=document.getElementById("aiModel").value.trim()||LLM_DEFAULT_MODELS[provider];
+  const key=document.getElementById("aiApiKey").value.trim();
+  const cache=document.getElementById("aiCacheKey").checked;
+  llmConfig.provider=provider; llmConfig.models={...LLM_DEFAULT_MODELS,...(llmConfig.models||{}),[provider]:model}; llmConfig.cacheKey=cache;
+  if(cache){llmConfig.keys={...(llmConfig.keys||{}),[provider]:key}; delete sessionApiKeys[provider];}
+  else {llmConfig.keys={}; sessionApiKeys[provider]=key;}
+  saveLLMConfig();
+  document.getElementById("aiSettingsStatus").textContent=cache?"Saved. API key cached in this browser.":"Saved. API key kept only for this page session.";
+  toast("AI settings saved.");
+}
+function clearAIKey(){const provider=document.getElementById("aiProvider").value; delete sessionApiKeys[provider]; if(llmConfig.keys)delete llmConfig.keys[provider]; saveLLMConfig(); document.getElementById("aiApiKey").value=""; document.getElementById("aiSettingsStatus").textContent="Key cleared for "+(LLM_PROVIDER_LABELS[provider]||provider)+"."; toast("AI key cleared.");}
+async function testAIConnection(){persistAISettings(); const status=document.getElementById("aiSettingsStatus"); status.textContent="Testing…"; try{const text=await callLLM("You are a concise test responder.","Reply with exactly: connection ok"); status.textContent="Test response: "+text; toast("AI connection worked.");}catch(e){status.textContent="Test failed: "+e.message; toast("AI connection failed.");}}
+async function askRoleAI(roleId, question){
+  question=(question||"").trim(); if(!question){toast("Type a question first.");return;}
+  if(!currentAIKey()){showAISettings(); toast("Add an API key first."); return;}
+  const providerLabel=LLM_PROVIDER_LABELS[llmConfig.provider]||llmConfig.provider, model=currentLLMModel();
+  const systemPrompt=buildAgentSystemPrompt(roleId);
+  const userPrompt=buildAgentUserPrompt(roleId,question);
+  state.aiChats=state.aiChats||{}; state.aiChats[roleId]=state.aiChats[roleId]||[]; const entry={q:question,a:"Thinking…",provider:providerLabel,model,pending:true,systemPrompt,userPrompt}; state.aiChats[roleId].push(entry); state.aiBusyRole=roleId; saveState(); renderAll();
+  try{const reply=normalizeAIReply(await callLLM(systemPrompt,userPrompt)); entry.a=reply; delete entry.pending; addLog(TEAM[roleId]?.title||"Live AI",reply);}
+  catch(e){entry.a="Live AI call failed: "+e.message+". Check the key, model name, provider billing, browser CORS rules, and network access."; delete entry.pending;}
+  finally{state.aiBusyRole=null; saveState(); renderAll();}
+}
+function buildAgentSystemPrompt(roleId){
+  const t=TEAM[roleId]||{title:"Teammate",summary:""};
+  const roleRules={
+    boss:"You are the Boss NPC. You give the assigned project brief and tell the new developer what to do next inside the existing game path. Do not ask the player to invent the main assignment; the first assignment is already astronaut rescue, followed by Lunar Lander after success.",
+    scientist:"You are the Scientist. Explain Newtonian mechanics, momentum, gravity, telemetry, and measurement. You do not create behaviour cards; tell the player what scientific idea to take to the Programmer.",
+    programmer:"You are the Programmer. Translate already-gathered ideas into clear composable behaviour cards and pseudocode. You may suggest parameter names and edge cases, but you cannot directly change the app state.",
+    designer:"You are the Assistant game designer. Focus on goals, challenge, failure feedback, pacing, fairness, and what the player should learn from playtesting. You do not create code.",
+    historian:"You are the Historian. Connect the activity to Lunar Lander, Apollo, Logo, constructionism, early educational games, and the history of scientific ideas. Do not fabricate exact URLs.",
+    artist:"You are the Artist / animator. Give readable sprite/art-direction advice and text-to-image prompts. Keep mechanics legible at small size.",
+    sound:"You are the Sound / music teammate. Suggest short, informative audio cues that reinforce causality and game state."
+  };
+  return `You are ${t.title} inside a web metagame called First Day at the Game Studio. ${roleRules[roleId]||t.summary}
+
+METAGAME CONTEXT YOU MUST USE
+The human player is a newly hired game developer / player-designer on their first day. They are not the boss, not the studio director, and not the owner of the whole company.
+
+The game is not a blank brainstorming exercise. It has a designed learning path, but the player may talk to teammates in any order during the team phase:
+1. Boss gives the first assignment: make Astronaut Rescue.
+2. Player meets teammates before opening the studio. They can visit Artist, Scientist, Assistant game designer, Historian, Sound, and Programmer in any order. Do not force a single next teammate unless only one required step remains.
+3. Specialists give ideas: Scientist gives physics ideas, Assistant game designer gives game-rule ideas, Artist gives readable placeholder art, Historian and Sound add context and feedback ideas.
+4. Programmer turns gathered ideas into behaviour cards. If the player has not gathered enough ideas yet, the Programmer should tell them which kind of idea is missing, not fake the behaviour.
+5. Player opens the game creation area, selects an object, and attaches behaviour cards to the back of that object.
+6. Player playtests, critiques the result, and improves the game.
+7. After a successful Astronaut Rescue, Boss starts the second assignment: Lunar Lander.
+
+FIRST ASSIGNMENT: Astronaut Rescue
+The assigned goal is already known: rescue an untethered astronaut by reaching the rescue ship safely. Do not ask the player to invent that goal. After accepting the brief, the player should meet the team in any order. The first rescue build needs three kinds of input before the studio opens: placeholder art from the Artist, motion/momentum ideas from the Scientist, and safe-rescue rule ideas from the Assistant game designer. Then the Programmer can make the four starter behaviour cards: Horizontal motion, Horizontal rock thrower, Reach ship safely rule, and Oxygen timer. The player can start making the first game with only these four starter behaviours. Later, playtesting should reveal reasons to return to the team for velocity telemetry, sound feedback, historical context, and further refinements.
+
+SECOND ASSIGNMENT: Lunar Lander
+This begins only after the rescue game succeeds or the prototype shortcut is used. The useful path is: Boss starts Lunar brief → Scientist explains vertical motion and gravity → Programmer creates Vertical motion and Lunar gravity → Assistant game designer explains safe touchdown → Programmer creates Lander thrusters, Safe touchdown rule, and Lander telemetry → attach behaviours to the Lunar lander → run the playtest.
+
+CORE LEARNING MODEL
+Behaviours are transparent, editable cards. They are attached to the back of sprites. The player should learn by composing simple behaviours, testing them, noticing failures, and improving the design. Live AI advice must support this path; it must not pretend to unlock resources or change the game.
+
+STYLE RULES
+- Be brief: 1 to 3 sentences, ideally under 60 words.
+- Use plain language for a novice. No workplace jargon. Never use MVP, sync, sprint, stakeholder, deliverable, agenda, owner, or action item.
+- Do not mention internal IDs such as missionBrief, physicsIdea, or horizontalMotion. Use visible names such as “mission brief” and “Horizontal motion”.
+- For “what should I do first/next?” use CURRENT APP STATE. If several teammates remain useful, say the player can visit them in any order and name the remaining kinds of help; do not choose one arbitrary teammate.
+- If one needed scripted button exists, name it plainly, e.g. “Click Talk to scientist” or “Ask the Programmer to create behaviour cards.”
+- If the player asks a broad question, answer it, then give one useful next step.
+
+CURRENT APP STATE
+${summarizeStateForPrompt()}`;
+}
+function buildAgentUserPrompt(roleId,question){return `The human player is acting as a newly hired game developer. They ask ${TEAM[roleId]?.title||"this teammate"}: ${question}`;}
+function normalizeAIReply(text){
+  return String(text||"")
+    .replace(/\bShort answer:\s*/gi, "")
+    .replace(/\bMVP\b/g, "first playable version")
+    .replace(/\bsync\b/gi, "meeting")
+    .replace(/\bsprint\b/gi, "short work period")
+    .replace(/\bstakeholders\b/gi, "people involved")
+    .replace(/\bdeliverables\b/gi, "things to make")
+    .replace(/\baction items?\b/gi, "next steps")
+    .replace(/missionBrief/g, "mission brief")
+    .replace(/physicsIdea/g, "science idea")
+    .replace(/horizontalMotion/g, "Horizontal motion")
+    .replace(/rockThrower/g, "Horizontal rock thrower")
+    .trim();
+}
+function summarizeStateForPrompt(){
+  const obj=selectedObject(); const rt=currentRuntime();
+  const unlocked=Object.keys(state.unlocked||{}).filter(k=>state.unlocked[k]);
+  const ideas=Object.keys(state.ideas||{}).filter(k=>state.ideas[k]);
+  const attached=currentObjects().map(o=>`${o.name}: ${(o.behaviors||[]).map(b=>BEHAVIORS[b.id]?.name||b.id).join(", ")||"no behaviours"}`).join("; ");
+  const phase=state.currentProject==="rescue" ? (state.studioOpen?"Astronaut Rescue studio/playtest":"pre-studio Astronaut Rescue team handoff") : "Lunar Lander studio/playtest";
+  return `Project: ${PROJECTS[state.currentProject].name}.
+Current phase: ${phase}.
+Brief accepted: ${state.briefAccepted}. Studio open: ${state.studioOpen}. Lunar brief accepted: ${state.lunarBriefAccepted}.
+Selected object: ${obj.name}.
+Last playtest result: ${rt.result||"none"} ${rt.detail||""}.
+Visible unlocked resources/behaviours: ${readableResourceList(unlocked)}.
+Ideas gathered: ${readableResourceList(ideas)}.
+Attached behaviours: ${attached}.
+Best next in-game step: ${nextStepForPrompt()}`;
+}
+async function callLLM(systemPrompt,userPrompt){
+  const provider=llmConfig.provider, key=currentAIKey(), model=currentLLMModel();
+  if(provider==="openai")return callOpenAI(key,model,systemPrompt,userPrompt);
+  if(provider==="gemini")return callGemini(key,model,systemPrompt,userPrompt);
+  if(provider==="anthropic")return callAnthropic(key,model,systemPrompt,userPrompt);
+  throw new Error("Unknown provider.");
+}
+async function callOpenAI(key,model,systemPrompt,userPrompt){
+  const body={
+    model,
+    instructions:systemPrompt,
+    input:userPrompt,
+    max_output_tokens:900,
+    store:false
+  };
+  if(/^gpt-5/i.test(model)){
+    body.reasoning={effort:"minimal"};
+    body.text={verbosity:"low"};
+  }
+  const res=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify(body)});
+  const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(extractError(data,res));
+  const text=(data.output_text||extractOpenAIText(data)||"").trim();
+  if(text)return text;
+  const why=openAINoTextReason(data);
+  throw new Error(why);
+}
+function openAINoTextReason(data){
+  const status=data?.status||"unknown";
+  const reason=data?.incomplete_details?.reason||data?.error?.message||"no output_text field was returned";
+  const usage=data?.usage?` Usage: ${JSON.stringify(data.usage)}.`:"";
+  if(status==="incomplete")return `OpenAI returned no visible text because the response was incomplete (${reason}). Try again; this build now gives GPT-5 more token room and uses minimal reasoning.${usage}`;
+  return `OpenAI returned a successful response but no visible text (status: ${status}; ${reason}). Try a different model or increase the OpenAI output-token limit.${usage}`;
+}
+function extractOpenAIText(data){
+  try{
+    const pieces=[];
+    const walk=x=>{
+      if(!x)return;
+      if(typeof x==="string"){pieces.push(x);return;}
+      if(Array.isArray(x)){x.forEach(walk);return;}
+      if(typeof x==="object"){
+        if((x.type==="output_text"||x.type==="text")&&typeof x.text==="string")pieces.push(x.text);
+        else if(typeof x.output_text==="string")pieces.push(x.output_text);
+        else if(typeof x.content==="string")pieces.push(x.content);
+        else if(x.content)walk(x.content);
+        else if(x.message)walk(x.message);
+      }
+    };
+    walk(data.output);
+    return pieces.filter(Boolean).join("\n");
+  }catch{return "";}
+}
+async function callGemini(key,model,systemPrompt,userPrompt){
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system_instruction:{parts:[{text:systemPrompt}]},contents:[{role:"user",parts:[{text:userPrompt}]}],generationConfig:{maxOutputTokens:220,temperature:.45}})});
+  const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(extractError(data,res));
+  return ((data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[]).map(p=>p.text||"").join("\n")||"[No text returned]").trim();
+}
+async function callAnthropic(key,model,systemPrompt,userPrompt){
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model,max_tokens:220,system:systemPrompt,messages:[{role:"user",content:userPrompt}]})});
+  const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(extractError(data,res));
+  return ((data.content||[]).map(c=>c.text||"").join("\n")||"[No text returned]").trim();
+}
+function extractError(data,res){return data?.error?.message||data?.message||`HTTP ${res.status}`;}
+
+function renderFeedback(){const el=document.getElementById("feedbackPanel"); if(!state.studioOpen){el.innerHTML="";return;} const rt=currentRuntime(); const status=rt.result?rt.detail:(rt.running?"Playtest running.":"Run a playtest, then use critique prompts to decide who to talk to next."); const cls=rt.result==="success"?"green":rt.result?"red":"blue"; const lunar=state.currentProject==="lunar"; el.innerHTML=`<div class="feedback-card"><div class="resource-title"><span>Debrief</span><span class="tag ${cls}">${rt.result || (rt.running?"running":"ready")}</span></div><div class="small">${escapeHtml(status)}</div><div class="feedback-list" style="margin-top:10px">${lunar?`<button data-feedback="needVertical">The lander is not changing altitude correctly.</button><button data-feedback="needGravity">The lander needs gravity.</button><button data-feedback="needThrusters">The player needs thrust controls.</button><button data-feedback="needLandingRule">The landing needs a safe/crash rule.</button><button data-feedback="needTelemetry">I need telemetry to make good landing decisions.</button>`:`<button data-feedback="noMotion">The astronaut cannot really move yet.</button><button data-feedback="noGoal">The game needs a win/loss rule.</button><button data-feedback="tooEasy">The game is too easy; add pressure.</button><button data-feedback="needTelemetry">I need telemetry to make good decisions.</button><button data-feedback="tooQuiet">The game needs sound feedback.</button>`}</div></div>`; el.querySelectorAll("[data-feedback]").forEach(btn=>btn.addEventListener("click",()=>handleFeedback(btn.dataset.feedback)));}
+function handleFeedback(kind){const msgs={noMotion:"Talk to the scientist about momentum, then ask the programmer for Horizontal rock thrower.",noGoal:"Talk to the designer about the safe-rescue rule, then ask the programmer to implement it.",tooEasy:"Talk to the designer about pressure. Then ask the programmer for an Oxygen timer.",tooQuiet:"Talk to the sound/music teammate for feedback cues.",needVertical:"Talk to the scientist about vertical motion, then ask the programmer for Vertical motion.",needGravity:"Talk to the scientist about gravity, then ask the programmer for Lunar gravity.",needThrusters:"Talk to the designer about the Lunar Lander challenge, then ask the programmer for Lander thrusters.",needLandingRule:"Talk to the designer about safe touchdown, then ask the programmer for the Safe touchdown rule.",needTelemetry:state.currentProject==="lunar"?"Talk to the scientist about altitude, vertical speed, horizontal speed, and fuel. Then ask the programmer for the Lander telemetry gauge.":"Talk to the scientist about what should be measured. Then ask the programmer for the Horizontal velocity gauge."}; state.currentExchange={roleId:"boss",player:"Playtest critique",reply:msgs[kind]||"Good critique. Ask the relevant teammate before requesting code."}; state.activeSpeaker=kind.includes("Telemetry")?"scientist":"boss"; state.tabLeft="team"; toast(msgs[kind]||"Ask the team for the next step."); addLog("Player feedback",msgs[kind]||"Good critique."); saveState(); renderAll();}
+
+function renderStats(){
+  const rt=currentRuntime();
+  const pills=[`time: <strong>${rt.t.toFixed(1)}s</strong>`];
+  const objs=currentObjects();
+
+  // Instrumentation is behaviour-driven: a gauge card should show telemetry for the
+  // object it is attached to. This also makes deliberately "wrong" attachments visible
+  // instead of silently doing nothing.
+  const horizontalGaugeHosts=objectsWithBehavior("velocityGauge", objs);
+  for(const host of horizontalGaugeHosts){
+    const label=horizontalGaugeHosts.length===1 ? "horizontal velocity" : `${shortObjectName(host)} horizontal velocity`;
+    pills.push(`${label}: <strong>${Number(host.vx||0).toFixed(1)} px/s</strong>`);
+  }
+  // If the rescue gauge has been unlocked but not attached yet, make that visible
+  // instead of leaving the player wondering where it went.
+  if(state.currentProject==="rescue" && isUnlocked("velocityGauge") && horizontalGaugeHosts.length===0){
+    pills.push(`horizontal velocity gauge: <strong>attach to show</strong>`);
+  }
+
+  if(state.currentProject==="rescue"){
+    const a=state.objects.astronaut;
+    if(hasBehavior(a,"rockThrower"))pills.push(`rocks: <strong>${rt.rocks}</strong>`);
+    if(objectsWithBehavior("oxygenTimer", objs).length)pills.push(`oxygen: <strong>${rt.oxygen.toFixed(1)}</strong>`);
+  } else {
+    const telemetryHosts=objectsWithBehavior("landerTelemetry", objs);
+    if(telemetryHosts.length){
+      for(const host of telemetryHosts){
+        const prefix=telemetryHosts.length===1 ? "" : `${shortObjectName(host)} `;
+        const alt=Math.max(0,532-Number(host.r||0)-Number(host.y||0));
+        if(!horizontalGaugeHosts.includes(host))pills.push(`${prefix}vx: <strong>${Number(host.vx||0).toFixed(1)}</strong>`);
+        pills.push(`${prefix}vy: <strong>${Number(host.vy||0).toFixed(1)}</strong>`);
+        pills.push(`${prefix}altitude: <strong>${alt.toFixed(0)}</strong>`);
+      }
+    }
+    if(telemetryHosts.length || hasBehavior(state.objects.lander,"landerThrusters"))pills.push(`fuel: <strong>${rt.fuel.toFixed(0)}</strong>`);
+  }
+
+  document.getElementById("statsPills").innerHTML=pills.map(p=>`<span class="stat-pill">${p}</span>`).join("");
+}
+function renderCanvasSafe(){try{renderCanvas();}catch(e){console.error(e);}}
+function renderCanvas(){
+  ctx.clearRect(0,0,1000,600); ctx.fillStyle="#050817"; ctx.fillRect(0,0,1000,600); drawStars();
+  if(state.currentProject==="lunar")drawMoon(); else drawRescueBackdrop();
+  for(const obj of currentObjects()) drawObject(obj);
+  drawVelocityGauges();
+  drawParticles(); drawResult();
+}
+function drawStars(){ctx.save(); for(const s of stars){ctx.globalAlpha=s.a; ctx.fillStyle="#dbe6ff"; ctx.fillRect(s.x,s.y,s.s,s.s);} ctx.restore();}
+function drawRescueBackdrop(){ctx.save();ctx.fillStyle="rgba(123,223,242,.07)";ctx.fillRect(0,0,1000,600);ctx.restore();}
+function drawMoon(){ctx.save(); ctx.fillStyle="#191d2a"; ctx.beginPath(); ctx.ellipse(500,610,640,130,0,Math.PI,Math.PI*2); ctx.fill(); const pad=state.objects.pad; ctx.fillStyle="#8f8446"; ctx.fillRect(pad.x-78,520,156,12); ctx.fillStyle="#d4c66a"; ctx.fillRect(pad.x-78,520,156,3); ctx.fillStyle="rgba(255,255,255,.12)"; ctx.fillText("LANDING PAD",pad.x-42,548); ctx.restore();}
+function drawObject(obj){
+  ctx.save();
+  if(obj.id==="ship"){ctx.translate(obj.x,obj.y);ctx.rotate(.2);ctx.font="60px serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(obj.emoji,0,0);}
+  else if(obj.id==="pad"){/* drawn with moon */}
+  else {ctx.font=(obj.id==="lander"?"54px":"50px")+" serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(obj.emoji,obj.x,obj.y);}
+  const rt=currentRuntime(); const hideBehaviors=state.playtestMode||rt.running||!!rt.result;
+  if(state.selected===obj.id && !hideBehaviors){ctx.strokeStyle=state.inspectSide==="back"?"rgba(247,215,116,.9)":"rgba(123,223,242,.85)";ctx.lineWidth=3;ctx.beginPath();ctx.arc(obj.x,obj.y,obj.r+13,0,Math.PI*2);ctx.stroke(); if(state.inspectSide==="back"&&obj.behaviors.length)drawBacksideMarker(obj);}
+  ctx.restore();
+}
+function drawBacksideMarker(obj){ctx.save(); const n=obj.behaviors.length; const txt=`${n} card${n===1?"":"s"} on back`; ctx.font="12px system-ui"; const w=Math.max(110,ctx.measureText(txt).width+20); roundRect(obj.x-w/2,obj.y-obj.r-44,w,24,10); ctx.fillStyle="rgba(247,215,116,.86)";ctx.fill();ctx.fillStyle="#211800";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(txt,obj.x,obj.y-obj.r-32);ctx.restore();}
+function drawVelocityGauges(){
+  if(state.currentProject!=="rescue")return;
+  const hosts=objectsWithBehavior("velocityGauge", currentObjects());
+  for(const obj of hosts){
+    const card=getBehavior(obj,"velocityGauge")||{};
+    const maxSpeed=Math.max(10,Number((card.params||{}).maxSpeed||80));
+    drawHorizontalVelocityGauge(obj,maxSpeed);
+  }
+}
+function drawHorizontalVelocityGauge(obj,maxSpeed){
+  const vx=Number(obj.vx||0);
+  const barW=132, barH=12, pad=8;
+  const x=Math.max(10,Math.min(1000-barW-10,obj.x-barW/2));
+  const y=Math.max(14,Math.min(600-48,obj.y+obj.r+22));
+  const center=x+barW/2;
+  const frac=Math.max(-1,Math.min(1,vx/maxSpeed));
+  ctx.save();
+  ctx.font="12px system-ui";
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  roundRect(x-pad,y-pad,barW+pad*2,barH+32,12);
+  ctx.fillStyle="rgba(5,8,23,.78)";
+  ctx.fill();
+  ctx.strokeStyle="rgba(123,223,242,.55)";
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+  ctx.fillStyle="rgba(255,255,255,.12)";
+  roundRect(x,y,barW,barH,6);
+  ctx.fill();
+  ctx.strokeStyle="rgba(238,244,255,.45)";
+  ctx.beginPath();
+  ctx.moveTo(center,y-3);
+  ctx.lineTo(center,y+barH+3);
+  ctx.stroke();
+  ctx.fillStyle=frac>=0?"rgba(156,246,178,.88)":"rgba(255,156,174,.88)";
+  if(Math.abs(frac)>0.01){
+    const w=Math.abs(frac)*(barW/2);
+    roundRect(frac>=0?center:center-w,y,w,barH,6);
+    ctx.fill();
+  }
+  ctx.fillStyle="#eef4ff";
+  ctx.fillText(`vx ${vx.toFixed(1)} px/s`,center,y+barH+17);
+  ctx.restore();
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function drawParticles(){const rt=currentRuntime();ctx.save(); for(const p of rt.particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color||"#f7d774";ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();} ctx.restore();}
+function drawResult(){const rt=currentRuntime(); if(!rt.result)return; ctx.save(); ctx.textAlign="center"; ctx.fillStyle=rt.result==="success"?"#9cf6b2":"#ff9cae"; ctx.font="800 42px system-ui"; ctx.fillText(rt.result==="success"?"MISSION SUCCESS":"MISSION FAILED",500,292); ctx.fillStyle="#eef4ff"; ctx.font="18px system-ui"; ctx.fillText(rt.detail,500,330); ctx.restore();}
+
+function resetPlaytest(render=true){
+  // Preserve behaviour cards and user-edited labels/prompts from the current in-memory state.
+  // Do not reload these from localStorage here. That was the attachment bug: a newly attached
+  // card could be erased before saveState() wrote it to storage.
+  const preserved={};
+  for(const [id,obj] of Object.entries(state.objects||{})){
+    preserved[id]={
+      behaviors:Array.isArray(obj.behaviors)?obj.behaviors.map(b=>({id:b.id,params:{...(b.params||{})},code:b.code,reviewed:!!b.reviewed})):[],
+      name:obj.name,
+      emoji:obj.emoji,
+      prompt:obj.prompt
+    };
+  }
+  dbgAttach("resetPlaytest preserving", Object.fromEntries(Object.entries(preserved).map(([id,o])=>[id,o.behaviors.map(b=>b.id)])));
+  state.objects=initialObjects();
+  for(const id of Object.keys(state.objects)){
+    const old=preserved[id];
+    if(old){
+      state.objects[id].behaviors=old.behaviors||[];
+      if(old.name)state.objects[id].name=old.name;
+      if(old.emoji)state.objects[id].emoji=old.emoji;
+      if(old.prompt)state.objects[id].prompt=old.prompt;
+    }
+  }
+  state.runtime[state.currentProject]=defaultRuntime(state.currentProject);
+  state.playtestMode=false;
+  for(const obj of currentObjects()) for(const b of obj.behaviors){const def=BEHAVIORS[b.id]; if(def?.onReset)def.onReset(obj,b.params);}
+  if(render){saveState();renderAll();}
+}
+function switchProjectDebug(project){ switchProject(project); }
+function startPlaytest(){resetPlaytest(false); state.playtestMode=true; currentRuntime().running=true; lastFrame=null; saveState(); renderAll();}
+function pausePlaytest(){currentRuntime().running=false; saveState(); renderAll();}
+function endPlaytest(result,detail){const rt=currentRuntime(); rt.running=false; rt.result=result; rt.detail=detail; playSound(result==="success"?"success":"fail"); if(state.currentProject==="rescue"&&result==="success"){state.lunarUnlocked=true; addLog("Boss","Good rescue. Lunar Lander is now available as the second project.");} saveState(); renderAll();}
+function step(dt){const rt=currentRuntime(); if(!rt.running)return; rt.t+=dt; if(state.currentProject==="rescue")stepRescue(dt); else stepLunar(dt); updateParticles(rt,dt); renderStats(); renderCanvasSafe(); saveState();}
+function stepRescue(dt){const rt=state.runtime.rescue; const objs=currentObjects(); for(const obj of objs) for(const b of obj.behaviors){const def=BEHAVIORS[b.id]; if(def?.update)def.update(obj,b.params,dt);} const a=state.objects.astronaut; if(a.x<-60||a.x>1060||a.y<-80||a.y>680)endPlaytest("lost","The astronaut drifted out of the useful play area.");}
+function stepLunar(dt){const rt=state.runtime.lunar; const objs=currentObjects(); for(const obj of objs) for(const b of obj.behaviors){const def=BEHAVIORS[b.id]; if(def?.update)def.update(obj,b.params,dt);} const l=state.objects.lander; if(l.x<-80||l.x>1080||l.y<-120)endPlaytest("lost","The lander left the playable area.");}
+function updateParticles(rt,dt){rt.particles=rt.particles.map(p=>({...p,x:p.x+p.vx*dt,y:p.y+p.vy*dt,life:p.life-dt*1.6,r:p.r+dt*7})).filter(p=>p.life>0);}
+function throwRock(dir,obj,b){const rt=state.runtime.rescue; if(rt.rocks<=0)return; const p=b.params; const rockMass=Number(p.rockMass||1), rockSpeed=Number(p.rockSpeed||34); const totalMass=Math.max(1,obj.mass+rt.rocks*rockMass); obj.vx += -dir*(rockMass*rockSpeed/totalMass)*18; rt.rocks--; rt.particles.push({x:obj.x-dir*25,y:obj.y+4,vx:dir*120,vy:(Math.random()-.5)*40,r:4,life:.8,color:"#cbd7ff"}); playSound("throw",.06);}
+function spawnFlame(obj,dx,dy){const rt=state.runtime.lunar; rt.particles.push({x:obj.x+dx*18,y:obj.y+dy*22,vx:dx*90+(Math.random()-.5)*20,vy:dy*90+40*Math.random(),r:3,life:.5,color:"#ffd08a"});}
+function playSound(type,vol=.12){try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); const now=audioCtx.currentTime; o.type="sine"; o.frequency.value=type==="success"?660:type==="fail"?140:330; g.gain.setValueAtTime(vol,now); g.gain.exponentialRampToValueAtTime(.0001,now+.12); o.start(now); o.stop(now+.14);}catch{}}
+
+function animationLoop(ts){if(lastFrame==null)lastFrame=ts; const dt=Math.min(.04,(ts-lastFrame)/1000); lastFrame=ts; step(dt); requestAnimationFrame(animationLoop);} requestAnimationFrame(animationLoop);
+
+function exportJSON(){const data=JSON.stringify(state,null,2); document.getElementById("exportText").value=data; if(exportBlobUrl)URL.revokeObjectURL(exportBlobUrl); exportBlobUrl=URL.createObjectURL(new Blob([data],{type:"application/json"})); document.getElementById("downloadExportLink").href=exportBlobUrl; document.getElementById("exportModal").classList.add("show");}
+function showImportModal(){document.getElementById("importText").value=""; document.getElementById("importStatus").textContent="Paste exported JSON here, or choose a file exported from this prototype."; document.getElementById("importModal").classList.add("show");}
+function normaliseImportedState(candidate){
+  if(candidate && candidate.state && typeof candidate.state==="object") candidate=candidate.state;
+  if(!candidate || typeof candidate!=="object" || Array.isArray(candidate)) throw new Error("The JSON does not contain a prototype state object.");
+  const base=DEFAULT_STATE();
+  const s={...base,...candidate};
+  s.appVersion=APP_VERSION;
+  s.currentProject=PROJECTS[s.currentProject]?s.currentProject:"rescue";
+  s.tabLeft=s.tabLeft==="brief"?"brief":"team";
+  s.tabRight=s.tabRight==="inspector"?"inspector":"resources";
+  s.inspectSide=s.inspectSide==="front"?"front":"back";
+  s.activeSpeaker=TEAM[s.activeSpeaker]?s.activeSpeaker:"boss";
+  s.selected=(candidate.objects && candidate.objects[s.selected])?s.selected:PROJECTS[s.currentProject].defaultSelected;
+  s.unlocked=(candidate.unlocked&&typeof candidate.unlocked==="object"&&!Array.isArray(candidate.unlocked))?candidate.unlocked:base.unlocked;
+  s.ideas=(candidate.ideas&&typeof candidate.ideas==="object"&&!Array.isArray(candidate.ideas))?candidate.ideas:{};
+  s.visits=(candidate.visits&&typeof candidate.visits==="object"&&!Array.isArray(candidate.visits))?candidate.visits:{};
+  s.aiChats=(candidate.aiChats&&typeof candidate.aiChats==="object"&&!Array.isArray(candidate.aiChats))?candidate.aiChats:{};
+  s.log=Array.isArray(candidate.log)?candidate.log.slice(-80):base.log;
+  s.rightMessage=typeof candidate.rightMessage==="string"?candidate.rightMessage:null;
+  s.currentExchange=(candidate.currentExchange&&typeof candidate.currentExchange==="object")?candidate.currentExchange:null;
+  s.aiBusyRole=null;
+  s.runtime={
+    rescue:{...defaultRuntime("rescue"),...((candidate.runtime&&candidate.runtime.rescue)||{})},
+    lunar:{...defaultRuntime("lunar"),...((candidate.runtime&&candidate.runtime.lunar)||{})}
+  };
+  const init=initialObjects();
+  s.objects={};
+  for(const id of Object.keys(init)){
+    const imported=(candidate.objects&&candidate.objects[id]&&typeof candidate.objects[id]==="object")?candidate.objects[id]:{};
+    const obj={...init[id],...imported};
+    obj.behaviors=Array.isArray(imported.behaviors)?imported.behaviors.filter(b=>b&&BEHAVIORS[b.id]).map(b=>{
+      const def=BEHAVIORS[b.id];
+      const importedCode=typeof b.code==="string" && b.code.trim() ? b.code : def.pseudocode;
+      return {
+        id:b.id,
+        params:{...(def.defaultParams||{}),...((b.params&&typeof b.params==="object")?b.params:{})},
+        code: importedCode,
+        reviewed: !!b.reviewed,
+        experimental: !!b.experimental
+      };
+    }):[];
+    s.objects[id]=obj;
+  }
+  // Migration: current builds pair the safe-rescue rule with a horizontal velocity gauge
+  // because players need to see speed to judge whether rescue is safe.
+  if(s.currentProject==="rescue" || s.lunarUnlocked || s.briefAccepted){
+    const rescueHasSpeedRule=!!(s.unlocked.reachShipRule || s.ideas.designGoalIdea || hasBehavior(s.objects.astronaut,"reachShipRule"));
+    if(rescueHasSpeedRule) s.unlocked.velocityGauge=true;
+  }
+  if(!PROJECTS[s.currentProject].objects.includes(s.selected)) s.selected=PROJECTS[s.currentProject].defaultSelected;
+  return s;
+}
+function importSummary(s){
+  const names=["astronaut","ship","lander","pad"];
+  return names.map(id=>`${s.objects[id]?.name||id}: ${(s.objects[id]?.behaviors||[]).length} behaviour${(s.objects[id]?.behaviors||[]).length===1?"":"s"}`).join("; ");
+}
+
+function importJSONFromText(raw){
+  const text=String(raw||"").trim();
+  if(!text) throw new Error("No JSON was provided.");
+  const parsed=JSON.parse(text);
+  return normaliseImportedState(parsed);
+}
+function applyImportJSON(){
+  const status=document.getElementById("importStatus");
+  try{
+    const imported=importJSONFromText(document.getElementById("importText").value);
+    const summary=importSummary(imported);
+    state=imported;
+    keyState={}; lastFrame=null;
+    resetPlaytest(false);
+    addLog("Import", summary);
+    saveState();
+    document.getElementById("importModal").classList.remove("show");
+    renderAll();
+    toast("Project JSON imported. " + summary);
+  }catch(err){
+    status.textContent="Import failed: "+(err&&err.message?err.message:String(err));
+  }
+}
+function toast(msg){const el=document.getElementById("toast"); el.textContent=msg; el.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove("show"),2600);}
+
+function isTextEntryTarget(target){
+  if(!target)return false;
+  const tag=(target.tagName||"").toLowerCase();
+  return tag==="input" || tag==="textarea" || tag==="select" || target.isContentEditable;
+}
+
+function initEvents(){
+  document.getElementById("tabTeam").addEventListener("click",()=>{state.tabLeft="team";saveState();renderAll();}); document.getElementById("tabBrief").addEventListener("click",()=>{state.tabLeft="brief";saveState();renderAll();});
+  document.getElementById("tabResources").addEventListener("click",()=>{state.tabRight="resources";saveState();renderAll();}); document.getElementById("tabInspector").addEventListener("click",()=>{state.tabRight="inspector";saveState();renderAll();});
+  // Robust delegated attachment handler. The Resources panel is re-rendered often,
+  // so this catches attach clicks even after tab switches, selected-object changes,
+  // or stale saved UI state.
+  document.getElementById("rightContent").addEventListener("click",e=>{
+    const btn=e.target.closest("[data-attach]");
+    if(!btn)return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(btn.disabled)return;
+    const targetId=btn.getAttribute("data-attach-target") || state.selected || PROJECTS[state.currentProject].defaultSelected;
+    const behaviorId=btn.getAttribute("data-attach");
+    dbgAttach("click captured", {targetId, behaviorId, selected:state.selected, tabRight:state.tabRight, buttonText:btn.textContent.trim(), disabled:btn.disabled});
+    attachBehavior(targetId,behaviorId);
+  },true);
+  document.getElementById("helpBtn").addEventListener("click",()=>document.getElementById("helpModal").classList.add("show")); document.getElementById("closeHelpBtn").addEventListener("click",()=>document.getElementById("helpModal").classList.remove("show"));
+  document.getElementById("aiSettingsBtn").addEventListener("click",showAISettings); document.getElementById("closeAiBtn").addEventListener("click",()=>document.getElementById("aiModal").classList.remove("show")); document.getElementById("saveAiSettingsBtn").addEventListener("click",persistAISettings); document.getElementById("clearAiKeyBtn").addEventListener("click",clearAIKey); document.getElementById("testAiBtn").addEventListener("click",testAIConnection); document.getElementById("aiProvider").addEventListener("change",()=>{const p=document.getElementById("aiProvider").value; llmConfig.provider=p; document.getElementById("aiModel").value=(llmConfig.models&&llmConfig.models[p])||LLM_DEFAULT_MODELS[p]; document.getElementById("aiApiKey").value=sessionApiKeys[p]||(llmConfig.keys&&llmConfig.keys[p])||"";});
+  document.getElementById("exportBtn").addEventListener("click",exportJSON); document.getElementById("closeExportBtn").addEventListener("click",()=>document.getElementById("exportModal").classList.remove("show")); document.getElementById("copyExportBtn").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(document.getElementById("exportText").value);toast("JSON copied.");}catch{toast("Copy failed; select the text manually.");}});
+  document.getElementById("importBtn").addEventListener("click",showImportModal); document.getElementById("closeImportBtn").addEventListener("click",()=>document.getElementById("importModal").classList.remove("show")); document.getElementById("applyImportBtn").addEventListener("click",applyImportJSON); document.getElementById("importFile").addEventListener("change",async e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; try{document.getElementById("importText").value=await file.text(); document.getElementById("importStatus").textContent=`Loaded ${file.name}. Click Import into prototype to apply it.`;}catch(err){document.getElementById("importStatus").textContent="Could not read file: "+(err&&err.message?err.message:String(err));}});
+  document.getElementById("resetAllBtn").addEventListener("click",()=>{if(confirm("Reset the prototype state?"))resetAll();}); document.getElementById("runBtn").addEventListener("click",startPlaytest); document.getElementById("pauseBtn").addEventListener("click",pausePlaytest); document.getElementById("resetBtn").addEventListener("click",()=>resetPlaytest(true));
+  document.getElementById("projectSwitch").addEventListener("click",e=>{const btn=e.target.closest("[data-switch-project]"); if(btn) switchProject(btn.dataset.switchProject);});
+  document.getElementById("storyGatePanel").addEventListener("click",e=>{const ai=e.target.closest("[data-story-ai-settings]"); if(ai){showAISettings(); return;} const role=e.target.closest("[data-story-role]"); if(role){state.activeSpeaker=role.dataset.storyRole; state.tabLeft="team"; saveState(); renderAll(); return;} const tab=e.target.closest("[data-story-tab]"); if(tab){state.tabLeft=tab.dataset.storyTab; saveState(); renderAll();}});
+  canvas.addEventListener("click",e=>{if(!state.studioOpen)return; const rect=canvas.getBoundingClientRect(); const x=(e.clientX-rect.left)*1000/rect.width, y=(e.clientY-rect.top)*600/rect.height; let best=null,bd=1e9; for(const obj of currentObjects()){const d=Math.hypot(obj.x-x,obj.y-y); if(d<obj.r+25&&d<bd){best=obj;bd=d;}} if(best){state.selected=best.id; state.tabRight="inspector"; saveState(); renderAll();}});
+  window.addEventListener("keydown",e=>{if(isTextEntryTarget(e.target))return; keyState[e.key]=true; if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key))e.preventDefault(); const rt=currentRuntime(); if(!rt.running)return; if(state.currentProject==="rescue"&&(e.key==="ArrowLeft"||e.key==="ArrowRight")){const dir=e.key==="ArrowLeft"?-1:1; for(const obj of currentObjects()) for(const b of obj.behaviors) if(b.id==="rockThrower")throwRock(dir,obj,b);} });
+  window.addEventListener("keyup",e=>{if(isTextEntryTarget(e.target))return; keyState[e.key]=false;});
+}
+
+// Repair old states that may have missing newer fields.
+state.appVersion=APP_VERSION; state.runtime=state.runtime||{rescue:defaultRuntime("rescue"),lunar:defaultRuntime("lunar")}; state.runtime.rescue=state.runtime.rescue||defaultRuntime("rescue"); state.runtime.lunar=state.runtime.lunar||defaultRuntime("lunar"); state.ideas=state.ideas||{}; state.aiChats=state.aiChats||{}; state.aiBusyRole=null; state.objects={...initialObjects(),...(state.objects||{})}; if(!state.objects.pad)state.objects.pad=initialObjects().pad; state.currentProject=PROJECTS[state.currentProject]?state.currentProject:"rescue"; state.selected=(state.selected&&state.objects[state.selected]&&PROJECTS[state.currentProject].objects.includes(state.selected))?state.selected:PROJECTS[state.currentProject].defaultSelected;
+initEvents(); resetPlaytest(false); renderAll();
+</script>
+
+<!-- ============================================================
+     Studio voice guide (appended layer; touches nothing above).
+     Ported from the In-Between voice-demo architecture: docked
+     side panel, transcript log, one generation counter, trusted-
+     event takeover, provenance-correct resume, mic-by-policy.
+     Drives the app only through its real controls and globals.
+     All ids/classes prefixed vg.
+     ============================================================ -->
+<style>
+  .vg-spot{box-shadow:0 0 0 3px var(--gold,#f7d774),0 0 22px 6px rgba(247,215,116,.45)!important;
+    border-radius:12px;scroll-margin:130px;animation:vgPulse 1.6s ease-in-out infinite}
+  @keyframes vgPulse{50%{box-shadow:0 0 0 5px var(--gold,#f7d774),0 0 30px 10px rgba(247,215,116,.6)}}
+
+  body{transition:margin-right .25s}
+  body.vg-open{margin-right:302px}
+  /* Narrow (artifact preview pane, phones): dock to the bottom
+     instead of overlaying — margin-bottom reflows the app above the
+     panel, so the guide never covers anything at any width. */
+  @media (max-width:700px){
+    body.vg-open{margin-right:0;margin-bottom:302px}
+    #vgPanel{top:auto;left:0;right:0;bottom:0;width:auto;height:300px;
+      border-left:none;border-top:1px solid var(--line,rgba(255,255,255,.14));
+      box-shadow:0 -8px 26px rgba(0,0,0,.45)}
+    body:not(.vg-open) #vgPanel{transform:translateY(102%)}
+    #vgTab{top:auto;bottom:0;right:14px;border-radius:12px 12px 0 0;
+      border-right:1px solid var(--line,rgba(255,255,255,.14));border-bottom:none;
+      padding:8px 12px;flex-direction:row!important;gap:8px}
+    .vg-tab-label{writing-mode:horizontal-tb}
+  }
+
+  /* With the guide docked, the app must reflow as if the window were
+     302px narrower — its own grid minimums (320+520+320) otherwise
+     overflow horizontally underneath the fixed panel. Soften the
+     minimums in the band just above the app's 1180px stacking
+     breakpoint, and mirror that breakpoint at 1180+302. */
+  @media (max-width:1560px){
+    body.vg-open .layout{grid-template-columns:minmax(290px,380px) minmax(430px,1fr) minmax(290px,380px)}
+  }
+  @media (max-width:1482px){
+    body.vg-open .layout,body.vg-open .layout.prestudio{grid-template-columns:1fr}
+    body.vg-open header{grid-template-columns:1fr}
+    body.vg-open .top-actions{justify-content:flex-start}
+    body.vg-open .row{grid-template-columns:1fr}
+    body.vg-open .hint-row{display:block}
+    body.vg-open .layout.prestudio #rightPanel{display:none}
+  }
+
+  #vgPanel{position:fixed;top:0;right:0;bottom:0;width:min(300px,88vw);z-index:9999;
+    display:flex;flex-direction:column;font:inherit;
+    background:var(--panel,#111a33);border-left:1px solid var(--line,rgba(255,255,255,.14));
+    box-shadow:-8px 0 26px rgba(0,0,0,.45);
+    transform:translateX(0);transition:transform .25s}
+  body:not(.vg-open) #vgPanel{transform:translateX(102%)}
+
+  #vgHead{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line,rgba(255,255,255,.14));
+    background:rgba(0,0,0,.18);flex:0 0 auto}
+  #vgFace{font-size:22px;user-select:none;transition:transform .2s}
+  #vgFace.vg-talk,#vgTab.vg-talk{animation:vgBob .55s ease-in-out infinite}
+  @keyframes vgBob{50%{transform:translateY(-3px) rotate(-6deg)}}
+  #vgTitle{font-weight:850;font-size:14px;letter-spacing:-.01em;color:var(--ink,#eef4ff);flex:1}
+  #vgHide{border:none;background:none;color:var(--muted,#b7c5e8);font-size:17px;cursor:pointer;padding:4px 6px}
+  #vgHide:hover{color:var(--accent,#7bdff2);transform:none}
+
+  #vgControls{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line,rgba(255,255,255,.14));flex:0 0 auto}
+  .vg-btn{flex:0 0 auto;width:36px;height:36px;border-radius:50%;border:1px solid var(--line,rgba(255,255,255,.14));
+    background:rgba(255,255,255,.06);color:var(--accent,#7bdff2);font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;padding:0}
+  .vg-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(123,223,242,.55);transform:none}
+  .vg-primary{color:#06111f;background:linear-gradient(180deg,#aaf4ff,#65d4ea);border:none;font-size:16px;font-weight:900}
+  #vgMic.vg-live{background:#e0483c;color:#fff;border:none;animation:vgPulse 1.2s infinite}
+  #vgMic.vg-off{opacity:.45}
+
+  #vgLog{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:12px}
+  .vg-b{max-width:95%;padding:8px 11px;border-radius:12px;font-size:13.5px;line-height:1.5;
+    white-space:pre-wrap;overflow-wrap:break-word;align-self:flex-start;
+    background:rgba(255,255,255,.07);color:var(--ink,#eef4ff);border:1px solid var(--line,rgba(255,255,255,.14));
+    border-bottom-left-radius:4px}
+  .vg-b.vg-user{align-self:flex-end;background:rgba(123,223,242,.16);border-color:rgba(123,223,242,.4);
+    border-bottom-left-radius:12px;border-bottom-right-radius:4px}
+
+  #vgStatus{flex:0 0 auto;min-height:18px;padding:2px 12px;font-size:12px;font-style:italic;color:var(--muted,#b7c5e8)}
+  #vgTypeRow{display:flex;gap:8px;padding:0 12px 12px;flex:0 0 auto}
+  #vgIn{flex:1;min-width:0;font-size:13.5px;border:1px solid var(--line,rgba(255,255,255,.14));
+    border-radius:10px;padding:8px 11px;background:rgba(0,0,0,.25);color:var(--ink,#eef4ff);font-family:inherit;width:auto}
+  #vgIn:focus{outline:none;border-color:rgba(123,223,242,.6)}
+  #vgGo{font-weight:850;font-size:13px;color:#06111f;background:linear-gradient(180deg,#aaf4ff,#65d4ea);
+    border:none;border-radius:10px;padding:0 15px;cursor:pointer}
+
+  #vgTab{position:fixed;right:0;top:38%;z-index:9998;cursor:pointer;user-select:none;
+    background:var(--panel,#111a33);border:1px solid var(--line,rgba(255,255,255,.14));border-right:none;
+    border-radius:12px 0 0 12px;box-shadow:-4px 2px 14px rgba(0,0,0,.45);
+    padding:10px 8px 10px 10px;font-size:22px;display:none}
+  body:not(.vg-open) #vgTab{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .vg-tab-label{writing-mode:vertical-rl;font-size:11px;font-weight:850;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--accent,#7bdff2)}
+</style>
+
+<div id="vgTab" title="Bring the studio guide back"><span>&#129302;</span><span class="vg-tab-label">Guide</span></div>
+<aside id="vgPanel" role="complementary" aria-label="Studio voice guide">
+  <div id="vgHead">
+    <span id="vgFace">&#129302;</span>
+    <span id="vgTitle">Studio guide</span>
+    <button id="vgHide" title="Hide the guide">&#10095;</button>
+  </div>
+  <div id="vgControls">
+    <button id="vgMain" class="vg-btn vg-primary" title="Start the spoken tour">&#9654;</button>
+    <button id="vgMic"  class="vg-btn" title="Ask a question by voice">&#127908;</button>
+    <button id="vgSkip" class="vg-btn" title="Skip to the next stop" style="display:none">&#9197;</button>
+    <button id="vgEnd"  class="vg-btn" title="End the tour" style="display:none">&#10005;</button>
+  </div>
+  <div id="vgLog" aria-live="polite"></div>
+  <div id="vgStatus"></div>
+  <div id="vgTypeRow">
+    <input id="vgIn" placeholder="Type a question for the guide&hellip;" spellcheck="false">
+    <button id="vgGo">Ask</button>
+  </div>
+</aside>
+
+<script>
+/* ============================================================
+   Studio voice guide: spoken tour + voice/typed Q&A.
+   State machine: idle -> running <-> paused -> done.
+   vgGen is the single generation counter: bumping it cancels
+   every in-flight speech chunk, timed wait, and pending answer.
+   ============================================================ */
+(function(){
+'use strict';
+const VG_ABORT={vg:'abort'};
+/* Keyless artifact proxy: try newest Sonnet first, fall back if
+   the proxy's allow-list has not caught up. One-line edit here. */
+const VG_KEYLESS_MODELS=['claude-sonnet-5','claude-sonnet-4-6'];
+let vgGen=0, vgState='idle', vgCur=0;
+let vgPauseSnap=null;
+let vgQA=[];                 // spoken Q&A history (persists across pauses)
+let vgSpotted=[], vgSpotSel=null;
+let vgWordMs=300;            // read-along ms/word when TTS is absent (tests set 0)
+const vg$=id=>document.getElementById(id);
+
+/* Where are we running? Artifacts sit in a sandboxed cross-origin
+   iframe whose permissions policy withholds the microphone —
+   detectable directly, no error-string guessing. */
+const vgMicPolicyBlocked=(()=>{ try{
+    const pp=document.permissionsPolicy||document.featurePolicy;
+    if(pp&&typeof pp.allowsFeature==='function') return !pp.allowsFeature('microphone');
+  }catch(e){} return false; })();
+const vgInClaude=(()=>{ try{
+    if(/claudeusercontent\.com$/i.test(location.hostname)) return true;
+    return Array.from(location.ancestorOrigins||[]).some(o=>/claude\.(ai|com)/i.test(o));
+  }catch(e){ return false; } })();
+const VG_SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const vgCanListen=!!VG_SR&&!vgMicPolicyBlocked;
+const vgAskPhrase=()=>vgCanListen?'press my microphone button and just ask':'type in the box at the bottom of my panel and just ask';
+
+/* ---------- confirm() done properly ----------
+   Artifact iframes lack allow-modals, so native confirm() is
+   swallowed (returns false instantly) and every "if(confirm(...))"
+   guard silently aborts. confirm is synchronous and a nice dialog
+   is not, so: remember which button was just pressed, answer false,
+   show an in-page dialog styled like the app's own modals, and on
+   Yes pre-approve the message and re-click that button — the
+   handler runs again and the wrapper answers true. Works the same
+   in normal browsers (nicer than the native box). Fallbacks when no
+   trigger button is known: native dialog, then press-again toast. */
+let vgLastClick=null;
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(t&&t.closest&&(t.closest('#vgPanel')||t.closest('#vgTab')||t.closest('#vgConfirm'))) return;
+  vgLastClick={el:(t&&t.closest&&t.closest('button'))||t,t:Date.now()};
+},true);
+let vgConfirmCb=null, vgConfirmNoCb=null;
+function vgEnsureConfirmEl(){
+  if(vg$('vgConfirm')) return;
+  const d=document.createElement('div');
+  d.id='vgConfirm'; d.className='modal-backdrop'; d.style.zIndex='10001';
+  d.innerHTML='<div class="modal" style="max-width:430px"><h2 style="margin:0 0 8px">Just checking</h2>'+
+    '<p id="vgConfirmMsg" style="margin:0 0 10px"></p>'+
+    '<p id="vgConfirmHint" style="margin:0 0 14px;font-size:13px;color:var(--muted,#b7c5e8)"></p>'+
+    '<div class="button-row"><button id="vgConfirmYes" class="primary">Yes, do it</button>'+
+    '<button id="vgConfirmExtra" class="ghost" style="display:none"></button>'+
+    '<button id="vgConfirmNo" class="ghost">Cancel</button></div></div>';
+  document.body.appendChild(d);
+  d.addEventListener('click',e=>{ if(e.target===d) vgHideConfirm(); });
+}
+function vgHideConfirm(){ const d=vg$('vgConfirm'); if(d) d.classList.remove('show');
+  const no=vgConfirmNoCb; vgConfirmCb=null; vgConfirmNoCb=null; if(no) no(); }
+function vgShowConfirm(msg,onYes,opts){
+  opts=opts||{};
+  vgEnsureConfirmEl();
+  vg$('vgConfirmMsg').textContent=msg;
+  const h=vg$('vgConfirmHint'); h.textContent=opts.hint||''; h.style.display=opts.hint?'':'none';
+  const ex=vg$('vgConfirmExtra');
+  if(opts.extraLabel){ ex.style.display=''; ex.textContent=opts.extraLabel;
+    ex.onclick=()=>{ vgHideConfirm(); try{ opts.onExtra&&opts.onExtra(); }catch(e){} }; }
+  else { ex.style.display='none'; ex.onclick=null; }
+  vgConfirmCb=onYes; vgConfirmNoCb=opts.onNo||null;
+  vg$('vgConfirmYes').onclick=()=>{ const cb=vgConfirmCb; vgConfirmCb=null; vgConfirmNoCb=null;
+    vg$('vgConfirm').classList.remove('show'); if(cb) cb(); };
+  vg$('vgConfirmNo').onclick=vgHideConfirm;
+  vg$('vgConfirm').classList.add('show');
+}
+function vgRatify(msg){ return new Promise(res=>{ vgShowConfirm(msg,()=>res(true),{onNo:()=>res(false)}); }); }
+{
+  const vgOrigConfirm=typeof window.confirm==='function'?window.confirm.bind(window):null;
+  const vgApproved=new Map();                    // message -> expiry
+  window.confirm=function(msg){
+    msg=String(msg);
+    const now=Date.now();
+    if(now<(vgApproved.get(msg)||0)){ vgApproved.delete(msg); return true; }
+    const trg=(vgLastClick&&now-vgLastClick.t<3000)?vgLastClick.el:null;
+    if(trg){                                     // caveat: any side effects the handler ran before calling confirm run again on Yes; the app has none today
+      const isReset=/reset the prototype/i.test(msg);
+      vgShowConfirm(msg,()=>{ vgApproved.set(msg,Date.now()+3000); try{ trg.click(); }catch(e){} },
+        isReset?{hint:'This wipes everything \u2014 cards, edits, progress. If you might want this build back later, export it first.',
+                 extraLabel:'Export JSON first',
+                 onExtra:()=>{ try{ vg$('exportBtn').click(); }catch(e){} }}:{});
+      return false;
+    }
+    if(vgOrigConfirm){                           // no known trigger: let the real dialog handle it
+      const t0=performance.now(); let r=false;
+      try{ r=!!vgOrigConfirm(msg); }catch(e){}
+      if(r) return true;
+      if(performance.now()-t0>150) return false; // a human really pressed Cancel
+    }
+    if(now<(vgApproved.get('arm:'+msg)||0)){ vgApproved.delete('arm:'+msg); return true; }
+    vgApproved.set('arm:'+msg,now+6000);         // swallowed and no trigger: last-resort press-again
+    try{ toast(msg+' \u2014 pop-ups are blocked here, so press the same button again to confirm.'); }catch(e){}
+    return false;
+  };
+}
+
+/* ---------- tiny helpers ---------- */
+const vgCHK=g=>{ if(vgGen!==g) throw VG_ABORT; };
+function vgWait(ms,g){ return new Promise((res,rej)=>{ const t0=performance.now();
+  const iv=setInterval(()=>{ if(vgGen!==g){clearInterval(iv);rej(VG_ABORT);}
+    else if(performance.now()-t0>=ms){clearInterval(iv);res();} },60); }); }
+function vgClickSel(sel){ const b=document.querySelector(sel);
+  if(b&&!b.disabled){ b.click(); vgRespot(); return true; } return false; }
+function vgEnsureTeamTab(){ if(state.tabLeft!=='team') vgClickSel('#tabTeam'); }
+function vgEnsureBriefTab(){ if(state.tabLeft!=='brief') vgClickSel('#tabBrief'); }
+function vgTourLive(){ return vgState==='running'||vgState==='paused'; }
+function vgNice(id){ return RESOURCE_NAMES[id]||(BEHAVIORS[id]&&BEHAVIORS[id].name)||id; }
+function vgDemoMs(ms){ return vgWordMs>=100?ms:15; }   // demos shrink with test speed
+
+/* ---------- panel: transcript log + status line ----------
+   Narration and answers land in the log as full blocks the moment
+   they start; the log scrolls, so no message can outgrow its
+   container. The status line carries the transient stuff only:
+   paused, listening, thinking. */
+function vgLogAdd(text,who){
+  const log=vg$('vgLog');
+  const d=document.createElement('div');
+  d.className='vg-b'+(who==='user'?' vg-user':'');
+  d.textContent=text; log.appendChild(d);
+  while(log.children.length>60) log.removeChild(log.firstChild);
+  log.scrollTop=log.scrollHeight;
+  return d;
+}
+function vgStatus(t){ vg$('vgStatus').textContent=t||''; }
+function vgSetPanel(open){
+  document.body.classList.toggle('vg-open',open);
+  try{ localStorage.setItem('first-day-guide-panel',open?'1':'0'); }catch(e){}
+  if(open){ const log=vg$('vgLog'); log.scrollTop=log.scrollHeight; }
+}
+
+/* ---------- speech synthesis (chunked; Chrome cuts long utterances) ---------- */
+let vgVoice=null;
+function vgPickVoice(){
+  if(!('speechSynthesis' in window)) return;
+  const vs=speechSynthesis.getVoices()||[];
+  vgVoice = vs.find(v=>/^en/i.test(v.lang)&&/natural|neural/i.test(v.name))
+         || vs.find(v=>/^en/i.test(v.lang))
+         || vs[0]||null;
+}
+if('speechSynthesis' in window){ vgPickVoice(); speechSynthesis.onvoiceschanged=vgPickVoice; }
+function vgSynthCancel(){ try{ speechSynthesis.cancel(); }catch(e){} }
+async function vgSpeak(text,g,who){
+  const face=vg$('vgFace'), tab=vg$('vgTab');
+  face.classList.add('vg-talk'); tab.classList.add('vg-talk');
+  vgLogAdd(String(text),who);                       // whole message visible at once
+  try{
+    const chunks=(String(text).match(/[^.!?\u2026]+[.!?\u2026]*/g)||[String(text)]).map(s=>s.trim()).filter(Boolean);
+    for(const c of chunks){
+      vgCHK(g);
+      if(!('speechSynthesis' in window)){           // no TTS: read-along timing
+        await vgWait(Math.max(vgWordMs?600:0,c.split(/\s+/).length*vgWordMs),g); continue;
+      }
+      await new Promise(res=>{
+        const u=new SpeechSynthesisUtterance(c);
+        if(vgVoice) u.voice=vgVoice;
+        u.rate=1.0; u.pitch=1.0;
+        const iv=setInterval(()=>{ if(vgGen!==g){ clearInterval(iv); res(); } },150); // watchdog: onend is sometimes swallowed after cancel()
+        u.onend=()=>{clearInterval(iv);res();}; u.onerror=()=>{clearInterval(iv);res();};
+        try{ speechSynthesis.resume(); }catch(e){}  // defensive: Chrome can wedge in a paused state
+        speechSynthesis.speak(u);
+      });
+      vgCHK(g);
+    }
+  } finally { face.classList.remove('vg-talk'); tab.classList.remove('vg-talk'); }
+}
+function vgFaceThink(on){ vg$('vgFace').textContent=on?'\u{1F914}':'\u{1F916}'; }
+
+/* ---------- spotlight (selector string or function returning element(s)) ----------
+   The app re-renders whole panels on every state change, which
+   strips classes; vgRespot() re-resolves the stored target, so
+   guide-driven renders never lose the glow. */
+function vgUnspot(){ vgSpotted.forEach(el=>{ try{ el.classList.remove('vg-spot'); }catch(e){} }); vgSpotted=[]; vgSpotSel=null; }
+function vgApplySpot(sel,scroll){
+  vgSpotted.forEach(el=>{ try{ el.classList.remove('vg-spot'); }catch(e){} }); vgSpotted=[];
+  if(!sel) return;
+  let els=[];
+  if(typeof sel==='function'){ try{ els=[].concat(sel()||[]); }catch(e){} }
+  else els=Array.from(document.querySelectorAll(sel));
+  els=els.filter(Boolean); if(!els.length) return;
+  vgSpotted=els; els.forEach(el=>el.classList.add('vg-spot'));
+  if(scroll){ try{ els[0].scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
+}
+function vgSpot(sel){ vgSpotSel=sel||null; vgApplySpot(sel,true); }
+function vgRespot(){ if(vgSpotSel) vgApplySpot(vgSpotSel,false); }
+
+/* ---------- the tour ----------
+   Each stop: {name, spot, text (string|fn), prep()?, action(gen)?,
+   during?, skipIf?}. prep runs before the spotlight (tab switches
+   etc., via real buttons — synthetic clicks are untrusted, so the
+   guide never pauses itself). during:true runs the action
+   concurrently with the narration. Actions are state-aware and
+   safe to re-run, so restarting a stop after a pause never fights
+   whatever the player has done. The tour never presses a story
+   button: ideas, unlocks, and studio-opening stay the player's. */
+const VG_STEPS=[
+ {name:'welcome', spot:'header',
+  text:()=>"Hello, and welcome to First Day at the Game Studio! I'm the front-desk robot, over here in my own panel. I'll show you around without touching your work. Pause me by clicking anywhere, hide me with the little arrow, and if you're curious about anything, "+vgAskPhrase()+"."},
+
+ {name:'first-day', skipIf:()=>state.studioOpen,
+  spot:()=>document.querySelector('#storyGatePanel .note-card')||vg$('storyGatePanel'),
+  text:"You're the newly hired developer, and the studio floor is closed. That's on purpose. In this studio, games get built along a chain: a specialist gives you an idea, the programmer turns the idea into a behaviour card, and playtesting tells you what's still missing."},
+
+ {name:'the-boss', skipIf:()=>state.briefAccepted,
+  prep:()=>{ vgEnsureTeamTab(); const b=document.querySelector('[data-open-role="boss"]'); if(b) b.click(); vgRespot(); },
+  spot:()=>document.querySelector('[data-answer-role="boss"][data-answer="acceptBrief"]')||vg$('team-boss'),
+  text:"This is the boss, and that glowing button is your very first real move: accepting the astronaut-rescue assignment. I'll point at it, but I won't press it. Every choice that moves the story forward belongs to you, not to me."},
+
+ {name:'the-team', prep:()=>vgEnsureTeamTab(),
+  spot:()=>document.querySelector('#leftContent .team-grid'),
+  text:"Here's the whole team. The scientist explains physics, the designer turns simulations into games, the artist supplies readable art, and the historian and sound designer add context and feedback. You can visit them in any order, but only the programmer can turn their ideas into behaviour cards."},
+
+ {name:'checklist', prep:()=>vgEnsureBriefTab(),
+  spot:()=>document.querySelector('#leftContent .milestones'),
+  text:()=>{ const done=document.querySelectorAll('#leftContent .milestone.done').length;
+    const total=document.querySelectorAll('#leftContent .milestone').length;
+    return "This checklist under Brief and milestones keeps score for you. Right now "+
+      (done===0?"nothing is ticked yet":done+" of the "+total+" steps "+(done===1?"is":"are")+" ticked")+
+      ", and each tick appears on its own the moment you actually do the thing."; }},
+
+ {name:'locked-door', skipIf:()=>state.studioOpen, prep:()=>vgEnsureBriefTab(),
+  spot:'[data-open-studio]',
+  text:()=>readyForStudio()
+    ? "And look — the door is already unlocked! This button opens the game creation area whenever you're ready. The studio only opens once the handoff chain is real, and yours is."
+    : "This button is the studio door, and it stays grey until the handoff is real: placeholder art from the artist, the two science ideas, and the programmer's first two behaviour cards. No shortcuts — not even for me."},
+
+ {name:'the-stage', skipIf:()=>!state.studioOpen,
+  spot:()=>[vg$('stage'),document.querySelector('#stageWrap .stage-toolbar')].filter(Boolean),
+  text:()=>"This is the stage, where your "+PROJECTS[state.currentProject].name+" actually runs. Run starts a playtest, Pause freezes it, and Reset puts everything back without losing your cards. The keyboard controls written under the stage are yours during a run."},
+
+ {name:'resources', skipIf:()=>!state.studioOpen, prep:()=>vgClickSel('#tabResources'),
+  spot:()=>document.querySelector('#rightContent .behavior-list'),
+  text:()=>{ const avail=availableBehaviors(); const un=avail.filter(d=>isUnlocked(d.id)).length;
+    return "These are behaviour cards — "+un+" of the "+avail.length+" you can see are unlocked so far. Each one came from a teammate's idea. And here's my favourite rule: you may attach a card to the wrong object on purpose. The studio calls that an experiment, not an error."; }},
+
+ {name:'the-backside', skipIf:()=>!state.studioOpen,
+  prep:()=>{ vgClickSel('#tabInspector'); const b=document.querySelector('[data-side="back"]'); if(b&&state.inspectSide!=='back'){ b.click(); vgRespot(); } },
+  spot:()=>[document.querySelector('#rightContent .side-toggle'),
+            document.querySelector('#rightContent .behavior-list')||document.querySelector('#rightContent .empty-state')].filter(Boolean),
+  text:()=>{ const obj=selectedObject(); const n=(obj.behaviors||[]).length;
+    return "Every object has two sides. The front holds its name and art; the back holds its behaviour cards. "+
+      (n?("The "+obj.name+" has "+n+" card"+(n===1?"":"s")+" on its back right now — open one and the pseudocode is sitting there, plain and editable.")
+        :("The "+obj.name+"'s back is empty so far. Attach a card from Resources and it lands here, pseudocode and all, ready to read and tune.")); }},
+
+ {name:'live-run', skipIf:()=>!state.studioOpen, during:true, spot:'#runBtn',
+  text:()=>{ const lunar=state.currentProject==='lunar';
+    if(lunar&&hasBehavior(state.objects.lander,'lunarGravity'))
+      return "Let me run a quick playtest — watch gravity tug the lander down while the clock ticks. I'll reset it after, so nothing you built is disturbed.";
+    return "Let me run a quick playtest. Watch the clock: the stage only does what behaviour cards tell it to do, nothing more. The arrow keys are yours during a real run, not mine. I'll reset afterwards, promise."; },
+  action:async g=>{ if(!currentRuntime().running&&!currentRuntime().result) vgClickSel('#runBtn');
+    await vgWait(vgDemoMs(4200),g);
+    vgClickSel('#resetBtn'); }},
+
+ {name:'debrief', skipIf:()=>!state.studioOpen,
+  spot:()=>document.querySelector('#feedbackPanel .feedback-card'),
+  text:"After a playtest, this debrief panel turns what went wrong into who to talk to next. A crash isn't a verdict here — it's directions back to the team room."},
+
+ {name:'two-projects', skipIf:()=>!state.studioOpen||!(state.lunarUnlocked||state.lunarBriefAccepted),
+  spot:'#projectSwitch',
+  text:()=>state.currentProject==='lunar'
+    ? "You're on the second project, Lunar Lander, and this switch hops back to Astronaut Rescue whenever you like — each project keeps its own objects and cards."
+    : "You've unlocked the second project! This switch moves between Astronaut Rescue and Lunar Lander, and each keeps its own objects and cards."},
+
+ {name:'live-ai', spot:'#aiSettingsBtn',
+  text:()=>"One more thing about the team: every teammate can also answer free-form questions with live AI. "+
+    (vgInClaude?"In here that simply works \u2014 no key needed, for the whole team and for me. The gold button is only for bringing your own key or picking a different provider."
+              :"The gold button sets that up with your own key. Questions to me need either that key, or running this page inside a Claude artifact, where it all works keyless.")},
+
+ {name:'save-your-work', spot:()=>[vg$('exportBtn'),vg$('importBtn')].filter(Boolean),
+  text:"Your whole studio — objects, cards, edited pseudocode, progress — can leave the building as one JSON file with Export, and come back with Import. Hand a friend the file and they get your exact game."},
+
+ {name:'your-turn', prep:()=>{ if(!state.briefAccepted) vgEnsureTeamTab(); },
+  spot:()=>[vg$('vgMic'),vg$('vgIn')].filter(Boolean),
+  text:()=>{ const tail="And if you ever wonder why something works the way it does, "+vgAskPhrase()+".";
+    if(!state.studioOpen) return "That's the tour of the front office! Your first move is waiting with the boss. Once the studio door opens, press my replay button and I'll walk you round the workshop floor too. "+tail;
+    return "That's the tour! The studio is yours now — attach cards, tune numbers, break things on purpose, and let the playtests tell you what to fix. "+tail; }}
+];
+
+/* ---------- runner ---------- */
+async function vgRunFrom(i){
+  const g=++vgGen; vgState='running'; vgStatus(''); vgUpdateBar();
+  try{
+    for(; i<VG_STEPS.length; i++){
+      vgCur=i; const st=VG_STEPS[i];
+      if(st.skipIf&&st.skipIf()) continue;
+      if(st.prep){ try{ st.prep(); }catch(e){} }
+      vgSpot(st.spot);
+      const text=typeof st.text==='function'?st.text():st.text;
+      if(st.during&&st.action) await Promise.all([vgSpeak(text,g), st.action(g)]);
+      else { await vgSpeak(text,g); if(st.action) await st.action(g); }
+      await vgWait(vgDemoMs(450),g);
+    }
+    vgState='done'; vgCur=0; vgUnspot();
+    vgStatus("Tour's over \u2014 the studio is yours!");
+    vgUpdateBar();
+  }catch(e){ if(e!==VG_ABORT) console.error('studio guide tour:',e); }
+}
+
+/* ---------- pause / resume, aware of what the player did ----------
+   Snapshot on pause; on resume, speak a one-line diff of what the
+   player changed. Forced side effects of a reported change are
+   suppressed: starting the Lunar brief also switches project, opens
+   the studio, and unlocks Lunar art (report only the brief);
+   accepting the rescue brief also unlocks the mission-brief resource
+   (report only the acceptance); attaching a card also flips the
+   inspector (minor facets only speak when nothing bigger did). */
+function vgSnap(){
+  const attach={};
+  for(const [id,o] of Object.entries(state.objects||{})) attach[id]=((o&&o.behaviors)||[]).map(b=>b.id).sort();
+  return {
+    project:state.currentProject, studioOpen:!!state.studioOpen,
+    brief:!!state.briefAccepted, lunarBrief:!!state.lunarBriefAccepted,
+    ideas:Object.keys(state.ideas||{}).filter(k=>state.ideas[k]).sort(),
+    unlocked:Object.keys(state.unlocked||{}).filter(k=>state.unlocked[k]).sort(),
+    attach,
+    selected:state.selected, side:state.inspectSide,
+    tabLeft:state.tabLeft, tabRight:state.tabRight,
+    result:currentRuntime().result||null
+  };
+}
+function vgDiffRemark(o){
+  if(!o) return '';
+  const n=vgSnap(); const bits=[]; const suppress=new Set();
+  const fresh=(a,b)=>b.filter(x=>!a.includes(x));
+  if(!o.lunarBrief&&n.lunarBrief){
+    bits.push("you've started the Lunar Lander brief with the boss");
+    suppress.add('lunarArt');                     // startLunar unlocks it
+  } else {
+    if(n.project!==o.project) bits.push("you've switched over to "+PROJECTS[n.project].name);
+    else if(!o.studioOpen&&n.studioOpen) bits.push("you've opened the game creation area");
+  }
+  if(!o.brief&&n.brief){ bits.push("you've accepted the boss's rescue assignment"); suppress.add('missionBrief'); }
+  for(const id of Object.keys(n.attach)){
+    for(const bid of fresh(o.attach[id]||[],n.attach[id]||[]))
+      bits.push("you've put "+vgNice(bid)+" on the "+(state.objects[id]?state.objects[id].name:id)+"'s back");
+    for(const bid of fresh(n.attach[id]||[],o.attach[id]||[]))
+      bits.push("you've taken "+vgNice(bid)+" off the "+(state.objects[id]?state.objects[id].name:id));
+  }
+  const gathered=fresh(o.ideas,n.ideas).concat(fresh(o.unlocked,n.unlocked)).filter(id=>!suppress.has(id));
+  if(gathered.length) bits.push("you've gathered "+gathered.slice(0,3).map(vgNice).join(", ")+" from the team");
+  if(n.result&&n.result!==o.result)
+    bits.push("you've run a playtest"+(n.result==='success'?" \u2014 and it succeeded!":" \u2014 it ended in a "+n.result));
+  if(!bits.length){
+    if(n.tabLeft!==o.tabLeft) bits.push("you've flipped to the "+(n.tabLeft==='brief'?"Brief and milestones":"Team room")+" tab");
+    else if(n.selected!==o.selected&&state.objects[n.selected]) bits.push("you're looking at the "+state.objects[n.selected].name+" now");
+    else if(n.side!==o.side) bits.push("you've turned to the "+n.side+" side");
+    else if(n.tabRight!==o.tabRight&&n.studioOpen) bits.push("you've opened the "+(n.tabRight==='inspector'?"object inspector":"Resources")+" tab");
+  }
+  if(!bits.length) return '';
+  return "Ooh \u2014 I see "+bits.slice(0,2).join(", and ")+". Let's carry on from there.";
+}
+function vgPauseCore(){ vgGen++; vgSynthCancel(); vgPauseSnap=vgSnap(); vgState='paused';
+  vg$('vgFace').classList.remove('vg-talk'); vg$('vgTab').classList.remove('vg-talk'); }
+function vgPause(){ vgPauseCore();
+  vgStatus("Paused \u2014 explore as much as you like! \u25B6 carries on.");
+  vgUpdateBar(); }
+async function vgResume(){
+  const remark=vgDiffRemark(vgPauseSnap); vgPauseSnap=null;
+  vgState='running'; vgStatus(''); vgUpdateBar();
+  const g=++vgGen;
+  try{ if(remark) await vgSpeak(remark,g); }catch(e){ if(e===VG_ABORT) return; }
+  if(vgGen!==g) return;
+  vgRunFrom(vgCur);            // restart the interrupted stop; actions are re-run-safe
+}
+function vgStart(){
+  vgCur=0; vgPauseSnap=null;
+  if('speechSynthesis' in window && !vgVoice) vgPickVoice();
+  vgRunFrom(0);
+}
+function vgEndTour(){ vgGen++; vgSynthCancel(); vgState='idle'; vgCur=0; vgPauseSnap=null; vgUnspot();
+  vgStatus(''); vgUpdateBar(); }
+function vgSkipStep(){ if(!vgTourLive()) return;
+  vgGen++; vgSynthCancel(); vgPauseSnap=null;
+  vgRunFrom(vgCur+1); }
+
+/* auto-pause: any trusted interaction with the app while the tour
+   is narrating means the player has taken the wheel. Guide-driven
+   clicks are synthetic, hence untrusted, and pass through. */
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,e=>{
+  if(vgState!=='running'||!e.isTrusted) return;
+  const t=e.target;
+  if(t&&t.closest&&(t.closest('#vgPanel')||t.closest('#vgTab')||t.closest('#vgConfirm'))) return;
+  vgPauseCore();
+  vgStatus("You're in charge! \u25B6 carries on the tour.");
+  vgUpdateBar();
+},true));
+
+/* ---------- spoken Q&A ----------
+   Reuses the app's own grounding: buildAgentSystemPrompt with an
+   unknown role id falls through to its generic-teammate branch and
+   still emits the full metagame context, style rules, and live
+   state summary. The override below replaces only the persona and
+   adds the voice + DO rules. No parallel AI path. */
+function vgSystem(){
+  const stop=vgTourLive()&&VG_STEPS[vgCur]?VG_STEPS[vgCur].name:'';
+  const roleOpts=Object.keys(TEAM).map(r=>{
+    const os=optionsFor(r); return os.length?r+': '+os.map(x=>x[0]).join(', '):null;
+  }).filter(Boolean).join(' | ');
+  return buildAgentSystemPrompt('guide')+`
+
+VOICE-GUIDE OVERRIDE (this outranks the persona above; the metagame context, learning-path facts, style rules, and CURRENT APP STATE all still apply):
+You are not one of the seven teammates. You are the studio's front-desk robot guide, the spoken voice of a live guided tour of this app, talking to a middle- or high-school student. Your reply is read aloud by speech synthesis, so write plain speakable prose only: no markdown of any kind, no lists, no headings, no code fences, no URLs, no emoji, and write numbers and symbols the way you would say them. Prefer one to three short sentences. Default to warm, plain wording; if the visitor's question is technical or adult in style, answer at that level, still concise and still speakable.
+${stop?`The visitor interrupted the tour at the stop called "${stop}".`:'The tour is not running; the visitor is exploring freely.'}
+You may also drive the app. If, and only if, actually doing something would demonstrate the answer better than words alone, end your reply with ONE final line in exactly this form:
+DO: VERB arguments
+Pointing and demonstrating verbs (use freely): SHOW target \u00B7 TALK roleId \u00B7 TAB team|brief|resources|inspector \u00B7 SELECT objectId \u00B7 SIDE front|back \u00B7 PROJECT rescue|lunar \u00B7 RUN \u00B7 PAUSE \u00B7 RESETTEST
+SHOW targets: boss, team, brief, resources, inspector, stage, run, debrief, projects, ai_setup, export, help.
+Team roleIds for TALK and ANSWER \u2014 ${Object.keys(TEAM).map(r=>r+' ('+TEAM[r].title+')').join(', ')}. The id must match the teammate you name in prose; pointing at a different teammate than the one you are talking about is worse than not pointing at all.
+Story-moving verbs (ANSWER roleId optionId \u00B7 OPENSTUDIO \u00B7 ATTACH behaviorId objectId) are allowed ONLY when the visitor's latest message explicitly asks you to do that exact thing for them. Explicit means they named the action itself, or they are accepting an offer in which YOU named that exact action. "Please do", "yes", or "go ahead" authorize only the precise action you just offered and nothing more \u2014 if you offered to jump to a tab, consent to that is consent to jump, never to attach, answer, or open anything. Never escalate; when in doubt, use SHOW. Before any story-moving verb, your prose must say plainly what you are about to do, and it must match what they asked for. The app will also ask the visitor to confirm these actions, so never claim one is already done \u2014 say you are asking.
+If they ask what to do or how, use SHOW instead and never do it for them unasked.
+Valid scripted options right now \u2014 ${roleOpts||'none'}.
+Objects in the current project: ${PROJECTS[state.currentProject].objects.join(', ')}. Unlocked behaviour ids: ${availableBehaviors().filter(d=>isUnlocked(d.id)).map(d=>d.id).join(', ')||'none'}.
+These ids are for the DO line only; in prose keep using visible names. The DO line is executed by the app and stripped before speaking, so never mention it.
+How things are actually done here \u2014 never invent controls; there is no drag and drop anywhere in this app:
+- Attaching: on the Resources tab every unlocked card has an "Attach to <object>" button. Pressing it puts the card on that object's back side. That button is the whole story.
+- The back side (Inspector tab, front/back toggle) is where already-attached cards are read and tuned. It is not needed for attaching, so don't send people there to attach.
+- The page is often taller than the window, so when the visitor says they can't see or find something, never just describe where it is: end with a DO SHOW or DO TAB line, which switches to it, scrolls it into view, and highlights it. Questions like "where is", "I don't see", or "how do I get to" should ALWAYS end with a DO line.
+- You live in a docked panel \u2014 beside the app on wide windows, below it on narrow ones. The app always reflows to fit, so you never cover it; the arrow at the top of your panel hides you if the visitor wants the space back.
+The visitor's message ends with a STATUS RIGHT NOW block. Your advice must match it exactly: if earlier conversation turns disagree with the status, the status wins, and never tell the visitor to do a step the status shows as already done.`;
+}
+function vgUserPrompt(q){
+  const hist=vgQA.slice(-8).map(m=>(m.role==='user'?'Visitor: ':'Guide: ')+m.content);
+  return (hist.length?'Conversation so far between the visitor and you, the guide:\n'+hist.join('\n')+'\n\n':'')+
+    'STATUS RIGHT NOW, fresh from the app this second. The game may have moved on since earlier turns; this status outranks anything the guide said before, and the guide must never advise a step the status already shows as done:\n'+
+    summarizeStateForPrompt()+'\n\n'+
+    'The visitor now asks the guide: '+q;
+}
+function vgExtractDo(t){
+  const m=String(t).match(/\n\s*DO:\s*([A-Z_]+)\s*(.*?)\s*$/);
+  if(!m) return {text:String(t).trim(),act:null};
+  return {text:String(t).slice(0,m.index).trim(),act:{verb:m[1],args:m[2].trim()}};
+}
+
+const VG_SHOW_TARGETS={
+  boss:()=>{ vgEnsureTeamTab(); return vg$('team-boss'); },
+  team:()=>{ vgEnsureTeamTab(); return document.querySelector('#leftContent .team-grid'); },
+  brief:()=>{ vgEnsureBriefTab(); return document.querySelector('#leftContent .milestones'); },
+  resources:()=>{ if(!state.studioOpen) return null; vgClickSel('#tabResources'); return document.querySelector('#rightContent .behavior-list'); },
+  inspector:()=>{ if(!state.studioOpen) return null; vgClickSel('#tabInspector'); return vg$('rightContent'); },
+  stage:()=>state.studioOpen?vg$('stageWrap'):null,
+  run:()=>state.studioOpen?vg$('runBtn'):null,
+  debrief:()=>document.querySelector('#feedbackPanel .feedback-card'),
+  projects:()=>vg$('projectSwitch'),
+  ai_setup:()=>vg$('aiSettingsBtn'),
+  export:()=>vg$('exportBtn'),
+  help:()=>vg$('helpBtn')
+};
+async function vgDo(act,g){
+  try{
+    const v=(act.verb||'').toUpperCase(), parts=String(act.args||'').trim().split(/\s+/).filter(Boolean);
+    if(v==='SHOW'){ const f=VG_SHOW_TARGETS[(parts[0]||'').toLowerCase()]; if(f) vgSpot(()=>f()); }
+    else if(v==='TALK'){ const r=(parts[0]||'').toLowerCase();
+      if(TEAM[r]){ vgEnsureTeamTab(); const b=document.querySelector('[data-open-role="'+r+'"]'); if(b) b.click(); vgSpot('#team-'+r); } }
+    else if(v==='TAB'){ const t=(parts[0]||'').toLowerCase();
+      const map={team:'#tabTeam',brief:'#tabBrief',resources:'#tabResources',inspector:'#tabInspector'};
+      if(map[t]&&((t!=='resources'&&t!=='inspector')||state.studioOpen)) vgClickSel(map[t]); }
+    else if(v==='SELECT'){ const id=parts[0];
+      if(state.studioOpen&&id&&PROJECTS[state.currentProject].objects.includes(id)){
+        vgClickSel('#tabInspector'); vgClickSel('[data-select="'+id+'"]'); } }
+    else if(v==='SIDE'){ const s=(parts[0]||'').toLowerCase();
+      if(state.studioOpen&&(s==='front'||s==='back')){ vgClickSel('#tabInspector'); vgClickSel('[data-side="'+s+'"]'); } }
+    else if(v==='PROJECT'){ const p=(parts[0]||'').toLowerCase();
+      if(PROJECTS[p]&&p!==state.currentProject) switchProject(p); }   // app's own entry; it enforces the lunar lock
+    else if(v==='RUN'){ if(state.studioOpen&&!currentRuntime().running) vgClickSel('#runBtn'); }
+    else if(v==='PAUSE'){ if(state.studioOpen) vgClickSel('#pauseBtn'); }
+    else if(v==='RESETTEST'){ if(state.studioOpen) vgClickSel('#resetBtn'); }
+    /* story-moving verbs: prompt-gated to explicit visitor requests,
+       AND player-ratified through the dialog — the model can only
+       propose these; the player countersigns. Validity is checked
+       first so nobody is asked to approve an impossible act. The
+       app's own disabled/locked gating still applies underneath. */
+    else if(v==='ANSWER'){ const r=parts[0], oid=parts[1];
+      const opt=TEAM[r]&&optionsFor(r).find(x=>x[0]===oid);
+      if(opt&&await vgRatify('The guide wants to choose "'+opt[1]+'" with the '+TEAM[r].title+' for you. OK?')){
+        vgEnsureTeamTab();
+        const open=document.querySelector('[data-open-role="'+r+'"]'); if(open) open.click();
+        const b=document.querySelector('[data-answer-role="'+r+'"][data-answer="'+oid+'"]');
+        if(b&&!b.disabled) b.click(); } }
+    else if(v==='OPENSTUDIO'){
+      const btn=(vgEnsureBriefTab(),document.querySelector('[data-open-studio]'));
+      if(btn&&!btn.disabled&&await vgRatify('The guide wants to open the game creation area for you. OK?')){
+        const b=document.querySelector('[data-open-studio]'); if(b&&!b.disabled) b.click(); } }
+    else if(v==='ATTACH'){ const bid=parts[0], oid=parts[1]||state.selected;
+      if(state.studioOpen&&BEHAVIORS[bid]&&isUnlocked(bid)&&state.objects[oid]&&PROJECTS[state.currentProject].objects.includes(oid)
+         &&await vgRatify('The guide wants to attach "'+BEHAVIORS[bid].name+'" to the '+state.objects[oid].name+' for you. OK?'))
+        attachBehavior(oid,bid); }                 // the app's own real handler; still refuses anything it doesn't like
+    vgRespot();
+  }catch(e){ if(e!==VG_ABORT) console.warn('guide DO failed:',e); }
+  finally{
+    if(vgPauseSnap) vgPauseSnap=vgSnap();   // the guide drove; re-baseline so resume remarks only describe what the player did
+  }
+}
+
+/* keyless artifact fallback: user-configured key always wins */
+async function vgKeylessAnthropic(systemPrompt,userPrompt){
+  let lastErr=null;
+  for(const model of VG_KEYLESS_MODELS){
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model,max_tokens:1000,system:systemPrompt,messages:[{role:'user',content:userPrompt}]})});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(extractError(data,res));
+      const text=((data.content||[]).map(c=>c.text||'').join('\n')||'').trim();
+      if(text) return text;
+      throw new Error('the AI returned no text');
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr||new Error('keyless call failed');
+}
+async function vgCallLLM(systemPrompt,userPrompt){
+  if(currentAIKey()) return callLLM(systemPrompt,userPrompt);   // the app's plumbing, provider and model as configured
+  if(vgInClaude) return vgKeylessAnthropic(systemPrompt,userPrompt);
+  const err=new Error('no live AI connection'); err.vgNoAI=true; throw err;
+}
+
+/* ---------- keyless Live AI for the whole team (artifact mode) ----------
+   The app gates every teammate's free-form ask on currentAIKey().
+   Inside a Claude artifact the keyless proxy makes that gate wrong,
+   so wrap the two window functions from down here: callLLM routes
+   keyless when no real key is set, and askRoleAI slips past the key
+   gate with a sentinel that the callLLM wrapper recognises. A real
+   configured key always takes priority, on the user's own provider
+   and model. Nothing above the splice point is edited. */
+if(vgInClaude){
+  const vgAppCallLLM=callLLM, vgAppAskRoleAI=askRoleAI, vgAppCurrentAIKey=currentAIKey;
+  const VG_SENTINEL='__vg-keyless-artifact__';
+  window.callLLM=async function(systemPrompt,userPrompt){
+    const k=vgAppCurrentAIKey();
+    if(k&&k!==VG_SENTINEL) return vgAppCallLLM(systemPrompt,userPrompt);
+    return vgKeylessAnthropic(systemPrompt,userPrompt);
+  };
+  window.askRoleAI=async function(roleId,question){
+    if(vgAppCurrentAIKey()) return vgAppAskRoleAI(roleId,question);
+    window.currentAIKey=()=>VG_SENTINEL;                 // pass the one-line key gate
+    try{ return await vgAppAskRoleAI(roleId,question); }
+    finally{ window.currentAIKey=vgAppCurrentAIKey; }    // restore even if the call throws
+  };
+  /* tell the settings modal the truth about artifact mode */
+  try{
+    const modal=document.getElementById('aiModal');
+    const note=modal&&modal.querySelector('.api-note');
+    if(note){ const d=document.createElement('div');
+      d.style.marginTop='8px';
+      d.innerHTML='<strong>Running inside a Claude artifact:</strong> live AI answers already work here with no key at all. Keys below are optional \u2014 add one only to use a different provider or model.';
+      note.appendChild(d); }
+  }catch(e){}
+}
+
+async function vgAsk(q){
+  q=(q||'').trim(); if(!q) return;
+  if(vgState==='running') vgPauseCore();
+  const g=++vgGen; vgSynthCancel(); vgUpdateBar();
+  vgLogAdd(q,'user'); vgFaceThink(true); vgStatus('thinking\u2026');
+  const sys=vgSystem(), usr=vgUserPrompt(q);
+  vgQA.push({role:'user',content:q});
+  try{
+    const raw=await vgCallLLM(sys,usr);
+    if(vgGen!==g) return;
+    vgQA.push({role:'assistant',content:raw||''});
+    const {text,act}=vgExtractDo(raw||'');
+    const prose=normalizeAIReply(text);          // the app's own cleaner: ids -> visible names; must run AFTER DO extraction or it would corrupt DO arguments
+    vgFaceThink(false); vgStatus('');
+    const jobs=[vgSpeak(prose||"I couldn't put that into words \u2014 try asking another way!",g)];
+    if(act) jobs.push(vgDo(act,g));
+    await Promise.all(jobs);
+    if(vgGen===g&&vgTourLive()) vgStatus('\u25B6 carries on the tour \u2014 or ask me more!');
+  }catch(e){
+    vgFaceThink(false); vgStatus('');
+    if(e===VG_ABORT) return;
+    if(e&&e.vgNoAI){
+      vgSpot('#aiSettingsBtn');
+      try{ await vgSpeak("To answer questions I need a live AI connection. Press the gold Live AI setup button at the top to add your own key \u2014 or run this page inside a Claude artifact, where I can answer with no key at all.",g); }catch(_){}
+      return;
+    }
+    vgLogAdd('Live AI call failed: '+(e&&e.message?e.message:String(e)));
+    try{ await vgSpeak("I hit a snag talking to the AI \u2014 my panel says more.",g); }catch(_){}
+  }
+}
+
+/* ---------- speech recognition (push-to-talk; typed fallback) ---------- */
+let vgRec=null, vgListening=false;
+function vgMicUnavailableMsg(){
+  if(vgMicPolicyBlocked){
+    const where=vgInClaude?'inside a Claude artifact':'inside this embedded page';
+    return "I'm not allowed to use the microphone "+where+" \u2014 the sandbox keeps it switched off, so no permission pop-up can ever appear here. "+
+      "Type your question in the box at the bottom of my panel instead! To actually talk with me out loud, save this page's HTML file and open it straight in a normal browser tab. "+
+      "Out there the mic works \u2014 and my answers need an API key you provide, via the gold Live AI setup button.";
+  }
+  return "This browser doesn't support speech recognition, so I can't listen here \u2014 but you can type your question in the box below!";
+}
+async function vgExplainMic(){
+  if(vgState==='running') vgPauseCore();
+  const g=++vgGen; vgSynthCancel(); vgUpdateBar();
+  vgLogAdd(vgMicUnavailableMsg());
+  try{ vg$('vgIn').focus(); }catch(e){}
+  try{ await vgSpeak(vgMicPolicyBlocked
+    ? "The microphone is switched off inside this sandbox, so type your question in the box below \u2014 or run the standalone file in a normal browser tab, where the mic works with your own API key."
+    : "I can't listen in this browser \u2014 type your question in the box below instead.", g); }catch(e){}
+}
+function vgListen(){
+  if(!vgCanListen){ vgExplainMic(); return; }
+  if(vgListening){ try{ vgRec.stop(); }catch(e){} return; }
+  if(vgState==='running') vgPauseCore();
+  vgGen++; vgSynthCancel(); vgUpdateBar();
+  vgRec=new VG_SR();
+  const nl=navigator.language||'en-GB';
+  vgRec.lang=/^en/i.test(nl)?nl:'en-GB';
+  vgRec.interimResults=true; vgRec.continuous=false;
+  vgListening=true; vg$('vgMic').classList.add('vg-live');
+  vgStatus("I'm listening \u2014 ask me anything!");
+  let final='';
+  vgRec.onresult=e=>{ let s=''; for(const r of e.results){ s+=r[0].transcript; if(r.isFinal) final=s; }
+    vgStatus('\u201C'+s+'\u201D'); };
+  vgRec.onerror=e=>{ vgListening=false; vg$('vgMic').classList.remove('vg-live');
+    if(e.error==='not-allowed'){ vgStatus(''); vgLogAdd("The browser blocked the microphone \u2014 check the mic icon in the address bar, or type your question below."); try{ vg$('vgIn').focus(); }catch(_){} }
+    else vgStatus("I didn't catch that \u2014 try the mic again, or type below."); };
+  vgRec.onend=()=>{ vgListening=false; vg$('vgMic').classList.remove('vg-live');
+    if(final.trim()){ vgStatus(''); vgAsk(final.trim()); } };
+  try{ vgRec.start(); }catch(e){ vgListening=false; vg$('vgMic').classList.remove('vg-live'); vgStatus(''); try{ vg$('vgIn').focus(); }catch(_){} }
+}
+
+/* ---------- the studio opens below the fold ----------
+   In single-column layouts the stage appears under the brief panel,
+   off-screen — the click seems to do nothing. Watch the transition
+   (capture records the before-state, bubble runs after the app's
+   own handler) and bring the stage into view. */
+let vgStudioWasOpen=false;
+document.addEventListener('click',e=>{
+  if(e.target&&e.target.closest&&e.target.closest('[data-open-studio]')) vgStudioWasOpen=!!state.studioOpen;
+},true);
+document.addEventListener('click',e=>{
+  const b=e.target&&e.target.closest&&e.target.closest('[data-open-studio]');
+  if(b&&state.studioOpen&&!vgStudioWasOpen){
+    setTimeout(()=>{ try{ vg$('stageWrap').scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){} },60);
+    try{ toast('The studio floor is open \u2014 the stage and the Resources tab are just below.'); }catch(_){}
+  }
+});
+
+/* ---------- panel wiring ---------- */
+function vgUpdateBar(){
+  const main=vg$('vgMain');
+  if(vgState==='running'){ main.innerHTML='&#10073;&#10073;'; main.title='Pause the tour'; }
+  else if(vgState==='paused'){ main.innerHTML='&#9654;'; main.title='Resume the tour'; }
+  else if(vgState==='done'){ main.innerHTML='&#8635;'; main.title='Replay the tour'; }
+  else { main.innerHTML='&#9654;'; main.title='Start the spoken tour'; }
+  const live=vgTourLive();
+  vg$('vgSkip').style.display=live?'flex':'none';
+  vg$('vgEnd').style.display=live?'flex':'none';
+}
+vg$('vgMain').onclick=()=>{ if(vgState==='running') vgPause();
+  else if(vgState==='paused') vgResume();
+  else vgStart(); };
+vg$('vgMic').onclick=vgListen;
+vg$('vgGo').onclick=()=>{ const q=vg$('vgIn').value; vg$('vgIn').value=''; vgAsk(q); };
+vg$('vgIn').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); vg$('vgGo').click(); } });
+vg$('vgSkip').onclick=vgSkipStep;
+vg$('vgEnd').onclick=vgEndTour;
+vg$('vgHide').onclick=()=>{ vgSetPanel(false);
+  try{ toast('The guide is tucked into the right edge \u2014 click the \u{1F916} Guide tab to bring it back.'); }catch(e){}
+  const t=vg$('vgTab'); t.classList.add('vg-talk');
+  setTimeout(()=>t.classList.remove('vg-talk'),4000); };
+vg$('vgTab').onclick=()=>vgSetPanel(true);
+if(!vgCanListen){ vg$('vgMic').classList.add('vg-off');
+  vg$('vgMic').title=vgMicPolicyBlocked?'The microphone is blocked in this sandbox \u2014 press for details':'No speech recognition here \u2014 press for details'; }
+vgUpdateBar();
+let vgWasOpen=true; try{ vgWasOpen=localStorage.getItem('first-day-guide-panel')!=='0'; }catch(e){}
+vgSetPanel(vgWasOpen);
+vgLogAdd("Hi! I'm the studio's front-desk robot. Press \u25B6 for a spoken tour \u2014 or "+(vgCanListen
+  ?"press the microphone any time to ask a question."
+  :"type me a question in the box below any time."));
+
+/* test hook (smoke suites poke internals through here) */
+window.__guide={ do:vgDo, snap:vgSnap, diff:vgDiffRemark, pauseCore:vgPauseCore, ask:vgAsk,
+  spot:vgSpot, unspot:vgUnspot, steps:VG_STEPS, system:vgSystem,
+  start:vgStart, end:vgEndTour, skip:vgSkipStep, pause:vgPause, resume:vgResume,
+  setWordMs(ms){ vgWordMs=ms; },
+  get state(){ return vgState; }, get cur(){ return vgCur; },
+  get pauseSnap(){ return vgPauseSnap; }, get qa(){ return vgQA.slice(); },
+  get micPolicyBlocked(){ return vgMicPolicyBlocked; }, get inClaude(){ return vgInClaude; },
+  get keylessModels(){ return VG_KEYLESS_MODELS.slice(); },
+  /* the app's top-level let/const bindings are global-lexical, not
+     window properties; surface them so headless suites can reach in */
+  get app(){ return {state, llmConfig, sessionApiKeys, BEHAVIORS, TEAM, PROJECTS, RESOURCE_NAMES}; } };
+})();
+</script>
+
+</body>
+</html>
