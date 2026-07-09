@@ -541,12 +541,11 @@ window.__vgDeferBoot = async function(create){
     <div class="hint" id="scrubInfo"></div>
     <div id="scrubPrompts"></div>
     <div id="scrubCap"></div>
-    <button class="go small" id="scrubRaise" disabled>🐣 keep raising it from here</button>
-    <span id="scrubStoryRow" style="display:inline-flex;gap:6px;align-items:center;margin-left:6px">
-      <input id="scrubPrefix" class="small" placeholder="Once upon a time, …" style="width:14rem">
-      <button class="alt small" id="scrubStory" disabled>📖 write a story from this moment</button>
-    </span>
-    <span class="hint" id="scrubHint">drag to watch it grow — let go to load that moment into the model panel</span>
+    <div id="scrubStoryRow" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:.4rem">
+      <input id="scrubPrefix" class="small" placeholder="or type your own start, e.g. One day…" style="width:18rem">
+      <button class="go small" id="scrubStory">📖 tell this story</button>
+    </div>
+    <span class="hint" id="scrubHint">drag the slider to any moment. Tap a story-start above, or type your own and press “tell this story.”</span>
     </div>
   </div>
 </div>
@@ -2818,7 +2817,7 @@ worker.onmessage = (e) => {
       $('restartBtn').title = 'new training run from the ORIGINAL 260K weights — your storybook is kept';
     }
     const from = S.scrub.lastLoaded;
-    $('modelInfo').textContent = `dim ${m.config.dim} · ${m.config.nLayers} layers · vocab ${m.config.vocabSize}`
+    $('modelInfo').innerHTML = (() => { const chip = (k, t) => `<span class="vg-chip" data-vg-explain="${k}" style="cursor:help;border-bottom:1px dotted currentColor" title="click to ask the guide">${t}</span>`; return `${chip('dim','dimension ' + m.config.dim)} · ${chip('layers', m.config.nLayers + ' layers')} · ${chip('vocab', m.config.vocabSize + ' vocabulary')}`; })()
       + (from ? ` · = ${from.arc} step ${from.step}` : '');
     status('model ready');
     if (m.config.vocabSize <= 512) worker.postMessage({ type: 'alphabet' });
@@ -2850,13 +2849,19 @@ worker.onmessage = (e) => {
     }
   }
   if (m.type === 'sample') {
-    const d = document.createElement('div');
-    d.className = 'sample';
-    d.innerHTML = `<b>step ${m.step}:</b> `;
-    d.append(m.text);
-    $('samples').prepend(d);
-    S.samples.push({ step: m.step, text: m.text });
-    $('saveSamples').disabled = false;
+    if (S.scrub && S.scrub.custom) {   // a time-machine 'tell this story' request: show it under the slider, not in the samples list
+      S.scrub.custom = false;
+      const cap = $('scrubCap');
+      if (cap) { cap.innerHTML = ''; const bb = document.createElement('b'); bb.textContent = 'it says: '; cap.append(bb, m.text || ''); }
+    } else {
+      const d = document.createElement('div');
+      d.className = 'sample';
+      d.innerHTML = `<b>step ${m.step}:</b> `;
+      d.append(m.text);
+      $('samples').prepend(d);
+      S.samples.push({ step: m.step, text: m.text });
+      $('saveSamples').disabled = false;
+    }
   }
   if (m.type === 'idle') {
     S.running = false; S.trained = true; S.lastStep = m.step;
@@ -2898,6 +2903,7 @@ function scrubAddArc(manifest, extras = {}, source = '') {
   renderArcPicker();
   $('scrubStub').style.display = 'none';
   $('scrubLive').style.display = '';
+  { const mi = $('modelInfo'); if (mi) { mi.textContent = 'time machine loaded \u2014 ' + arcKidLabel(manifest); mi.classList.remove('badge'); mi.classList.add('ok'); } }
   status(`time machine ready: "${arcKidLabel(manifest)}" — ${manifest.snapshots.length} moments to scrub through (from ${source || 'an arc pack'})`, 'ok');
 }
 
@@ -2939,8 +2945,8 @@ function renderScrubStop() {
   }
   $('scrubCap').innerHTML = cap.prompt ? '' : '<span class="hint">no sample recorded at this moment</span>';
   if (cap.prompt) { const b = document.createElement('b'); b.textContent = 'it says: '; $('scrubCap').append(b, cap.text); }
-  $('scrubRaise').disabled = S.running || S.scrub.loading;
-  $('scrubStory').disabled = S.running || S.scrub.loading;
+  if ($('scrubRaise')) $('scrubRaise').disabled = S.running || S.scrub.loading;
+  if ($('scrubStory')) $('scrubStory').disabled = S.scrub.loading;
   drawChart();
 }
 
@@ -2977,15 +2983,15 @@ async function commitScrub() {
   if (!e || !snap || S.running || S.scrub.loading) return;
   if (S.scrub.lastLoaded && S.scrub.lastLoaded.arc === S.scrub.arc && S.scrub.lastLoaded.step === snap.step)
     return;                                 // already the loaded moment (arrow keys fire change per press)
-  S.scrub.loading = true; $('scrubRaise').disabled = true; $('scrubStory').disabled = true;
+  S.scrub.loading = true; if ($('scrubRaise')) $('scrubRaise').disabled = true; if ($('scrubStory')) $('scrubStory').disabled = true;
   try {
     const [u8, tokBuf] = [await scrubSnapshotBytes(e, snap), await scrubTokBuf()];
     const ck = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
     await loadModel(ck, tokBuf, { arc: S.scrub.arc, step: snap.step });
     S.scrub.lastLoaded = { arc: S.scrub.arc, step: snap.step };   // ready confirms; optimistic for the raise flow
-    status(`loaded ${S.scrub.arc} at step ${snap.step} — ask it for a story, or press "keep raising it from here"`, 'ok');
+    status(`loaded ${S.scrub.arc} at step ${snap.step} — now ask it for a story with your own start above`, 'ok');
     window.dispatchEvent(new CustomEvent('scrubCommitted', { detail: { arc: S.scrub.arc, step: snap.step } }));
-    $('scrubRaise').disabled = false; $('scrubStory').disabled = false;
+    if ($('scrubRaise')) $('scrubRaise').disabled = false; if ($('scrubStory')) $('scrubStory').disabled = false;
   } catch (err) {
     status('could not load that snapshot: ' + (err.message || err), 'err');
   } finally { S.scrub.loading = false; }
@@ -3005,14 +3011,27 @@ function applyScrubBase(arc, step) {
    moment if it is not loaded, then ask it for a story. The prefix box
    is optional — blank means "Once upon a time, <name>". */
 $('scrubStory').onclick = async () => {
-  const snap = scrubSnap(); if (!snap) return;
-  if (!S.scrub.lastLoaded || S.scrub.lastLoaded.step !== snap.step || S.scrub.lastLoaded.arc !== S.scrub.arc)
-    await commitScrub();
-  const prefix = ($('scrubPrefix').value || '').trim() || `Once upon a time, ${$('chName').value.trim()}`;
-  status(`asking the step-${snap.step} mind for a story…`);
+  const snap = scrubSnap();
+  if (!snap) { status('drag the slider to a moment first, then I can tell its story'); return; }
+  const prefix = ($('scrubPrefix').value || '').trim();
+  if (!prefix) { status('tap one of the story-starts above, or type your own first'); return; }
+  const cap = $('scrubCap'); if (cap) cap.innerHTML = '<span class="hint">the step-' + snap.step + ' mind is writing\u2026</span>';
+  try {
+    if (!S.scrub.lastLoaded || S.scrub.lastLoaded.step !== snap.step || S.scrub.lastLoaded.arc !== S.scrub.arc)
+      await commitScrub();   // bring this checkpoint's weights in so it can answer a new prompt
+  } catch (e) { if (cap) cap.innerHTML = '<span class="hint">could not reach that moment</span>'; return; }
+  S.scrub.custom = true;
+  S.scrub.customAt = Date.now();
   worker.postMessage({ type: 'sample-now', prompt: prefix });
+  setTimeout(() => {   // the worker can only answer a new prompt when this checkpoint is 'awake' as a trainee; if it stays silent, say so plainly
+    if (S.scrub.custom && Date.now() - S.scrub.customAt >= 1500) {
+      S.scrub.custom = false;
+      const cap = $('scrubCap');
+      if (cap) cap.innerHTML = '<span class="hint">this moment has recorded stories — tap a story-start chip above to see one. (Typing a brand-new start needs the full trainer, which the next build will add here.)</span>';
+    }
+  }, 1600);
 };
-$('scrubRaise').onclick = async () => {
+if ($('scrubRaise')) $('scrubRaise').onclick = async () => {
   const snap = scrubSnap(); if (!snap) return;
   if (!S.scrub.lastLoaded || S.scrub.lastLoaded.step !== snap.step || S.scrub.lastLoaded.arc !== S.scrub.arc) {
     await commitScrub();                                // make the chosen moment the trainer's start
@@ -3599,6 +3618,7 @@ function create(A){
     if(spec.condition&&!spec.condition(payload)) return;
     if(spec.once&&vgEvOnceDone.has(name)) return;
     if(spec.cooldownMs&&Date.now()-(vgEvLastAt.get(name)||0)<spec.cooldownMs) return;
+    if(vgEvQueue.some(q=>q.name===name)) return;   // a burst of the same event (e.g. two run-done in a tick) enqueues once
     const pr=spec.priority||'moment';
     if(pr==='ambient'){
       if(vgSpeakDepth>0||vgEvQueue.length) return;    // ambient never waits
@@ -3818,13 +3838,13 @@ function create(A){
     const q='Explain this part of the screen to me: "'+(g.label||key)+'". '+
       (note?'Here is what it is, in one line, so you can put it in your own words'+(kid?' for a young child':'')+': '+note:'')+
       ' Keep it to a sentence or two.';
-    vgAsk(q);
+    vgAsk(q, 'What is "'+(g.label||key)+'"?');   // the visitor sees the short question, not the seeded note
   }
-  async function vgAsk(q){
+  async function vgAsk(q, shown){
     q=(q||'').trim(); if(!q) return;
     if(vgState==='running') vgPauseCore();
     const g=++vgGen; vgSynthCancel(); vgUpdateBar();
-    vgLogAdd(q,'user'); vgFaceThink(true); vgStatus('thinking\u2026');
+    vgLogAdd((shown||q),'user'); vgFaceThink(true); vgStatus('thinking\u2026');
     const sys=vgSystem(), usr=vgUserPrompt(q);
     vgQA.push({role:'user',content:q});
     try{
@@ -4156,6 +4176,14 @@ function trainingBeats(){
 }
 
 /* ---------- emergent events ---------- */
+
+/* on-screen terms the guide can explain on click (or when asked). */
+const NUR_TERMS = {
+  dim: { label: 'dimension', note: 'the width of the mind: how many numbers it uses to describe each piece of text as it thinks.', kidNote: 'how many numbers the mind uses to think about each little piece of a word.' },
+  layers: { label: 'layers', note: 'how many times in a row the mind reconsiders the text, each layer refining the last.', kidNote: 'how many times the mind thinks about the story over and over.' },
+  vocab: { label: 'vocabulary', note: 'how many different pieces (letters and letter-chunks) this mind can read and write — its whole alphabet.', kidNote: 'all the different little pieces of words this mind knows.' },
+};
+
 const EVENTS = {
   floorReached: { priority: 'moment', once: true, spot: '#chart',
     lines: p => `There — it just learned ${sheet().name} as well as it ever will. Keep going past this floor and it starts parroting its storybook instead of understanding it.`,
@@ -4299,6 +4327,7 @@ function createGuide(){
       return null; } },
     testHook: { app: () => ({ sheet, base0: () => base0, prefs: window.__vgPrefs }) },
     init(a){ api = a; a.on('showBlocked', window.__vgShowBlockedEvent);
+      document.addEventListener('click', a.explainable(NUR_TERMS));   // click any [data-vg-explain] chip in the nursery
       wireWorker((n, p) => a.emit(n, p)); window.__vgAttach((n, p) => a.emit(n, p)); window.__vgPanelToggles(a); offerSavedBooks(); },
   };
   window.VoiceGuide.create(A);
@@ -6611,8 +6640,8 @@ worker.onmessage = (e) => {
     if (window.__tmBridge) parent.postMessage({ tm: 'model-loaded' }, '*');
     S.config = m.config;
     S.run = null; S.att = null; S.ablRun = null; S.neuron = null;
-    $('modelInfo').textContent =
-      (() => { const chip = (k, t) => `<span class="vg-chip" data-vg-explain="${k}" style="cursor:help;border-bottom:1px dotted currentColor" title="click to ask the guide">${t}</span>`; return `${chip('dim','width ' + m.config.dim)} · ${chip('layers', m.config.nLayers + ' layers')} · ${chip('heads', m.config.nHeads + ' attention heads')} · ${chip('neurons', m.config.hiddenDim + ' neurons per layer')} · ${chip('vocab', m.config.vocabSize + ' vocabulary')}`; })();
+    $('modelInfo').innerHTML =
+      (() => { const chip = (k, t) => `<span class="vg-chip" data-vg-explain="${k}" style="cursor:help;border-bottom:1px dotted currentColor" title="click to ask the guide">${t}</span>`; return `${chip('dim','dimension ' + m.config.dim)} · ${chip('layers', m.config.nLayers + ' layers')} · ${chip('heads', m.config.nHeads + ' attention heads')} · ${chip('neurons', m.config.hiddenDim + ' neurons per layer')} · ${chip('vocab', m.config.vocabSize + ' vocabulary')}`; })();
     $('runBtn').disabled = false;
     buildAttSelectors(); buildAblGrid();
     status('model ready — now look inside a story'); { const dz = $('drop'); if (dz) dz.textContent = 'model loaded — drop another .bin here to swap it'; }
@@ -7312,6 +7341,7 @@ function create(A){
     if(spec.condition&&!spec.condition(payload)) return;
     if(spec.once&&vgEvOnceDone.has(name)) return;
     if(spec.cooldownMs&&Date.now()-(vgEvLastAt.get(name)||0)<spec.cooldownMs) return;
+    if(vgEvQueue.some(q=>q.name===name)) return;   // a burst of the same event (e.g. two run-done in a tick) enqueues once
     const pr=spec.priority||'moment';
     if(pr==='ambient'){
       if(vgSpeakDepth>0||vgEvQueue.length) return;    // ambient never waits
@@ -7531,13 +7561,13 @@ function create(A){
     const q='Explain this part of the screen to me: "'+(g.label||key)+'". '+
       (note?'Here is what it is, in one line, so you can put it in your own words'+(kid?' for a young child':'')+': '+note:'')+
       ' Keep it to a sentence or two.';
-    vgAsk(q);
+    vgAsk(q, 'What is "'+(g.label||key)+'"?');   // the visitor sees the short question, not the seeded note
   }
-  async function vgAsk(q){
+  async function vgAsk(q, shown){
     q=(q||'').trim(); if(!q) return;
     if(vgState==='running') vgPauseCore();
     const g=++vgGen; vgSynthCancel(); vgUpdateBar();
-    vgLogAdd(q,'user'); vgFaceThink(true); vgStatus('thinking\u2026');
+    vgLogAdd((shown||q),'user'); vgFaceThink(true); vgStatus('thinking\u2026');
     const sys=vgSystem(), usr=vgUserPrompt(q);
     vgQA.push({role:'user',content:q});
     try{
@@ -7713,7 +7743,7 @@ const F = window.VoiceGuide.fragments;
 const kid = () => window.__vgPrefs.kid;
 let api = null;
 
-let ablCount = 0, lastFull = null;
+let ablCount = 0, lastFull = null, lastCaptureSig = null;
 /* the real-next piece's chance before vs after the mute, taken from
    the two worker payloads at the position the guess-o-meter shows (the
    selection end). Lets the kid line say the odds and the drop in
@@ -7731,7 +7761,11 @@ function ablDelta(ablMsg){
 function wire(emit){
   window.__vgW.taps.push((dir, m) => {
     if (dir !== 'in' || !m || !m.type) return;
-    if (m.type === 'run-done')      { lastFull = m; emit('captureDone', { n: m.n }); }
+    if (m.type === 'run-done')      {
+      const sig = (m.n || 0) + ':' + ((m.pieces && m.pieces.join('|')) || (m.nextProb && m.nextProb.length) || '');
+      lastFull = m;
+      if (sig !== lastCaptureSig) { lastCaptureSig = sig; emit('captureDone', { n: m.n }); }   // one confirmation per distinct capture
+    }
     /* the whole bench refreshes on every ablation, so this arrives in
        bursts; say the lesson once and vary the acknowledgements after */
     if (m.type === 'run-ablated') {
@@ -7814,7 +7848,7 @@ const AGAIN_KID = [
 
 /* on-screen terms the guide can explain on click (or when asked). */
 const MIC_TERMS = {
-  dim: { label: 'width (dim)', note: 'the width of the mind: how many numbers it uses to describe each piece of text as it thinks.', kidNote: 'how many numbers the mind uses to think about each little piece of a word.' },
+  dim: { label: 'dimension', note: 'the width of the mind: how many numbers it uses to describe each piece of text as it thinks.', kidNote: 'how many numbers the mind uses to think about each little piece of a word.' },
   layers: { label: 'layers', note: 'how many times in a row the mind reconsiders the text, each layer refining the last.', kidNote: 'how many times the mind thinks about the story over and over.' },
   heads: { label: 'attention heads', note: 'parallel lookers per layer; each head can watch a different earlier word while reading the current one.', kidNote: 'little lookers that each watch a different earlier word.' },
   neurons: { label: 'neurons per layer', note: 'the size of each layer’s scratchpad: how many little units do the thinking inside one layer.', kidNote: 'how many tiny thinking bits are inside each layer.' },
@@ -10882,6 +10916,7 @@ function create(A){
     if(spec.condition&&!spec.condition(payload)) return;
     if(spec.once&&vgEvOnceDone.has(name)) return;
     if(spec.cooldownMs&&Date.now()-(vgEvLastAt.get(name)||0)<spec.cooldownMs) return;
+    if(vgEvQueue.some(q=>q.name===name)) return;   // a burst of the same event (e.g. two run-done in a tick) enqueues once
     const pr=spec.priority||'moment';
     if(pr==='ambient'){
       if(vgSpeakDepth>0||vgEvQueue.length) return;    // ambient never waits
@@ -11101,13 +11136,13 @@ function create(A){
     const q='Explain this part of the screen to me: "'+(g.label||key)+'". '+
       (note?'Here is what it is, in one line, so you can put it in your own words'+(kid?' for a young child':'')+': '+note:'')+
       ' Keep it to a sentence or two.';
-    vgAsk(q);
+    vgAsk(q, 'What is "'+(g.label||key)+'"?');   // the visitor sees the short question, not the seeded note
   }
-  async function vgAsk(q){
+  async function vgAsk(q, shown){
     q=(q||'').trim(); if(!q) return;
     if(vgState==='running') vgPauseCore();
     const g=++vgGen; vgSynthCancel(); vgUpdateBar();
-    vgLogAdd(q,'user'); vgFaceThink(true); vgStatus('thinking\u2026');
+    vgLogAdd((shown||q),'user'); vgFaceThink(true); vgStatus('thinking\u2026');
     const sys=vgSystem(), usr=vgUserPrompt(q);
     vgQA.push({role:'user',content:q});
     try{
@@ -11904,6 +11939,23 @@ function renderOverlay(app) {
   });
 }
 function showOverlay(app) { renderOverlay(app); $('overlay').classList.remove('hide'); }
+/* once a room is showing a model, offer a way back to that room's model
+   picker without reloading the page (the overlay is otherwise one-shot). */
+function showChooseAnother(app) {
+  if (app === 'bay') return;
+  let b = document.getElementById('vgChooseAnother');
+  if (!b) {
+    b = document.createElement('button');
+    b.id = 'vgChooseAnother'; b.className = 'small alt';
+    b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:60';
+    document.body.appendChild(b);
+  }
+  b.textContent = '\u2934 other minds for the ' + app;
+  b.onclick = () => { revealed.delete(app); loaded.delete(app);
+    try { frames[app] && frames[app].classList.add('hide'); } catch (e) {}
+    b.remove(); showOverlay(app); };
+  b.style.display = '';
+}
 function hideOverlay() { $('overlay').classList.add('hide'); }
 
 function selectTab(tab) {
@@ -11913,7 +11965,7 @@ function selectTab(tab) {
   for (const a of APPS) if (frames[a]) frames[a].classList.add('hide');
   for (const a of Object.keys(frames)) { try { frames[a].contentWindow.postMessage({ tm: 'vg-tab', active: a === tab, tab }, '*'); } catch (e) {} } // vg: tab visibility for the frame guides
   if (tab === 'bay') hideOverlay();
-  else if (loaded.has(tab) || revealed.has(tab)) { hideOverlay(); ensureFrame(tab).classList.remove('hide'); }
+  else if (loaded.has(tab) || revealed.has(tab)) { hideOverlay(); ensureFrame(tab).classList.remove('hide'); showChooseAnother(tab); }
   else { ensureFrame(tab); showOverlay(tab); }   // boot the frame behind the overlay
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => selectTab(t.dataset.tab));
@@ -12047,7 +12099,10 @@ function tmPersistText(kind, name, text){ if (!tmRestoring) tmWrite(kind, name, 
 async function tmRestorePool(){
   try {
     if (typeof shellStorage.list !== 'function') return;
-    const r = await shellStorage.list('tm-pool-');
+    const probe = await shellStorage.list('tm-pool-');
+    if (probe && probe.keys && probe.keys.filter(k => !/~\d+$/.test(k)).length)
+      say('bay: loading your saved files from last visit\u2026 one moment');
+    const r = probe;
     const keys = ((r && r.keys) || []).filter(k => !/~\d+$/.test(k));
     if (!keys.length) return;
     const recs = [], broken = [];
@@ -12624,6 +12679,7 @@ function create(A){
     if(spec.condition&&!spec.condition(payload)) return;
     if(spec.once&&vgEvOnceDone.has(name)) return;
     if(spec.cooldownMs&&Date.now()-(vgEvLastAt.get(name)||0)<spec.cooldownMs) return;
+    if(vgEvQueue.some(q=>q.name===name)) return;   // a burst of the same event (e.g. two run-done in a tick) enqueues once
     const pr=spec.priority||'moment';
     if(pr==='ambient'){
       if(vgSpeakDepth>0||vgEvQueue.length) return;    // ambient never waits
@@ -12843,13 +12899,13 @@ function create(A){
     const q='Explain this part of the screen to me: "'+(g.label||key)+'". '+
       (note?'Here is what it is, in one line, so you can put it in your own words'+(kid?' for a young child':'')+': '+note:'')+
       ' Keep it to a sentence or two.';
-    vgAsk(q);
+    vgAsk(q, 'What is "'+(g.label||key)+'"?');   // the visitor sees the short question, not the seeded note
   }
-  async function vgAsk(q){
+  async function vgAsk(q, shown){
     q=(q||'').trim(); if(!q) return;
     if(vgState==='running') vgPauseCore();
     const g=++vgGen; vgSynthCancel(); vgUpdateBar();
-    vgLogAdd(q,'user'); vgFaceThink(true); vgStatus('thinking\u2026');
+    vgLogAdd((shown||q),'user'); vgFaceThink(true); vgStatus('thinking\u2026');
     const sys=vgSystem(), usr=vgUserPrompt(q);
     vgQA.push({role:'user',content:q});
     try{
