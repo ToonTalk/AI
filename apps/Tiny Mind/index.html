@@ -50,6 +50,7 @@ button:disabled{opacity:.4;cursor:default}
 </header>
 <main>
   <div id="bay">
+    <div id="bayNotice" class="hide" style="margin:0 0 14px;padding:12px 16px;border-radius:10px;border:1px solid #4a6a3f;background:#1c2a18;color:#b7d9a4;font-size:14px;line-height:1.5"></div>
     <div id="dropzone">drop your model bundle here — a .zip with the .bin files, a folder, or loose files<br>
       <span class="small">(drops made while an app tab is open go to that app instead)</span></div>
     <table><thead><tr><th>model</th><th>vocab</th><th>size</th><th>open in…</th></tr></thead>
@@ -11506,6 +11507,33 @@ window.__vgDeferBoot(createGuide);
 <script>
 const $ = (id) => document.getElementById(id);
 const say = (msg, cls) => { $('shellStatus').textContent = msg; $('shellStatus').className = cls || ''; };
+/* the one-line status strip is easy to miss; important bay news also gets a visible banner */
+let bayNoticeTimer = null;
+function bayNotice(html, holdMs) {
+  const el = $('bayNotice'); if (!el) return;
+  el.innerHTML = html; el.classList.remove('hide');
+  if (bayNoticeTimer) { clearTimeout(bayNoticeTimer); bayNoticeTimer = null; }
+  if (holdMs) bayNoticeTimer = setTimeout(() => updateBigModelHint(true), holdMs);
+}
+/* the rich 15M specimen cannot be fetched from inside the artifact sandbox; if it is
+   not already in the pool (dropped now or restored from memory), tell the visitor
+   exactly where to get it and what to do with it. Hides itself once the pair lands. */
+const BIG_MODEL_URL = 'https://toontalk.github.io/AI/apps/Tiny%20Mind/stories15M.bin';
+const BIG_TOK_URL   = 'https://toontalk.github.io/AI/apps/Tiny%20Mind/tokenizer.bin';
+function updateBigModelHint(force) {
+  const el = $('bayNotice'); if (!el) return;
+  if (!el.classList.contains('hide') && /Restor/i.test(el.innerHTML) && !force) return;   // never clobber a live restore banner; the post-restore timer re-evaluates
+  const has15M = pool.models.some(m => /stories15M/i.test(m.name) || m.vocab === 32000);
+  const hasBigTok = pool.toks.some(t => t.vocab === 32000);
+  if (has15M && hasBigTok) { if (force || /stories15M/.test(el.innerHTML)) el.classList.add('hide'); return; }
+  if (!window.__tmNoAutoload) { if (force) el.classList.add('hide'); return; }   // hosted deploys autoload; no hint needed
+  el.innerHTML = 'Want the big <b>stories15M</b> specimen (15M parameters, real English)? '
+    + 'It\u2019s too big to ship inside this page \u2014 download '
+    + '<a href="' + BIG_MODEL_URL + '" target="_blank" rel="noopener">stories15M.bin</a> (\u224860 MB) and '
+    + '<a href="' + BIG_TOK_URL + '" target="_blank" rel="noopener">tokenizer.bin</a>, '
+    + 'then drop both files here. They\u2019ll be remembered for next time.';
+  el.classList.remove('hide');
+}
 
 /* ---------- shared model plumbing (inlined from src/ingest.js at build time) ---------- */
 // ---- inlined src/scrubber.js ----
@@ -11978,6 +12006,7 @@ const pool = { models: [], toks: [] };   // {name, u8, vocab}
 function fmtKB(n) { return n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB'; }
 function tokFor(vocab) { return pool.toks.find(t => t.vocab === vocab) || (pool.toks.length === 1 ? pool.toks[0] : null); }
 function renderPool() {
+  try { updateBigModelHint(); } catch (e) {}
   const tb = $('pool'); tb.innerHTML = '';
   if (!pool.models.length) tb.innerHTML = '<tr><td colspan="4" class="small">nothing yet</td></tr>';
   for (const mo of pool.models) {
@@ -12091,8 +12120,10 @@ async function tmRestorePool(){
   try {
     if (typeof shellStorage.list !== 'function') return;
     const probe = await shellStorage.list('tm-pool-');
-    if (probe && probe.keys && probe.keys.filter(k => !/~\d+$/.test(k)).length)
+    if (probe && probe.keys && probe.keys.filter(k => !/~\d+$/.test(k)).length) {
       say('bay: loading your saved files from last visit\u2026 one moment');
+      bayNotice('\u23f3 <b>Restoring your saved models from memory\u2026</b> one moment \u2014 no need to re-download anything.');
+    }
     const r = probe;
     const keys = ((r && r.keys) || []).filter(k => !/~\d+$/.test(k));
     if (!keys.length) return;
@@ -12117,6 +12148,7 @@ async function tmRestorePool(){
     tmRestoring = true;
     try { await shellIngest(recs); } finally { tmRestoring = false; }
     say('bay: remembered ' + recs.map(r => r.name).join(', ') + ' from last visit');
+    bayNotice('\u2713 <b>Restored from memory:</b> ' + recs.map(r => r.name).join(' \u00b7 ') + '. These were saved on an earlier visit \u2014 nothing to re-download.', 8000);
   } catch (e) {}
 }
 
@@ -12193,8 +12225,8 @@ const MODEL_FILES = ['tok512.bin', 'tokenizer.bin', 'stories260K.bin', 'stories2
 (async function autoLoadModels() {
   let probe;
   try { probe = await fetch(MODEL_FILES[0]); }
-  catch { say('nothing can be fetched beside the app here (sandbox or file://) — drop your bundle (models, replay.json, arc .zip) into the bay', 'warn'); return; }
-  if (!probe.ok) { say('no model files found beside the app (looked for ' + MODEL_FILES[0] + ') — drop a bundle instead', 'warn'); return; }
+  catch { window.__tmNoAutoload = true; say('nothing can be fetched beside the app here (sandbox or file://) — drop your bundle (models, replay.json, arc .zip) into the bay', 'warn'); setTimeout(updateBigModelHint, 1200); return; }
+  if (!probe.ok) { window.__tmNoAutoload = true; say('no model files found beside the app (looked for ' + MODEL_FILES[0] + ') — drop a bundle instead', 'warn'); setTimeout(updateBigModelHint, 1200); return; }
   say('found model files beside the app — loading…');
   let got = 0;
   let gotReplay = false, gotArc = null;
