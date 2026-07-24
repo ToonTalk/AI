@@ -11,8 +11,19 @@
 // ===== Config =====
 const MENU_ID = 'meaning-in-context';
 const ICON_URL = 'icon.png'; // make sure this exists in your extension root
+const PROMPT_TIMEOUT_MS = 60000; // allow for Gemini Nano cold-start latency
+const SYSTEM_INSTRUCTIONS = `
+You are a concise, accurate assistant that defines a selected word or phrase in context.
+Return:
+1) A brief meaning (1-2 sentences).
+2) If ambiguous, list up to 3 plausible senses and pick the best match for the provided sentence.
+3) One short paraphrase of the sentence using the chosen sense.
+4) One synonym, if appropriate.
+Avoid hallucinations. If you cannot infer the meaning, say so.
+`.trim();
 
 let session = null;
+let sessionPromise = null;
 
 // Store full HTML payload for each notification id so click can open full view
 const notifStore = new Map();
@@ -71,6 +82,29 @@ function randomId(prefix = 'id') {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
+// ===== Prompt with timeout =====
+// Use the Prompt API's AbortSignal support so a timed-out prompt is actually
+// stopped. Promise.race() alone would report a timeout but leave the model running.
+async function promptWithTimeout(sess, prompt, timeoutMs = PROMPT_TIMEOUT_MS) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timerId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await sess.prompt(prompt, { signal: controller.signal });
+  } catch (err) {
+    if (timedOut) {
+      throw new Error(`AI prompt timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timerId);
+  }
+}
+
 // ===== Full-text popup window (no external file needed) =====
 function openFullResultWindow(title, html) {
   const doc = `<!doctype html>
@@ -114,29 +148,52 @@ ${html}
 // ===== Gemini Nano session handling =====
 async function getOrCreateSession() {
   if (session) return session;
+  if (sessionPromise) return sessionPromise;
 
-  if (typeof LanguageModel === 'undefined') {
-    throw new Error('LanguageModel API not available in this browser build.');
+  sessionPromise = (async () => {
+    if (typeof LanguageModel === 'undefined') {
+      throw new Error('LanguageModel API not available in this browser build.');
+    }
+
+    const availability = await LanguageModel.availability();
+    console.log('[AI] Availability:', availability);
+    if (availability === 'unavailable' || availability === 'no') {
+      throw new Error(`AI is not available on this device/browser ("${availability}").`);
+    }
+    // "available" → ready; "downloadable"/"downloading" → create() waits for readiness.
+
+    console.log('[AI] Creating new AI session...');
+    const created = await LanguageModel.create({
+      initialPrompts: [
+        { role: 'system', content: SYSTEM_INSTRUCTIONS },
+      ],
+      monitor(m) {
+        m.addEventListener('downloadprogress', (e) => {
+          console.log(`[AI] Gemini Nano download: ${Math.round(e.loaded * 100)}%`);
+        });
+      },
+    });
+
+    session = created;
+    console.log('[AI] Session ready.');
+    return created;
+  })();
+
+  try {
+    return await sessionPromise;
+  } finally {
+    sessionPromise = null;
   }
+}
 
-  const availability = await LanguageModel.availability();
-  console.log('[AI] Availability:', availability);
-  if (availability === 'unavailable' || availability === 'no') {
-    throw new Error(`AI is not available on this device/browser ("${availability}").`);
+function resetSession() {
+  try {
+    session?.destroy();
+  } catch (e) {
+    console.debug('[AI] Session destroy failed:', e);
   }
-  // "available" → ready; "downloadable" → create() will trigger the download
-
-  console.log('Creating new AI session...');
-  session = await LanguageModel.create({
-    monitor(m) {
-      m.addEventListener('downloadprogress', (e) => {
-        console.log(`[AI] Gemini Nano download: ${Math.round(e.loaded * 100)}%`);
-      });
-    },
-  });
-
-  console.log('[AI] Session ready.');
-  return session;
+  session = null;
+  sessionPromise = null;
 }
 
 // ===== Selection + context extraction =====
@@ -209,25 +266,25 @@ async function defineSelectedInContext(tab) {
 
     const sess = await getOrCreateSession();
 
-    const prompt = `
-You are a concise, accurate assistant that defines the selected word/phrase in its context.
-Return:
-1) A brief meaning (1-2 sentences).
-2) If ambiguous, list up to 3 plausible senses and pick the best match for the provided sentence.
-3) Provide one short paraphrase of the sentence using the chosen sense.
-4) Provide one synonym (if appropriate).
-Avoid hallucinations. If you can't infer, say so.
+    // Truncate context to stay within Gemini Nano's input limits.
+    // Without this, container.closest('div') can match the entire article body,
+    // causing the model to hang silently instead of rejecting.
+    const MAX_PARA = 600;
+    const MAX_SENT = 300;
+    const truncParagraph = (paragraph || '').slice(0, MAX_PARA) + (paragraph.length > MAX_PARA ? '…' : '');
+    const truncSentence  = (sentence  || '').slice(0, MAX_SENT)  + (sentence.length  > MAX_SENT  ? '…' : '');
 
+    const prompt = `
 Selected: "${text}"
 
 Page title: "${title}"
 Heading: "${heading}"
 
-Sentence: "${sentence}"
-Paragraph (may include noise): "${paragraph}"
+Sentence: "${truncSentence}"
+Paragraph (may include noise): "${truncParagraph}"
 `.trim();
 
-    const result = await sess.prompt(prompt);
+    const result = await promptWithTimeout(sess, prompt);
 
     const markdown = `## Meaning (in context)\n${result}\n`;
     const plain = markdownToPlain(markdown);
@@ -262,6 +319,7 @@ Paragraph (may include noise): "${paragraph}"
       requireInteraction: true,
     });
   } catch (err) {
+    resetSession(); // force a clean session on next attempt
     console.error('Define error:', err);
     await chrome.notifications.create({
       type: 'basic',
@@ -292,6 +350,17 @@ function ensureContextMenu() {
       if (chrome.runtime.lastError) {
         console.warn('Context menu create error:', chrome.runtime.lastError.message);
       }
+    });
+  });
+}
+
+// Start loading the model as soon as the user opens a context menu over a
+// selection. This usually hides most of the cold-start delay before they click.
+if (chrome.contextMenus.onShown) {
+  chrome.contextMenus.onShown.addListener((info) => {
+    if (!info.selectionText) return;
+    void getOrCreateSession().catch((err) => {
+      console.debug('[AI] Pre-warm did not complete:', err);
     });
   });
 }
