@@ -1,0 +1,900 @@
+"use strict";
+
+/* ============================== art registry ============================== */
+let HAVE_ORIGINAL = (typeof CC_ORIGINAL_ART !== "undefined") && CC_ORIGINAL_ART &&
+                    Object.keys(CC_ORIGINAL_ART).length > 0;
+const STYLES = {
+  modern:   {label:"Modern (drawn)",       art: MODERN_ART},
+  original: {label:"Original (Microsoft)", art: HAVE_ORIGINAL ? CC_ORIGINAL_ART : null}
+};
+/* The artifact build ships without the 2 MB artwork; an artpack file loaded at
+   runtime installs it through here. */
+function installOriginalArt(art, backdrops){
+  if(!art || !Object.keys(art).length) return;
+  STYLES.original.art = art;
+  HAVE_ORIGINAL = true;
+  if(backdrops) for(const k of Object.keys(backdrops)) CC_BACKDROPS[k] = backdrops[k];
+  const opt = document.querySelector('#artsel option[value="original"]');
+  if(opt) opt.disabled = false;
+  refreshScenes();
+  document.getElementById("artsel").value = "original";
+  document.getElementById("artsel").onchange();
+  updateStatusNote();
+}
+function artset(){ const s = STYLES[state.style]; return (s && s.art) ? s.art : MODERN_ART; }
+function getArt(id){ const a = artset(); return a[id] || a[Object.keys(a)[0]]; }
+function castIds(){ return Object.keys(artset()); }
+
+/* ================================= state ================================= */
+const DEFAULT_STYLE = HAVE_ORIGINAL ? "original" : "modern";
+// backID 0 (no backdrop, white paper) is what the original shipped with
+let state = { msgs:[], bg:"none", style:DEFAULT_STYLE, wide:3, title:true };
+try{
+  const s = JSON.parse(localStorage.getItem("comicchat-v2"));
+  if(s && s.msgs) state = Object.assign(state, s);
+}catch(e){}
+if(!STYLES[state.style] || (state.style === "original" && !HAVE_ORIGINAL)) state.style = DEFAULT_STYLE;
+if(state.bg !== "none" && !CC_BACKDROPS[state.bg]) state.bg = "none";   // e.g. saved pre-.bgb names
+function persist(){ try{ localStorage.setItem("comicchat-v2", JSON.stringify(state)); }catch(e){} }
+
+let curChar = null;
+let curMode = "say";
+const wheelState = {};   // charId -> {emotion, intensity, touched}
+
+function ensureCast(){
+  const ids = castIds();
+  if(!curChar || ids.indexOf(curChar) === -1) curChar = ids[0];
+  for(const id of ids) if(!wheelState[id]) wheelState[id] = {emotion:EM.HAPPY, intensity:0, touched:false};
+}
+
+/* ============================ balloon geometry ============================ */
+function edgePoints(x0,y0,x1,y1,nx,ny,phase){
+  const pts = [], len = Math.hypot(x1-x0, y1-y0);
+  const n = Math.max(2, Math.round(len / WAVE_INTERVAL));
+  for(let i=0;i<n;i++){
+    const t = i/n;
+    const s = ((i + phase) % 2) ? -1 : 1;
+    pts.push({x: x0+(x1-x0)*t + nx*WAVE_H*s, y: y0+(y1-y0)*t + ny*WAVE_H*s});
+  }
+  return pts;
+}
+function smoothClosed(pts){
+  const n = pts.length;
+  if(!n) return "";
+  const mid = (a,b)=>({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+  const f = v=>v.toFixed(1);
+  let m0 = mid(pts[n-1], pts[0]);
+  let d = `M ${f(m0.x)} ${f(m0.y)}`;
+  for(let i=0;i<n;i++){
+    const cur = pts[i], next = pts[(i+1)%n], m = mid(cur,next);
+    if(cur.sharp || next.sharp) d += ` L ${f(cur.x)} ${f(cur.y)} L ${f(m.x)} ${f(m.y)}`;
+    else d += ` Q ${f(cur.x)} ${f(cur.y)} ${f(m.x)} ${f(m.y)}`;
+  }
+  return d + " Z";
+}
+function tailFor(b, body){
+  if(!body) return null;
+  const c = b.cloud;
+  let ay = body.top - 200;                                  // tip sits just above the head
+  if(ay - c.bottom < MIN_TAIL_H) ay = c.bottom + MIN_TAIL_H;
+  let xbreak = (b.routeRgn.left + b.routeRgn.right)/2;
+  xbreak = Math.max(c.left + TAIL_MOUTH + 60, Math.min(c.right - TAIL_MOUTH - 60, xbreak));
+  let ax = body.arrowX;
+  const maxdx = ay - c.bottom;                              // clamp to 45 deg from vertical
+  if(Math.abs(ax - xbreak) > maxdx) ax = xbreak + Math.sign(ax - xbreak) * maxdx;
+  return {x:xbreak, ax, ay};
+}
+function cloudPath(r, tail){
+  const top    = edgePoints(r.left, r.top, r.right, r.top, 0, -1, 0);
+  const right  = edgePoints(r.right, r.top, r.right, r.bottom, 1, 0, 1);
+  const bottomRaw = edgePoints(r.right, r.bottom, r.left, r.bottom, 0, 1, 0);
+  const left   = edgePoints(r.left, r.bottom, r.left, r.top, -1, 0, 1);
+  let bottom = bottomRaw;
+  if(tail){
+    const hi = tail.x + TAIL_MOUTH, lo = tail.x - TAIL_MOUTH;
+    const ins = [{x:hi, y:r.bottom, sharp:true}, {x:tail.ax, y:tail.ay, sharp:true}, {x:lo, y:r.bottom, sharp:true}];
+    const out = []; let placed = false;
+    for(const p of bottomRaw){                              // bottom runs right -> left
+      if(!placed && p.x < hi){ out.push(...ins); placed = true; }
+      if(p.x <= hi && p.x >= lo) continue;
+      out.push(p);
+    }
+    if(!placed) out.push(...ins);
+    bottom = out;
+  }
+  return smoothClosed(top.concat(right, bottom, left));
+}
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function balloonSvg(b, body){
+  const m = b.msg, c = b.cloud, pad = b.pad;
+  const italic = m.mode === "whisper";
+  const lines = b.text.lines;
+  const parts = [];
+
+  if(m.mode === "action"){
+    parts.push(`<rect x="${c.left}" y="${c.top}" width="${c.right-c.left}" height="${c.bottom-c.top}" fill="#fff" stroke="#000" stroke-width="28"/>`);
+  } else {
+    const tail = m.mode === "think" ? null : tailFor(b, body);
+    const dash = italic ? ` stroke-dasharray="150 90"` : "";
+    if(italic) parts.push(`<path d="${cloudPath(c, tail)}" fill="#fff" stroke="#fff" stroke-width="100"/>`);
+    parts.push(`<path d="${cloudPath(c, tail)}" fill="#fff" stroke="#000" stroke-width="28"${dash}/>`);
+    if(m.mode === "think" && body){
+      // chain of ellipses growing toward the balloon (balloon.cpp:1826)
+      const ex = (b.routeRgn.left + b.routeRgn.right)/2, ey = c.bottom;
+      const tx = body.arrowX, ty = Math.max(body.top - 200, ey + MIN_TAIL_H);
+      const dy = ty - ey;
+      const n = Math.max(1, Math.floor((dy + INTERBUBBLE) / (BUBBLE_H + INTERBUBBLE)));
+      const wd = n > 1 ? (ENDBUBBLE_W - BUBBLE_H) / (2*(n-1)) : 0;
+      for(let i=0;i<n;i++){
+        const t = n === 1 ? 0 : i/(n-1);
+        const cx = tx + (ex-tx)*(1-t), cy = ty + (ey-ty)*t;
+        const rx = (BUBBLE_H + 2*wd*i)/2, ry = BUBBLE_H/2;
+        parts.push(`<ellipse cx="${cx.toFixed(0)}" cy="${cy.toFixed(0)}" rx="${rx.toFixed(0)}" ry="${ry.toFixed(0)}" fill="#fff" stroke="#000" stroke-width="28"/>`);
+      }
+    }
+  }
+
+  const leftJust = m.mode === "action";
+  const tx = leftJust ? c.left + pad.x : (c.left + c.right)/2;
+  const anchor = leftJust ? "start" : "middle";
+  const y0 = c.top + pad.y + LINE_HEIGHT*0.78;
+  lines.forEach((ln,i)=>{
+    parts.push(`<text x="${tx.toFixed(0)}" y="${(y0 + i*LINE_HEIGHT).toFixed(0)}" text-anchor="${anchor}" `+
+      `font-family="Comic Sans MS, Comic Sans, cursive" font-size="${FONT_TWIPS}" font-weight="700"`+
+      `${italic?' font-style="italic"':''} fill="#000">${esc(ln)}</text>`);
+  });
+  return parts.join("");
+}
+
+/* ============================== panel render ============================== */
+function backdropSvg(panel){
+  const bd = CC_BACKDROPS[state.bg];
+  if(!bd) return `<rect width="${S}" height="${S}" fill="#fff"/>`;
+  const z = panel.zoom || 1;
+  // crop follows the character zoom, anchored at the left edge and sliding down
+  const w = S*z, h = S*z;
+  const y = -BACKDROP_ANCHOR * (1 - 1/z) * S * z;
+  return `<image href="data:image/png;base64,${bd.png}" x="0" y="${y.toFixed(0)}" `+
+         `width="${w.toFixed(0)}" height="${h.toFixed(0)}" preserveAspectRatio="none"/>`;
+}
+/* The artwork is drawn ~480px tall and displayed smaller. Smooth downscaling is
+   area-averaging, so it conserves ink almost exactly: Anna measures 40.4% black
+   natively and still 35.9% at a 5x reduction. An earlier gamma curve here was
+   over-inking by 5-13 points and turning the cast into silhouettes; plain
+   smooth scaling is the faithful choice. */
+function bodySvg(panel, body){
+  const art = getArt(body.charId);
+  const dm = body.dm || art.nat;      // per-pose composite box from the engine
+  const scale = body.height / dm.h;
+  const tx = body.left - dm.x*scale;
+  const ty = body.top  - dm.y*scale;
+  const inner = art.draw(body.pose.face, body.pose.torso);
+  const cx = (body.left + body.right)/2;
+  const wrap = body.flip ? ` transform="translate(${(2*cx).toFixed(0)},0) scale(-1,1)"` : "";
+  return `<g${wrap}><g transform="translate(${tx.toFixed(1)},${ty.toFixed(1)}) scale(${scale.toFixed(4)})">${inner}</g></g>`;
+}
+function titlePanelSvg(){
+  const ids = [];
+  for(const m of state.msgs) if(ids.indexOf(m.charId) === -1) ids.push(m.charId);
+  const show = ids.slice(0,5);
+  const parts = [`<rect width="${S}" height="${S}" fill="#fff"/>`];
+  parts.push(`<text x="${S/2}" y="640" text-anchor="middle" font-family="Comic Sans MS, cursive" `+
+             `font-size="520" font-weight="700" fill="#000">STARRING</text>`);
+  if(show.length){
+    const casts = show.map(id=>{
+      const art = getArt(id);
+      const pose = bodyFromEmotion(art, EM.HAPPY, 0, -1);
+      const dm = art.dim ? art.dim(pose.face, pose.torso) : art.nat;
+      return {art, pose, dm};
+    });
+    let h = S*0.44;
+    let widths = casts.map(c=>h*c.dm.w/c.dm.h);
+    let sum = widths.reduce((s,w)=>s+w, 0);
+    const maxRow = S*0.90;                       // leave room for gutters
+    if(sum > maxRow){ const k = maxRow/sum; h *= k; widths = widths.map(w=>w*k); sum = maxRow; }
+    const margin = (S - sum) / (show.length + 1);
+    const baseline = S*0.86;
+    let x = margin;
+    casts.forEach((c,i)=>{
+      const w = widths[i], scale = h / c.dm.h;
+      parts.push(`<g transform="translate(${(x - c.dm.x*scale).toFixed(1)},${(baseline - h - c.dm.y*scale).toFixed(1)}) scale(${scale.toFixed(4)})">${c.art.draw(c.pose.face,c.pose.torso)}</g>`);
+      const nm = c.art.name.toUpperCase();
+      const fs = Math.min(230, FONT_TWIPS * (w*0.98) / Math.max(1, textWidth(nm, false)));
+      parts.push(`<text x="${(x + w/2).toFixed(0)}" y="${(S*0.95).toFixed(0)}" text-anchor="middle" `+
+                 `font-family="Comic Sans MS, cursive" font-size="${fs.toFixed(0)}" font-weight="700" fill="#000">${esc(nm)}</text>`);
+      x += w + margin;
+    });
+  }
+  parts.push(`<rect x="${BORDER_W}" y="${BORDER_W}" width="${S-2*BORDER_W}" height="${S-2*BORDER_W}" fill="none" stroke="#000" stroke-width="${2*BORDER_W}"/>`);
+  return parts.join("");
+}
+function panelSvg(panel, px){
+  let inner;
+  if(panel.title){
+    inner = titlePanelSvg();
+  } else {
+    const parts = [backdropSvg(panel)];
+    for(const b of panel.bodies) parts.push(bodySvg(panel, b));
+    // drawn tail-to-head so the FIRST balloon ends up on top (panel.cpp:695)
+    for(let i=panel.balloons.length-1;i>=0;i--){
+      const b = panel.balloons[i];
+      if(b.cloud) parts.push(balloonSvg(b, b.speaker));
+    }
+    parts.push(`<rect x="${BORDER_W}" y="${BORDER_W}" width="${S-2*BORDER_W}" height="${S-2*BORDER_W}" fill="none" stroke="#000" stroke-width="${2*BORDER_W}"/>`);
+    inner = parts.join("");
+  }
+  return `<svg class="panel" width="${px}" height="${px}" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">`+
+         `<rect width="${S}" height="${S}" fill="#fff"/>${inner}</svg>`;
+}
+
+/* ================================ strip ================================== */
+function panelPx(){
+  const avail = Math.min(1100, document.getElementById("page").clientWidth - 40);
+  const gap = 6;
+  return Math.max(150, Math.floor((avail - gap*(state.wide+1)) / state.wide));
+}
+function renderAll(){
+  ensureCast();
+  const strip = document.getElementById("strip");
+  const px = panelPx();
+  strip.style.maxWidth = (state.wide*px + 6*(state.wide+1) + 8) + "px";
+  if(!state.msgs.length){
+    strip.innerHTML = `<div class="hint">Pick a character, set an emotion on the wheel, and say something…</div>`;
+    return;
+  }
+  const panels = layoutStrip(state.msgs, getArt, {title: state.title});
+  strip.innerHTML = panels.map(p=>panelSvg(p, px)).join("");
+  const page = document.getElementById("page");
+  page.scrollTop = page.scrollHeight;
+}
+
+/* =============================== sending ================================= */
+function detectTalkTos(text, fromId){
+  const out = [];
+  const low = text.toLowerCase();
+  for(const id of castIds()){
+    if(id === fromId) continue;
+    const nm = getArt(id).name.toLowerCase();
+    if(checkWord(low, nm)) out.push(id);
+  }
+  return out;
+}
+function send(raw, charId, modeOverride, flags){
+  let text = (raw||"").trim();
+  if(!text) return;
+  let mode = modeOverride || curMode;
+  if(/^\/me\s+/i.test(text)){ mode = "action"; text = text.replace(/^\/me\s+/i,""); }
+  else if(/^\/think\s+/i.test(text)){ mode = "think"; text = text.replace(/^\/think\s+/i,""); }
+  else if(/^\/(w|whisper)\s+/i.test(text)){ mode = "whisper"; text = text.replace(/^\/(w|whisper)\s+/i,""); }
+
+  const id = charId || curChar;
+  const w = wheelState[id];
+  // An explicit wheel setting wins for exactly one message; otherwise the text
+  // rules apply. They never blend. (textpose.cpp:119 + AF_TEMPFROZEN)
+  const msg = {
+    charId: id,
+    text,
+    display: (mode === "action" ? getArt(id).name + " " + text : text).toUpperCase(),
+    mode,
+    talkTos: detectTalkTos(text, id),
+    wheel: (w && w.touched) ? {emotion:w.emotion, intensity:w.intensity} : null,
+    ai: !!(flags && flags.ai)
+  };
+  if(w){ w.touched = false; w.emotion = EM.HAPPY; w.intensity = 0; }   // ResetAvatar
+  // In a room the HOST owns message order, so everyone's strip lays out
+  // identically; a guest's own line comes back via the host's broadcast.
+  if(typeof netDispatch === "function" && netActive() && netDispatch(msg)) return;
+  applyNetMsg(msg);
+}
+
+/* every message — local or from the network — lands here */
+function applyNetMsg(msg){
+  state.msgs.push(msg);
+  persist();
+  renderAll(); renderRoster(); renderWheel();
+  if(typeof aiObserve === "function") aiObserve(msg);
+}
+
+/* ================================== UI =================================== */
+function portrait(id){
+  const art = getArt(id);
+  const w = wheelState[id] || {emotion:EM.HAPPY, intensity:0};
+  const pose = bodyFromEmotion(art, w.emotion, w.intensity, -1);
+  const n = art.dim ? art.dim(pose.face, pose.torso) : art.nat;
+  return `<svg viewBox="${n.x} ${n.y} ${n.w} ${n.h*0.62}" xmlns="http://www.w3.org/2000/svg">${art.draw(pose.face,pose.torso)}</svg>`;
+}
+let rosterExpanded = false;
+function renderRoster(){
+  ensureCast();
+  const ids = castIds();
+  const el = document.getElementById("roster");
+  el.innerHTML = ids.map(id=>
+    `<div class="porta${id===curChar?" sel":""}" data-id="${id}">${portrait(id)}${esc(getArt(id).name)}</div>`).join("");
+  el.querySelectorAll(".porta").forEach(d=> d.onclick = ()=>{ curChar = d.dataset.id; renderRoster(); renderWheel(); });
+  const more = document.getElementById("rostermore");
+  const overflows = ids.length > 12;                 // two collapsed rows
+  more.hidden = !overflows;
+  el.classList.toggle("collapsed", overflows && !rosterExpanded);
+  if(overflows) more.textContent = rosterExpanded ? "▴ Fewer characters" : `▾ Show all ${ids.length} characters`;
+}
+document.getElementById("rostermore").onclick = ()=>{ rosterExpanded = !rosterExpanded; renderRoster(); };
+
+const WHEEL_ICON_KEY = {happy:"hap", coy:"coy", bored:"bor", scared:"sca", sad:"sad", angry:"ang", shout:"sho", laugh:"laf"};
+const WR = 52, WSZ = 132, WC = WSZ/2;
+function renderWheel(){
+  ensureCast();
+  const w = wheelState[curChar];
+  const parts = [`<circle cx="${WC}" cy="${WC}" r="${WR+12}" fill="#e8e8e8" stroke="#808080" stroke-width="2"/>`];
+  for(let i=0;i<8;i++){
+    const a = i*2*Math.PI/8;                        // screen space: y grows down
+    const x = WC + Math.cos(a)*(WR+2), y = WC + Math.sin(a)*(WR+2);
+    const icon = CC_WHEEL_ICONS[WHEEL_ICON_KEY[WHEEL[i].key]];
+    parts.push(`<image href="data:image/png;base64,${icon}" x="${x-10}" y="${y-13}" width="20" height="26"/>`);
+  }
+  parts.push(`<circle cx="${WC}" cy="${WC}" r="13" fill="#fff" stroke="#808080" stroke-width="2"/>`);
+  parts.push(`<image href="data:image/png;base64,${CC_WHEEL_ICONS.neu}" x="${WC-10}" y="${WC-13}" width="20" height="26"/>`);
+  const r = w.intensity * WR;
+  const px = WC + Math.cos(w.emotion)*r, py = WC + Math.sin(w.emotion)*r;
+  parts.push(`<line x1="${WC}" y1="${WC}" x2="${px}" y2="${py}" stroke="#000080" stroke-width="2"/>`);
+  parts.push(`<circle cx="${px}" cy="${py}" r="5" fill="#000080" stroke="#fff" stroke-width="1.5"/>`);
+  document.getElementById("wheel").innerHTML = parts.join("");
+  const key = emotionKeyFromAngle(w.emotion, w.intensity);
+  document.getElementById("wheellabel").textContent =
+    w.intensity === 0 ? "neutral" : `${key} ${Math.round(w.intensity*100)}%`;
+}
+function wheelPick(ev){
+  const svg = document.getElementById("wheel");
+  const r = svg.getBoundingClientRect();
+  const vx = ev.clientX - r.left - WC, vy = ev.clientY - r.top - WC;
+  const w = wheelState[curChar];
+  let mag = Math.hypot(vx,vy) / WR;
+  mag = Math.min(mag, 1.0);
+  if(mag < 0.2){ w.intensity = 0; w.emotion = 0; }    // "detente in the center"
+  else { w.intensity = mag; w.emotion = Math.atan2(vy, vx); }
+  w.touched = true;
+  renderWheel(); renderRoster();
+}
+{
+  const el = document.getElementById("wheel");
+  let drag = false;
+  el.addEventListener("pointerdown", e=>{ drag = true; el.setPointerCapture(e.pointerId); wheelPick(e); });
+  el.addEventListener("pointermove", e=>{ if(drag) wheelPick(e); });
+  el.addEventListener("pointerup", ()=> drag = false);
+}
+
+/* mode-aware placeholder so nobody has to know IRC folklore */
+const MODE_PLACEHOLDER = {
+  say:     "Type a message…",
+  think:   "Type a thought — it appears in a cloud with a bubble trail",
+  whisper: "Type a whisper — dashed balloon, italics",
+  action:  'Describe what your character does — e.g. "waves goodbye"'
+};
+function updatePlaceholder(){
+  document.getElementById("msg").placeholder = MODE_PLACEHOLDER[curMode] || MODE_PLACEHOLDER.say;
+}
+
+/* live preview of what the message will become */
+function updateRuleHint(){
+  const raw = document.getElementById("msg").value;
+  // Action becomes a narration caption: the text is appended to the name
+  let mode = curMode, tt = raw;
+  if(/^\/me\s+/i.test(tt)){ mode = "action"; tt = tt.replace(/^\/me\s+/i,""); }
+  if(mode === "action"){
+    const nm = getArt(curChar).name.toUpperCase();
+    document.getElementById("rulehint").textContent = tt.trim()
+      ? `Caption preview: ✱ ${nm} ${tt.trim().toUpperCase()} ✱`
+      : `Action = a narration caption. Your words go after the name: "waves" → ✱ ${nm} WAVES ✱`;
+    return;
+  }
+  const t = raw;
+  const opts = t ? getEmotionsFromString(t) : [];
+  const names = {};
+  names[EM.SHOUT]="shout"; names[EM.LAUGH]="laugh"; names[EM.HAPPY]="happy"; names[EM.SAD]="sad";
+  names[EM.COY]="coy"; names[EM.WAVE]="wave"; names[EM.POINTOTHER]="point at you"; names[EM.POINTSELF]="point at self";
+  const w = wheelState[curChar];
+  const el = document.getElementById("rulehint");
+  if(w && w.touched){ el.textContent = "Wheel set — it overrides the text rules for this one message."; return; }
+  el.textContent = opts.length
+    ? "Text rules: " + opts.sort((a,b)=>b.priority-a.priority).map(o=>`${names[o.emotion]||"?"}(${o.priority})`).join(", ")
+    : 'Or start a line with "/me waves" (action caption), "/think …" (thought), "/w …" (whisper).';
+}
+
+document.querySelectorAll(".tog").forEach(b=> b.onclick = ()=>{
+  document.querySelectorAll(".tog").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); curMode = b.dataset.mode;
+  updatePlaceholder(); updateRuleHint();
+  document.getElementById("msg").focus();
+});
+document.getElementById("send").onclick = ()=>{
+  const inp = document.getElementById("msg");
+  send(inp.value); inp.value = "";
+  document.querySelectorAll(".tog").forEach(x=>x.classList.toggle("on", x.dataset.mode === "say"));
+  curMode = "say"; updatePlaceholder(); updateRuleHint(); inp.focus();
+};
+document.getElementById("msg").addEventListener("keydown", e=>{
+  if(e.key === "Enter" || e.keyCode === 13) document.getElementById("send").click();
+});
+document.getElementById("msg").addEventListener("input", updateRuleHint);
+
+const bgsel = document.getElementById("bgsel");
+function refreshScenes(){
+  bgsel.innerHTML = Object.keys(CC_BACKDROPS).map(k=>`<option value="${k}">${CC_BACKDROPS[k].label}</option>`).join("")
+                  + `<option value="none">(none)</option>`;
+  bgsel.value = (CC_BACKDROPS[state.bg] || state.bg === "none") ? state.bg : "none";
+}
+refreshScenes();
+bgsel.onchange = ()=>{ state.bg = bgsel.value; persist(); renderAll(); };
+
+const artsel = document.getElementById("artsel");
+artsel.value = state.style;
+artsel.onchange = ()=>{
+  if(artsel.value === "original" && !HAVE_ORIGINAL){ artsel.value = state.style; return; }
+  const oldIds = castIds();
+  const prev = state.style;
+  state.style = artsel.value;
+  const newIds = castIds();
+  if(prev !== state.style && oldIds.length && newIds.length){
+    // The two casts have different names, so recast the existing strip by
+    // position — otherwise every line falls back to the first character.
+    const map = {};
+    oldIds.forEach((id,i)=> map[id] = newIds[i % newIds.length]);
+    for(const m of state.msgs){
+      m.charId = map[m.charId] || newIds[0];
+      m.talkTos = (m.talkTos || []).map(t=> map[t] || newIds[0]);
+      if(m.mode === "action") m.display = (getArt(m.charId).name + " " + m.text).toUpperCase();
+    }
+  }
+  curChar = null;
+  persist(); ensureCast(); renderRoster(); renderWheel(); renderAll();
+};
+const wide = document.getElementById("wide");
+wide.value = String(state.wide);
+wide.onchange = ()=>{ state.wide = +wide.value; persist(); renderAll(); };
+const tp = document.getElementById("titlepanel");
+tp.checked = state.title;
+tp.onchange = ()=>{ state.title = tp.checked; persist(); renderAll(); };
+document.getElementById("clear").onclick = ()=>{
+  if(confirm("Clear the whole strip?")){ state.msgs = []; persist(); renderAll(); }
+};
+function updateStatusNote(){
+  const el = document.getElementById("statusnote");
+  if(!HAVE_ORIGINAL){
+    artsel.querySelector('option[value="original"]').disabled = true;
+    el.className = "note";
+    el.textContent = window.CC_ARTIFACT_BUILD
+      ? "Modern art only — load the artpack for the original Microsoft artwork."
+      : "Original artwork not installed — art-original.js missing.";
+  } else {
+    el.className = "help";
+    el.textContent = "Artwork © 1996-1998 Microsoft Corporation (MIT).";
+  }
+}
+updateStatusNote();
+
+/* ==================== artpack loading (artifact build) ==================== */
+/* The claude.ai artifact ships without the ~2 MB of artwork. The user loads
+   comic-chat-artpack.json once; we keep it for next time if storage allows
+   (sandboxed artifact iframes usually have none — then it's a per-visit drop). */
+function applyArtpack(text){
+  let pack;
+  try{ pack = JSON.parse(text); }catch(e){ alert("That file isn't a Comic Chat artpack (bad JSON)."); return false; }
+  if(!pack || pack.format !== "comic-chat-artpack-1" || !pack.original){
+    alert("That file isn't a Comic Chat artpack."); return false;
+  }
+  installOriginalArt(CC_buildOriginalArt(pack.original), pack.backdrops);
+  try{ localStorage.setItem("comicchat-artpack", text); }catch(e){}
+  const dz = document.getElementById("dropzone");
+  if(dz) dz.hidden = true;
+  return true;
+}
+{
+  const dz = document.getElementById("dropzone");
+  if(dz){
+    if(HAVE_ORIGINAL) dz.hidden = true;
+    else{
+      try{
+        const saved = localStorage.getItem("comicchat-artpack");
+        if(saved) applyArtpack(saved);
+      }catch(e){}
+    }
+    const fi = document.getElementById("artfile");
+    fi.onchange = ()=>{ if(fi.files[0]) fi.files[0].text().then(applyArtpack); };
+    document.addEventListener("dragover", ev=>ev.preventDefault());
+    document.addEventListener("drop", ev=>{
+      ev.preventDefault();
+      const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if(f) f.text().then(applyArtpack);
+    });
+  }
+}
+
+/* ========================= AI cast replies ========================== */
+/* Available only inside a claude.ai artifact, where window.claude.complete is
+   the keyless completion API. Hidden everywhere else. */
+const AI_BIOS = {
+  anna:     "sleek black bob, arch expression; dry, deadpan wit — the sardonic straight woman who is secretly fond of everyone",
+  bolo:     "pompadour and a bolo tie; earnest retro-cool, takes fashion and manners very seriously",
+  tiki:     "a living carved tiki mask on legs; speaks in grand dramatic pronouncements, prone to volcano metaphors",
+  scotty:   "a droopy, rumpled dog-like fellow; easily confused, endlessly good-natured, food-motivated",
+  kirby:    "a kid in a red jacket and round glasses; boundless enthusiasm, everything is the BEST THING EVER",
+  dan:      "spiky-haired guy with a big grin; laid-back surfer energy, nothing fazes him",
+  margaret: "curly hair, hands on hips; brooks absolutely no nonsense, delivers withering one-liners",
+  xeno:     "a slender grey alien; deadpan and literal, quietly conducting field research on humans",
+  susan:    "sensible and organized; the one who actually read the manual",
+  cro:      "a hulking caveman type; simple words, surprisingly deep thoughts",
+  lynnea:   "theatrical and glamorous; treats every panel as her big scene",
+  veronica: "stylish and self-assured; always slightly above it all",
+  buck:     "a big friendly galoot; enthusiastic, not always accurate",
+  jordan:   "cool and mysterious; says little, means much",
+  connor:   "an odd knight-ish figure; formal, chivalrous, slightly out of era"
+};
+/* ---- AI with a user-supplied key: Claude, ChatGPT, or Gemini ---- */
+/* Defaults are each provider's current small ("mini") model as of July 2026;
+   the model field is editable, and a model-shaped error falls back once to a
+   long-lived known-good id so a stale default never breaks every call. */
+const AI_PROVIDERS = {
+  claude: {label:"Claude (Anthropic)", model:"claude-haiku-4-5-20251001", fallback:"claude-sonnet-5",   keyHint:"sk-ant-…"},
+  openai: {label:"ChatGPT (OpenAI)",   model:"gpt-5.4-mini",              fallback:"gpt-5-mini",        keyHint:"sk-…"},
+  gemini: {label:"Gemini (Google)",    model:"gemini-3.6-flash",          fallback:"gemini-2.5-flash",  keyHint:"AIza…"}
+};
+let AI_CFG = {provider:"claude", models:{}, keys:{}};
+try{
+  const c = JSON.parse(localStorage.getItem("comicchat-ai-cfg"));
+  if(c && AI_PROVIDERS[c.provider]) AI_CFG = {provider:c.provider, models:c.models||{}, keys:c.keys||{}};
+  const legacy = localStorage.getItem("comicchat-apikey");   // pre-provider versions
+  if(legacy && !AI_CFG.keys.claude){ AI_CFG.keys.claude = legacy; localStorage.removeItem("comicchat-apikey"); }
+}catch(e){}
+function aiPersistCfg(){ try{ localStorage.setItem("comicchat-ai-cfg", JSON.stringify(AI_CFG)); }catch(e){} }
+function aiKey(){ return AI_CFG.keys[AI_CFG.provider] || ""; }
+function aiModel(){ return (AI_CFG.models[AI_CFG.provider] || "").trim() || AI_PROVIDERS[AI_CFG.provider].model; }
+function aiAvailable(){ return !!aiKey(); }
+
+async function callProvider(provider, model, prompt){
+  const key = AI_CFG.keys[provider];
+  let url, headers, body, pick;
+  if(provider === "claude"){
+    url = "https://api.anthropic.com/v1/messages";
+    headers = {"x-api-key": key, "anthropic-version": "2023-06-01",
+               "content-type": "application/json",
+               "anthropic-dangerous-direct-browser-access": "true"};
+    body = {model, max_tokens: 300, messages: [{role:"user", content: prompt}]};
+    pick = d => (d.content && d.content[0] && d.content[0].text) || "";
+  } else if(provider === "openai"){
+    url = "https://api.openai.com/v1/chat/completions";
+    headers = {"authorization": "Bearer " + key, "content-type": "application/json"};
+    body = {model, messages: [{role:"user", content: prompt}]};
+    pick = d => (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || "";
+  } else {
+    url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+          encodeURIComponent(model) + ":generateContent";
+    headers = {"x-goog-api-key": key, "content-type": "application/json"};
+    body = {contents: [{parts: [{text: prompt}]}]};
+    pick = d => {
+      const parts = d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts;
+      return parts ? parts.map(p=>p.text||"").join("") : "";
+    };
+  }
+  const res = await fetch(url, {method:"POST", headers, body: JSON.stringify(body)});
+  if(!res.ok) throw new Error("API " + res.status + ": " + (await res.text()).slice(0,200));
+  return pick(await res.json());
+}
+async function fetchAI(prompt){
+  const p = AI_CFG.provider;
+  try{
+    return await callProvider(p, aiModel(), prompt);
+  }catch(e){
+    if(/model/i.test(String(e)) && aiModel() !== AI_PROVIDERS[p].fallback)
+      return await callProvider(p, AI_PROVIDERS[p].fallback, prompt);
+    throw e;
+  }
+}
+
+/* ---- AI participants: characters played by Claude with YOUR key ---- */
+window.AI_PLAYERS = [];   // [{name, charId, chatty, busy}]
+try{
+  const saved = JSON.parse(localStorage.getItem("comicchat-aiplayers"));
+  if(Array.isArray(saved)) window.AI_PLAYERS = saved.map(p=>({name:p.name, charId:p.charId, chatty:!!p.chatty, busy:false}));
+}catch(e){}
+function aiPersistPlayers(){
+  try{ localStorage.setItem("comicchat-aiplayers",
+    JSON.stringify(window.AI_PLAYERS.map(p=>({name:p.name, charId:p.charId, chatty:p.chatty})))); }catch(e){}
+}
+function aiPrompt(responder){
+  const art = getArt(responder);
+  const bio = AI_BIOS[responder] || "improvise a fitting playful personality from the name alone";
+  const cast = state.msgs.slice(-12).map(m=>{
+    const nm = getArt(m.charId) ? getArt(m.charId).name : m.charId;
+    return m.mode === "action" ? `[${nm} ${m.text}]` : `${nm} (${m.mode}): ${m.text}`;
+  }).join("\n");
+  return `You write dialogue for a Microsoft Comic Chat comic strip. You play ${art.name}: ${bio}.
+
+Recent strip:
+${cast}
+
+Write ${art.name}'s next line. Playful and funny, 1-2 short sentences, stay in character, react to what was just said.
+
+Reply with ONLY this JSON, nothing else:
+{"text":"...","emotion":"neutral|happy|coy|bored|scared|sad|angry|shout|laugh","intensity":0.7,"mode":"say|think|whisper|action"}
+For mode "action", "text" is a third-person action phrase WITHOUT the name (e.g. "hands Anna a coffee").`;
+}
+/* An AI participant decides for ITSELF whether to answer a message:
+   always when addressed by name, or (if marked chatty) when the message
+   addressed nobody in particular. AI players never answer other AIs, so two
+   of them can't chain-react forever. */
+function aiObserve(msg){
+  if(msg.ai || !aiAvailable()) return;
+  for(const p of window.AI_PLAYERS){
+    if(p.busy || p.charId === msg.charId) continue;
+    const addressed = (msg.talkTos||[]).includes(p.charId) ||
+                      checkWord(msg.text.toLowerCase(), getArt(p.charId).name.toLowerCase());
+    if(addressed || (p.chatty && !(msg.talkTos||[]).length)) aiReplyAs(p);
+  }
+}
+async function aiReplyAs(p){
+  p.busy = true;
+  const hint = document.getElementById("rulehint");
+  hint.textContent = `💭 ${getArt(p.charId).name} is thinking…`;
+  try{
+    const raw = await fetchAI(aiPrompt(p.charId));
+    const m = raw.match(/\{[\s\S]*\}/);
+    const r = JSON.parse(m ? m[0] : raw);
+    const emoKey = String(r.emotion||"neutral").toLowerCase();
+    const wheelEntry = WHEEL.find(w=>w.key===emoKey || (emoKey==="laughing" && w.key==="laugh"));
+    wheelState[p.charId] = wheelEntry
+      ? {emotion: wheelEntry.em, intensity: Math.max(0.25, Math.min(1, +r.intensity || 0.7)), touched:true}
+      : {emotion: EM.HAPPY, intensity: 0, touched:true};
+    const mode = ["say","think","whisper","action"].includes(r.mode) ? r.mode : "say";
+    send(String(r.text||"").slice(0,200), p.charId, mode, {ai:true});
+  }catch(e){
+    hint.textContent = "🤖 " + getArt(p.charId).name + " lost their train of thought (" +
+                       String(e.message||e).slice(0,80) + ")";
+  }finally{
+    p.busy = false;
+    setTimeout(updateRuleHint, 2500);
+  }
+}
+
+/* ================================= demo ================================== */
+const DEMO = [
+  ["say",     null,                        "Hi everyone! Welcome to Comic Chat."],
+  ["say",     null,                        "I'm just here for the free coffee."],
+  ["say",     null,                        "lol you are ALWAYS here for the coffee"],
+  ["say",     {emotion:EM.ANGRY, i:0.9},   "WHO DRANK MY COFFEE"],
+  ["think",   {emotion:EM.BORED, i:0.7},   "Humans are such strange creatures."],
+  ["action",  null,                        "hands over a fresh cup"],
+  ["say",     {emotion:EM.HAPPY, i:0.9},   "Ah, splendid. All is forgiven :)"],
+  ["whisper", {emotion:EM.COY,   i:0.8},   "psst... want to raid the fridge later?"],
+  ["say",     {emotion:EM.SCARED,i:1.0},   "MY COVER IS BLOWN!!!"]
+];
+document.getElementById("demo").onclick = ()=>{
+  const ids = castIds();
+  state.msgs = [];
+  let i = 0;
+  const step = ()=>{
+    if(i >= DEMO.length){ renderRoster(); return; }
+    const [mode, emo, text] = DEMO[i];
+    const id = ids[i % ids.length];
+    const w = wheelState[id];
+    if(emo){ w.emotion = emo.emotion; w.intensity = emo.i; w.touched = true; }
+    i++;
+    send(text, id, mode);
+    setTimeout(step, 420);
+  };
+  step();
+};
+
+/* =============================== save PNG ================================ */
+document.getElementById("save").onclick = async ()=>{
+  const svgs = [...document.querySelectorAll("svg.panel")];
+  if(!svgs.length) return;
+  const cols = Math.min(state.wide, svgs.length), gap = 12, px = 420;
+  const rows = Math.ceil(svgs.length / cols);
+  const cv = document.createElement("canvas");
+  cv.width = cols*px + (cols+1)*gap;
+  cv.height = rows*px + (rows+1)*gap;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  await Promise.all(svgs.map((svg,i)=> new Promise(res=>{
+    const img = new Image();
+    img.onload = ()=>{
+      ctx.drawImage(img, gap + (i%cols)*(px+gap), gap + Math.floor(i/cols)*(px+gap), px, px);
+      res();
+    };
+    img.onerror = res;
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+  })));
+  const a = document.createElement("a");
+  a.download = "comic-chat-strip.png";
+  a.href = cv.toDataURL("image/png");
+  a.click();
+};
+
+/* ============================ DOM modal system =========================== */
+function ccModal(title, bodyHTML){
+  const old = document.getElementById("ccmodal");
+  if(old) old.remove();
+  const ov = document.createElement("div");
+  ov.id = "ccmodal";
+  ov.innerHTML = `<div class="mwin"><div class="mtitle">${esc(title)}
+    <button class="mclose">×</button></div><div class="mbody">${bodyHTML}</div></div>`;
+  document.body.appendChild(ov);
+  const close = ()=>ov.remove();
+  ov.querySelector(".mclose").onclick = close;
+  ov.addEventListener("pointerdown", ev=>{ if(ev.target === ov) close(); });
+  return {el: ov, close};
+}
+function copyText(t){
+  try{
+    const ta = document.createElement("textarea");
+    ta.value = t; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ========================= multiplayer UI wiring ========================= */
+function enterRoomMode(){
+  // shared strips reference the original cast ids, so everyone plays with it
+  if(HAVE_ORIGINAL && state.style !== "original"){
+    artsel.value = "original"; artsel.onchange();
+  }
+  document.getElementById("demo").disabled = true;
+  document.getElementById("clear").disabled = !NET.isHost;
+  document.getElementById("clear").title = NET.isHost ? "" : "Only the host can clear the shared strip";
+}
+function leaveRoomMode(){
+  document.getElementById("demo").disabled = false;
+  document.getElementById("clear").disabled = false;
+  document.getElementById("clear").title = "";
+}
+function rosterHTML(parts){
+  if(!parts || !parts.length) return "";
+  return "<div class='mrow'><b>In the room:</b> " +
+    parts.map(p=>esc(p.name) + (p.ai ? " 🤖" : "") +
+      " <span class='small'>(" + esc(getArt(p.charId) ? getArt(p.charId).name : "?") + ")</span>").join(" · ") +
+    "</div>";
+}
+let lastRoster = [];
+if(typeof NET !== "undefined"){
+  NET.onStatus = t=>{ const el = document.getElementById("netstatus"); if(el) el.textContent = t; };
+  NET.onRoster = parts=>{
+    lastRoster = parts;
+    const box = document.getElementById("mroster");
+    if(box) box.innerHTML = rosterHTML(parts);
+  };
+}
+/* Accept a bare code, a pasted invite URL (file:///...#join=cc-xxxxxx), or
+   anything containing a cc- code — extract the room id from all of them. */
+function parseRoomCode(s){
+  s = (s||"").trim();
+  const m = s.match(/#?join=([\w-]+)/i) || s.match(/\b(cc-[a-z0-9]+)\b/i);
+  return m ? m[1] : s;
+}
+function openNetModal(){
+  const joined = netActive();
+  const hashJoin = (location.hash.match(/#join=([\w-]+)/)||[])[1] || "";
+  let body;
+  if(joined){
+    body = `<div class="mrow">Room code: <code>${esc(NET.roomId||"")}</code>
+        <button id="mcopy">Copy invite link</button> <span id="mcopied" class="small"></span></div>
+      <div id="mroster">${rosterHTML(lastRoster)}</div>
+      <div class="mrow"><button id="mleave">Leave room</button></div>
+      <div class="small">Messages travel peer-to-peer (WebRTC). The host's browser keeps the
+      strip in order — if the host leaves, the room closes.</div>`;
+  } else {
+    body = `<div class="mrow">Your name: <input id="mname" maxlength="24" value="${esc(localStorage.getItem("comicchat-name")||"")}" placeholder="e.g. Ken"></div>
+      <div class="mrow"><button id="mhost"><b>Host a new room</b></button>
+        — then send the invite link to friends.</div>
+      <div class="mrow"><input id="mcode" placeholder="room code, e.g. cc-x7k2mp" value="${esc(hashJoin)}" style="width:14em">
+        <button id="mjoin"><b>Join</b></button></div>
+      <div id="mroster"></div>
+      <div class="small">No account, no server of ours: WebRTC with a public signalling
+      broker. Both sides need this page open in a browser.</div>`;
+  }
+  const m = ccModal("🌐 Multiplayer", body);
+  const nameOf = ()=>{
+    const v = (m.el.querySelector("#mname") ? m.el.querySelector("#mname").value : "").trim() || "Player";
+    try{ localStorage.setItem("comicchat-name", v); }catch(e){}
+    return v;
+  };
+  if(joined){
+    m.el.querySelector("#mcopy").onclick = ()=>{
+      const link = location.href.split("#")[0] + "#join=" + NET.roomId;
+      m.el.querySelector("#mcopied").textContent = copyText(link) ? "copied!" : link;
+    };
+    m.el.querySelector("#mleave").onclick = ()=>{ netLeave(); leaveRoomMode(); m.close(); };
+  } else {
+    m.el.querySelector("#mhost").onclick = ()=>{
+      netHost(nameOf(), ()=>{ enterRoomMode(); m.close(); openNetModal(); });
+      m.el.querySelector("#mhost").textContent = "connecting…";
+    };
+    m.el.querySelector("#mjoin").onclick = ()=>{
+      const code = parseRoomCode(m.el.querySelector("#mcode").value);
+      if(!code) return;
+      m.el.querySelector("#mcode").value = code;
+      netJoin(code, nameOf(), ()=>{ enterRoomMode(); m.close(); openNetModal(); });
+      m.el.querySelector("#mjoin").textContent = "connecting…";
+    };
+  }
+}
+
+/* ============================ AI setup wiring ============================ */
+function openAiModal(){
+  const players = window.AI_PLAYERS;
+  const chars = castIds().map(id=>`<option value="${id}">${esc(getArt(id).name)}</option>`).join("");
+  const list = players.length
+    ? players.map((p,i)=>`<div class="mrow">🤖 <b>${esc(p.name)}</b> plays ${esc(getArt(p.charId).name)}
+        ${p.chatty ? "(chatty)" : "(replies when addressed)"}
+        <button data-rm="${i}">remove</button></div>`).join("")
+    : `<div class="mrow small">No AI players yet.</div>`;
+  const provOpts = Object.keys(AI_PROVIDERS).map(k=>
+    `<option value="${k}"${k===AI_CFG.provider?" selected":""}>${esc(AI_PROVIDERS[k].label)}</option>`).join("");
+  const m = ccModal("🤖 AI players", `
+    <div class="mrow">Provider: <select id="mprov">${provOpts}</select>
+      &nbsp; Model: <input id="mmodel" style="width:14em" value="${esc(aiModel())}"></div>
+    <div class="mrow">API key:
+      <input id="mkey" type="password" style="width:16em" value="${esc(aiKey())}" placeholder="${esc(AI_PROVIDERS[AI_CFG.provider].keyHint)}">
+      <button id="mkeysave">Save</button> <span id="mkeynote" class="small"></span></div>
+    <div class="small mrow">The key stays in this browser's storage and goes only to the
+      provider you chose — never to other players. Calls are made from whoever added the
+      AI player, so only you need a key. The model box is prefilled with the provider's
+      current small model; edit it to use any model your key can access.</div>
+    <hr>${list}
+    <div class="mrow">Add: <select id="mchar">${chars}</select>
+      <label><input type="checkbox" id="mchatty"> chatty (replies even when not addressed)</label>
+      <button id="madd"><b>Add AI player</b></button></div>
+    <div class="small">An AI player answers when someone mentions its character's name.
+      Its replies use your key and appear to everyone in the room.</div>`);
+  const readFields = ()=>{
+    AI_CFG.models[AI_CFG.provider] = m.el.querySelector("#mmodel").value.trim();
+    AI_CFG.keys[AI_CFG.provider] = m.el.querySelector("#mkey").value.trim();
+    aiPersistCfg();
+  };
+  m.el.querySelector("#mprov").onchange = ()=>{
+    readFields();
+    AI_CFG.provider = m.el.querySelector("#mprov").value;
+    aiPersistCfg();
+    m.el.querySelector("#mmodel").value = aiModel();
+    m.el.querySelector("#mkey").value = aiKey();
+    m.el.querySelector("#mkey").placeholder = AI_PROVIDERS[AI_CFG.provider].keyHint;
+    m.el.querySelector("#mkeynote").textContent = "";
+  };
+  m.el.querySelector("#mkeysave").onclick = ()=>{
+    readFields();
+    m.el.querySelector("#mkeynote").textContent = aiKey() ? "saved" : "cleared";
+  };
+  m.el.querySelectorAll("[data-rm]").forEach(b=> b.onclick = ()=>{
+    players.splice(+b.dataset.rm, 1); aiPersistPlayers(); m.close(); openAiModal();
+  });
+  m.el.querySelector("#madd").onclick = ()=>{
+    readFields();
+    if(!aiKey()){ m.el.querySelector("#mkeynote").textContent = "an API key is needed first"; return; }
+    const charId = m.el.querySelector("#mchar").value;
+    players.push({name: getArt(charId).name + " (AI)", charId,
+                  chatty: m.el.querySelector("#mchatty").checked, busy:false});
+    aiPersistPlayers();
+    if(typeof netAnnounceAI === "function" && netActive()) netAnnounceAI();
+    m.close(); openAiModal();
+  };
+}
+
+{
+  const nb = document.getElementById("netbtn");
+  if(nb){
+    if(typeof netAvailable === "function" && netAvailable()) nb.onclick = openNetModal;
+    else nb.style.display = "none";
+  }
+  const ab = document.getElementById("aibtn");
+  if(ab) ab.onclick = openAiModal;
+  if(location.hash.startsWith("#join=") && typeof netAvailable === "function" && netAvailable())
+    openNetModal();
+}
+
+ensureCast();
+renderRoster();
+renderWheel();
+renderAll();
+updatePlaceholder();
+updateRuleHint();
+window.addEventListener("resize", ()=>renderAll());
