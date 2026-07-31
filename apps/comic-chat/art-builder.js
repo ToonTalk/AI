@@ -8,7 +8,15 @@ function CC_buildOriginalArt(DATA){
     const d = DATA[id];
     const uri = i => "data:image/png;base64," + d.imgs[i];
 
-    if(d.bodies){
+    /* Halos (aura planes) are drawn for EVERY layer before ANY artwork — the
+     client blits all auras first (bodycam.cpp:520-560), so a halo can never
+     erase a neighboring layer's art. Compositing the halo into the image is
+     what separated heads from bodies at the neck. */
+  const auraImg = (rec, x, y) => (rec.aimg >= 0)
+    ? `<image href="${"data:image/png;base64," + d.imgs[rec.aimg]}" x="${x}" y="${y}" width="${rec.w}" height="${rec.h}"/>`
+    : "";
+
+  if(d.bodies){
       /* AT_SIMPLE: one image per pose; gestures and emotions share the list. */
       const pick = (fi, ti) => {
         const t = d.bodies[Math.max(0,ti)], f = d.bodies[Math.max(0,fi)];
@@ -26,7 +34,8 @@ function CC_buildOriginalArt(DATA){
         },
         draw(fi, ti){
           const b = pick(fi, ti);
-          return `<image href="${uri(b.img)}" x="${-b.w/2}" y="${-b.h}" width="${b.w}" height="${b.h}"/>`;
+          return auraImg(b, -b.w/2, -b.h) +
+                 `<image href="${uri(b.img)}" x="${-b.w/2}" y="${-b.h}" width="${b.w}" height="${b.h}"/>`;
         }
       };
       continue;
@@ -57,9 +66,10 @@ function CC_buildOriginalArt(DATA){
         const f = d.faces[Math.max(0,fi)] || d.faces[0];
         const t = d.torsos[Math.max(0,ti)] || d.torsos[0];
         const o = offset(f, t);
+        const halos = auraImg(t, o.tx, o.ty) + auraImg(f, o.hx, o.hy);
         const torso = `<image href="${uri(t.img)}" x="${o.tx}" y="${o.ty}" width="${t.w}" height="${t.h}"/>`;
         const head  = `<image href="${uri(f.img)}" x="${o.hx}" y="${o.hy}" width="${f.w}" height="${f.h}"/>`;
-        return d.torsoFirst ? torso + head : head + torso;
+        return halos + (d.torsoFirst ? torso + head : head + torso);
       }
     };
   }
