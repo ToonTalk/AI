@@ -1,0 +1,2254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web Comic Chat + AI</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M4 4 Q2 4 2 7 L2 17 Q2 20 5 20 L8 20 L6 27 L14 20 L27 20 Q30 20 30 17 L30 7 Q30 4 27 4 Z" fill="white" stroke="black" stroke-width="2.2"/><text x="16" y="16" text-anchor="middle" font-family="Comic Sans MS,cursive" font-size="11" font-weight="bold" fill="black">CC</text></svg>'>
+<style>
+  :root{ --face:#c0c0c0; --lt:#ffffff; --dk:#808080; }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{ font-family:"Comic Sans MS","Comic Sans",cursive; background:#008080; display:flex; flex-direction:column; }
+  .win{ margin:8px; flex:1; display:flex; flex-direction:column; min-height:0; background:var(--face);
+        border:2px solid; border-color:var(--lt) var(--dk) var(--dk) var(--lt); box-shadow:2px 2px 6px rgba(0,0,0,.4); }
+  .titlebar{ background:linear-gradient(90deg,#000080,#1084d0); color:#fff; padding:4px 8px; font-weight:bold; font-size:14px; }
+  .titlebar .sub{ font-weight:normal; font-size:11px; opacity:.85; }
+  .toolbar{ display:flex; align-items:center; gap:6px; padding:5px 8px; flex-wrap:wrap; border-bottom:2px solid var(--dk); }
+  button, select{ font-family:inherit; font-size:12px; padding:3px 9px; cursor:pointer; background:var(--face);
+        border:2px solid; border-color:var(--lt) var(--dk) var(--dk) var(--lt); }
+  button:active{ border-color:var(--dk) var(--lt) var(--lt) var(--dk); }
+  button.tog.on{ border-color:var(--dk) var(--lt) var(--lt) var(--dk); background:#e6e6e6; }
+  label{ font-size:12px; }
+  #page{ flex:1; overflow-y:auto; background:#7a7a7a; padding:14px; }
+  #strip{ background:#fff; margin:0 auto; display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;
+          padding:10px; box-shadow:0 2px 8px rgba(0,0,0,.5); }
+  #strip .hint{ color:#777; font-size:13px; padding:20px; }
+  svg.panel{ display:block; }
+  svg.thinkpanel{ opacity:.88; }
+  .composer{ display:flex; gap:10px; padding:8px; align-items:stretch; flex-wrap:wrap; border-top:2px solid var(--lt); }
+  .rosterbox{ display:flex; flex-direction:column; gap:2px; }
+  #roster{ display:flex; gap:4px; flex-wrap:wrap; max-width:390px; }
+  #roster.collapsed{ max-height:132px; overflow:hidden; }
+  #rostermore{ font-size:10px; padding:1px 6px; align-self:flex-start; }
+  .porta{ width:54px; padding:2px; text-align:center; font-size:10px; line-height:1.1; background:var(--face); cursor:pointer;
+          border:2px solid; border-color:var(--lt) var(--dk) var(--dk) var(--lt); }
+  .porta.sel{ background:#cfe3ff; border-color:#000080; }
+  .porta svg,.porta img{ display:block; width:100%; height:42px; background:#fff; border:1px solid #999; object-fit:contain; }
+  .wheelbox{ text-align:center; font-size:11px; }
+  #wheel{ cursor:crosshair; touch-action:none; }
+  .inputcol{ flex:1; display:flex; flex-direction:column; gap:5px; min-width:250px; }
+  .typerow{ display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+  .sendrow{ display:flex; gap:6px; }
+  #msg{ flex:1; font-family:inherit; font-size:14px; padding:6px 8px; background:#fff;
+        border:2px solid; border-color:var(--dk) var(--lt) var(--lt) var(--dk); }
+  .help{ font-size:10px; color:#444; }
+  .note{ font-size:10px; color:#7a0000; }
+  #ccmodal{
+    position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:50;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #ccmodal .mwin{
+    background:var(--face); min-width:320px; max-width:560px; max-height:85vh; overflow:auto;
+    border:2px solid; border-color:var(--lt) var(--dk) var(--dk) var(--lt);
+    box-shadow:3px 3px 10px rgba(0,0,0,.5);
+  }
+  #ccmodal .mtitle{
+    background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:bold;
+    font-size:13px; padding:4px 8px; display:flex; justify-content:space-between; align-items:center;
+  }
+  #ccmodal .mclose{ padding:0 7px; font-weight:bold; }
+  #ccmodal .mbody{ padding:12px 14px; font-size:12px; }
+  #ccmodal .mrow{ margin:8px 0; }
+  #ccmodal input[type=text], #ccmodal input[type=password], #ccmodal input:not([type]){
+    font-family:inherit; font-size:12px; padding:3px 6px; background:#fff;
+    border:2px solid; border-color:var(--dk) var(--lt) var(--lt) var(--dk);
+  }
+  #ccmodal .small{ font-size:10px; color:#444; }
+  #ccmodal hr{ border:none; border-top:1px solid var(--dk); margin:10px 0; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">💬 Web Comic Chat <span class="sub">— a faithful web port of Microsoft Comic Chat (1996)</span></div>
+  <div class="toolbar">
+    <label>Artwork:
+      <select id="artsel">
+        <option value="original">Original (Microsoft)</option>
+        <option value="modern">Modern (drawn)</option>
+      </select>
+    </label>
+    <label>Scene: <select id="bgsel"></select></label>
+    <label>Panels wide: <select id="wide"><option>1</option><option>2</option><option selected>3</option><option>4</option></select></label>
+    <label><input type="checkbox" id="titlepanel" checked> Title panel</label>
+    <button id="demo">▶ Play demo</button>
+    <button id="save">💾 Save PNG</button>
+    <button id="clear">🗑 Clear</button>
+    <span id="dropzone"><button onclick="document.getElementById('artfile').click()">🎨 Load original artwork…</button><input type="file" id="artfile" accept=".json,application/json" hidden></span>
+    <button id="netbtn">🌐 Multiplayer</button>
+    <button id="aibtn">🤖 AI players</button>
+    <span class="help" id="netstatus"></span>
+    <span class="help" id="statusnote" style="margin-left:auto"></span>
+  </div>
+  <div id="page"><div id="strip"><div class="hint">Pick a character, set an emotion on the wheel, and say something…</div></div></div>
+  <div class="composer">
+    <div class="rosterbox">
+      <div id="roster" class="collapsed"></div>
+      <button id="rostermore" hidden></button>
+    </div>
+    <div class="wheelbox">
+      <svg id="wheel" width="132" height="132"></svg>
+      <div id="wheellabel">neutral</div>
+    </div>
+    <div class="inputcol">
+      <div class="typerow">
+        <button class="tog on" data-mode="say">💬 Say</button>
+        <button class="tog" data-mode="think">💭 Think</button>
+        <button class="tog" data-mode="whisper">🤫 Whisper</button>
+        <button class="tog" data-mode="action">🎬 Action</button>
+        <span class="help">Shouting isn't a balloon — type in CAPS or pick Shout on the wheel.</span>
+      </div>
+      <div class="sendrow">
+        <input id="msg" maxlength="200" placeholder="Type a message…">
+        <button id="send" style="font-weight:bold">Send</button>
+      </div>
+      <div class="help" id="rulehint">&nbsp;</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CC_BACKDROPS = {};
+const CC_WHEEL_ICONS = {"hap": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAACzklEQVR42pVVv0szQRB9JxIrEYLVYLqAjRYqCqL/gIWijY34BygBsbG1SJPGxsJOovij00aFgIdg4xFFxUZECIEDlQuiSCRkDe77Cr3V8y7xc+C427nZt29nZt8CDWxycpIAAs/09DTxVzs4OKCIUEQ4MDBA27a5vb1NAMZ/fHz8f8CLi4sUEfb19VFrzZ/2+vpqgHO5XGPQZDJJEeHDwwOjrFwum0VyuRxFhCsrK/VBRYRDQ0ORYO/v7wTA2dlZkqTW2jCtCyYiBsBxHMbjccPo8fExUBwf1J8XCXhzc0OSzGazZqJt22aRarXKiYkJdnZ2Gl8mkwkDdnV1mVVJhpg0slqtRhHh4eEhA+zS6XQgUGsdWeWXl5eQ73sum3zQ0dHRAGvLsrCwsICP+A/b29tDW1tbKF2pVOprcH5+ThEJsbFt25yMn6nY2dkJxBYKhS+Gp6enuL+/h2VZkdVvb28P+YaHhwPjjo4OAMDl5SWxtLQUmXylFAHQ8zzjOzk5YSwWC+3G79FsNstmrXUks1gsFsjf29sbBgcHoZQKxfoYJNGUSCR+Pd+rq6toaWmp+19rDRFBd3f3V9vUajWSZKlUMt++9ff3c2pqymxVa81CoUAA1FrTcZxgc4sI8/k8SXJubo4AmEgk6LoulVKsVCosl8v0PI9jY2Ohxk+lUmFAvz2ur69DolrvcRwnWiTy+bzpRT8AACuVCgHQdV0Wi0UCYCaTMW+SvLu7o4jw6OiIdcXh7OyMALi8vMx4PE7P8/j8/Bxg5+d5fn4+Wm22trb4vTjVajVym7e3t6Y4PruZmZn6mtjT0xOo5tPTE13XZalUYrFYZDKZNCrTUGC/g25ubhrQ9fX1AEOlFJVSRlgvLi5+v6w+V+Xu7q4B8NsnnU43ZBapCFdXVxwZGTHj8fFxtLa2YmNjw/j29/fR29tr/fmOXltbM9tteMN92j+GQ3dKpfdi6gAAAABJRU5ErkJggg==", "coy": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAAC0UlEQVR42pWVPUszQRSFz8awTYqAhYQLqRRULEyVQhtrBZtUFv6B/ABFsNDCTomdnY2NCFYigkQwiIgEgzbiRxFREiUE4yIEl3HnvMXLjo5J/DiwsDM7+3Dm3rl3gA5aW1sjgE7P3yQiFBEDWFhY4MzMjBmLCBcXF/knWDqdplKKX9VsNplMJikiXF5e5q9g9XqdP6lSqVBEOD09bUEj4UuxWCQATExMoLu7+zc7QW9vLw4ODjq7S6VS37oCwJGREWsHn+L9oaOjI4oIm81mR5hSysr0zs4OSfLu7q4VGGY0lO/7TCaTBECttZm/ubkxwNXVVcvl4eEhLWA+nydJBkFgObm6uvoxQXNzc7ZLEeHz8zNJUmttYIVCgb9RoVD4AJZKJYqItWB/f99Al5aWzHy5XDYHvlwuW/E1wFwuZ8XP8zxry9lsliR5enraUoK1Ws2KIwBgfn7eAoZJCX/yfd+E4nOmHx8fzXqtNUWE5+fnjP4/XrZc14VSCr7vw3VdAIDjOIhGowiCALVaDYlEwqx3HAcAkEqlHBwfH7fE8K8KHQJAZHR01AGA9/f3jmVGEgMDAxgbG2v7vV6vt9by7e2tmXx4eMDT05MZ53I5XF9fI5vNtgWur6+31vHs7Cy11tzY2LCSEW7pc8V8lYhwamrqIxknJycEQKUUt7e3OT4+TgBcWVlhEATfxu/y8rK1lkOX9/f3VErx7e2NsVjMHJFKpUKlVFuXk5OT7YFbW1sUEdOltdb0fZ+lUomZTIYAmE6neXFxYWDFYtGcv449MZFIWE42NzfpeR49z2Oj0bCugna9MPJ5sLe3h0gkgsHBQWitAQCxWAzxeBzxeBy7u7sAgJeXF/T19QEAqtWq0xE4PDzsVKtV5/X1FV1dXejp6UF/fz8ajQY8z0M0GoXjOBgaGmoL66izszN+vUrD67Nty/+LMpkMXdclAObz+R9B/wAqKK4qEZ1q8AAAAABJRU5ErkJggg==", "bor": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAACjElEQVR42p1VMUsjQRh9Eat0Wlh8ZUiwEGEhYGEnhEAICJYWNlrYpI0pAvkRQhoJYUEIgRARwVbsLFxJl8ImEARJCBFJWHbZ7L4r7nbZMZu93D0Y2JnZed+b7818A8Tg5eWFAILWaDSI/8Hb2xtFhCKiEPpjuq6vT1ypVCgi1DSN8/mcYQwGg4D46Ojo76S+gul0yji8v7+Hd6Bgw/94fn4mABSLRWxtbcUGzmQy2NvbAwB0u12uVJfL5fgv0DQtUiV0XaeI0LbtWALHcXh3d8fJZBL0/ZwuqQNAkry/vw9crdfrAZlt24rjvmHb29sqoWEYFBEOh0OSVBaNRiNFYXjOx2QyoYiw3W7/Jq1WqwRAz/NIkmdnZwRAwzAit/z9/a2kxvM8AmA6nQ5UKhHDP66LcB43AGB3d1fJ6WKxQKfTiTwN+/v7SCQSypimaUqf5+fnSsRsNksAHI/HS6qjdnR1dRUo3ASAZDKpRNjZ2QEAWJaljCcSCRweHuL4+FgZ/7meJycnSsThcMhsNhuZr6jclkol5ehEmuLDMAxGpSXWlDjoug4AyOfz65WrZrNJEaFpmisVxB0hx3EoIiyXy1Su3unp6RKJaZrs9/t8fX3laDSibdtL5BcXF/F3mSRnsxkPDg6UqxZuYRMji0O326WI8Pb2lq7rEgAfHx/59fXF+XxO0zRpWRZt26ZlWRwMBiTJVqtFEeHT0xMj6yEAWpZFz/PoeR4/Pj4IgKlUipqm8fLycqn6RNZDAOj1esGj5LpusLDdbrNQKLBWqwVFwXXdlU/ASqU3Nzd0HEdx2XEcViqVeGU/cX19HURPp9Ps9/uczWb8/PxkLpcL5v682evj4eEh0uFerxdL9AvPy8iTqa9YpAAAAABJRU5ErkJggg==", "sca": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAACsklEQVR42p1VO0grURScZ6GNIKQQOdgELC0sBYtYROzUQgSLlBIQC1NolU60EMTGXrCzC0IKbVSCYiFIilQWiiBiig3rLpdcr7nzisfelzW7+BlYyB5O5nx3DvAFjo6OCIAAODU1RfwW6+vrFBGKiCME0G37PqI/FQoF+r5Pay2ttVRKcWVlxRFfXFzwW2T5fJ7GGBpj+BnWWhpjODc3RxHhxsZGOunBwQFFhEEQMAxDAmAul3Nkxhju7+9Ta02llMs0kezm5oYiwna7zevra9ezQqHgCHd2dpw9CAJaa9N7KiIsFoskGRtCN4wxzr65uUmS3Nvb6yWs1+sUEdezfD5PAGy1Wj09bDQasWDWWgLgwsLCf9Lx8XFms1n+FvPz8y7LPgDwPA9ra2u/3tnFxcXe/j0/P8eitlotAqBSKrYySb3VWlNEWKvV6AittTGn5eVlAuDx8bGzeZ6XSBgNMpvNsi+tjJmZGQDA0NCQs3X/TsLDwwNSMyTJ19fXHlu73U4cDAD29/enZwgAw8PDwL/6cHt7C601BgYGUv1HR0fTh/I5OgCenZ2l+kRi4TI8PT1NjPr+/o77+3uUy2UMDg7i4+Ojx+ft7Q0AMD09/ScmV92IxCHpOT8/j/lWKpX451er1ZwwdDodFotFAuDW1hZ93ycAhmHITCbDw8NDAuDJyUmsJUtLS+xZ7mq1yk6nQwCsVCqcmJhwC+77PkulEhuNBre3tzk7Oxtb6qurqzjh2NiY08KkMkdGRmLvnueRJDOZTLomRvcjDEM+PT3R930qpRiGIYMgoFKKWmunStVqlSLCu7u7ZMJyuUwR4erqKo0xvLy8TMyWJF9eXiginJyc5LeuHQA2m01qrV1WxhgqpZjL5Sgi3N3d5Y+uXjScqPTHx0cn+T8+pfV6PbHcr4j+Am/UggmSvlhjAAAAAElFTkSuQmCC", "sad": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAAC3UlEQVR42o1VPUvsUBA97oKCIvYDWli5oIVWi1hY2NrbuIWChf4COysRQRSx0UILGxvFQmGRtFuIQVxhqwVdkLWSxI8QEy73nle8l+uLm3UdSJGTmTMz596ZAL+wSqXCo6Mj/sa3q92H0dFRep5n35+fnyEi/79nxuayQBGh53no6enBzc0NHh4eEEUR7u/vMTY2Zn0qlUrnqkWEIsJarUZjDL+bUopBEBAARYR3d3f8kaxYLDKKInYypRTHx8cpIj8Tnpyc8LfWbDYJgFNTU8wkW1lZsc5xHBMAC4WCxZaXlwmApVLJYmtra9lVigh93ydJGmMIwD6J9fX1WaxcLpMkwzAkAM7MzHyRlstliogNPD4+toEfHx8p3aanp1OJkuSpKkWE+/v7NtB1XR4cHFAplXkYYRiy0WikChARVqtVWsJqtWodjDHUWmdemziOqbVOYbVajQC4tbX1Rfi9mqSV1dVVi728vBAAt7e3W5IA4ODgIO2k5PP51CG9vr4CABzHsZjrugCARqORHrfcX5qnp6fs0QOAMAwBACMjIxabmJgAAAwNDXUetyy93t7eUnoppRjHcYtv0jKAr5a11i2J+vv7kcvl8P7+js/PT+TzeXR3d6OrK71olFKt2ybRJ7Xb/gUODAygt7cXFxcXmR1eXV0BADY2Nv4CxWKRi4uLbWc2iiKGYZgpizGGk5OT6YvtOA7b6ai1ZhAEbDabDIKASqmUn1KqdVKSg3EcJyV0oVBIzXTyzM/PW+Lz83MC4O7ubivh7OwsjTE0xthFcHp6Ss/z6Ps+Hx8fOTc3RwC8vb2lMYbDw8MUEV5fX2dvnPX1dXs9tNapRQGAl5eXVEoxiiKenZ1RRLi5uZm9ZPf29igirNfrVietNV3X5c7ODn3ftzPueV62du3+Ka7rpkgTKZRS9DyPiZ/dMD/Z4eFhkpmlUonVapX1ep0LCwu2qo6VfbelpaXME+7U5h8Igb1Y40sF+gAAAABJRU5ErkJggg==", "ang": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAAC+klEQVR42pWVPUgzQRCGJ0c0lYWCiNNFBNuATdBaJDYW1pZiI6SyCNiKZUQiAQWxSBPESkTQaCMcaBRiYyHYHHKQQziWC0eW4/a1kFtz3yXxc2DhfmafnXlndpdoiDEziCg2Tk9PQX+14+NjMDOYGaurq7i8vMTOzg6ISH9/fHz8P/De3h6YGScnJwiCAL0WhiEcx9Hgm5ub4dDZ2VkwM6SUGGZhGGJrawvMjEqlgqGa1Wo1KKXwm/m+ryMdCDs4OAAAKKUgpewLDoIAR0dH8H0fruuCmZHP5+NQ0zTBzOh0OnplIsLGxkYMKqXU/wqFApRSWF5eTkYZtUdkFxcXemK5XNZRT0xM6O+Rzo7jgJlxf3+PGNA0TQ1USqHVaunJSikIIUBEyGaziaIltGRmCCFiTlJKXF9fY2lpSS8ihOir7dra2g/w6uoKzNy3AFJKDVBKod1uo1qtJvweHh5+gLlcLqZfbzV7Uw7DMKFfZEIIDUw7jkP0TaRUKqVl+Pz81M9BEMSKaBhG7H1kZIRs2ybTNJFWSvXty6mpKSqVSpTL5cgwDDIMQ4PT6XTMNwgCYmZaWFhI0czMjE5rkIZCCDSbzYE7yLKsHw1vb2/77t+oEJZlxbTsZ5VKJdk27+/vsQkRUEoJ13XheV6s4r1+0aFCRKTVrVarujgAKAgCsm2bMpkMjY+P09jYGGUyGTIMg97e3ui7n7/9fd+nubm55NaLIuh2uzrN19dXEBE6nQ6KxSLq9TrW19dRKBQAAOfn58m9fHd3B2aGZVkIwxBnZ2cgIszPz8N1XRARhBCo1+uo1Wr4+PjQmmaz2f5HWG+Ui4uLibvk31Eul9FoNMDMaDabSeDLywuYGSsrK2i32yAibG5uwnEcCCHgeR48z4Pv+7qVovtl4Imdz+fBzNjf39cTR0dHY5GVSiV0u93fYZFtb29Hjmi1WhBCxEaxWBwKSw25j4mIaHp6mnZ3d+n5+ZkODw+1j23bqT/fz09PT5icnNTpNhqNX1P8AqM17n+9c1M5AAAAAElFTkSuQmCC", "sho": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAADCklEQVR42pVVPUsjURQ9qxsTsBMUvMHCRvAH2FgIQgqttNTfoBaWotgJNkGwERXEIkWsFCQYJOkshIxfKSy0CAQcyRQJY8IkwzNzttidZ2YTk90DA8N799537n3n3Qv0wNTUFAEQAI+Pj9nL/sd3GyJCADBNs3VN/5um2dG3r1uwmZkZ1Go1KKXgui7y+TyUUgGbrjAMgyLClZUVOo5D13XZCtd1qZSi4zgUEfYM+seApVKJa2trBMBcLkeSTKfTupapVIrlcpkAvg86OztLEaFlWdoRAIeGhkiS4+Pjem11dZUkWa1WKSI8PT1lR3bpdJok+fz8zEwmQ9u26XkeSVIpxVqtRtu2qZTSZYjFYu0sLy8vKSLa2fM8FgoFAtDOnuexWq0SAI+OjnRAv563t7cMsIvH49pIKcXJyUkCYKFQoOu6bDQafHt702m3orWWWjZzc3P6gP7+fkxMTAAAIpEIQqEQBgYGMDIyAgAYHBwMZLi1tdVePz9dH81mk8Vika7rala7u7uB+vl4f3//qqOvve/geR5t22apVGKlUqHjOB0PFxE+Pj7y59XVVeB5teLz8xOWZSEajbbtNRoNhMPh38+trw+macIwDPR1MgaAer2OUCiEaDSKvb09AIBlWQCApaUlRCIR/L6PL4TDYSCbzbal7Hke9/f3tbArlQoBsFgsBkRfKpW0vYjQMAzqS2nF9fV1wPG7b2NjgyTZaDSC4hYR3Qg8z/unYK16vL+/b9dhLpcDSeTzefwPSCIej+NvYRIAm80ml5eX/4uhUooiwouLiy+GCwsLEBHU63WMjY31ZOUz2t7ehm3bAIDFxcUfHXuhbdsEwOHhYU5PTzOZTHJnZ4epVCpwy+vr65pdx5748PBAEWEymeTJyUnXNP22trm52b1r+6e9vLywXC7z7OyM8XiciUSCr6+vtG1bs7y5uaGI8ODgoPsYiMViuh3VajUeHh4G2OVyOb2fzWbZc4w+PT1xfn7eH5XIZDIYHR3Fx8cHzs/PkUgkeo7Sjri7u+tYv16T7heKSxPlQnqGxgAAAABJRU5ErkJggg==", "laf": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAAC9klEQVR42p2VvUsrXRDGn6RYU4oQkAMWQkDttNWANiGVhaWFjRYiYqUElgjaWIoQLP0XLEULwSZEhIBJswgiC4KIATcshmU3h8xzC989b9bovbl3YCCZs+fHfJ0Z4DdycHBAAEaXl5eJf5F6vU6lFJVSCWBs+88+nFQqFSqluLq6yiAIKCIkSRGh7/u0LGt4aPxhEAQkyXa7zX4Jw5AiQs/zfoSmvxpOTk6QyWTQ7XZRKpXgOA4AoNvtIpPJQGuN0dFRbG1tAQC2t7f5o3eXl5ckyf39fZO3ZrNJkry6ujK2iYkJkmSpVKJSivV6PQmtVqtUSrHX69H3fXNxbW0tEfLR0ZE5ExH2ej1TrAHv5ufnzUXbtlmtVvmdRFHETqdj/u/s7HwP7C+AiJjqfpXYs1i01lRKcXd39xPaaDSolEoAHh8fOTk5yYeHhwHY6ekpx8fHTSeQTIY9NTVFAObw4uIi0cw3NzeJiwBYKBQ4NjZm7IVCIRF2AtgfUr/XImL68Gs6zs7ODDANALOzsyafqVQK6XTa/H5/fzc2y7KQSqVMX346DUxPTycb++Xl5dNVEs1mEySNighc10UYhgb09vaGkZERpNNpkITWOlFkE7LneQTAxcVFtlothmHIIAgYBAE/Pj7YaDS4sLCQyLGI8Pz8/PscttttFotFOo6TuNSv6+vrBMByuWx6d3Nz83/g3t4eATCKIkZRRAC0bZuVSoWtVosA6HkeXdfl0tISDw8PDbxWq1FEBl+LUop3d3fmKQ2rURQZYD6fTwLjfDw/Pw8FOz4+JsmB/CXmoNbahP0njZ/qzMzM98NWKcW5uTkzAABwY2ODANjpdGhZFl3XJQAzOG5vb6mU4vX19SAwn89TKcWnpyeSZBAEzGazA57Ztk0RYRRFf14F8Qe+71NEqLWm67rM5XIsl8v0PM88zVwuN/xeAcBisUitdWJJiUgc3vCbLx5nSilms1k6jkPf9/n6+sqVlRVzdn9//3c7ular/VTh38ovGQiVTQtzjh4AAAAASUVORK5CYII=", "neu": "iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAACg0lEQVR42pVVv0szQRB9F9BerZxOsFEs0gjaB4y2NnYWKUQhICR/wFXpRLAOWNuJEgyiRQQVMWrSpTAQAlenMIZclttn8XH7Zb3LDx9cM7v3eDPzZhYYg+PjYwKwPhEh/oq3tzeKCEWES0tLLJfLLJVKzGQyJp5KpaYjfnh4CFXQ933+hlKK2WzWEI8lOzs7o4jw7u6Ok/D19TWZNFSmteY0ODg4oIjw4+ODsWQiMjUZSWqtI41KDJO6rgvHcUZm4HkeFhYWsLq6iu/vbziOg0ajYWpvLhaLRUvd1dWVscnJyYlR9NtCw3GrliLC5eVl08Xhn4YJtdZsNBqsVCrs9Xomns/no4Su65oLe3t7hvC3dYIgiNT59vY2SthsNi0lSqlYH8ah2+0SAAuFAlEqlSJK3t/frbTb7TZJ8unpibOzswTAra0tKqWM6vBuwvM8AMDMzIxRHAQBVlZWQrNjcXERAKCUwmAwAADs7+8jkfhnEssZxWIx1sxaa3Y6nUh6vu+zUChE6moyen5+pohMXa84+L5PAJyfn2dic3PTAYDPz8+Rhn58fITjOEin07HnvV4PAJDL5f5PysXFxUjCVqsFAJibm4s9r1QqEBHs7OzYS2Ecwo7GYX193fbhzc0NRYTdbje2Pp7n8f7+nq+vr5Fah/Xb2NhgZNucn59bXT49PY3MLwBeXl6ae6GYarVqEx4eHloqO50O+/0+fd83U6OUotaaQRBYcz9yyY5asGF8e3vbiieTyfEbu1qtUkSYyWQs0nC2tdbm293dpYiwXC5PfqxCRa7rst/vWym+vLz8/Tmt1WrDDxBTqRSPjo5MTER4fX399/e5Xq9b3V1bW5tI8gOdiPbcYuGtMgAAAABJRU5ErkJggg=="};
+</script>
+<script>
+"use strict";
+/* ===========================================================================
+   Web Comic Chat — layout & behavior engine
+   Reimplemented from the MIT-licensed Microsoft Comic Chat source
+   (github.com/microsoft/ComicChat). Comic Chat is
+   Copyright (c) 1996, 1997, 1998 Microsoft Corporation. Released under MIT.
+
+   All geometry is in TWIPS (1440/inch), matching the original. The original
+   used y-up (panel top = 0, floor = -unitHeight); this port uses y-DOWN
+   (panel top = 0, floor = +S) because that is SVG's convention. Constants are
+   translated accordingly and noted where the sign flips.
+   =========================================================================== */
+
+/* ---- panel geometry (panel.h, pageview.cpp, backdrop.cpp) ---- */
+const S              = 4860;   // design reference panel side (3.375") — panels are SQUARE
+const BORDER_W       = 60;     // CUnitPanel::m_borderWidth
+const INTERSTICE     = 144;    // gap between panels (0.1")
+const MAX_BALLOONS   = 5;      // pOldP->m_elements.GetCount() >= 5 -> new panel
+const MAX_BODIES     = 5;      // "don't add more than 5 people to the panel!!!"
+const MAX_LINES      = 10;     // MAXLINES
+
+/* ---- balloon constants (balloon.cpp / balloon.h) ---- */
+const ONELINE_THRESH = 500;    // ONELINETHRESHOLD
+const MIN_HOOK_H     = 100;    // MINHOOKHEIGHT
+const MIN_ROUTE_W    = 300;    // MINROUTEWIDTH
+const XBORDER        = 100, YBORDER = 40, TOPBORDER = -20;
+const WAVE_H         = 70,  WAVE_INTERVAL = 300;   // H/VWAVEHEIGHT, H/VWAVEINTERVAL
+const DOCK_SHIFT     = 90;     // TOPBORDER + YBORDER + HWAVEHEIGHT
+const XBOXDELTA      = 90,  YBOXDELTA = 50;        // caption box padding
+const MIN_TAIL_H     = 100;    // MINTAILHEIGHT
+const TAIL_MOUTH     = 80;     // BreakSpline gap half-width
+const BUBBLE_H       = 150, INTERBUBBLE = 100, ENDBUBBLE_W = 400;  // thought chain
+const FONT_TWIPS     = 180;    // 9pt balloon text
+const LEADING        = -40;    // Comic Sans MS vertical kern adjustment (fonts.cpp)
+
+/* ---- character layout ---- */
+const BODY_H_DIV     = 1.9;    // maxBodyHeight = unitHeight / 1.9
+const ZOOM_DEADZONE  = 1.1;    // zoomFactor < 1.1 snaps to 1.0
+const HEAD_ROOM      = 1.2;    // headFactor = maxBodyHeight / (maxHeadHeight * 1.2)
+const BACKDROP_ANCHOR = (1 - 1/BODY_H_DIV);  // 0.4737 — backdrop crop follows the head-line
+
+/* ===========================================================================
+   EMOTION MODEL  (avatar.h:326-341)
+   Angles are in the original's screen space: atan2(y_down, x).
+   Happy=E, Coy=SE, Bored=S, Scared=SW, Sad=W, Angry=NW, Shout=N, Laugh=NE.
+   =========================================================================== */
+const NEMOTIONS = 8;
+const EM = {
+  HAPPY:  0*2*Math.PI/8,
+  COY:    1*2*Math.PI/8,
+  BORED:  2*2*Math.PI/8,
+  SCARED: 3*2*Math.PI/8,
+  SAD:    4*2*Math.PI/8,
+  ANGRY:  5*2*Math.PI/8,
+  SHOUT:  6*2*Math.PI/8,
+  LAUGH:  7*2*Math.PI/8,
+  /* pseudo-emotions: torso gestures, never on the wheel */
+  WAVE:1001, POINTOTHER:1002, POINTSELF:1003, DOUBLEPOINT:1004, SHRUG:1005
+};
+const WHEEL = [
+  {key:"happy",  em:EM.HAPPY,  label:"Happy"},
+  {key:"coy",    em:EM.COY,    label:"Coy"},
+  {key:"bored",  em:EM.BORED,  label:"Bored"},
+  {key:"scared", em:EM.SCARED, label:"Scared"},
+  {key:"sad",    em:EM.SAD,    label:"Sad"},
+  {key:"angry",  em:EM.ANGRY,  label:"Angry"},
+  {key:"shout",  em:EM.SHOUT,  label:"Shout"},
+  {key:"laugh",  em:EM.LAUGH,  label:"Laughing"}
+];
+const isGesture = e => e >= 1000;
+
+/* wrap to (-PI, PI] — vector2d.cpp subtract_angles */
+function subAngles(a, b){
+  let d = a - b;
+  while(d >  Math.PI) d -= 2*Math.PI;
+  while(d <= -Math.PI) d += 2*Math.PI;
+  return d;
+}
+/* bodycam.cpp:285 — which wheel sector an angle belongs to */
+function emotionKeyFromAngle(ang, intensity){
+  if(intensity === 0) return "neutral";
+  const a = ((ang + Math.PI) % (2*Math.PI)) - Math.PI;   // normalise to (-PI,PI]
+  if(a >= 7*Math.PI/8 || a < -7*Math.PI/8) return "sad";
+  if(a <= -5*Math.PI/8) return "angry";
+  if(a <= -3*Math.PI/8) return "shout";
+  if(a <=   -Math.PI/8) return "laugh";
+  if(a >   5*Math.PI/8) return "scared";
+  if(a >   3*Math.PI/8) return "bored";
+  if(a >     Math.PI/8) return "coy";
+  return "happy";
+}
+
+/* ===========================================================================
+   TEXT ANALYSIS  (textpose.cpp + chat.rc:2290-2304, v2.5 table verbatim)
+   =========================================================================== */
+const RULES = [
+  // [kind, arg, emotion, priority]
+  ["allcaps", "",          EM.SHOUT, 9],
+  ["find",    "!!!",       EM.SHOUT, 9],
+  ["word_i",  "rotfl",     EM.LAUGH, 11],
+  ["word_i",  "lol",       EM.LAUGH, 11],
+  ["find_i",  "hehe",      EM.LAUGH, 11],
+  ["find",    ":)",        EM.HAPPY, 10],
+  ["find",    ":-)",       EM.HAPPY, 10],
+  ["find",    ":(",        EM.SAD,   10],
+  ["find",    ":-(",       EM.SAD,   10],
+  ["find",    ";-)",       EM.COY,   10],
+  ["find",    ";)",        EM.COY,   10],
+  ["start_i", "you",       EM.POINTOTHER, 4],
+  ["word_i",  "are you",   EM.POINTOTHER, 8],
+  ["word_i",  "will you",  EM.POINTOTHER, 8],
+  ["word_i",  "did you",   EM.POINTOTHER, 8],
+  ["word_i",  "aren't you",EM.POINTOTHER, 8],
+  ["word_i",  "don't you", EM.POINTOTHER, 8],
+  ["start_i", "i",         EM.POINTSELF, 3],
+  ["word_i",  "i'm",       EM.POINTSELF, 7],
+  ["word_i",  "i will",    EM.POINTSELF, 7],
+  ["word_i",  "i'll",      EM.POINTSELF, 7],
+  ["word_i",  "i am",      EM.POINTSELF, 7],
+  ["start_i", "hi",        EM.WAVE, 2],
+  ["start_i", "bye",       EM.WAVE, 3],
+  ["start_i", "hello",     EM.WAVE, 5],
+  ["start_i", "welcome",   EM.WAVE, 5],
+  ["start_i", "howdy",     EM.WAVE, 5]
+];
+// NOTE: angry / scared / bored have NO text rules in the original — wheel only.
+// There is NO rule for "?" — question marks are only sentence terminators.
+
+/* CheckForUppers (textpose.cpp:26): false if ANY lowercase, needs >1 uppercase */
+function allCaps(s){
+  let up = 0;
+  for(const ch of s){
+    if(ch >= 'a' && ch <= 'z') return false;
+    if(ch >= 'A' && ch <= 'Z') up++;
+  }
+  return up > 1;
+}
+/* CheckWord (textpose.cpp:37): starts a word AND ends a word */
+function checkWord(hay, needle){
+  let i = 0;
+  while((i = hay.indexOf(needle, i)) !== -1){
+    const before = i === 0 || /\s/.test(hay[i-1]);
+    const after  = i+needle.length >= hay.length || /[\s.,!?;:'"]/.test(hay[i+needle.length]);
+    if(before && after) return true;
+    i++;
+  }
+  return false;
+}
+/* StartCompare2 (textpose.cpp:264): prefix match, next char must not be alphanumeric.
+   Faithful to the original bug: only ever tested at offset 0 of the whole message. */
+function checkStart(hay, needle){
+  if(!hay.startsWith(needle)) return false;
+  const next = hay[needle.length];
+  return next === undefined || !/[a-z0-9]/i.test(next);
+}
+
+/* CEmotionOpts::Add — duplicates keep the MAX priority (OVERRIDEBYPRIORITY) */
+function optsAdd(opts, emotion, intensity, priority){
+  for(const o of opts){
+    if(o.emotion === emotion){ if(o.priority < priority){ o.priority = priority; o.intensity = intensity; } return; }
+  }
+  if(opts.length >= 10) return;
+  opts.push({emotion, intensity, priority});
+}
+function getEmotionsFromString(str){
+  const opts = [];
+  const lower = str.toLowerCase();
+  for(const [kind, arg, emotion, priority] of RULES){
+    let hit = false;
+    switch(kind){
+      case "allcaps": hit = allCaps(str); break;
+      case "find":    hit = str.indexOf(arg) !== -1; break;
+      case "find_i":  hit = lower.indexOf(arg) !== -1; break;
+      case "word_i":  hit = checkWord(lower, arg); break;
+      case "start_i": hit = checkStart(lower, arg); break;
+    }
+    if(hit) optsAdd(opts, emotion, 1.0, priority);
+  }
+  return opts;
+}
+
+/* ===========================================================================
+   POSE RESOLUTION  (avatar.cpp:252-412)
+   Face and torso are resolved INDEPENDENTLY, highest priority first, so
+   "HI THERE!!!" yields a shouting face AND a waving torso.
+   =========================================================================== */
+function pickFace(art, emotion, intensity){
+  if(isGesture(emotion)) return -1;                 // gestures resolve against torsos only
+  let best = -1, bestAng = Infinity, bestInt = Infinity;
+  art.faces.forEach((f,i)=>{
+    if(isGesture(f.emotion)) return;                // simple avatars mix gestures into the list
+    const d = Math.abs(subAngles(f.emotion, emotion));
+    const di = Math.abs(f.intensity - intensity);
+    if(d < bestAng - 1e-9 || (Math.abs(d-bestAng) < 1e-9 && di < bestInt)){
+      best = i; bestAng = d; bestInt = di;
+    }
+  });
+  return best;
+}
+function pickTorso(art, emotion, intensity, lastTorso){
+  const n = art.torsos.length;
+  if(!n) return -1;
+  if(isGesture(emotion)){
+    for(let k=0;k<n;k++){                            // exact equality for gestures
+      const i = (lastTorso + 1 + k) % n;
+      if(art.torsos[i].emotion === emotion) return i;
+    }
+    return -1;
+  }
+  // round-robin from lastTorso so repeats cycle through variants
+  let best = -1, bestInt = Infinity;
+  for(let k=0;k<n;k++){
+    const i = (lastTorso + 1 + k) % n;
+    const t = art.torsos[i];
+    if(isGesture(t.emotion)) continue;
+    if(Math.abs(subAngles(t.emotion, emotion)) >= Math.PI/8) continue;   // within half a sector
+    const di = Math.abs(t.intensity - intensity);
+    if(di < bestInt){ best = i; bestInt = di; }
+  }
+  return best;
+}
+/* GetBodyFromEmotion(CEmotionOpts&) — avatar.cpp:354 */
+function bodyFromOpts(art, opts, lastTorso){
+  const pool = opts.map(o=>({...o}));
+  let face = -1, torso = -1;
+  while(true){
+    let bi = -1, bp = -1;
+    pool.forEach((o,i)=>{ if(o.priority > bp){ bp = o.priority; bi = i; } });
+    if(bi < 0 || bp <= 0) break;
+    const o = pool[bi];
+    const f = pickFace(art, o.emotion, o.intensity);
+    const t = pickTorso(art, o.emotion, o.intensity, lastTorso);
+    o.priority = 0;
+    if(f >= 0 && face < 0) face = f;
+    if(t >= 0 && torso < 0) torso = t;
+    if(face >= 0 && torso >= 0) break;
+  }
+  if(face < 0)  face  = pickFace(art, EM.HAPPY, 0);     // SetFaceNeutral
+  if(torso < 0) torso = pickTorso(art, EM.HAPPY, 0, lastTorso);
+  if(torso < 0) torso = 0;
+  return {face, torso};
+}
+function bodyFromEmotion(art, emotion, intensity, lastTorso){
+  return bodyFromOpts(art, [{emotion, intensity, priority:1}], lastTorso);
+}
+
+/* ===========================================================================
+   TEXT MEASUREMENT — measured at FONT_TWIPS px so 1 measured px == 1 twip
+   =========================================================================== */
+const _mc = document.createElement("canvas").getContext("2d");
+function balloonFont(italic){
+  return (italic ? "italic " : "") + "bold " + FONT_TWIPS + 'px "Comic Sans MS","Comic Sans",cursive';
+}
+let LINE_HEIGHT = FONT_TWIPS * 1.2 + LEADING;
+(function(){
+  _mc.font = balloonFont(false);
+  const m = _mc.measureText("Hg");
+  if(m.fontBoundingBoxAscent && m.fontBoundingBoxDescent)
+    LINE_HEIGHT = m.fontBoundingBoxAscent + m.fontBoundingBoxDescent + LEADING;
+})();
+function textWidth(s, italic){ _mc.font = balloonFont(italic); return _mc.measureText(s).width; }
+function widestWord(s, italic){
+  return s.split(/\s+/).filter(Boolean).reduce((w,x)=>Math.max(w, textWidth(x, italic)), 0);
+}
+/* greedy wrap; a word wider than the line is force-broken mid-word (no hyphen) */
+function wrapLines(s, width, italic){
+  const words = s.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for(let w of words){
+    while(textWidth(w, italic) > width && w.length > 1){
+      let cut = w.length;
+      while(cut > 1 && textWidth(w.slice(0,cut), italic) > width) cut--;
+      if(line){ lines.push(line); line = ""; }
+      lines.push(w.slice(0,cut));
+      w = w.slice(cut);
+    }
+    const test = line ? line + " " + w : w;
+    if(line && textWidth(test, italic) > width){ lines.push(line); line = w; }
+    else line = test;
+  }
+  if(line) lines.push(line);
+  return lines.slice(0, MAX_LINES);
+}
+
+/* ===========================================================================
+   SEEDED RNG — the original captures m_seed = rand() per panel and re-seeds
+   before every layout so re-layout is deterministic (panel.cpp:552, 861).
+   =========================================================================== */
+function makeRng(seed){
+  let s = (seed >>> 0) || 1;
+  return function(){
+    s ^= s << 13; s >>>= 0;
+    s ^= s >> 17;
+    s ^= s << 5;  s >>>= 0;
+    return s / 4294967296;
+  };
+}
+
+/* ===========================================================================
+   AVATAR ORDERING & FACING  (panel.cpp:259-448)
+   m_flip === false  => faces +x (right).   true => mirrored, faces left.
+   =========================================================================== */
+function evalPair(a, b, deltaPlacement){
+  let rating = 0;
+  let desiredDir;
+  if(deltaPlacement > 0) desiredDir = false;         // other is to my RIGHT
+  else { desiredDir = true; deltaPlacement = -deltaPlacement; }
+
+  const talkTos = a.talkTos || [];
+  if(talkTos.length === 0){
+    if(a.flip !== desiredDir) rating += 4;           // I'm not facing him
+    if(b.flip === desiredDir) rating += 2;           // he's not facing me
+  } else {
+    if(talkTos.indexOf(b.charId) !== -1){
+      if(a.flip === desiredDir) rating += 4*(deltaPlacement-1);
+      else rating += 40;                             // facing away from my addressee
+      if(b.flip === desiredDir) rating += 4;
+    }
+  }
+  return rating;
+}
+function displacementPenalty(order, hyst){
+  let p = 0;
+  order.forEach((b,i)=>{
+    const h = hyst[b.charId];
+    if(!h) return;
+    const right = i+1 < order.length ? order[i+1].charId : null;
+    const left  = i > 0 ? order[i-1].charId : null;
+    if(h.lastRight !== undefined && h.lastRight !== right) p += 1;
+    if(h.lastLeft  !== undefined && h.lastLeft  !== left)  p += 1;
+  });
+  return p;
+}
+function evalPlacement(order, hyst){
+  let rating = displacementPenalty(order, hyst);
+  for(let i=0;i<order.length;i++)
+    for(let j=i+1;j<order.length;j++)
+      rating += evalPair(order[i], order[j], j-i) + evalPair(order[j], order[i], i-j);
+  return rating;
+}
+function orderAvatars(bodies, hyst){
+  const placed = [];
+  for(const b of bodies){
+    let best = null, bestRating = 1000;
+    for(let pos=0; pos<=placed.length; pos++){
+      for(const flip of [false, true]){
+        b.flip = flip;
+        const trial = placed.slice(0, pos).concat([b], placed.slice(pos));
+        const r = evalPlacement(trial, hyst);
+        if(r < bestRating){ bestRating = r; best = {pos, flip}; }
+      }
+    }
+    if(!best) best = {pos: placed.length, flip: (hyst[b.charId] && hyst[b.charId].lastDir) || false};
+    b.flip = best.flip;
+    placed.splice(best.pos, 0, b);
+  }
+  return placed;
+}
+function updateHysteresis(order, hyst){
+  order.forEach((b,i)=>{
+    hyst[b.charId] = {
+      lastDir:   b.flip,
+      lastRight: i+1 < order.length ? order[i+1].charId : null,
+      lastLeft:  i > 0 ? order[i-1].charId : null
+    };
+  });
+}
+
+/* ---- LayoutAvatars (panel.cpp:726-820) ---- */
+function layoutAvatars(panel, getArt, hyst, establishing){
+  const bodies = panel.bodies;
+  if(!bodies.length){ panel.zoom = 1; return; }
+
+  const order = orderAvatars(bodies, hyst);
+  panel.bodies = order;
+
+  const maxBodyHeight = S / BODY_H_DIV;
+  const maxNorm = Math.max(...order.map(b=>getArt(b.charId).normHeight));
+  order.forEach(b=>{
+    const art = getArt(b.charId);
+    // GetDimInfo (avatar.cpp:77) measures the CURRENT pose's composite box,
+    // so aspect and head height are per-pose, not per-character constants.
+    b.dm = (art.dim && b.pose) ? art.dim(b.pose.face, b.pose.torso)
+         : {x: art.nat.x, y: art.nat.y, w: art.nat.w, h: art.nat.h,
+            headH: art.nat.h * art.headFrac, anchorX: art.faceX};
+    b.height = maxBodyHeight * (art.normHeight / maxNorm);
+    b.width  = b.height * (b.dm.w / b.dm.h);
+    b.headHeight = b.height * (b.dm.headH / b.dm.h);
+  });
+
+  // preHeight fixes where the head sits. The original never moves `top` when it
+  // zooms — the body grows DOWNWARD past the panel floor and the feet are
+  // cropped, which is what makes a close-up a close-up.
+  order.forEach(b=>{ b.preHeight = b.height; });
+
+  let sumWidth = order.reduce((s,b)=>s+b.width, 0);
+  let zoom = 1.0;
+  if(sumWidth > S){                                  // too wide -> shrink to fit
+    const reduction = S / sumWidth;
+    order.forEach(b=>{ b.height *= reduction; b.width *= reduction; b.headHeight *= reduction;
+                       b.preHeight = b.height; });
+    sumWidth = S;
+  } else if(!establishing){                          // room to spare -> zoom in
+    zoom = S / sumWidth;
+    const maxHead = Math.max(...order.map(b=>b.headHeight));
+    zoom = Math.min(zoom, maxBodyHeight / (maxHead * HEAD_ROOM));   // never crop at the neck
+    if(zoom < ZOOM_DEADZONE) zoom = 1.0;
+    order.forEach(b=>{ b.height *= zoom; b.width *= zoom; b.headHeight *= zoom; });
+  }
+  panel.zoom = zoom;
+
+  // equal gutters: slack split into n+1 margins, including both outer edges
+  const bdyWidth = order.reduce((s,b)=>s+b.width, 0);
+  const margin = (S - bdyWidth) / (order.length + 1);
+  let x = margin;
+  order.forEach(b=>{
+    const art = getArt(b.charId);
+    b.left = x; b.right = x + b.width;
+    b.top = S - b.preHeight;                         // head-line, fixed by the un-zoomed height
+    b.bottom = b.top + b.height;                     // may run past the floor and be cropped
+    // the balloon-tail anchor is per-pose in the original artwork
+    const frac = b.dm.anchorX;
+    const fx = b.flip ? (1 - frac) : frac;
+    b.arrowX = b.left + fx * b.width;
+    x += b.width + margin;
+  });
+  updateHysteresis(order, hyst);
+}
+
+/* ===========================================================================
+   BALLOON LAYOUT  (panel.cpp:855-945, balloon.cpp)
+   =========================================================================== */
+/* inset by WAVE_H as well: the hand-drawn wobble bulges outside the cloud rect */
+function balloonRect(){
+  return {left: BORDER_W + WAVE_H, right: S - BORDER_W - WAVE_H, top: BORDER_W + WAVE_H, bottom: S/2};
+}
+/* QueryRouteRgn (balloon.cpp:1358) — keeps tails from ever crossing.
+   TAIL_CLEAR pads the protected anchor: the tail's two arcs bulge sideways
+   (5% of tail length) and the neighbor's own spline wobble reaches ~WAVE_H
+   outside its rect, so a balloon flush against the bare anchor still gets
+   grazed. */
+const TAIL_CLEAR = 340;
+function queryRouteRgn(b, otherToX){
+  const toX = b.speakerArrowX;
+  if(otherToX > toX) return {left: Math.max(toX + TAIL_CLEAR, b.routeRgn.left + MIN_ROUTE_W), right: Infinity};
+  return {left: -Infinity, right: Math.min(toX - TAIL_CLEAR, b.routeRgn.right - MIN_ROUTE_W)};
+}
+function measureBalloon(msg, width){
+  const italic = msg.mode === "whisper";
+  const lines = wrapLines(msg.display, width, italic);
+  const tw = lines.reduce((w,l)=>Math.max(w, textWidth(l, italic)), 0);
+  return {lines, textW: tw, textH: lines.length * LINE_HEIGHT};
+}
+function cloudPad(msg){
+  return msg.mode === "action"
+    ? {x: XBOXDELTA, y: YBOXDELTA}
+    : {x: XBORDER + WAVE_H, y: YBORDER + WAVE_H};
+}
+
+function layoutBalloons(panel, rng){
+  const free = balloonRect();
+  const placed = [];
+  for(let i=0;i<panel.balloons.length;i++){
+    if(!layoutOneBalloon(panel.balloons[i], placed, free, rng)){
+      if(i === 0 && panel.balloons.length === 1){ forceFit(panel.balloons[0], free); return true; }
+      return false;                                  // caller starts a new panel
+    }
+    placed.push(panel.balloons[i]);
+  }
+  return true;
+}
+
+function layoutOneBalloon(b, placed, free, rng){
+  const italic = b.msg.mode === "whisper";
+  const maxWidth = free.right - free.left;
+  const oneLineLen = textWidth(b.msg.display, italic);
+  const pad = cloudPad(b.msg);
+
+  /* --- Step A: choose a width (GetCloudEstimate) --- */
+  let goalWidth;
+  if(oneLineLen <= ONELINE_THRESH){
+    goalWidth = oneLineLen;
+  } else {
+    // lowest previous bottom (y-down: the largest bottom seen so far)
+    let lowest = free.top;
+    for(const p of placed) lowest = Math.max(lowest, p.cloud.bottom);
+    const potentialHeight = Math.max(LINE_HEIGHT, free.bottom - lowest + MIN_HOOK_H);
+    const area = 1.3 * oneLineLen * LINE_HEIGHT;
+    let minWidth = area / potentialHeight;
+    minWidth = Math.max(minWidth, widestWord(b.msg.display, italic));
+    minWidth = Math.min(minWidth, maxWidth);
+    goalWidth = minWidth + rng() * (maxWidth - minWidth);
+  }
+  goalWidth = Math.min(goalWidth + 200, maxWidth);
+  goalWidth = Math.min(goalWidth, oneLineLen + 200);
+  goalWidth = Math.max(goalWidth, Math.min(widestWord(b.msg.display, italic), maxWidth));
+
+  const m = measureBalloon(b.msg, goalWidth);
+  const cw = Math.min(m.textW + 2*pad.x, maxWidth);
+
+  /* --- Step B: choose x so the speaker's anchor is inside the balloon --- */
+  let left;
+  if(b.msg.mode === "action"){
+    left = free.left;                                // caption boxes are flush left
+  } else {
+    const toX = b.speakerArrowX;
+    const lo = toX - cw, hi = toX;
+    left = lo + rng() * (hi - lo);
+  }
+  let right = left + cw;
+
+  /* --- Step C: respect every earlier balloon's tail corridor --- */
+  let mostLeft = free.left, mostRight = free.right;
+  if(b.msg.mode !== "action"){
+    for(const p of placed){
+      if(p.msg.mode === "action") continue;          // boxes opt out of routing
+      const a = queryRouteRgn(p, b.speakerArrowX);
+      mostLeft = Math.max(mostLeft, a.left);
+      mostRight = Math.min(mostRight, a.right);
+    }
+  }
+  if(mostLeft > left || mostRight < right){
+    const clearance = mostRight - mostLeft;
+    if(clearance >= cw){
+      const delta = (mostLeft > left) ? mostLeft - left : mostRight - right;
+      left += delta; right += delta;
+    } else { left = mostLeft; right = mostRight; }
+  }
+  if(left < free.left){ right += free.left - left; left = free.left; }
+  if(right > free.right){ left -= right - free.right; right = free.right; }
+  if(left < free.left) left = free.left;
+  if(right > free.right) right = free.right;
+
+  /* The corridor may be narrower than the balloon wanted to be. Re-wrap the
+     text to whatever width actually survived rather than letting the cloud
+     spill outside the panel. */
+  const availW = right - left;
+  if(availW < 2*pad.x + 200) return false;
+  const text2 = measureBalloon(b.msg, Math.min(cw, availW) - 2*pad.x);
+  const cw2 = Math.min(text2.textW + 2*pad.x, availW);
+  const ch2 = text2.textH + 2*pad.y;
+  right = left + cw2;
+
+  /* --- vertical: below anything it overlaps, else share the top ---
+     The cloud rects are only the spline's control frame: the rendered wobble
+     bulges up to WAVE_H beyond them (plus half the stroke), on BOTH facing
+     edges. DOCK_SHIFT covers one side's bump; clear the neighbor's too, or
+     stacked balloons visibly kiss. */
+  const BUMP_CLEAR = WAVE_H + 28;
+  let top = free.top;
+  for(const p of placed){
+    if(p.cloud.right + 2*WAVE_H + 28 < left) top = Math.max(top, p.cloud.top);
+    else top = Math.max(top, p.cloud.bottom + DOCK_SHIFT + BUMP_CLEAR);
+  }
+  let bottom = top + ch2;
+
+  /* --- validate: must leave room for a tail --- */
+  if(bottom > free.bottom - MIN_HOOK_H) return false;
+
+  b.cloud = {left, top, right, bottom};
+  b.text = text2;
+  b.pad = pad;
+  b.routeRgn = {left: b.cloud.left, right: b.cloud.right};
+
+  /* AdjustRouteRgns: shrink earlier corridors so they no longer overlap this one */
+  for(const p of placed){
+    if(p.msg.mode === "action") continue;
+    if(b.cloud.left > p.speakerArrowX) p.routeRgn.right = Math.min(p.routeRgn.right, b.cloud.left);
+    else if(b.cloud.right < p.speakerArrowX) p.routeRgn.left = Math.max(p.routeRgn.left, b.cloud.right);
+  }
+  return true;
+}
+
+/* ForceFitBalloon — a lone balloon that won't fit gets squeezed rather than dropped */
+function forceFit(b, free){
+  const pad = cloudPad(b.msg);
+  const cw = free.right - free.left;
+  const maxH = free.bottom - free.top - MIN_HOOK_H;
+  const text = measureBalloon(b.msg, cw - 2*pad.x);
+  const ch = Math.min(text.textH + 2*pad.y, maxH);
+  b.cloud = {left: free.left, top: free.top, right: free.right, bottom: free.top + ch};
+  b.text = text; b.pad = pad;
+  b.routeRgn = {left: b.cloud.left, right: b.cloud.right};
+}
+
+/* ===========================================================================
+   FULL STRIP LAYOUT — ties it together, with the "doesn't fit => new panel"
+   retry that the original gets from AddLine recursing (panel.cpp:1110).
+   =========================================================================== */
+function layoutStrip(messages, getArt, opts){
+  const withTitle = opts && opts.title;
+  const panels = [];
+  const hyst = {};
+  const lastTorso = {};
+  let forceNew = false;
+
+  if(withTitle) panels.push({title:true, msgs:[], bodies:[], balloons:[], zoom:1});
+
+  const commit = (panel, idx) => {
+    // resolve bodies present: speakers + their explicit addressees (talk-tos)
+    const ids = [];
+    const talkMap = {};
+    for(const m of panel.msgs){
+      if(ids.indexOf(m.charId) === -1) ids.push(m.charId);
+      talkMap[m.charId] = m.talkTos || [];
+    }
+    for(const m of panel.msgs)
+      for(const t of (m.talkTos || []))
+        if(ids.indexOf(t) === -1 && ids.length < MAX_BODIES) ids.push(t);
+
+    panel.bodies = ids.map(id=>({charId:id, talkTos: talkMap[id] || [], flip:false}));
+    // pose each body
+    for(const body of panel.bodies){
+      const art = getArt(body.charId);
+      const msg = panel.msgs.find(m=>m.charId === body.charId);
+      const lt = lastTorso[body.charId] === undefined ? -1 : lastTorso[body.charId];
+      if(msg){
+        body.pose = msg.wheel
+          ? bodyFromEmotion(art, msg.wheel.emotion, msg.wheel.intensity, lt)
+          : bodyFromOpts(art, getEmotionsFromString(msg.text), lt);
+      } else {
+        body.pose = bodyFromEmotion(art, EM.HAPPY, 0, lt);   // addressees stand neutral
+      }
+      lastTorso[body.charId] = body.pose.torso;
+    }
+    const establishing = idx <= 1;
+    layoutAvatars(panel, getArt, hyst, establishing);
+
+    panel.balloons = panel.msgs.map(m=>{
+      const body = panel.bodies.find(b=>b.charId === m.charId);
+      return {msg:m, speakerArrowX: body ? body.arrowX : S/2, speaker: body};
+    });
+    return layoutBalloons(panel, makeRng(panel.seed));
+  };
+
+  let seedCounter = 12345;
+  for(const m of messages){
+    if(m.mode === "action") forceNew = true;
+    let cur = panels[panels.length-1];
+    const speakerInPanel = cur && !cur.title && cur.msgs.some(x=>x.charId === m.charId);
+    // A question to the room right after someone answered THIS speaker reads
+    // as if it were aimed at the answerer if they share a panel — the Q&A is
+    // a completed beat, so an undirected follow-up starts a fresh panel.
+    const closesExchange = cur && !cur.title && !(m.talkTos||[]).length &&
+                           cur.msgs.some(x=>x.replyTo === m.charId);
+    let startNew = forceNew || !cur || cur.title ||
+                   cur.msgs.length >= MAX_BALLOONS ||
+                   panels.length < (withTitle ? 2 : 1) ||
+                   speakerInPanel || closesExchange;
+
+    if(!startNew){
+      // try appending: clone, re-layout the whole panel, keep only if it fits
+      const trial = {msgs: cur.msgs.concat([m]), bodies:[], balloons:[], seed: cur.seed};
+      if(commit(trial, panels.length-1)){
+        panels[panels.length-1] = trial;
+        continue;
+      }
+      startNew = true;                                // didn't fit -> new panel
+    }
+    const p = {msgs:[m], bodies:[], balloons:[], seed: (seedCounter = (seedCounter*1103515245+12345) >>> 0)};
+    commit(p, panels.length);
+    panels.push(p);
+    forceNew = false;
+  }
+  return panels;
+}
+</script>
+<script>
+"use strict";
+/* ===========================================================================
+   "Modern" art style — the original procedural SVG cast.
+   Kept as an alternative to the authentic Microsoft artwork.
+
+   Exposes the same art interface the engine expects:
+     {name, normHeight, aspect, faceX, headFrac, faces[], torsos[], draw()}
+   Natural coordinate box: x in [-46,46], y in [-164,+2].
+   =========================================================================== */
+const MODERN_NAT = {x:-46, y:-164, w:92, h:166};
+
+const MODERN_CHARS = [
+  { id:"margo",    name:"Margo",    skin:"#f2c79a", shirt:"#2aa8a0", hair:"#6b3fa0" },
+  { id:"rex",      name:"Rex",      skin:"#b9c2cc", shirt:"#7d8794", hair:"#5a6470" },
+  { id:"whiskers", name:"Whiskers", skin:"#f0a05a", shirt:"#4f9d4f", hair:"#c97f36" },
+  { id:"zorb",     name:"Zorb",     skin:"#8fd14f", shirt:"#8f9bff", hair:"#5aa32b" },
+  { id:"duke",     name:"Duke",     skin:"#e8b088", shirt:"#2c3e70", hair:"#9a9a9a" },
+  { id:"pix",      name:"Pix",      skin:"#f2c79a", shirt:"#2b2b2b", hair:"#e6007e" }
+];
+
+const OUT = "#1a1a1a";
+
+/* ---------- faces ---------- */
+function mFace(c, key, t){
+  const eyeOpen = (cx,r)=>`<circle cx="${cx}" cy="-115" r="${r}" fill="#fff" stroke="${OUT}" stroke-width="2"/><circle cx="${cx}" cy="-115" r="2.3" fill="${OUT}"/>`;
+  const eyeHalf = cx=>eyeOpen(cx,5.5)+`<path d="M ${cx-6} -121 A 6 6 0 0 1 ${cx+6} -121 L ${cx+6} -117 L ${cx-6} -117 Z" fill="${c.skin}"/><line x1="${cx-6}" y1="-117" x2="${cx+6}" y2="-117" stroke="${OUT}" stroke-width="2"/>`;
+  const eyeShut = (cx,up)=>`<path d="M ${cx-5.5} -113 Q ${cx} ${up?-121:-108} ${cx+5.5} -113" fill="none" stroke="${OUT}" stroke-width="2.5" stroke-linecap="round"/>`;
+  const brow = (cx,dy,rot)=>`<line x1="${cx-7}" y1="${dy}" x2="${cx+7}" y2="${dy}" stroke="${OUT}" stroke-width="3" stroke-linecap="round" transform="rotate(${rot},${cx},${dy})"/>`;
+  let eyes="", brows="", mouth="", extra="";
+  switch(key){
+    case "happy":
+      eyes=eyeOpen(-10,5.5)+eyeOpen(10,5.5); brows=brow(-10,-131,0)+brow(10,-131,0);
+      mouth = t>0.55
+        ? `<path d="M -10 -100 Q 0 ${-100+14*t} 10 -100 Z" fill="#fff" stroke="${OUT}" stroke-width="2.5"/>`
+        : `<path d="M -8 -98 Q 0 ${-94+6*t} 8 -98" fill="none" stroke="${OUT}" stroke-width="2.5" stroke-linecap="round"/>`;
+      break;
+    case "laugh":
+      eyes=eyeShut(-10,true)+eyeShut(10,true); brows=brow(-10,-131,0)+brow(10,-131,0);
+      mouth=`<path d="M -11 -100 Q 0 ${-100+16+8*t} 11 -100 Z" fill="#6b2737" stroke="${OUT}" stroke-width="2.5"/><ellipse cx="0" cy="${-91+6*t}" rx="5" ry="2.6" fill="#e2777a"/>`;
+      extra=`<text x="30" y="-128" font-size="11" font-family="Comic Sans MS,cursive" fill="${OUT}" stroke="#fff" stroke-width="3.5" paint-order="stroke">${t>0.5?"ha ha!":"ha!"}</text>`;
+      break;
+    case "shout":
+      eyes=eyeOpen(-10,6)+eyeOpen(10,6); brows=brow(-10,-129,14)+brow(10,-129,-14);
+      mouth=`<ellipse cx="0" cy="${-96+2*t}" rx="${8+3*t}" ry="${7+5*t}" fill="#6b2737" stroke="${OUT}" stroke-width="2.5"/><ellipse cx="0" cy="${-92+4*t}" rx="4.5" ry="2.4" fill="#e2777a"/>`;
+      extra=`<g fill="none" stroke="${OUT}" stroke-width="2" opacity="0.85"><path d="M 34 -126 l 9 -4"/><path d="M 34 -118 l 9 0"/><path d="M 33 -134 l 8 -8"/></g>`;
+      break;
+    case "coy":
+      eyes=eyeHalf(-10)+eyeHalf(10); brows=brow(-10,-133,-6)+brow(10,-127,0);
+      mouth=`<path d="M -8 -97 Q 2 -92 10 -100" fill="none" stroke="${OUT}" stroke-width="2.5" stroke-linecap="round"/>`;
+      break;
+    case "sad":
+      eyes=eyeOpen(-10,5)+eyeOpen(10,5); brows=brow(-10,-129,-14)+brow(10,-129,14);
+      mouth=`<path d="M -8 -94 Q 0 ${-101-4*t} 8 -94" fill="none" stroke="${OUT}" stroke-width="2.5" stroke-linecap="round"/>`;
+      if(t>0.65) extra=`<path d="M -14 -110 q -3 6 0 8 q 3 -2 0 -8" fill="#79c4f2" stroke="#4a9fd8" stroke-width="1"/>`;
+      break;
+    case "scared":
+      eyes=eyeOpen(-10,6.5+1.5*t)+eyeOpen(10,6.5+1.5*t); brows=brow(-10,-135,-8)+brow(10,-135,8);
+      mouth=`<ellipse cx="0" cy="-95" rx="${3+3*t}" ry="${4+3*t}" fill="#6b2737" stroke="${OUT}" stroke-width="2"/>`;
+      if(t>0.45) extra=`<path d="M 26 -132 q -3 7 0 9 q 4 -2 0 -9" fill="#79c4f2" stroke="#4a9fd8" stroke-width="1"/>`;
+      break;
+    case "bored":
+      eyes=eyeHalf(-10)+eyeHalf(10); brows=brow(-10,-126,0)+brow(10,-126,0);
+      mouth=`<line x1="-7" y1="-96" x2="7" y2="-96" stroke="${OUT}" stroke-width="2.5" stroke-linecap="round"/>`;
+      break;
+    case "angry":
+      eyes=eyeOpen(-10,5)+eyeOpen(10,5); brows=brow(-10,-127,16)+brow(10,-127,-16);
+      mouth = t>0.6
+        ? `<rect x="-10" y="-101" width="20" height="8" rx="3" fill="#fff" stroke="${OUT}" stroke-width="2.5"/><line x1="-4" y1="-101" x2="-4" y2="-93" stroke="${OUT}" stroke-width="1.5"/><line x1="3" y1="-101" x2="3" y2="-93" stroke="${OUT}" stroke-width="1.5"/>`
+        : `<path d="M -8 -94 Q 0 ${-101-3*t} 8 -94" fill="none" stroke="${OUT}" stroke-width="2.5" stroke-linecap="round"/>`;
+      if(t>0.7){
+        const steam = `<path d="M 33 -140 q 4 -4 0 -8 q -4 -4 0 -8"/><path d="M 40 -136 q 4 -4 0 -8"/>`;
+        extra=`<g fill="none" stroke="#fff" stroke-width="4.5">${steam}</g><g fill="none" stroke="${OUT}" stroke-width="1.5">${steam}</g>`;
+      }
+      break;
+    default: /* neutral */
+      eyes=eyeOpen(-10,5.5)+eyeOpen(10,5.5); brows=brow(-10,-129,0)+brow(10,-129,0);
+      mouth=`<path d="M -6 -97 Q 0 -94.5 6 -97" fill="none" stroke="${OUT}" stroke-width="2.5" stroke-linecap="round"/>`;
+  }
+  let nose = `<path d="M 0 -110 Q 3.5 -105 0 -103" fill="none" stroke="${OUT}" stroke-width="1.8" stroke-linecap="round"/>`;
+  if(c.id==="whiskers") nose = `<path d="M -3 -107 L 3 -107 L 0 -103 Z" fill="#e87ba0" stroke="${OUT}" stroke-width="1.5"/>`;
+  if(c.id==="rex") nose = `<circle cx="0" cy="-106" r="2" fill="none" stroke="${OUT}" stroke-width="1.5"/>`;
+  return brows+eyes+nose+mouth+extra;
+}
+
+/* ---------- per-character head decoration ---------- */
+function mExtras(c){
+  switch(c.id){
+    case "margo": return {
+      back:`<circle cx="0" cy="-112" r="33" fill="${c.hair}" stroke="${OUT}" stroke-width="2.5"/><rect x="-33" y="-112" width="12" height="26" rx="5" fill="${c.hair}" stroke="${OUT}" stroke-width="2.5"/><rect x="21" y="-112" width="12" height="26" rx="5" fill="${c.hair}" stroke="${OUT}" stroke-width="2.5"/>`,
+      front:`<path d="M -28 -116 Q -22 -140 0 -139 Q 22 -140 28 -116 Q 18 -128 6 -129 Q 10 -134 -2 -133 Q -18 -132 -28 -116 Z" fill="${c.hair}" stroke="${OUT}" stroke-width="2"/>`};
+    case "rex": return {
+      back:`<line x1="0" y1="-138" x2="0" y2="-152" stroke="${OUT}" stroke-width="2.5"/><circle cx="0" cy="-156" r="4.5" fill="#ffd23e" stroke="${OUT}" stroke-width="2"/>`,
+      front:`<rect x="-33" y="-118" width="7" height="12" rx="2" fill="#8b95a1" stroke="${OUT}" stroke-width="2"/><rect x="26" y="-118" width="7" height="12" rx="2" fill="#8b95a1" stroke="${OUT}" stroke-width="2"/><circle cx="-20" cy="-131" r="1.6" fill="${OUT}"/><circle cx="20" cy="-131" r="1.6" fill="${OUT}"/>`};
+    case "whiskers": return {
+      back:`<path d="M -24 -128 L -33 -155 L -8 -136 Z" fill="${c.skin}" stroke="${OUT}" stroke-width="2.5"/><path d="M 24 -128 L 33 -155 L 8 -136 Z" fill="${c.skin}" stroke="${OUT}" stroke-width="2.5"/><path d="M -24 -132 L -28 -147 L -14 -136 Z" fill="#e87ba0"/><path d="M 24 -132 L 28 -147 L 14 -136 Z" fill="#e87ba0"/>`,
+      front:`<g stroke="${OUT}" stroke-width="1.4"><line x1="-26" y1="-106" x2="-42" y2="-109"/><line x1="-26" y1="-101" x2="-42" y2="-100"/><line x1="26" y1="-106" x2="42" y2="-109"/><line x1="26" y1="-101" x2="42" y2="-100"/></g>`};
+    case "zorb": return {
+      back:`<g fill="none" stroke="${OUT}" stroke-width="2.5"><path d="M -12 -136 Q -18 -148 -14 -156"/><path d="M 12 -136 Q 18 -148 14 -156"/></g><circle cx="-14" cy="-159" r="4.5" fill="#c8f26e" stroke="${OUT}" stroke-width="2"/><circle cx="14" cy="-159" r="4.5" fill="#c8f26e" stroke="${OUT}" stroke-width="2"/>`,
+      front:""};
+    case "duke": return {
+      back:`<ellipse cx="-27" cy="-103" rx="6" ry="9" fill="${c.hair}" stroke="${OUT}" stroke-width="2"/><ellipse cx="27" cy="-103" rx="6" ry="9" fill="${c.hair}" stroke="${OUT}" stroke-width="2"/>`,
+      front:`<path d="M -11 -102 Q -6 -107 0 -103 Q 6 -107 11 -102 Q 6 -98 0 -100 Q -6 -98 -11 -102 Z" fill="${c.hair}" stroke="${OUT}" stroke-width="1.5"/><path d="M 0 -84 L -6 -76 L 0 -52 L 6 -76 Z" fill="#c0392b" stroke="${OUT}" stroke-width="2"/>`};
+    case "pix": return {
+      back:`<path d="M -18 -130 L -12 -160 L -5 -133 L 1 -164 L 8 -133 L 15 -158 L 20 -128 Z" fill="${c.hair}" stroke="${OUT}" stroke-width="2.5"/>`,
+      front:`<circle cx="-27" cy="-98" r="3" fill="none" stroke="#d4af37" stroke-width="2"/>`};
+  }
+  return {back:"", front:""};
+}
+
+/* ---------- arms / torso gestures ---------- */
+function mArm(c, pts, point){
+  const poly = pts.map(p=>p.join(",")).join(" ");
+  const h = pts[pts.length-1];
+  let extra = "";
+  if(point) extra =
+    `<line x1="${h[0]}" y1="${h[1]}" x2="${h[0]+10}" y2="${h[1]-1}" stroke="${OUT}" stroke-width="8" stroke-linecap="round"/>`+
+    `<line x1="${h[0]}" y1="${h[1]}" x2="${h[0]+10}" y2="${h[1]-1}" stroke="${c.skin}" stroke-width="4.5" stroke-linecap="round"/>`;
+  return `<polyline points="${poly}" fill="none" stroke="${OUT}" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>`+
+         `<polyline points="${poly}" fill="none" stroke="${c.shirt}" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`+
+         extra+`<circle cx="${h[0]}" cy="${h[1]}" r="5.5" fill="${c.skin}" stroke="${OUT}" stroke-width="2"/>`;
+}
+const TORSO_POSE = {
+  rest:      c=>({back:mArm(c,[[-24,-75],[-30,-50],[-26,-26]]),  front:mArm(c,[[24,-75],[30,-50],[26,-26]])}),
+  wave:      c=>({back:mArm(c,[[-24,-75],[-30,-50],[-26,-26]]),  front:mArm(c,[[24,-75],[40,-92],[34,-116]])}),
+  pointOut:  c=>({back:mArm(c,[[-24,-75],[-30,-50],[-26,-26]]),  front:mArm(c,[[24,-75],[45,-70],[60,-74]],true)}),
+  pointSelf: c=>({back:mArm(c,[[-24,-75],[-30,-50],[-26,-26]]),  front:mArm(c,[[24,-75],[40,-62],[14,-68]])}),
+  shrug:     c=>({back:mArm(c,[[-24,-75],[-36,-58],[-46,-70]]),  front:mArm(c,[[24,-75],[36,-58],[46,-70]])}),
+  crossed:   c=>({back:mArm(c,[[-24,-75],[-4,-56],[16,-62]]),    front:mArm(c,[[24,-75],[2,-54],[-18,-60]])}),
+  chin:      c=>({back:mArm(c,[[-24,-75],[-30,-50],[-26,-26]]),  front:mArm(c,[[24,-75],[32,-52],[10,-92]])}),
+  handsUp:   c=>({back:mArm(c,[[-24,-75],[-40,-88],[-38,-112]]), front:mArm(c,[[24,-75],[40,-88],[38,-112]])}),
+  hips:      c=>({back:mArm(c,[[-24,-75],[-34,-55],[-20,-44]]),  front:mArm(c,[[24,-75],[34,-55],[20,-44]])})
+};
+
+/* face list: neutral + 8 emotions at two intensities */
+function buildFaces(){
+  const faces = [{emotion:EM.HAPPY, intensity:0, key:"neutral"}];
+  for(const w of WHEEL) for(const t of [0.5, 1.0]) faces.push({emotion:w.em, intensity:t, key:w.key});
+  return faces;
+}
+/* torso list: neutral, the three text gestures, a shrug, plus emotion-linked stances */
+function buildTorsos(){
+  return [
+    {emotion:EM.HAPPY,      intensity:0,   pose:"rest"},
+    {emotion:EM.WAVE,       intensity:1,   pose:"wave"},
+    {emotion:EM.POINTOTHER, intensity:1,   pose:"pointOut"},
+    {emotion:EM.POINTSELF,  intensity:1,   pose:"pointSelf"},
+    {emotion:EM.SHRUG,      intensity:1,   pose:"shrug"},
+    {emotion:EM.ANGRY,      intensity:1,   pose:"crossed"},
+    {emotion:EM.SCARED,     intensity:1,   pose:"handsUp"},
+    {emotion:EM.COY,        intensity:1,   pose:"chin"},
+    {emotion:EM.SHOUT,      intensity:1,   pose:"hips"},
+    {emotion:EM.BORED,      intensity:1,   pose:"rest"},
+    {emotion:EM.LAUGH,      intensity:1,   pose:"rest"},
+    {emotion:EM.SAD,        intensity:1,   pose:"rest"}
+  ];
+}
+
+const MODERN_ART = {};
+for(const c of MODERN_CHARS){
+  const faces = buildFaces(), torsos = buildTorsos();
+  MODERN_ART[c.id] = {
+    id: c.id, name: c.name, normHeight: 100,
+    aspect: MODERN_NAT.w / MODERN_NAT.h,
+    faceX: 0.5, headFrac: 0.494,
+    nat: MODERN_NAT,
+    faces, torsos,
+    draw(faceIdx, torsoIdx){
+      const f = faces[Math.max(0,faceIdx)] || faces[0];
+      const t = torsos[Math.max(0,torsoIdx)] || torsos[0];
+      const key = f.intensity === 0 ? "neutral" : emotionKeyFromAngle(f.emotion, f.intensity);
+      const ex = mExtras(c);
+      const arms = (TORSO_POSE[t.pose] || TORSO_POSE.rest)(c);
+      const head = c.id === "rex"
+        ? `<rect x="-27" y="-137" width="54" height="52" rx="12" fill="${c.skin}" stroke="${OUT}" stroke-width="2.5"/>`
+        : `<circle cx="0" cy="-110" r="28" fill="${c.skin}" stroke="${OUT}" stroke-width="2.5"/>`;
+      const deco = c.id === "rex"
+        ? `<circle cx="0" cy="-66" r="3" fill="#ffd23e" stroke="${OUT}" stroke-width="1.5"/><circle cx="0" cy="-52" r="3" fill="#ffd23e" stroke="${OUT}" stroke-width="1.5"/>`
+        : c.id === "pix" ? `<circle cx="-12" cy="-70" r="2" fill="#d4af37"/><circle cx="0" cy="-73" r="2" fill="#d4af37"/><circle cx="12" cy="-70" r="2" fill="#d4af37"/>` : "";
+      const body = `<path d="M -30 2 C -36 -55 -28 -84 0 -86 C 28 -84 36 -55 30 2 Z" fill="${c.shirt}" stroke="${OUT}" stroke-width="2.5"/>`;
+      const neck = `<rect x="-7" y="-92" width="14" height="10" fill="${c.skin}" stroke="${OUT}" stroke-width="2"/>`;
+      return arms.back+body+deco+neck+ex.back+head+ex.front+mFace(c, key, f.intensity)+arms.front;
+    }
+  };
+}
+</script>
+<script>
+"use strict";
+/* Builds the art objects the engine consumes from packed Comic Chat data.
+   Used by art-original.js (embedded data) and by the artifact build, where the
+   same data arrives at runtime as a dropped artpack file. */
+function CC_buildOriginalArt(DATA){
+  const ART = {};
+  for(const id of Object.keys(DATA)){
+    const d = DATA[id];
+    const uri = i => "data:image/png;base64," + d.imgs[i];
+
+    /* Halos (aura planes) are drawn for EVERY layer before ANY artwork — the
+     client blits all auras first (bodycam.cpp:520-560), so a halo can never
+     erase a neighboring layer's art. Compositing the halo into the image is
+     what separated heads from bodies at the neck. */
+  const auraImg = (rec, x, y) => (rec.aimg >= 0)
+    ? `<image href="${"data:image/png;base64," + d.imgs[rec.aimg]}" x="${x}" y="${y}" width="${rec.w}" height="${rec.h}"/>`
+    : "";
+
+  if(d.bodies){
+      /* AT_SIMPLE: one image per pose; gestures and emotions share the list. */
+      const pick = (fi, ti) => {
+        const t = d.bodies[Math.max(0,ti)], f = d.bodies[Math.max(0,fi)];
+        return (t && t.e >= 1000) ? t : (f || t || d.bodies[0]);
+      };
+      ART[id] = {
+        id: d.id, name: d.name, normHeight: d.normHeight,
+        nat: d.nat, aspect: d.nat.w / d.nat.h, headFrac: d.headFrac, faceX: 0.5,
+        faces: d.bodies.map(b => ({emotion: b.e, intensity: b.i})),
+        torsos: d.bodies.map(b => ({emotion: b.e, intensity: b.i})),
+        dim(fi, ti){
+          const b = pick(fi, ti);
+          return {x: -b.w/2, y: -b.h, w: b.w, h: b.h,
+                  headH: b.h/2, anchorX: b.fx / b.w};
+        },
+        draw(fi, ti){
+          const b = pick(fi, ti);
+          return auraImg(b, -b.w/2, -b.h) +
+                 `<image href="${uri(b.img)}" x="${-b.w/2}" y="${-b.h}" width="${b.w}" height="${b.h}"/>`;
+        }
+      };
+      continue;
+    }
+
+    const offset = (f, t) => ({
+      tx: -t.w/2, ty: -t.h,
+      hx: -t.w/2 + t.cx + f.cxd - f.cx,
+      hy: -t.h  + t.cy + f.cyd - f.cy
+    });
+    ART[id] = {
+      id: d.id, name: d.name, normHeight: d.normHeight,
+      nat: d.nat, aspect: d.nat.w / d.nat.h, headFrac: d.headFrac, faceX: 0.5,
+      faces:  d.faces.map(f  => ({emotion: f.e, intensity: f.i})),
+      torsos: d.torsos.map(t => ({emotion: t.e, intensity: t.i})),
+      /* CBodyDouble::GetDimInfo (avatar.cpp:77): the CURRENT pose's composite
+         box; headHeight runs from the box top to the head image's bottom. */
+      dim(fi, ti){
+        const f = d.faces[Math.max(0,fi)] || d.faces[0];
+        const t = d.torsos[Math.max(0,ti)] || d.torsos[0];
+        const o = offset(f, t);
+        const x0 = Math.min(o.tx, o.hx), y0 = Math.min(o.ty, o.hy);
+        const x1 = Math.max(o.tx + t.w, o.hx + f.w), y1 = Math.max(o.ty + t.h, o.hy + f.h);
+        return {x: x0, y: y0, w: x1 - x0, h: y1 - y0,
+                headH: (o.hy + f.h) - y0, anchorX: (o.hx + f.fx - x0) / (x1 - x0)};
+      },
+      draw(fi, ti){
+        const f = d.faces[Math.max(0,fi)] || d.faces[0];
+        const t = d.torsos[Math.max(0,ti)] || d.torsos[0];
+        const o = offset(f, t);
+        const halos = auraImg(t, o.tx, o.ty) + auraImg(f, o.hx, o.hy);
+        const torso = `<image href="${uri(t.img)}" x="${o.tx}" y="${o.ty}" width="${t.w}" height="${t.h}"/>`;
+        const head  = `<image href="${uri(f.img)}" x="${o.hx}" y="${o.hy}" width="${f.w}" height="${f.h}"/>`;
+        return halos + (d.torsoFirst ? torso + head : head + torso);
+      }
+    };
+  }
+  return ART;
+}
+</script>
+<script>window.CC_ARTIFACT_BUILD = true;</script>
+<script>
+"use strict";
+
+/* ============================== art registry ============================== */
+let HAVE_ORIGINAL = (typeof CC_ORIGINAL_ART !== "undefined") && CC_ORIGINAL_ART &&
+                    Object.keys(CC_ORIGINAL_ART).length > 0;
+const STYLES = {
+  modern:   {label:"Modern (drawn)",       art: MODERN_ART},
+  original: {label:"Original (Microsoft)", art: HAVE_ORIGINAL ? CC_ORIGINAL_ART : null}
+};
+/* The artifact build ships without the 2 MB artwork; an artpack file loaded at
+   runtime installs it through here. */
+function installOriginalArt(art, backdrops){
+  if(!art || !Object.keys(art).length) return;
+  STYLES.original.art = art;
+  HAVE_ORIGINAL = true;
+  if(backdrops) for(const k of Object.keys(backdrops)) CC_BACKDROPS[k] = backdrops[k];
+  const opt = document.querySelector('#artsel option[value="original"]');
+  if(opt) opt.disabled = false;
+  refreshScenes();
+  document.getElementById("artsel").value = "original";
+  document.getElementById("artsel").onchange();
+  updateStatusNote();
+}
+function artset(){ const s = STYLES[state.style]; return (s && s.art) ? s.art : MODERN_ART; }
+function getArt(id){ const a = artset(); return a[id] || a[Object.keys(a)[0]]; }
+function castIds(){ return Object.keys(artset()); }
+
+/* ================================= state ================================= */
+const DEFAULT_STYLE = HAVE_ORIGINAL ? "original" : "modern";
+// backID 0 (no backdrop, white paper) is what the original shipped with
+let state = { msgs:[], bg:"none", style:DEFAULT_STYLE, wide:3, title:true };
+try{
+  const s = JSON.parse(localStorage.getItem("comicchat-v2"));
+  if(s && s.msgs) state = Object.assign(state, s);
+}catch(e){}
+if(!STYLES[state.style] || (state.style === "original" && !HAVE_ORIGINAL)) state.style = DEFAULT_STYLE;
+if(state.bg !== "none" && !CC_BACKDROPS[state.bg]) state.bg = "none";   // e.g. saved pre-.bgb names
+function persist(){ try{ localStorage.setItem("comicchat-v2", JSON.stringify(state)); }catch(e){} }
+
+let curChar = null;
+let curMode = "say";
+const wheelState = {};   // charId -> {emotion, intensity, touched}
+
+function ensureCast(){
+  const ids = castIds();
+  if(!curChar || ids.indexOf(curChar) === -1) curChar = ids[0];
+  for(const id of ids) if(!wheelState[id]) wheelState[id] = {emotion:EM.HAPPY, intensity:0, touched:false};
+}
+
+/* ============================ balloon geometry ============================ */
+function edgePoints(x0,y0,x1,y1,nx,ny,phase){
+  const pts = [], len = Math.hypot(x1-x0, y1-y0);
+  const n = Math.max(2, Math.round(len / WAVE_INTERVAL));
+  for(let i=0;i<n;i++){
+    const t = i/n;
+    const s = ((i + phase) % 2) ? -1 : 1;
+    pts.push({x: x0+(x1-x0)*t + nx*WAVE_H*s, y: y0+(y1-y0)*t + ny*WAVE_H*s});
+  }
+  return pts;
+}
+/* Closed uniform cubic B-spline through the wavy control points — the
+   original's CBeta spline (balloon.cpp CreateBalloonSpline). An approximating
+   spline rounds the bumps into Woodring's soft cloud lobes; the interpolating
+   scallops used before read sharp and angular. */
+function bsplineClosed(pts){
+  const n = pts.length;
+  if(n < 3) return "";
+  const f = v=>v.toFixed(1);
+  const P = i=>pts[(i+n)%n];
+  let d = "";
+  for(let i=0;i<n;i++){
+    const p0=P(i-1), p1=P(i), p2=P(i+1), p3=P(i+2);
+    const b0={x:(p0.x+4*p1.x+p2.x)/6, y:(p0.y+4*p1.y+p2.y)/6};
+    const b1={x:(2*p1.x+p2.x)/3,      y:(2*p1.y+p2.y)/3};
+    const b2={x:(p1.x+2*p2.x)/3,      y:(p1.y+2*p2.y)/3};
+    const b3={x:(p1.x+4*p2.x+p3.x)/6, y:(p1.y+4*p2.y+p3.y)/6};
+    d += (i ? "" : `M ${f(b0.x)} ${f(b0.y)}`) +
+         ` C ${f(b1.x)} ${f(b1.y)} ${f(b2.x)} ${f(b2.y)} ${f(b3.x)} ${f(b3.y)}`;
+  }
+  return d + " Z";
+}
+function cloudPath(r){
+  const top    = edgePoints(r.left, r.top, r.right, r.top, 0, -1, 0);
+  const right  = edgePoints(r.right, r.top, r.right, r.bottom, 1, 0, 1);
+  const bottom = edgePoints(r.right, r.bottom, r.left, r.bottom, 0, 1, 0);
+  const left   = edgePoints(r.left, r.bottom, r.left, r.top, -1, 0, 1);
+  return bsplineClosed(top.concat(right, bottom, left));
+}
+/* The tail: two opposing arcs (CArc bulge = 5% of tail length), drawn OVER the
+   cloud so its white fill opens the balloon border at the mouth. The apex
+   stays AT the speaker — the 45-degree clamp moves the MOUTH along the
+   balloon's bottom edge (balloon.cpp:1466), never the apex; swinging the apex
+   sideways is what made tails wander across neighboring balloons. */
+function tailPath(b, body, dashed, others){
+  if(!body) return "";
+  const c = b.cloud;
+  const ax = body.arrowX;
+  let ay = body.top - 200;
+  if(ay - c.bottom < MIN_TAIL_H) ay = c.bottom + MIN_TAIL_H;
+  const heightDelta = ay - c.bottom;
+  const mouthY = c.bottom - 40;                              // tucked inside the border
+  const clampMouth = x => Math.max(c.left + TAIL_MOUTH + 40, Math.min(c.right - TAIL_MOUTH - 40, x));
+  let xbreak = (b.routeRgn.left + b.routeRgn.right)/2;
+  if(Math.abs(ax - xbreak) > heightDelta)                    // 45° from vertical
+    xbreak = ax - Math.sign(ax - xbreak) * heightDelta;
+  xbreak = clampMouth(xbreak);
+
+  const q = (P, Q, bulge)=>{
+    const mx=(P.x+Q.x)/2, my=(P.y+Q.y)/2;
+    const dx=Q.x-P.x, dy=Q.y-P.y, len=Math.hypot(dx,dy)||1;
+    return {x: mx - dy/len*2*bulge, y: my + dx/len*2*bulge};
+  };
+  // The clamps above can still route a tail alongside (or across) a sibling
+  // balloon. Sample the arcs against the siblings' clouds (inflated for the
+  // spline wobble) and escalate: normal bulge -> straight -> mouth moved as
+  // close under the speaker as the cloud allows.
+  const rects = (others||[]).filter(o=>o!==b && o.cloud && o.msg.mode!=="action")
+    .map(o=>({l:o.cloud.left-84, t:o.cloud.top-84, r:o.cloud.right+84, b:o.cloud.bottom+84}));
+  const hits = (L, A, R, c1, c2)=>{
+    if(!rects.length) return false;
+    const probe = (P, C, Q)=>{
+      for(let t=0.05; t<1; t+=0.09){
+        const x=(1-t)*(1-t)*P.x + 2*(1-t)*t*C.x + t*t*Q.x;
+        const y=(1-t)*(1-t)*P.y + 2*(1-t)*t*C.y + t*t*Q.y;
+        for(const rc of rects) if(x>rc.l && x<rc.r && y>rc.t && y<rc.b) return true;
+      }
+      return false;
+    };
+    return probe(L,c1,A) || probe(A,c2,R);
+  };
+  const build = (mx, bulgeScale)=>{
+    const L = {x: mx - TAIL_MOUTH, y: mouthY};
+    const R = {x: mx + TAIL_MOUTH, y: mouthY};
+    const A = {x: ax, y: ay};
+    const alt = Math.min(0.05 * Math.hypot(ax - mx, ay - mouthY), 120) * bulgeScale;
+    const sign = ax > mx ? 1 : -1;
+    return {L, R, A, c1: q(L, A, sign*alt), c2: q(A, R, -sign*alt)};
+  };
+  let g = build(xbreak, 1);
+  if(hits(g.L, g.A, g.R, g.c1, g.c2)){
+    g = build(xbreak, 0);                                    // straighten
+    if(hits(g.L, g.A, g.R, g.c1, g.c2)) g = build(clampMouth(ax), 0);  // drop from under the speaker
+  }
+  const f = v=>v.toFixed(1);
+  const d = `M ${f(g.L.x)} ${f(g.L.y)} Q ${f(g.c1.x)} ${f(g.c1.y)} ${f(g.A.x)} ${f(g.A.y)}`+
+            ` Q ${f(g.c2.x)} ${f(g.c2.y)} ${f(g.R.x)} ${f(g.R.y)}`;
+  const stroke = dashed ? ` stroke-dasharray="150 90" stroke="#777"` : ` stroke="#000"`;
+  return `<path class="tail" d="${d}" fill="#fff"${stroke} stroke-width="28" stroke-linejoin="round"/>`;
+}
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function balloonSvg(b, body, siblings){
+  const m = b.msg, c = b.cloud, pad = b.pad;
+  const italic = m.mode === "whisper";
+  const lines = b.text.lines;
+  const parts = [];
+
+  if(m.mode === "action"){
+    parts.push(`<rect x="${c.left}" y="${c.top}" width="${c.right-c.left}" height="${c.bottom-c.top}" fill="#fff" stroke="#000" stroke-width="28"/>`);
+  } else {
+    const dash = italic ? ` stroke-dasharray="150 90"` : "";
+    const stroke = italic ? "#777" : "#000";
+    if(italic) parts.push(`<path d="${cloudPath(c)}" fill="#fff" stroke="#fff" stroke-width="100"/>`);
+    parts.push(`<path d="${cloudPath(c)}" fill="#fff" stroke="${stroke}" stroke-width="28"${dash}/>`);
+    if(m.mode !== "think") parts.push(tailPath(b, body, italic, siblings));
+    if(m.mode === "think" && body){
+      // chain of ellipses growing toward the balloon (balloon.cpp:1826)
+      const ex = (b.routeRgn.left + b.routeRgn.right)/2, ey = c.bottom;
+      const tx = body.arrowX, ty = Math.max(body.top - 200, ey + MIN_TAIL_H);
+      const dy = ty - ey;
+      const n = Math.max(1, Math.floor((dy + INTERBUBBLE) / (BUBBLE_H + INTERBUBBLE)));
+      const wd = n > 1 ? (ENDBUBBLE_W - BUBBLE_H) / (2*(n-1)) : 0;
+      for(let i=0;i<n;i++){
+        const t = n === 1 ? 0 : i/(n-1);
+        const cx = tx + (ex-tx)*(1-t), cy = ty + (ey-ty)*t;
+        const rx = (BUBBLE_H + 2*wd*i)/2, ry = BUBBLE_H/2;
+        parts.push(`<ellipse cx="${cx.toFixed(0)}" cy="${cy.toFixed(0)}" rx="${rx.toFixed(0)}" ry="${ry.toFixed(0)}" fill="#fff" stroke="#000" stroke-width="28"/>`);
+      }
+    }
+  }
+
+  const leftJust = m.mode === "action";
+  const tx = leftJust ? c.left + pad.x : (c.left + c.right)/2;
+  const anchor = leftJust ? "start" : "middle";
+  const y0 = c.top + pad.y + LINE_HEIGHT*0.78;
+  lines.forEach((ln,i)=>{
+    parts.push(`<text x="${tx.toFixed(0)}" y="${(y0 + i*LINE_HEIGHT).toFixed(0)}" text-anchor="${anchor}" `+
+      `font-family="Comic Sans MS, Comic Sans, cursive" font-size="${FONT_TWIPS}" font-weight="700"`+
+      `${italic?' font-style="italic"':''} fill="#000">${esc(ln)}</text>`);
+  });
+  return parts.join("");
+}
+
+/* ============================== panel render ============================== */
+function backdropSvg(panel){
+  const bd = CC_BACKDROPS[state.bg];
+  if(!bd) return `<rect width="${S}" height="${S}" fill="#fff"/>`;
+  const z = panel.zoom || 1;
+  // crop follows the character zoom, anchored at the left edge and sliding down
+  const w = S*z, h = S*z;
+  const y = -BACKDROP_ANCHOR * (1 - 1/z) * S * z;
+  return `<image href="data:image/png;base64,${bd.png}" x="0" y="${y.toFixed(0)}" `+
+         `width="${w.toFixed(0)}" height="${h.toFixed(0)}" preserveAspectRatio="none"/>`;
+}
+/* The artwork is drawn ~480px tall and displayed smaller. Smooth downscaling is
+   area-averaging, so it conserves ink almost exactly: Anna measures 40.4% black
+   natively and still 35.9% at a 5x reduction. An earlier gamma curve here was
+   over-inking by 5-13 points and turning the cast into silhouettes; plain
+   smooth scaling is the faithful choice. */
+function bodySvg(panel, body){
+  const art = getArt(body.charId);
+  const dm = body.dm || art.nat;      // per-pose composite box from the engine
+  const scale = body.height / dm.h;
+  const tx = body.left - dm.x*scale;
+  const ty = body.top  - dm.y*scale;
+  const inner = art.draw(body.pose.face, body.pose.torso);
+  const cx = (body.left + body.right)/2;
+  const wrap = body.flip ? ` transform="translate(${(2*cx).toFixed(0)},0) scale(-1,1)"` : "";
+  return `<g${wrap}><g transform="translate(${tx.toFixed(1)},${ty.toFixed(1)}) scale(${scale.toFixed(4)})">${inner}</g></g>`;
+}
+function titlePanelSvg(){
+  const ids = [];
+  for(const m of state.msgs) if(ids.indexOf(m.charId) === -1) ids.push(m.charId);
+  const show = ids.slice(0,5);
+  const parts = [`<rect width="${S}" height="${S}" fill="#fff"/>`];
+  parts.push(`<text x="${S/2}" y="640" text-anchor="middle" font-family="Comic Sans MS, cursive" `+
+             `font-size="520" font-weight="700" fill="#000">STARRING</text>`);
+  if(show.length){
+    const casts = show.map(id=>{
+      const art = getArt(id);
+      const pose = bodyFromEmotion(art, EM.HAPPY, 0, -1);
+      const dm = art.dim ? art.dim(pose.face, pose.torso) : art.nat;
+      return {art, pose, dm};
+    });
+    let h = S*0.44;
+    let widths = casts.map(c=>h*c.dm.w/c.dm.h);
+    let sum = widths.reduce((s,w)=>s+w, 0);
+    const maxRow = S*0.90;                       // leave room for gutters
+    if(sum > maxRow){ const k = maxRow/sum; h *= k; widths = widths.map(w=>w*k); sum = maxRow; }
+    const margin = (S - sum) / (show.length + 1);
+    const baseline = S*0.86;
+    let x = margin;
+    casts.forEach((c,i)=>{
+      const w = widths[i], scale = h / c.dm.h;
+      parts.push(`<g transform="translate(${(x - c.dm.x*scale).toFixed(1)},${(baseline - h - c.dm.y*scale).toFixed(1)}) scale(${scale.toFixed(4)})">${c.art.draw(c.pose.face,c.pose.torso)}</g>`);
+      const nm = c.art.name.toUpperCase();
+      const fs = Math.min(230, FONT_TWIPS * (w*0.98) / Math.max(1, textWidth(nm, false)));
+      parts.push(`<text x="${(x + w/2).toFixed(0)}" y="${(S*0.95).toFixed(0)}" text-anchor="middle" `+
+                 `font-family="Comic Sans MS, cursive" font-size="${fs.toFixed(0)}" font-weight="700" fill="#000">${esc(nm)}</text>`);
+      x += w + margin;
+    });
+  }
+  parts.push(`<rect x="${BORDER_W}" y="${BORDER_W}" width="${S-2*BORDER_W}" height="${S-2*BORDER_W}" fill="none" stroke="#000" stroke-width="${2*BORDER_W}"/>`);
+  return parts.join("");
+}
+function panelSvg(panel, px){
+  let inner;
+  if(panel.title){
+    inner = titlePanelSvg();
+  } else {
+    const parts = [backdropSvg(panel)];
+    for(const b of panel.bodies) parts.push(bodySvg(panel, b));
+    // drawn tail-to-head so the FIRST balloon ends up on top (panel.cpp:695)
+    for(let i=panel.balloons.length-1;i>=0;i--){
+      const b = panel.balloons[i];
+      if(b.cloud) parts.push(balloonSvg(b, b.speaker, panel.balloons));
+    }
+    parts.push(`<rect x="${BORDER_W}" y="${BORDER_W}" width="${S-2*BORDER_W}" height="${S-2*BORDER_W}" fill="none" stroke="#000" stroke-width="${2*BORDER_W}"/>`);
+    inner = parts.join("");
+  }
+  return `<svg class="panel" width="${px}" height="${px}" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">`+
+         `<rect width="${S}" height="${S}" fill="#fff"/>${inner}</svg>`;
+}
+
+/* ================================ strip ================================== */
+function panelPx(){
+  const avail = Math.min(1100, document.getElementById("page").clientWidth - 40);
+  const gap = 6;
+  return Math.max(150, Math.floor((avail - gap*(state.wide+1)) / state.wide));
+}
+function renderAll(){
+  ensureCast();
+  const strip = document.getElementById("strip");
+  const px = panelPx();
+  strip.style.maxWidth = (state.wide*px + 6*(state.wide+1) + 8) + "px";
+  if(!state.msgs.length){
+    strip.innerHTML = `<div class="hint">Pick a character, set an emotion on the wheel, and say something…</div>`;
+    if(typeof updateThinkingPanels === "function") updateThinkingPanels();
+    return;
+  }
+  const panels = layoutStrip(state.msgs, getArt, {title: state.title});
+  strip.innerHTML = panels.map(p=>panelSvg(p, px)).join("");
+  if(typeof updateThinkingPanels === "function") updateThinkingPanels();
+  const page = document.getElementById("page");
+  page.scrollTop = page.scrollHeight;
+}
+
+/* =============================== sending ================================= */
+function detectTalkTos(text, fromId){
+  const out = [];
+  const low = text.toLowerCase();
+  for(const id of castIds()){
+    if(id === fromId) continue;
+    const nm = getArt(id).name.toLowerCase();
+    if(checkWord(low, nm)) out.push(id);
+  }
+  return out;
+}
+function send(raw, charId, modeOverride, flags){
+  let text = (raw||"").trim();
+  if(!text) return;
+  let mode = modeOverride || curMode;
+  if(/^\/me\s+/i.test(text)){ mode = "action"; text = text.replace(/^\/me\s+/i,""); }
+  else if(/^\/think\s+/i.test(text)){ mode = "think"; text = text.replace(/^\/think\s+/i,""); }
+  else if(/^\/(w|whisper)\s+/i.test(text)){ mode = "whisper"; text = text.replace(/^\/(w|whisper)\s+/i,""); }
+
+  const id = charId || curChar;
+  const w = wheelState[id];
+  // An explicit wheel setting wins for exactly one message; otherwise the text
+  // rules apply. They never blend. (textpose.cpp:119 + AF_TEMPFROZEN)
+  const msg = {
+    charId: id,
+    text,
+    display: (mode === "action" ? getArt(id).name + " " + text : text).toUpperCase(),
+    mode,
+    talkTos: detectTalkTos(text, id),
+    wheel: (w && w.touched) ? {emotion:w.emotion, intensity:w.intensity} : null,
+    ai: !!(flags && flags.ai),
+    replyTo: (flags && flags.replyTo) || null
+  };
+  if(w){ w.touched = false; w.emotion = EM.HAPPY; w.intensity = 0; }   // ResetAvatar
+  // In a room the HOST owns message order, so everyone's strip lays out
+  // identically; a guest's own line comes back via the host's broadcast.
+  if(typeof netDispatch === "function" && netActive() && netDispatch(msg)) return;
+  applyNetMsg(msg);
+}
+
+/* every message — local or from the network — lands here */
+function applyNetMsg(msg){
+  state.msgs.push(msg);
+  persist();
+  renderAll(); renderRoster(); renderWheel();
+  if(typeof aiObserve === "function") aiObserve(msg);
+}
+
+/* ================================== UI =================================== */
+function portrait(id){
+  const art = getArt(id);
+  const w = wheelState[id] || {emotion:EM.HAPPY, intensity:0};
+  const pose = bodyFromEmotion(art, w.emotion, w.intensity, -1);
+  const n = art.dim ? art.dim(pose.face, pose.torso) : art.nat;
+  return `<svg viewBox="${n.x} ${n.y} ${n.w} ${n.h*0.62}" xmlns="http://www.w3.org/2000/svg">${art.draw(pose.face,pose.torso)}</svg>`;
+}
+let rosterExpanded = false;
+function renderRoster(){
+  ensureCast();
+  const ids = castIds();
+  const el = document.getElementById("roster");
+  el.innerHTML = ids.map(id=>
+    `<div class="porta${id===curChar?" sel":""}" data-id="${id}">${portrait(id)}${esc(getArt(id).name)}</div>`).join("");
+  el.querySelectorAll(".porta").forEach(d=> d.onclick = ()=>{ curChar = d.dataset.id; renderRoster(); renderWheel(); });
+  const more = document.getElementById("rostermore");
+  const overflows = ids.length > 12;                 // two collapsed rows
+  more.hidden = !overflows;
+  el.classList.toggle("collapsed", overflows && !rosterExpanded);
+  if(overflows) more.textContent = rosterExpanded ? "▴ Fewer characters" : `▾ Show all ${ids.length} characters`;
+}
+document.getElementById("rostermore").onclick = ()=>{ rosterExpanded = !rosterExpanded; renderRoster(); };
+
+const WHEEL_ICON_KEY = {happy:"hap", coy:"coy", bored:"bor", scared:"sca", sad:"sad", angry:"ang", shout:"sho", laugh:"laf"};
+const WR = 52, WSZ = 132, WC = WSZ/2;
+function renderWheel(){
+  ensureCast();
+  const w = wheelState[curChar];
+  const parts = [`<circle cx="${WC}" cy="${WC}" r="${WR+12}" fill="#e8e8e8" stroke="#808080" stroke-width="2"/>`];
+  for(let i=0;i<8;i++){
+    const a = i*2*Math.PI/8;                        // screen space: y grows down
+    const x = WC + Math.cos(a)*(WR+2), y = WC + Math.sin(a)*(WR+2);
+    const icon = CC_WHEEL_ICONS[WHEEL_ICON_KEY[WHEEL[i].key]];
+    parts.push(`<image href="data:image/png;base64,${icon}" x="${x-10}" y="${y-13}" width="20" height="26"/>`);
+  }
+  parts.push(`<circle cx="${WC}" cy="${WC}" r="13" fill="#fff" stroke="#808080" stroke-width="2"/>`);
+  parts.push(`<image href="data:image/png;base64,${CC_WHEEL_ICONS.neu}" x="${WC-10}" y="${WC-13}" width="20" height="26"/>`);
+  const r = w.intensity * WR;
+  const px = WC + Math.cos(w.emotion)*r, py = WC + Math.sin(w.emotion)*r;
+  parts.push(`<line x1="${WC}" y1="${WC}" x2="${px}" y2="${py}" stroke="#000080" stroke-width="2"/>`);
+  parts.push(`<circle cx="${px}" cy="${py}" r="5" fill="#000080" stroke="#fff" stroke-width="1.5"/>`);
+  document.getElementById("wheel").innerHTML = parts.join("");
+  const key = emotionKeyFromAngle(w.emotion, w.intensity);
+  document.getElementById("wheellabel").textContent =
+    w.intensity === 0 ? "neutral" : `${key} ${Math.round(w.intensity*100)}%`;
+}
+function wheelPick(ev){
+  const svg = document.getElementById("wheel");
+  const r = svg.getBoundingClientRect();
+  const vx = ev.clientX - r.left - WC, vy = ev.clientY - r.top - WC;
+  const w = wheelState[curChar];
+  let mag = Math.hypot(vx,vy) / WR;
+  mag = Math.min(mag, 1.0);
+  if(mag < 0.2){ w.intensity = 0; w.emotion = 0; }    // "detente in the center"
+  else { w.intensity = mag; w.emotion = Math.atan2(vy, vx); }
+  w.touched = true;
+  renderWheel(); renderRoster();
+}
+{
+  const el = document.getElementById("wheel");
+  let drag = false;
+  el.addEventListener("pointerdown", e=>{ drag = true; el.setPointerCapture(e.pointerId); wheelPick(e); });
+  el.addEventListener("pointermove", e=>{ if(drag) wheelPick(e); });
+  el.addEventListener("pointerup", ()=> drag = false);
+}
+
+/* mode-aware placeholder so nobody has to know IRC folklore */
+const MODE_PLACEHOLDER = {
+  say:     "Type a message…",
+  think:   "Type a thought — it appears in a cloud with a bubble trail",
+  whisper: "Type a whisper — dashed balloon, italics",
+  action:  'Describe what your character does — e.g. "waves goodbye"'
+};
+function updatePlaceholder(){
+  document.getElementById("msg").placeholder = MODE_PLACEHOLDER[curMode] || MODE_PLACEHOLDER.say;
+}
+
+/* live preview of what the message will become */
+function updateRuleHint(){
+  const raw = document.getElementById("msg").value;
+  // Action becomes a narration caption: the text is appended to the name
+  let mode = curMode, tt = raw;
+  if(/^\/me\s+/i.test(tt)){ mode = "action"; tt = tt.replace(/^\/me\s+/i,""); }
+  if(mode === "action"){
+    const nm = getArt(curChar).name.toUpperCase();
+    document.getElementById("rulehint").textContent = tt.trim()
+      ? `Caption preview: ✱ ${nm} ${tt.trim().toUpperCase()} ✱`
+      : `Action = a narration caption. Your words go after the name: "waves" → ✱ ${nm} WAVES ✱`;
+    return;
+  }
+  const t = raw;
+  const opts = t ? getEmotionsFromString(t) : [];
+  const names = {};
+  names[EM.SHOUT]="shout"; names[EM.LAUGH]="laugh"; names[EM.HAPPY]="happy"; names[EM.SAD]="sad";
+  names[EM.COY]="coy"; names[EM.WAVE]="wave"; names[EM.POINTOTHER]="point at you"; names[EM.POINTSELF]="point at self";
+  const w = wheelState[curChar];
+  const el = document.getElementById("rulehint");
+  if(w && w.touched){ el.textContent = "Wheel set — it overrides the text rules for this one message."; return; }
+  el.textContent = opts.length
+    ? "Text rules: " + opts.sort((a,b)=>b.priority-a.priority).map(o=>`${names[o.emotion]||"?"}(${o.priority})`).join(", ")
+    : 'Or start a line with "/me waves" (action caption), "/think …" (thought), "/w …" (whisper).';
+}
+
+document.querySelectorAll(".tog").forEach(b=> b.onclick = ()=>{
+  document.querySelectorAll(".tog").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); curMode = b.dataset.mode;
+  updatePlaceholder(); updateRuleHint();
+  document.getElementById("msg").focus();
+});
+document.getElementById("send").onclick = ()=>{
+  const inp = document.getElementById("msg");
+  send(inp.value); inp.value = "";
+  document.querySelectorAll(".tog").forEach(x=>x.classList.toggle("on", x.dataset.mode === "say"));
+  curMode = "say"; updatePlaceholder(); updateRuleHint(); inp.focus();
+};
+document.getElementById("msg").addEventListener("keydown", e=>{
+  if(e.key === "Enter" || e.keyCode === 13) document.getElementById("send").click();
+});
+document.getElementById("msg").addEventListener("input", updateRuleHint);
+
+const bgsel = document.getElementById("bgsel");
+function refreshScenes(){
+  bgsel.innerHTML = Object.keys(CC_BACKDROPS).map(k=>`<option value="${k}">${CC_BACKDROPS[k].label}</option>`).join("")
+                  + `<option value="none">(none)</option>`;
+  bgsel.value = (CC_BACKDROPS[state.bg] || state.bg === "none") ? state.bg : "none";
+}
+refreshScenes();
+bgsel.onchange = ()=>{ state.bg = bgsel.value; persist(); renderAll(); };
+
+const artsel = document.getElementById("artsel");
+artsel.value = state.style;
+artsel.onchange = ()=>{
+  if(artsel.value === "original" && !HAVE_ORIGINAL){ artsel.value = state.style; return; }
+  const oldIds = castIds();
+  const prev = state.style;
+  state.style = artsel.value;
+  const newIds = castIds();
+  if(prev !== state.style && oldIds.length && newIds.length){
+    // The two casts have different names, so recast the existing strip by
+    // position — otherwise every line falls back to the first character.
+    const map = {};
+    oldIds.forEach((id,i)=> map[id] = newIds[i % newIds.length]);
+    for(const m of state.msgs){
+      m.charId = map[m.charId] || newIds[0];
+      m.talkTos = (m.talkTos || []).map(t=> map[t] || newIds[0]);
+      if(m.mode === "action") m.display = (getArt(m.charId).name + " " + m.text).toUpperCase();
+    }
+  }
+  curChar = null;
+  persist(); ensureCast(); renderRoster(); renderWheel(); renderAll();
+};
+const wide = document.getElementById("wide");
+wide.value = String(state.wide);
+wide.onchange = ()=>{ state.wide = +wide.value; persist(); renderAll(); };
+const tp = document.getElementById("titlepanel");
+tp.checked = state.title;
+tp.onchange = ()=>{ state.title = tp.checked; persist(); renderAll(); };
+document.getElementById("clear").onclick = ()=>{
+  if(confirm("Clear the whole strip?")){ state.msgs = []; persist(); renderAll(); }
+};
+function updateStatusNote(){
+  const el = document.getElementById("statusnote");
+  if(!HAVE_ORIGINAL){
+    artsel.querySelector('option[value="original"]').disabled = true;
+    el.className = "note";
+    el.textContent = window.CC_ARTIFACT_BUILD
+      ? "Modern art only — load the artpack for the original Microsoft artwork."
+      : "Original artwork not installed — art-original.js missing.";
+  } else {
+    el.className = "help";
+    el.textContent = "Artwork © 1996-1998 Microsoft Corporation (MIT).";
+  }
+}
+updateStatusNote();
+
+/* ==================== artpack loading (artifact build) ==================== */
+/* The claude.ai artifact ships without the ~2 MB of artwork. The user loads
+   comic-chat-artpack.json once; we keep it for next time if storage allows
+   (sandboxed artifact iframes usually have none — then it's a per-visit drop). */
+function applyArtpack(text){
+  let pack;
+  try{ pack = JSON.parse(text); }catch(e){ alert("That file isn't a Comic Chat artpack (bad JSON)."); return false; }
+  if(!pack || pack.format !== "comic-chat-artpack-1" || !pack.original){
+    alert("That file isn't a Comic Chat artpack."); return false;
+  }
+  installOriginalArt(CC_buildOriginalArt(pack.original), pack.backdrops);
+  try{ localStorage.setItem("comicchat-artpack", text); }catch(e){}
+  const dz = document.getElementById("dropzone");
+  if(dz) dz.hidden = true;
+  return true;
+}
+{
+  const dz = document.getElementById("dropzone");
+  if(dz){
+    if(HAVE_ORIGINAL) dz.hidden = true;
+    else{
+      try{
+        const saved = localStorage.getItem("comicchat-artpack");
+        if(saved) applyArtpack(saved);
+      }catch(e){}
+    }
+    const fi = document.getElementById("artfile");
+    fi.onchange = ()=>{ if(fi.files[0]) fi.files[0].text().then(applyArtpack); };
+    document.addEventListener("dragover", ev=>ev.preventDefault());
+    document.addEventListener("drop", ev=>{
+      ev.preventDefault();
+      const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if(f) f.text().then(applyArtpack);
+    });
+  }
+}
+
+/* ========================= AI cast replies ========================== */
+/* Available only inside a claude.ai artifact, where window.claude.complete is
+   the keyless completion API. Hidden everywhere else. */
+const AI_BIOS = {
+  anna:     "sleek black bob, arch expression; dry, deadpan wit — the sardonic straight woman who is secretly fond of everyone",
+  bolo:     "pompadour and a bolo tie; earnest retro-cool, takes fashion and manners very seriously",
+  tiki:     "a living carved tiki mask on legs; speaks in grand dramatic pronouncements, prone to volcano metaphors",
+  scotty:   "a droopy, rumpled dog-like fellow; easily confused, endlessly good-natured, food-motivated",
+  kirby:    "a kid in a red jacket and round glasses; boundless enthusiasm, everything is the BEST THING EVER",
+  dan:      "spiky-haired guy with a big grin; laid-back surfer energy, nothing fazes him",
+  margaret: "curly hair, hands on hips; brooks absolutely no nonsense, delivers withering one-liners",
+  xeno:     "a slender grey alien; deadpan and literal, quietly conducting field research on humans",
+  susan:    "sensible and organized; the one who actually read the manual",
+  cro:      "a hulking caveman type; simple words, surprisingly deep thoughts",
+  lynnea:   "theatrical and glamorous; treats every panel as her big scene",
+  veronica: "stylish and self-assured; always slightly above it all",
+  buck:     "a big friendly galoot; enthusiastic, not always accurate",
+  jordan:   "cool and mysterious; says little, means much",
+  connor:   "an odd knight-ish figure; formal, chivalrous, slightly out of era"
+};
+/* ---- AI with a user-supplied key: Claude, ChatGPT, or Gemini ---- */
+/* Defaults are each provider's current small ("mini") model as of July 2026;
+   the model field is editable, and a model-shaped error falls back once to a
+   long-lived known-good id so a stale default never breaks every call. */
+const AI_PROVIDERS = {
+  claude: {label:"Claude (Anthropic)", model:"claude-haiku-4-5-20251001", fallback:"claude-sonnet-5",   keyHint:"sk-ant-…"},
+  openai: {label:"ChatGPT (OpenAI)",   model:"gpt-5.4-mini",              fallback:"gpt-5-mini",        keyHint:"sk-…"},
+  gemini: {label:"Gemini (Google)",    model:"gemini-3.6-flash",          fallback:"gemini-2.5-flash",  keyHint:"AIza…"}
+};
+let AI_CFG = {provider:"claude", models:{}, keys:{}, chosen:false};
+try{
+  const c = JSON.parse(localStorage.getItem("comicchat-ai-cfg"));
+  if(c && (AI_PROVIDERS[c.provider] || c.provider === "nano"))
+    AI_CFG = {provider:c.provider, models:c.models||{}, keys:c.keys||{}, chosen:!!c.chosen};
+  const legacy = localStorage.getItem("comicchat-apikey");   // pre-provider versions
+  if(legacy && !AI_CFG.keys.claude){ AI_CFG.keys.claude = legacy; localStorage.removeItem("comicchat-apikey"); }
+}catch(e){}
+
+/* ---- Gemini Nano, built into Chrome (the Prompt API) ----
+   Feature-detected: the LanguageModel global (Chrome 138+), with the older
+   window.ai.languageModel shape as fallback. When the on-device model is
+   ready it becomes an AI provider needing NO key, and the default — unless
+   the user has explicitly picked a provider themselves. */
+const NANO = {state:"unsupported", api:null, legacy:false};
+async function nanoDetect(){
+  try{
+    if(typeof LanguageModel !== "undefined" && LanguageModel.availability){
+      NANO.api = LanguageModel;
+      NANO.state = await LanguageModel.availability();
+    } else if(window.ai && window.ai.languageModel && window.ai.languageModel.capabilities){
+      NANO.api = window.ai.languageModel; NANO.legacy = true;
+      const c = await window.ai.languageModel.capabilities();
+      NANO.state = c.available === "readily" ? "available"
+                 : c.available === "after-download" ? "downloadable" : "unavailable";
+    }
+  }catch(e){ NANO.state = "unavailable"; }
+  if(NANO.state === "available" || NANO.state === "downloadable" || NANO.state === "downloading"){
+    AI_PROVIDERS.nano = {label:"Gemini Nano (built into Chrome, no key)",
+                         model:"on-device", fallback:null, keyHint:"", local:true};
+    if(NANO.state === "available" && !AI_CFG.chosen){
+      AI_CFG.provider = "nano"; aiPersistCfg();
+    }
+  } else if(AI_CFG.provider === "nano"){
+    AI_CFG.provider = "claude";       // saved on a machine that had it; this one doesn't
+  }
+}
+const NANO_SCHEMA = {type:"object", properties:{
+  text:{type:"string"},
+  emotion:{type:"string", enum:["neutral","happy","coy","bored","scared","sad","angry","shout","laugh"]},
+  intensity:{type:"number"},
+  mode:{type:"string", enum:["say","think","whisper","action"]}
+}, required:["text","emotion","intensity","mode"]};
+/* Chrome asks for the output language to be declared ("No output language was
+   specified…"); older builds reject the options object, hence the fallback. */
+const NANO_LANG = {
+  expectedInputs:  [{type:"text", languages:["en"]}],
+  expectedOutputs: [{type:"text", languages:["en"]}]
+};
+async function nanoCreate(extraOpts){
+  try{ return await NANO.api.create(Object.assign({}, NANO_LANG, extraOpts||{})); }
+  catch(e){ return await NANO.api.create(extraOpts||{}); }
+}
+async function nanoPrompt(prompt){
+  const sess = await nanoCreate();
+  try{
+    try{ return await sess.prompt(prompt, {responseConstraint: NANO_SCHEMA}); }
+    catch(e){ return await sess.prompt(prompt); }    // constraint unsupported on this build
+  }finally{
+    try{ if(sess.destroy) sess.destroy(); }catch(e){}
+  }
+}
+async function nanoDownload(onProgress){
+  const sess = await nanoCreate({monitor(m){
+    m.addEventListener("downloadprogress", e=>{
+      if(onProgress) onProgress(Math.round((e.loaded || 0) * 100));
+    });
+  }});
+  try{ if(sess.destroy) sess.destroy(); }catch(e){}
+  NANO.state = "available";
+}
+nanoDetect();
+function aiPersistCfg(){ try{ localStorage.setItem("comicchat-ai-cfg", JSON.stringify(AI_CFG)); }catch(e){} }
+function aiKey(){ return AI_CFG.keys[AI_CFG.provider] || ""; }
+function aiModel(){
+  if(AI_CFG.provider === "nano") return "on-device";
+  return (AI_CFG.models[AI_CFG.provider] || "").trim() || AI_PROVIDERS[AI_CFG.provider].model;
+}
+function aiAvailable(){
+  if(AI_CFG.provider === "nano") return NANO.state === "available";
+  return !!aiKey();
+}
+
+async function callProvider(provider, model, prompt){
+  if(provider === "nano") return nanoPrompt(prompt);
+  const key = AI_CFG.keys[provider];
+  let url, headers, body, pick;
+  if(provider === "claude"){
+    url = "https://api.anthropic.com/v1/messages";
+    headers = {"x-api-key": key, "anthropic-version": "2023-06-01",
+               "content-type": "application/json",
+               "anthropic-dangerous-direct-browser-access": "true"};
+    body = {model, max_tokens: 300, messages: [{role:"user", content: prompt}]};
+    pick = d => (d.content && d.content[0] && d.content[0].text) || "";
+  } else if(provider === "openai"){
+    url = "https://api.openai.com/v1/chat/completions";
+    headers = {"authorization": "Bearer " + key, "content-type": "application/json"};
+    body = {model, messages: [{role:"user", content: prompt}]};
+    pick = d => (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || "";
+  } else {
+    url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+          encodeURIComponent(model) + ":generateContent";
+    headers = {"x-goog-api-key": key, "content-type": "application/json"};
+    body = {contents: [{parts: [{text: prompt}]}]};
+    pick = d => {
+      const parts = d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts;
+      return parts ? parts.map(p=>p.text||"").join("") : "";
+    };
+  }
+  const res = await fetch(url, {method:"POST", headers, body: JSON.stringify(body)});
+  if(!res.ok) throw new Error("API " + res.status + ": " + (await res.text()).slice(0,200));
+  return pick(await res.json());
+}
+async function fetchAI(prompt){
+  const p = AI_CFG.provider;
+  try{
+    return await callProvider(p, aiModel(), prompt);
+  }catch(e){
+    const fb = AI_PROVIDERS[p] && AI_PROVIDERS[p].fallback;
+    if(fb && /model/i.test(String(e)) && aiModel() !== fb)
+      return await callProvider(p, fb, prompt);
+    throw e;
+  }
+}
+
+/* ---- AI participants: characters played by Claude with YOUR key ---- */
+window.AI_PLAYERS = [];   // [{name, charId, chatty, busy}]
+try{
+  const saved = JSON.parse(localStorage.getItem("comicchat-aiplayers"));
+  // Every AI player is chatty now: characters addressed by name already answer
+  // for themselves, so a "replies when addressed" player would be redundant.
+  if(Array.isArray(saved)) window.AI_PLAYERS = saved.map(p=>({name:p.name, charId:p.charId, chatty:true, busy:false}));
+}catch(e){}
+function aiPersistPlayers(){
+  try{ localStorage.setItem("comicchat-aiplayers",
+    JSON.stringify(window.AI_PLAYERS.map(p=>({name:p.name, charId:p.charId, chatty:p.chatty})))); }catch(e){}
+}
+function aiPrompt(responder){
+  const art = getArt(responder);
+  const bio = AI_BIOS[responder] || "improvise a fitting playful personality from the name alone";
+  const cast = state.msgs.slice(-12).map(m=>{
+    const nm = getArt(m.charId) ? getArt(m.charId).name : m.charId;
+    return m.mode === "action" ? `[${nm} ${m.text}]` : `${nm} (${m.mode}): ${m.text}`;
+  }).join("\n");
+  return `You write dialogue for a Microsoft Comic Chat comic strip. You play ${art.name}: ${bio}.
+
+Recent strip:
+${cast}
+
+Write ${art.name}'s next line. Playful and funny, 1-2 short sentences, stay in character, react to what was just said.
+Plain text only — no markdown, no asterisks or other emphasis marks (the comic lettering has no bold or italics).
+
+Reply with ONLY a JSON object, nothing else. Its fields:
+"text" — the actual line of dialogue you wrote (a real sentence, never a placeholder)
+"emotion" — exactly one word from: neutral, happy, coy, bored, scared, sad, angry, shout, laugh
+"intensity" — a number between 0 and 1
+"mode" — exactly one word from: say, think, whisper, action
+For mode "action", "text" is a third-person action phrase WITHOUT the name (e.g. "hands Anna a coffee").
+Example of the format (do NOT copy its words): {"text":"${AI_EXAMPLE}","emotion":"coy","intensity":0.6,"mode":"say"}`;
+}
+/* An AI participant decides for ITSELF whether to answer a message:
+   always when addressed by name, or (if marked chatty) when the message
+   addressed nobody in particular. AI players never answer other AIs, so two
+   of them can't chain-react forever. */
+const AI_ADHOC = {};   // stand-ins for addressed-but-unclaimed characters
+function aiObserve(msg){
+  if(msg.ai || !aiAvailable()) return;
+  for(const p of window.AI_PLAYERS){
+    if(p.busy || p.charId === msg.charId) continue;
+    const addressed = (msg.talkTos||[]).includes(p.charId) ||
+                      checkWord(msg.text.toLowerCase(), getArt(p.charId).name.toLowerCase());
+    if(addressed || (p.chatty && !(msg.talkTos||[]).length)) aiReplyAs(p, msg.charId);
+  }
+  /* A character addressed by name who is played by nobody — no human, no AI
+     player — answers for themselves. In a room only the host's machine does
+     this, so the reply happens exactly once. */
+  if(AI_CFG.autoCast === false) return;
+  if(typeof netActive === "function" && netActive() && !NET.isHost) return;
+  const claimed = new Set([msg.charId, curChar]);
+  for(const p of window.AI_PLAYERS) claimed.add(p.charId);
+  for(const r of lastRoster) claimed.add(r.charId);
+  for(const id of (msg.talkTos||[])){
+    if(claimed.has(id) || !getArt(id)) continue;
+    const p = AI_ADHOC[id] ||
+      (AI_ADHOC[id] = {name: getArt(id).name + " (AI)", charId:id, chatty:false, busy:false});
+    if(!p.busy) aiReplyAs(p, msg.charId);
+  }
+}
+
+/* the format example shown to the model; any echo of it is rejected */
+const AI_EXAMPLE = "Ha! I knew you would say that.";
+
+/* AI replies must land as plain comic-balloon text, not markdown */
+function stripMarkdown(s){
+  return s
+    .replace(/```[a-z]*\n?/gi, "").replace(/```/g, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*\n]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\b_([^_\n]+)_\b/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#+\s*/gm, "")
+    .replace(/\s+/g, " ").trim();
+}
+/* one generation attempt; returns null if the model parroted the format
+   template ("...", the example sentence, or nothing) instead of writing a line.
+   Parsing is three-tier: full JSON, then a "text" field fished out of broken
+   JSON (truncation), then the whole reply treated as the spoken line — small
+   on-device models often answer in prose despite the instructions, and prose
+   is a perfectly good balloon. */
+async function aiAttempt(p, extra){
+  const raw = await fetchAI(aiPrompt(p.charId) + (extra || ""));
+  let r = null, text = "";
+  const m = raw.match(/\{[\s\S]*\}/);
+  if(m){ try{ r = JSON.parse(m[0]); }catch(e){} }
+  if(r){
+    text = stripMarkdown(String(r.text||"")).trim();
+  } else {
+    // the char class stops at any unescaped quote, so the close-quote itself
+    // is optional — truncated output loses it
+    const tf = raw.match(/"text"\s*:\s*"((?:[^"\\]|\\.)+)/);
+    text = stripMarkdown(tf ? tf[1].replace(/\\(.)/g, "$1")
+                            : raw.replace(/^["'\s]+|["'\s]+$/g, "")).trim();
+    r = {emotion:"neutral", intensity:0.5, mode:"say"};
+  }
+  const parroted = !text || text.startsWith("{") ||             // JSON junk is not dialogue
+    /^[.…\s]+$/.test(text) ||
+    /^[.…\s]+$/.test(text) ||                                   // "...", "…"
+    text.toLowerCase().replace(/[^a-z ]/g,"") ===
+      AI_EXAMPLE.toLowerCase().replace(/[^a-z ]/g,"");
+  if(parroted){
+    console.warn("Comic Chat AI: unusable reply from model:", raw);
+    return null;
+  }
+  return {r, text};
+}
+/* ---- a visible "thinking" panel while the model generates ----
+   On-device Nano can take many seconds; instead of a dead strip, the pending
+   character stands in a temporary panel with a pulsing thought bubble. These
+   panels are local-only presentation — never part of the shared message list,
+   so multiplayer layout stays deterministic. */
+const AI_THINKING = new Set();
+function thinkingPanelHTML(id, px){
+  const art = getArt(id);
+  const pose = bodyFromEmotion(art, EM.BORED, 0.35, -1);
+  const dm = art.dim ? art.dim(pose.face, pose.torso)
+                     : {x:art.nat.x, y:art.nat.y, w:art.nat.w, h:art.nat.h};
+  const h = S/BODY_H_DIV, scale = h/dm.h, w = dm.w*scale;
+  const cx = S/2;
+  const tx = cx - w/2 - dm.x*scale, ty = (S - h) - dm.y*scale;
+  const fig = `<g transform="translate(${tx.toFixed(1)},${ty.toFixed(1)}) scale(${scale.toFixed(4)})">${art.draw(pose.face,pose.torso)}</g>`;
+  const dots = [0,1,2].map(i=>
+    `<circle cx="${cx-280+i*280}" cy="880" r="95" fill="#000">`+
+    `<animate attributeName="opacity" values="0.15;1;0.15" dur="1.2s" begin="${(i*0.3).toFixed(1)}s" repeatCount="indefinite"/></circle>`).join("");
+  const cloud =
+    `<ellipse cx="${cx}" cy="880" rx="950" ry="460" fill="#fff" stroke="#000" stroke-width="28"/>`+dots+
+    `<circle cx="${cx-430}" cy="1560" r="80" fill="#fff" stroke="#000" stroke-width="26"/>`+
+    `<circle cx="${cx-560}" cy="1840" r="50" fill="#fff" stroke="#000" stroke-width="22"/>`;
+  const border = `<rect x="${BORDER_W}" y="${BORDER_W}" width="${S-2*BORDER_W}" height="${S-2*BORDER_W}" fill="none" stroke="#000" stroke-width="${2*BORDER_W}"/>`;
+  return `<svg class="panel thinkpanel" data-think="${esc(id)}" width="${px}" height="${px}" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">`+
+         `<rect width="${S}" height="${S}" fill="#fff"/>${fig}${cloud}${border}</svg>`;
+}
+function updateThinkingPanels(){
+  const strip = document.getElementById("strip");
+  strip.querySelectorAll("[data-think]").forEach(el=>{
+    if(!AI_THINKING.has(el.getAttribute("data-think"))) el.remove();
+  });
+  const px = panelPx();
+  for(const id of AI_THINKING){
+    if(!getArt(id)) continue;
+    if(!strip.querySelector(`[data-think="${id}"]`))
+      strip.insertAdjacentHTML("beforeend", thinkingPanelHTML(id, px));
+  }
+  if(AI_THINKING.size)
+    document.getElementById("page").scrollTop = document.getElementById("page").scrollHeight;
+}
+function showThinking(id){ AI_THINKING.add(id); updateThinkingPanels(); }
+function hideThinking(id){ AI_THINKING.delete(id); updateThinkingPanels(); }
+
+async function aiReplyAs(p, replyToId){
+  p.busy = true;
+  const hint = document.getElementById("rulehint");
+  hint.textContent = `💭 ${getArt(p.charId).name} is thinking…`;
+  showThinking(p.charId);
+  try{
+    let got = await aiAttempt(p);
+    if(!got) got = await aiAttempt(p,
+      `\n\nIMPORTANT: your previous reply used a placeholder instead of dialogue. ` +
+      `The "text" field must be a real line ${getArt(p.charId).name} would actually say in this scene.`);
+    if(!got){
+      hint.textContent = "🤖 " + getArt(p.charId).name + " had nothing to say (the model returned a placeholder twice).";
+      return;
+    }
+    const r = got.r;
+    const emoKey = String(r.emotion||"neutral").toLowerCase();
+    const wheelEntry = WHEEL.find(w=>w.key===emoKey || (emoKey==="laughing" && w.key==="laugh"));
+    wheelState[p.charId] = wheelEntry
+      ? {emotion: wheelEntry.em, intensity: Math.max(0.25, Math.min(1, +r.intensity || 0.7)), touched:true}
+      : {emotion: EM.HAPPY, intensity: 0, touched:true};
+    const mode = ["say","think","whisper","action"].includes(r.mode) ? r.mode : "say";
+    hideThinking(p.charId);              // the real panel replaces the pending one
+    send(got.text.slice(0,200), p.charId, mode, {ai:true, replyTo: replyToId || null});
+  }catch(e){
+    hint.textContent = "🤖 " + getArt(p.charId).name + " lost their train of thought (" +
+                       String(e.message||e).slice(0,80) + ")";
+  }finally{
+    hideThinking(p.charId);
+    p.busy = false;
+    setTimeout(updateRuleHint, 2500);
+  }
+}
+
+/* ================================= demo ================================== */
+const DEMO = [
+  ["say",     null,                        "Hi everyone! Welcome to Comic Chat."],
+  ["say",     null,                        "I'm just here for the free coffee."],
+  ["say",     null,                        "lol you are ALWAYS here for the coffee"],
+  ["say",     {emotion:EM.ANGRY, i:0.9},   "WHO DRANK MY COFFEE"],
+  ["think",   {emotion:EM.BORED, i:0.7},   "Humans are such strange creatures."],
+  ["action",  null,                        "hands over a fresh cup"],
+  ["say",     {emotion:EM.HAPPY, i:0.9},   "Ah, splendid. All is forgiven :)"],
+  ["whisper", {emotion:EM.COY,   i:0.8},   "psst... want to raid the fridge later?"],
+  ["say",     {emotion:EM.SCARED,i:1.0},   "MY COVER IS BLOWN!!!"]
+];
+document.getElementById("demo").onclick = ()=>{
+  const ids = castIds();
+  state.msgs = [];
+  let i = 0;
+  const step = ()=>{
+    if(i >= DEMO.length){ renderRoster(); return; }
+    const [mode, emo, text] = DEMO[i];
+    const id = ids[i % ids.length];
+    const w = wheelState[id];
+    if(emo){ w.emotion = emo.emotion; w.intensity = emo.i; w.touched = true; }
+    i++;
+    send(text, id, mode);
+    setTimeout(step, 420);
+  };
+  step();
+};
+
+/* =============================== save PNG ================================ */
+document.getElementById("save").onclick = async ()=>{
+  const svgs = [...document.querySelectorAll("svg.panel")];
+  if(!svgs.length) return;
+  const cols = Math.min(state.wide, svgs.length), gap = 12, px = 420;
+  const rows = Math.ceil(svgs.length / cols);
+  const cv = document.createElement("canvas");
+  cv.width = cols*px + (cols+1)*gap;
+  cv.height = rows*px + (rows+1)*gap;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  await Promise.all(svgs.map((svg,i)=> new Promise(res=>{
+    const img = new Image();
+    img.onload = ()=>{
+      ctx.drawImage(img, gap + (i%cols)*(px+gap), gap + Math.floor(i/cols)*(px+gap), px, px);
+      res();
+    };
+    img.onerror = res;
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+  })));
+  const a = document.createElement("a");
+  a.download = "comic-chat-strip.png";
+  a.href = cv.toDataURL("image/png");
+  a.click();
+};
+
+/* ============================ DOM modal system =========================== */
+function ccModal(title, bodyHTML){
+  const old = document.getElementById("ccmodal");
+  if(old) old.remove();
+  const ov = document.createElement("div");
+  ov.id = "ccmodal";
+  ov.innerHTML = `<div class="mwin"><div class="mtitle">${esc(title)}
+    <button class="mclose">×</button></div><div class="mbody">${bodyHTML}</div></div>`;
+  document.body.appendChild(ov);
+  const close = ()=>ov.remove();
+  ov.querySelector(".mclose").onclick = close;
+  ov.addEventListener("pointerdown", ev=>{ if(ev.target === ov) close(); });
+  return {el: ov, close};
+}
+function copyText(t){
+  try{
+    const ta = document.createElement("textarea");
+    ta.value = t; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ========================= multiplayer UI wiring ========================= */
+function enterRoomMode(){
+  // shared strips reference the original cast ids, so everyone plays with it
+  if(HAVE_ORIGINAL && state.style !== "original"){
+    artsel.value = "original"; artsel.onchange();
+  }
+  document.getElementById("demo").disabled = true;
+  document.getElementById("clear").disabled = !NET.isHost;
+  document.getElementById("clear").title = NET.isHost ? "" : "Only the host can clear the shared strip";
+}
+function leaveRoomMode(){
+  document.getElementById("demo").disabled = false;
+  document.getElementById("clear").disabled = false;
+  document.getElementById("clear").title = "";
+}
+function rosterHTML(parts){
+  if(!parts || !parts.length) return "";
+  return "<div class='mrow'><b>In the room:</b> " +
+    parts.map(p=>esc(p.name) + (p.ai ? " 🤖" : "") +
+      " <span class='small'>(" + esc(getArt(p.charId) ? getArt(p.charId).name : "?") + ")</span>").join(" · ") +
+    "</div>";
+}
+let lastRoster = [];
+if(typeof NET !== "undefined"){
+  NET.onStatus = t=>{ const el = document.getElementById("netstatus"); if(el) el.textContent = t; };
+  NET.onRoster = parts=>{
+    lastRoster = parts;
+    const box = document.getElementById("mroster");
+    if(box) box.innerHTML = rosterHTML(parts);
+  };
+}
+/* Accept a bare code, a pasted invite URL (file:///...#join=cc-xxxxxx), or
+   anything containing a cc- code — extract the room id from all of them. */
+function parseRoomCode(s){
+  s = (s||"").trim();
+  const m = s.match(/#?join=([\w-]+)/i) || s.match(/\b(cc-[a-z0-9]+)\b/i);
+  return m ? m[1] : s;
+}
+function openNetModal(){
+  const joined = netActive();
+  const hashJoin = (location.hash.match(/#join=([\w-]+)/)||[])[1] || "";
+  let body;
+  if(joined){
+    body = `<div class="mrow">Room code: <code>${esc(NET.roomId||"")}</code>
+        <button id="mcopy">Copy invite link</button> <span id="mcopied" class="small"></span></div>
+      <div id="mroster">${rosterHTML(lastRoster)}</div>
+      <div class="mrow"><button id="mleave">Leave room</button></div>
+      <div class="small">Messages travel peer-to-peer (WebRTC). The host's browser keeps the
+      strip in order — if the host leaves, the room closes.</div>`;
+  } else {
+    body = `<div class="mrow">Your name: <input id="mname" maxlength="24" value="${esc(localStorage.getItem("comicchat-name")||"")}" placeholder="e.g. Ken"></div>
+      <div class="mrow"><button id="mhost"><b>Host a new room</b></button>
+        — then send the invite link to friends.</div>
+      <div class="mrow"><input id="mcode" placeholder="room code, e.g. cc-x7k2mp" value="${esc(hashJoin)}" style="width:14em">
+        <button id="mjoin"><b>Join</b></button></div>
+      <div id="mroster"></div>
+      <div class="small">No account, no server of ours: WebRTC with a public signalling
+      broker. Both sides need this page open in a browser.</div>`;
+  }
+  const m = ccModal("🌐 Multiplayer", body);
+  const nameOf = ()=>{
+    const v = (m.el.querySelector("#mname") ? m.el.querySelector("#mname").value : "").trim() || "Player";
+    try{ localStorage.setItem("comicchat-name", v); }catch(e){}
+    return v;
+  };
+  if(joined){
+    m.el.querySelector("#mcopy").onclick = ()=>{
+      const link = location.href.split("#")[0] + "#join=" + NET.roomId;
+      m.el.querySelector("#mcopied").textContent = copyText(link) ? "copied!" : link;
+    };
+    m.el.querySelector("#mleave").onclick = ()=>{ netLeave(); leaveRoomMode(); m.close(); };
+  } else {
+    m.el.querySelector("#mhost").onclick = ()=>{
+      netHost(nameOf(), ()=>{ enterRoomMode(); m.close(); openNetModal(); });
+      m.el.querySelector("#mhost").textContent = "connecting…";
+    };
+    m.el.querySelector("#mjoin").onclick = ()=>{
+      const code = parseRoomCode(m.el.querySelector("#mcode").value);
+      if(!code) return;
+      m.el.querySelector("#mcode").value = code;
+      netJoin(code, nameOf(), ()=>{ enterRoomMode(); m.close(); openNetModal(); });
+      m.el.querySelector("#mjoin").textContent = "connecting…";
+    };
+  }
+}
+
+/* ============================ AI setup wiring ============================ */
+function openAiModal(){
+  const players = window.AI_PLAYERS;
+  const chars = castIds().map(id=>`<option value="${id}">${esc(getArt(id).name)}</option>`).join("");
+  const list = players.length
+    ? players.map((p,i)=>`<div class="mrow">🤖 <b>${esc(p.name)}</b> plays ${esc(getArt(p.charId).name)}
+        <button data-rm="${i}">remove</button></div>`).join("")
+    : `<div class="mrow small">No AI players yet.</div>`;
+  const provOpts = Object.keys(AI_PROVIDERS).map(k=>
+    `<option value="${k}"${k===AI_CFG.provider?" selected":""}>${esc(AI_PROVIDERS[k].label)}</option>`).join("");
+  const m = ccModal("🤖 AI players", `
+    <div class="mrow">Provider: <select id="mprov">${provOpts}</select>
+      <span id="mmodelrow">&nbsp; Model: <input id="mmodel" style="width:14em" value="${esc(aiModel())}"></span></div>
+    <div class="mrow" id="mkeyrow">API key:
+      <input id="mkey" type="password" style="width:16em" value="${esc(aiKey())}" placeholder="${esc(AI_PROVIDERS[AI_CFG.provider].keyHint)}">
+      <button id="mkeysave">Save</button> <span id="mkeynote" class="small"></span></div>
+    <div class="mrow" id="mnanorow" style="display:none"><span id="mnanostate"></span>
+      <button id="mnanodl" style="display:none">Download model</button></div>
+    <div class="small mrow" id="mkeyhelp">The key stays in this browser's storage and goes only to the
+      provider you chose — never to other players. Calls are made from whoever added the
+      AI player, so only you need a key. The model box is prefilled with the provider's
+      current small model; edit it to use any model your key can access.</div>
+    <hr>${list}
+    <div class="mrow">Add: <select id="mchar">${chars}</select>
+      <button id="madd"><b>Add AI player</b></button></div>
+    <div class="small">Any character you address by name already answers for themselves —
+      an AI player goes further and joins in even when nobody addressed them.
+      Their replies use your key and appear to everyone in the room.</div>
+    <div class="mrow"><label><input type="checkbox" id="mauto"${AI_CFG.autoCast===false?"":" checked"}>
+      Unclaimed characters answer for themselves when addressed</label>
+      <span class="small">(in a room, the host's AI does the talking)</span></div>`);
+  m.el.querySelector("#mauto").onchange = ()=>{
+    AI_CFG.autoCast = m.el.querySelector("#mauto").checked;
+    aiPersistCfg();
+  };
+  const readFields = ()=>{
+    if(AI_CFG.provider !== "nano"){
+      AI_CFG.models[AI_CFG.provider] = m.el.querySelector("#mmodel").value.trim();
+      AI_CFG.keys[AI_CFG.provider] = m.el.querySelector("#mkey").value.trim();
+    }
+    aiPersistCfg();
+  };
+  const refreshProviderRows = ()=>{
+    const isNano = AI_CFG.provider === "nano";
+    m.el.querySelector("#mmodelrow").style.display = isNano ? "none" : "";
+    m.el.querySelector("#mkeyrow").style.display = isNano ? "none" : "";
+    m.el.querySelector("#mkeyhelp").style.display = isNano ? "none" : "";
+    m.el.querySelector("#mnanorow").style.display = isNano ? "" : "none";
+    if(isNano){
+      const st = m.el.querySelector("#mnanostate");
+      const dl = m.el.querySelector("#mnanodl");
+      if(NANO.state === "available"){
+        st.textContent = "✅ Ready — runs on this machine inside Chrome, no key and no cost.";
+        dl.style.display = "none";
+      } else {
+        st.textContent = "The on-device model isn't downloaded yet (a few GB, one time).";
+        dl.style.display = "";
+        dl.onclick = async ()=>{
+          dl.disabled = true;
+          try{
+            await nanoDownload(pct=>{ st.textContent = "Downloading… " + pct + "%"; });
+            refreshProviderRows();
+          }catch(e){
+            st.textContent = "Download failed: " + String(e.message||e).slice(0,80);
+            dl.disabled = false;
+          }
+        };
+      }
+    }
+  };
+  refreshProviderRows();
+  m.el.querySelector("#mprov").onchange = ()=>{
+    readFields();
+    AI_CFG.provider = m.el.querySelector("#mprov").value;
+    AI_CFG.chosen = true;                      // an explicit choice sticks
+    aiPersistCfg();
+    if(AI_CFG.provider !== "nano"){
+      m.el.querySelector("#mmodel").value = aiModel();
+      m.el.querySelector("#mkey").value = aiKey();
+      m.el.querySelector("#mkey").placeholder = AI_PROVIDERS[AI_CFG.provider].keyHint;
+    }
+    m.el.querySelector("#mkeynote").textContent = "";
+    refreshProviderRows();
+  };
+  m.el.querySelector("#mkeysave").onclick = ()=>{
+    readFields();
+    m.el.querySelector("#mkeynote").textContent = aiKey() ? "saved" : "cleared";
+  };
+  m.el.querySelectorAll("[data-rm]").forEach(b=> b.onclick = ()=>{
+    players.splice(+b.dataset.rm, 1); aiPersistPlayers(); m.close(); openAiModal();
+  });
+  m.el.querySelector("#madd").onclick = ()=>{
+    readFields();
+    if(!aiAvailable()){
+      const note = AI_CFG.provider === "nano"
+        ? "download the on-device model first"
+        : "an API key is needed first";
+      (AI_CFG.provider === "nano" ? m.el.querySelector("#mnanostate")
+                                  : m.el.querySelector("#mkeynote")).textContent = note;
+      return;
+    }
+    const charId = m.el.querySelector("#mchar").value;
+    players.push({name: getArt(charId).name + " (AI)", charId, chatty:true, busy:false});
+    aiPersistPlayers();
+    if(typeof netAnnounceAI === "function" && netActive()) netAnnounceAI();
+    m.close(); openAiModal();
+  };
+}
+
+{
+  const nb = document.getElementById("netbtn");
+  if(nb){
+    if(typeof netAvailable === "function" && netAvailable()) nb.onclick = openNetModal;
+    else nb.style.display = "none";
+  }
+  const ab = document.getElementById("aibtn");
+  if(ab) ab.onclick = openAiModal;
+  if(location.hash.startsWith("#join=") && typeof netAvailable === "function" && netAvailable())
+    openNetModal();
+}
+
+ensureCast();
+renderRoster();
+renderWheel();
+renderAll();
+updatePlaceholder();
+updateRuleHint();
+window.addEventListener("resize", ()=>renderAll());
+</script>
+
+</body>
+</html>

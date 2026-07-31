@@ -435,11 +435,16 @@ function layoutAvatars(panel, getArt, hyst, establishing){
 function balloonRect(){
   return {left: BORDER_W + WAVE_H, right: S - BORDER_W - WAVE_H, top: BORDER_W + WAVE_H, bottom: S/2};
 }
-/* QueryRouteRgn (balloon.cpp:1358) — keeps tails from ever crossing */
+/* QueryRouteRgn (balloon.cpp:1358) — keeps tails from ever crossing.
+   TAIL_CLEAR pads the protected anchor: the tail's two arcs bulge sideways
+   (5% of tail length) and the neighbor's own spline wobble reaches ~WAVE_H
+   outside its rect, so a balloon flush against the bare anchor still gets
+   grazed. */
+const TAIL_CLEAR = 340;
 function queryRouteRgn(b, otherToX){
   const toX = b.speakerArrowX;
-  if(otherToX > toX) return {left: Math.max(toX, b.routeRgn.left + MIN_ROUTE_W), right: Infinity};
-  return {left: -Infinity, right: Math.min(toX, b.routeRgn.right - MIN_ROUTE_W)};
+  if(otherToX > toX) return {left: Math.max(toX + TAIL_CLEAR, b.routeRgn.left + MIN_ROUTE_W), right: Infinity};
+  return {left: -Infinity, right: Math.min(toX - TAIL_CLEAR, b.routeRgn.right - MIN_ROUTE_W)};
 }
 function measureBalloon(msg, width){
   const italic = msg.mode === "whisper";
@@ -537,11 +542,16 @@ function layoutOneBalloon(b, placed, free, rng){
   const ch2 = text2.textH + 2*pad.y;
   right = left + cw2;
 
-  /* --- vertical: below anything it overlaps, else share the top --- */
+  /* --- vertical: below anything it overlaps, else share the top ---
+     The cloud rects are only the spline's control frame: the rendered wobble
+     bulges up to WAVE_H beyond them (plus half the stroke), on BOTH facing
+     edges. DOCK_SHIFT covers one side's bump; clear the neighbor's too, or
+     stacked balloons visibly kiss. */
+  const BUMP_CLEAR = WAVE_H + 28;
   let top = free.top;
   for(const p of placed){
-    if(p.cloud.right < left) top = Math.max(top, p.cloud.top);
-    else top = Math.max(top, p.cloud.bottom + DOCK_SHIFT);
+    if(p.cloud.right + 2*WAVE_H + 28 < left) top = Math.max(top, p.cloud.top);
+    else top = Math.max(top, p.cloud.bottom + DOCK_SHIFT + BUMP_CLEAR);
   }
   let bottom = top + ch2;
 
@@ -629,10 +639,15 @@ function layoutStrip(messages, getArt, opts){
     if(m.mode === "action") forceNew = true;
     let cur = panels[panels.length-1];
     const speakerInPanel = cur && !cur.title && cur.msgs.some(x=>x.charId === m.charId);
+    // A question to the room right after someone answered THIS speaker reads
+    // as if it were aimed at the answerer if they share a panel — the Q&A is
+    // a completed beat, so an undirected follow-up starts a fresh panel.
+    const closesExchange = cur && !cur.title && !(m.talkTos||[]).length &&
+                           cur.msgs.some(x=>x.replyTo === m.charId);
     let startNew = forceNew || !cur || cur.title ||
                    cur.msgs.length >= MAX_BALLOONS ||
                    panels.length < (withTitle ? 2 : 1) ||
-                   speakerInPanel;
+                   speakerInPanel || closesExchange;
 
     if(!startNew){
       // try appending: clone, re-layout the whole panel, keep only if it fits

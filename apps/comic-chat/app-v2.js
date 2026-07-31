@@ -58,98 +58,55 @@ function edgePoints(x0,y0,x1,y1,nx,ny,phase){
   }
   return pts;
 }
-/* Closed uniform cubic B-spline through the wavy control points — the
-   original's CBeta spline (balloon.cpp CreateBalloonSpline). An approximating
-   spline rounds the bumps into Woodring's soft cloud lobes; the interpolating
-   scallops used before read sharp and angular. */
-function bsplineClosed(pts){
+function smoothClosed(pts){
   const n = pts.length;
-  if(n < 3) return "";
+  if(!n) return "";
+  const mid = (a,b)=>({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
   const f = v=>v.toFixed(1);
-  const P = i=>pts[(i+n)%n];
-  let d = "";
+  let m0 = mid(pts[n-1], pts[0]);
+  let d = `M ${f(m0.x)} ${f(m0.y)}`;
   for(let i=0;i<n;i++){
-    const p0=P(i-1), p1=P(i), p2=P(i+1), p3=P(i+2);
-    const b0={x:(p0.x+4*p1.x+p2.x)/6, y:(p0.y+4*p1.y+p2.y)/6};
-    const b1={x:(2*p1.x+p2.x)/3,      y:(2*p1.y+p2.y)/3};
-    const b2={x:(p1.x+2*p2.x)/3,      y:(p1.y+2*p2.y)/3};
-    const b3={x:(p1.x+4*p2.x+p3.x)/6, y:(p1.y+4*p2.y+p3.y)/6};
-    d += (i ? "" : `M ${f(b0.x)} ${f(b0.y)}`) +
-         ` C ${f(b1.x)} ${f(b1.y)} ${f(b2.x)} ${f(b2.y)} ${f(b3.x)} ${f(b3.y)}`;
+    const cur = pts[i], next = pts[(i+1)%n], m = mid(cur,next);
+    if(cur.sharp || next.sharp) d += ` L ${f(cur.x)} ${f(cur.y)} L ${f(m.x)} ${f(m.y)}`;
+    else d += ` Q ${f(cur.x)} ${f(cur.y)} ${f(m.x)} ${f(m.y)}`;
   }
   return d + " Z";
 }
-function cloudPath(r){
+function tailFor(b, body){
+  if(!body) return null;
+  const c = b.cloud;
+  let ay = body.top - 200;                                  // tip sits just above the head
+  if(ay - c.bottom < MIN_TAIL_H) ay = c.bottom + MIN_TAIL_H;
+  let xbreak = (b.routeRgn.left + b.routeRgn.right)/2;
+  xbreak = Math.max(c.left + TAIL_MOUTH + 60, Math.min(c.right - TAIL_MOUTH - 60, xbreak));
+  let ax = body.arrowX;
+  const maxdx = ay - c.bottom;                              // clamp to 45 deg from vertical
+  if(Math.abs(ax - xbreak) > maxdx) ax = xbreak + Math.sign(ax - xbreak) * maxdx;
+  return {x:xbreak, ax, ay};
+}
+function cloudPath(r, tail){
   const top    = edgePoints(r.left, r.top, r.right, r.top, 0, -1, 0);
   const right  = edgePoints(r.right, r.top, r.right, r.bottom, 1, 0, 1);
-  const bottom = edgePoints(r.right, r.bottom, r.left, r.bottom, 0, 1, 0);
+  const bottomRaw = edgePoints(r.right, r.bottom, r.left, r.bottom, 0, 1, 0);
   const left   = edgePoints(r.left, r.bottom, r.left, r.top, -1, 0, 1);
-  return bsplineClosed(top.concat(right, bottom, left));
-}
-/* The tail: two opposing arcs (CArc bulge = 5% of tail length), drawn OVER the
-   cloud so its white fill opens the balloon border at the mouth. The apex
-   stays AT the speaker — the 45-degree clamp moves the MOUTH along the
-   balloon's bottom edge (balloon.cpp:1466), never the apex; swinging the apex
-   sideways is what made tails wander across neighboring balloons. */
-function tailPath(b, body, dashed, others){
-  if(!body) return "";
-  const c = b.cloud;
-  const ax = body.arrowX;
-  let ay = body.top - 200;
-  if(ay - c.bottom < MIN_TAIL_H) ay = c.bottom + MIN_TAIL_H;
-  const heightDelta = ay - c.bottom;
-  const mouthY = c.bottom - 40;                              // tucked inside the border
-  const clampMouth = x => Math.max(c.left + TAIL_MOUTH + 40, Math.min(c.right - TAIL_MOUTH - 40, x));
-  let xbreak = (b.routeRgn.left + b.routeRgn.right)/2;
-  if(Math.abs(ax - xbreak) > heightDelta)                    // 45° from vertical
-    xbreak = ax - Math.sign(ax - xbreak) * heightDelta;
-  xbreak = clampMouth(xbreak);
-
-  const q = (P, Q, bulge)=>{
-    const mx=(P.x+Q.x)/2, my=(P.y+Q.y)/2;
-    const dx=Q.x-P.x, dy=Q.y-P.y, len=Math.hypot(dx,dy)||1;
-    return {x: mx - dy/len*2*bulge, y: my + dx/len*2*bulge};
-  };
-  // The clamps above can still route a tail alongside (or across) a sibling
-  // balloon. Sample the arcs against the siblings' clouds (inflated for the
-  // spline wobble) and escalate: normal bulge -> straight -> mouth moved as
-  // close under the speaker as the cloud allows.
-  const rects = (others||[]).filter(o=>o!==b && o.cloud && o.msg.mode!=="action")
-    .map(o=>({l:o.cloud.left-84, t:o.cloud.top-84, r:o.cloud.right+84, b:o.cloud.bottom+84}));
-  const hits = (L, A, R, c1, c2)=>{
-    if(!rects.length) return false;
-    const probe = (P, C, Q)=>{
-      for(let t=0.05; t<1; t+=0.09){
-        const x=(1-t)*(1-t)*P.x + 2*(1-t)*t*C.x + t*t*Q.x;
-        const y=(1-t)*(1-t)*P.y + 2*(1-t)*t*C.y + t*t*Q.y;
-        for(const rc of rects) if(x>rc.l && x<rc.r && y>rc.t && y<rc.b) return true;
-      }
-      return false;
-    };
-    return probe(L,c1,A) || probe(A,c2,R);
-  };
-  const build = (mx, bulgeScale)=>{
-    const L = {x: mx - TAIL_MOUTH, y: mouthY};
-    const R = {x: mx + TAIL_MOUTH, y: mouthY};
-    const A = {x: ax, y: ay};
-    const alt = Math.min(0.05 * Math.hypot(ax - mx, ay - mouthY), 120) * bulgeScale;
-    const sign = ax > mx ? 1 : -1;
-    return {L, R, A, c1: q(L, A, sign*alt), c2: q(A, R, -sign*alt)};
-  };
-  let g = build(xbreak, 1);
-  if(hits(g.L, g.A, g.R, g.c1, g.c2)){
-    g = build(xbreak, 0);                                    // straighten
-    if(hits(g.L, g.A, g.R, g.c1, g.c2)) g = build(clampMouth(ax), 0);  // drop from under the speaker
+  let bottom = bottomRaw;
+  if(tail){
+    const hi = tail.x + TAIL_MOUTH, lo = tail.x - TAIL_MOUTH;
+    const ins = [{x:hi, y:r.bottom, sharp:true}, {x:tail.ax, y:tail.ay, sharp:true}, {x:lo, y:r.bottom, sharp:true}];
+    const out = []; let placed = false;
+    for(const p of bottomRaw){                              // bottom runs right -> left
+      if(!placed && p.x < hi){ out.push(...ins); placed = true; }
+      if(p.x <= hi && p.x >= lo) continue;
+      out.push(p);
+    }
+    if(!placed) out.push(...ins);
+    bottom = out;
   }
-  const f = v=>v.toFixed(1);
-  const d = `M ${f(g.L.x)} ${f(g.L.y)} Q ${f(g.c1.x)} ${f(g.c1.y)} ${f(g.A.x)} ${f(g.A.y)}`+
-            ` Q ${f(g.c2.x)} ${f(g.c2.y)} ${f(g.R.x)} ${f(g.R.y)}`;
-  const stroke = dashed ? ` stroke-dasharray="150 90" stroke="#777"` : ` stroke="#000"`;
-  return `<path class="tail" d="${d}" fill="#fff"${stroke} stroke-width="28" stroke-linejoin="round"/>`;
+  return smoothClosed(top.concat(right, bottom, left));
 }
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
-function balloonSvg(b, body, siblings){
+function balloonSvg(b, body){
   const m = b.msg, c = b.cloud, pad = b.pad;
   const italic = m.mode === "whisper";
   const lines = b.text.lines;
@@ -158,11 +115,10 @@ function balloonSvg(b, body, siblings){
   if(m.mode === "action"){
     parts.push(`<rect x="${c.left}" y="${c.top}" width="${c.right-c.left}" height="${c.bottom-c.top}" fill="#fff" stroke="#000" stroke-width="28"/>`);
   } else {
+    const tail = m.mode === "think" ? null : tailFor(b, body);
     const dash = italic ? ` stroke-dasharray="150 90"` : "";
-    const stroke = italic ? "#777" : "#000";
-    if(italic) parts.push(`<path d="${cloudPath(c)}" fill="#fff" stroke="#fff" stroke-width="100"/>`);
-    parts.push(`<path d="${cloudPath(c)}" fill="#fff" stroke="${stroke}" stroke-width="28"${dash}/>`);
-    if(m.mode !== "think") parts.push(tailPath(b, body, italic, siblings));
+    if(italic) parts.push(`<path d="${cloudPath(c, tail)}" fill="#fff" stroke="#fff" stroke-width="100"/>`);
+    parts.push(`<path d="${cloudPath(c, tail)}" fill="#fff" stroke="#000" stroke-width="28"${dash}/>`);
     if(m.mode === "think" && body){
       // chain of ellipses growing toward the balloon (balloon.cpp:1826)
       const ex = (b.routeRgn.left + b.routeRgn.right)/2, ey = c.bottom;
@@ -263,7 +219,7 @@ function panelSvg(panel, px){
     // drawn tail-to-head so the FIRST balloon ends up on top (panel.cpp:695)
     for(let i=panel.balloons.length-1;i>=0;i--){
       const b = panel.balloons[i];
-      if(b.cloud) parts.push(balloonSvg(b, b.speaker, panel.balloons));
+      if(b.cloud) parts.push(balloonSvg(b, b.speaker));
     }
     parts.push(`<rect x="${BORDER_W}" y="${BORDER_W}" width="${S-2*BORDER_W}" height="${S-2*BORDER_W}" fill="none" stroke="#000" stroke-width="${2*BORDER_W}"/>`);
     inner = parts.join("");
@@ -285,12 +241,10 @@ function renderAll(){
   strip.style.maxWidth = (state.wide*px + 6*(state.wide+1) + 8) + "px";
   if(!state.msgs.length){
     strip.innerHTML = `<div class="hint">Pick a character, set an emotion on the wheel, and say something…</div>`;
-    if(typeof updateThinkingPanels === "function") updateThinkingPanels();
     return;
   }
   const panels = layoutStrip(state.msgs, getArt, {title: state.title});
   strip.innerHTML = panels.map(p=>panelSvg(p, px)).join("");
-  if(typeof updateThinkingPanels === "function") updateThinkingPanels();
   const page = document.getElementById("page");
   page.scrollTop = page.scrollHeight;
 }
@@ -325,8 +279,7 @@ function send(raw, charId, modeOverride, flags){
     mode,
     talkTos: detectTalkTos(text, id),
     wheel: (w && w.touched) ? {emotion:w.emotion, intensity:w.intensity} : null,
-    ai: !!(flags && flags.ai),
-    replyTo: (flags && flags.replyTo) || null
+    ai: !!(flags && flags.ai)
   };
   if(w){ w.touched = false; w.emotion = EM.HAPPY; w.intensity = 0; }   // ResetAvatar
   // In a room the HOST owns message order, so everyone's strip lays out
@@ -585,91 +538,19 @@ const AI_PROVIDERS = {
   openai: {label:"ChatGPT (OpenAI)",   model:"gpt-5.4-mini",              fallback:"gpt-5-mini",        keyHint:"sk-…"},
   gemini: {label:"Gemini (Google)",    model:"gemini-3.6-flash",          fallback:"gemini-2.5-flash",  keyHint:"AIza…"}
 };
-let AI_CFG = {provider:"claude", models:{}, keys:{}, chosen:false};
+let AI_CFG = {provider:"claude", models:{}, keys:{}};
 try{
   const c = JSON.parse(localStorage.getItem("comicchat-ai-cfg"));
-  if(c && (AI_PROVIDERS[c.provider] || c.provider === "nano"))
-    AI_CFG = {provider:c.provider, models:c.models||{}, keys:c.keys||{}, chosen:!!c.chosen};
+  if(c && AI_PROVIDERS[c.provider]) AI_CFG = {provider:c.provider, models:c.models||{}, keys:c.keys||{}};
   const legacy = localStorage.getItem("comicchat-apikey");   // pre-provider versions
   if(legacy && !AI_CFG.keys.claude){ AI_CFG.keys.claude = legacy; localStorage.removeItem("comicchat-apikey"); }
 }catch(e){}
-
-/* ---- Gemini Nano, built into Chrome (the Prompt API) ----
-   Feature-detected: the LanguageModel global (Chrome 138+), with the older
-   window.ai.languageModel shape as fallback. When the on-device model is
-   ready it becomes an AI provider needing NO key, and the default — unless
-   the user has explicitly picked a provider themselves. */
-const NANO = {state:"unsupported", api:null, legacy:false};
-async function nanoDetect(){
-  try{
-    if(typeof LanguageModel !== "undefined" && LanguageModel.availability){
-      NANO.api = LanguageModel;
-      NANO.state = await LanguageModel.availability();
-    } else if(window.ai && window.ai.languageModel && window.ai.languageModel.capabilities){
-      NANO.api = window.ai.languageModel; NANO.legacy = true;
-      const c = await window.ai.languageModel.capabilities();
-      NANO.state = c.available === "readily" ? "available"
-                 : c.available === "after-download" ? "downloadable" : "unavailable";
-    }
-  }catch(e){ NANO.state = "unavailable"; }
-  if(NANO.state === "available" || NANO.state === "downloadable" || NANO.state === "downloading"){
-    AI_PROVIDERS.nano = {label:"Gemini Nano (built into Chrome, no key)",
-                         model:"on-device", fallback:null, keyHint:"", local:true};
-    if(NANO.state === "available" && !AI_CFG.chosen){
-      AI_CFG.provider = "nano"; aiPersistCfg();
-    }
-  } else if(AI_CFG.provider === "nano"){
-    AI_CFG.provider = "claude";       // saved on a machine that had it; this one doesn't
-  }
-}
-const NANO_SCHEMA = {type:"object", properties:{
-  text:{type:"string"},
-  emotion:{type:"string", enum:["neutral","happy","coy","bored","scared","sad","angry","shout","laugh"]},
-  intensity:{type:"number"},
-  mode:{type:"string", enum:["say","think","whisper","action"]}
-}, required:["text","emotion","intensity","mode"]};
-/* Chrome asks for the output language to be declared ("No output language was
-   specified…"); older builds reject the options object, hence the fallback. */
-const NANO_LANG = {
-  expectedInputs:  [{type:"text", languages:["en"]}],
-  expectedOutputs: [{type:"text", languages:["en"]}]
-};
-async function nanoCreate(extraOpts){
-  try{ return await NANO.api.create(Object.assign({}, NANO_LANG, extraOpts||{})); }
-  catch(e){ return await NANO.api.create(extraOpts||{}); }
-}
-async function nanoPrompt(prompt){
-  const sess = await nanoCreate();
-  try{
-    try{ return await sess.prompt(prompt, {responseConstraint: NANO_SCHEMA}); }
-    catch(e){ return await sess.prompt(prompt); }    // constraint unsupported on this build
-  }finally{
-    try{ if(sess.destroy) sess.destroy(); }catch(e){}
-  }
-}
-async function nanoDownload(onProgress){
-  const sess = await nanoCreate({monitor(m){
-    m.addEventListener("downloadprogress", e=>{
-      if(onProgress) onProgress(Math.round((e.loaded || 0) * 100));
-    });
-  }});
-  try{ if(sess.destroy) sess.destroy(); }catch(e){}
-  NANO.state = "available";
-}
-nanoDetect();
 function aiPersistCfg(){ try{ localStorage.setItem("comicchat-ai-cfg", JSON.stringify(AI_CFG)); }catch(e){} }
 function aiKey(){ return AI_CFG.keys[AI_CFG.provider] || ""; }
-function aiModel(){
-  if(AI_CFG.provider === "nano") return "on-device";
-  return (AI_CFG.models[AI_CFG.provider] || "").trim() || AI_PROVIDERS[AI_CFG.provider].model;
-}
-function aiAvailable(){
-  if(AI_CFG.provider === "nano") return NANO.state === "available";
-  return !!aiKey();
-}
+function aiModel(){ return (AI_CFG.models[AI_CFG.provider] || "").trim() || AI_PROVIDERS[AI_CFG.provider].model; }
+function aiAvailable(){ return !!aiKey(); }
 
 async function callProvider(provider, model, prompt){
-  if(provider === "nano") return nanoPrompt(prompt);
   const key = AI_CFG.keys[provider];
   let url, headers, body, pick;
   if(provider === "claude"){
@@ -703,9 +584,8 @@ async function fetchAI(prompt){
   try{
     return await callProvider(p, aiModel(), prompt);
   }catch(e){
-    const fb = AI_PROVIDERS[p] && AI_PROVIDERS[p].fallback;
-    if(fb && /model/i.test(String(e)) && aiModel() !== fb)
-      return await callProvider(p, fb, prompt);
+    if(/model/i.test(String(e)) && aiModel() !== AI_PROVIDERS[p].fallback)
+      return await callProvider(p, AI_PROVIDERS[p].fallback, prompt);
     throw e;
   }
 }
@@ -714,9 +594,7 @@ async function fetchAI(prompt){
 window.AI_PLAYERS = [];   // [{name, charId, chatty, busy}]
 try{
   const saved = JSON.parse(localStorage.getItem("comicchat-aiplayers"));
-  // Every AI player is chatty now: characters addressed by name already answer
-  // for themselves, so a "replies when addressed" player would be redundant.
-  if(Array.isArray(saved)) window.AI_PLAYERS = saved.map(p=>({name:p.name, charId:p.charId, chatty:true, busy:false}));
+  if(Array.isArray(saved)) window.AI_PLAYERS = saved.map(p=>({name:p.name, charId:p.charId, chatty:!!p.chatty, busy:false}));
 }catch(e){}
 function aiPersistPlayers(){
   try{ localStorage.setItem("comicchat-aiplayers",
@@ -735,163 +613,43 @@ Recent strip:
 ${cast}
 
 Write ${art.name}'s next line. Playful and funny, 1-2 short sentences, stay in character, react to what was just said.
-Plain text only — no markdown, no asterisks or other emphasis marks (the comic lettering has no bold or italics).
 
-Reply with ONLY a JSON object, nothing else. Its fields:
-"text" — the actual line of dialogue you wrote (a real sentence, never a placeholder)
-"emotion" — exactly one word from: neutral, happy, coy, bored, scared, sad, angry, shout, laugh
-"intensity" — a number between 0 and 1
-"mode" — exactly one word from: say, think, whisper, action
-For mode "action", "text" is a third-person action phrase WITHOUT the name (e.g. "hands Anna a coffee").
-Example of the format (do NOT copy its words): {"text":"${AI_EXAMPLE}","emotion":"coy","intensity":0.6,"mode":"say"}`;
+Reply with ONLY this JSON, nothing else:
+{"text":"...","emotion":"neutral|happy|coy|bored|scared|sad|angry|shout|laugh","intensity":0.7,"mode":"say|think|whisper|action"}
+For mode "action", "text" is a third-person action phrase WITHOUT the name (e.g. "hands Anna a coffee").`;
 }
 /* An AI participant decides for ITSELF whether to answer a message:
    always when addressed by name, or (if marked chatty) when the message
    addressed nobody in particular. AI players never answer other AIs, so two
    of them can't chain-react forever. */
-const AI_ADHOC = {};   // stand-ins for addressed-but-unclaimed characters
 function aiObserve(msg){
   if(msg.ai || !aiAvailable()) return;
   for(const p of window.AI_PLAYERS){
     if(p.busy || p.charId === msg.charId) continue;
     const addressed = (msg.talkTos||[]).includes(p.charId) ||
                       checkWord(msg.text.toLowerCase(), getArt(p.charId).name.toLowerCase());
-    if(addressed || (p.chatty && !(msg.talkTos||[]).length)) aiReplyAs(p, msg.charId);
-  }
-  /* A character addressed by name who is played by nobody — no human, no AI
-     player — answers for themselves. In a room only the host's machine does
-     this, so the reply happens exactly once. */
-  if(AI_CFG.autoCast === false) return;
-  if(typeof netActive === "function" && netActive() && !NET.isHost) return;
-  const claimed = new Set([msg.charId, curChar]);
-  for(const p of window.AI_PLAYERS) claimed.add(p.charId);
-  for(const r of lastRoster) claimed.add(r.charId);
-  for(const id of (msg.talkTos||[])){
-    if(claimed.has(id) || !getArt(id)) continue;
-    const p = AI_ADHOC[id] ||
-      (AI_ADHOC[id] = {name: getArt(id).name + " (AI)", charId:id, chatty:false, busy:false});
-    if(!p.busy) aiReplyAs(p, msg.charId);
+    if(addressed || (p.chatty && !(msg.talkTos||[]).length)) aiReplyAs(p);
   }
 }
-
-/* the format example shown to the model; any echo of it is rejected */
-const AI_EXAMPLE = "Ha! I knew you would say that.";
-
-/* AI replies must land as plain comic-balloon text, not markdown */
-function stripMarkdown(s){
-  return s
-    .replace(/```[a-z]*\n?/gi, "").replace(/```/g, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*\n]+)\*/g, "$1")
-    .replace(/__([^_]+)__/g, "$1")
-    .replace(/\b_([^_\n]+)_\b/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/^#+\s*/gm, "")
-    .replace(/\s+/g, " ").trim();
-}
-/* one generation attempt; returns null if the model parroted the format
-   template ("...", the example sentence, or nothing) instead of writing a line.
-   Parsing is three-tier: full JSON, then a "text" field fished out of broken
-   JSON (truncation), then the whole reply treated as the spoken line — small
-   on-device models often answer in prose despite the instructions, and prose
-   is a perfectly good balloon. */
-async function aiAttempt(p, extra){
-  const raw = await fetchAI(aiPrompt(p.charId) + (extra || ""));
-  let r = null, text = "";
-  const m = raw.match(/\{[\s\S]*\}/);
-  if(m){ try{ r = JSON.parse(m[0]); }catch(e){} }
-  if(r){
-    text = stripMarkdown(String(r.text||"")).trim();
-  } else {
-    // the char class stops at any unescaped quote, so the close-quote itself
-    // is optional — truncated output loses it
-    const tf = raw.match(/"text"\s*:\s*"((?:[^"\\]|\\.)+)/);
-    text = stripMarkdown(tf ? tf[1].replace(/\\(.)/g, "$1")
-                            : raw.replace(/^["'\s]+|["'\s]+$/g, "")).trim();
-    r = {emotion:"neutral", intensity:0.5, mode:"say"};
-  }
-  const parroted = !text || text.startsWith("{") ||             // JSON junk is not dialogue
-    /^[.…\s]+$/.test(text) ||
-    /^[.…\s]+$/.test(text) ||                                   // "...", "…"
-    text.toLowerCase().replace(/[^a-z ]/g,"") ===
-      AI_EXAMPLE.toLowerCase().replace(/[^a-z ]/g,"");
-  if(parroted){
-    console.warn("Comic Chat AI: unusable reply from model:", raw);
-    return null;
-  }
-  return {r, text};
-}
-/* ---- a visible "thinking" panel while the model generates ----
-   On-device Nano can take many seconds; instead of a dead strip, the pending
-   character stands in a temporary panel with a pulsing thought bubble. These
-   panels are local-only presentation — never part of the shared message list,
-   so multiplayer layout stays deterministic. */
-const AI_THINKING = new Set();
-function thinkingPanelHTML(id, px){
-  const art = getArt(id);
-  const pose = bodyFromEmotion(art, EM.BORED, 0.35, -1);
-  const dm = art.dim ? art.dim(pose.face, pose.torso)
-                     : {x:art.nat.x, y:art.nat.y, w:art.nat.w, h:art.nat.h};
-  const h = S/BODY_H_DIV, scale = h/dm.h, w = dm.w*scale;
-  const cx = S/2;
-  const tx = cx - w/2 - dm.x*scale, ty = (S - h) - dm.y*scale;
-  const fig = `<g transform="translate(${tx.toFixed(1)},${ty.toFixed(1)}) scale(${scale.toFixed(4)})">${art.draw(pose.face,pose.torso)}</g>`;
-  const dots = [0,1,2].map(i=>
-    `<circle cx="${cx-280+i*280}" cy="880" r="95" fill="#000">`+
-    `<animate attributeName="opacity" values="0.15;1;0.15" dur="1.2s" begin="${(i*0.3).toFixed(1)}s" repeatCount="indefinite"/></circle>`).join("");
-  const cloud =
-    `<ellipse cx="${cx}" cy="880" rx="950" ry="460" fill="#fff" stroke="#000" stroke-width="28"/>`+dots+
-    `<circle cx="${cx-430}" cy="1560" r="80" fill="#fff" stroke="#000" stroke-width="26"/>`+
-    `<circle cx="${cx-560}" cy="1840" r="50" fill="#fff" stroke="#000" stroke-width="22"/>`;
-  const border = `<rect x="${BORDER_W}" y="${BORDER_W}" width="${S-2*BORDER_W}" height="${S-2*BORDER_W}" fill="none" stroke="#000" stroke-width="${2*BORDER_W}"/>`;
-  return `<svg class="panel thinkpanel" data-think="${esc(id)}" width="${px}" height="${px}" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">`+
-         `<rect width="${S}" height="${S}" fill="#fff"/>${fig}${cloud}${border}</svg>`;
-}
-function updateThinkingPanels(){
-  const strip = document.getElementById("strip");
-  strip.querySelectorAll("[data-think]").forEach(el=>{
-    if(!AI_THINKING.has(el.getAttribute("data-think"))) el.remove();
-  });
-  const px = panelPx();
-  for(const id of AI_THINKING){
-    if(!getArt(id)) continue;
-    if(!strip.querySelector(`[data-think="${id}"]`))
-      strip.insertAdjacentHTML("beforeend", thinkingPanelHTML(id, px));
-  }
-  if(AI_THINKING.size)
-    document.getElementById("page").scrollTop = document.getElementById("page").scrollHeight;
-}
-function showThinking(id){ AI_THINKING.add(id); updateThinkingPanels(); }
-function hideThinking(id){ AI_THINKING.delete(id); updateThinkingPanels(); }
-
-async function aiReplyAs(p, replyToId){
+async function aiReplyAs(p){
   p.busy = true;
   const hint = document.getElementById("rulehint");
   hint.textContent = `💭 ${getArt(p.charId).name} is thinking…`;
-  showThinking(p.charId);
   try{
-    let got = await aiAttempt(p);
-    if(!got) got = await aiAttempt(p,
-      `\n\nIMPORTANT: your previous reply used a placeholder instead of dialogue. ` +
-      `The "text" field must be a real line ${getArt(p.charId).name} would actually say in this scene.`);
-    if(!got){
-      hint.textContent = "🤖 " + getArt(p.charId).name + " had nothing to say (the model returned a placeholder twice).";
-      return;
-    }
-    const r = got.r;
+    const raw = await fetchAI(aiPrompt(p.charId));
+    const m = raw.match(/\{[\s\S]*\}/);
+    const r = JSON.parse(m ? m[0] : raw);
     const emoKey = String(r.emotion||"neutral").toLowerCase();
     const wheelEntry = WHEEL.find(w=>w.key===emoKey || (emoKey==="laughing" && w.key==="laugh"));
     wheelState[p.charId] = wheelEntry
       ? {emotion: wheelEntry.em, intensity: Math.max(0.25, Math.min(1, +r.intensity || 0.7)), touched:true}
       : {emotion: EM.HAPPY, intensity: 0, touched:true};
     const mode = ["say","think","whisper","action"].includes(r.mode) ? r.mode : "say";
-    hideThinking(p.charId);              // the real panel replaces the pending one
-    send(got.text.slice(0,200), p.charId, mode, {ai:true, replyTo: replyToId || null});
+    send(String(r.text||"").slice(0,200), p.charId, mode, {ai:true});
   }catch(e){
     hint.textContent = "🤖 " + getArt(p.charId).name + " lost their train of thought (" +
                        String(e.message||e).slice(0,80) + ")";
   }finally{
-    hideThinking(p.charId);
     p.busy = false;
     setTimeout(updateRuleHint, 2500);
   }
@@ -1067,83 +825,40 @@ function openAiModal(){
   const chars = castIds().map(id=>`<option value="${id}">${esc(getArt(id).name)}</option>`).join("");
   const list = players.length
     ? players.map((p,i)=>`<div class="mrow">🤖 <b>${esc(p.name)}</b> plays ${esc(getArt(p.charId).name)}
+        ${p.chatty ? "(chatty)" : "(replies when addressed)"}
         <button data-rm="${i}">remove</button></div>`).join("")
     : `<div class="mrow small">No AI players yet.</div>`;
   const provOpts = Object.keys(AI_PROVIDERS).map(k=>
     `<option value="${k}"${k===AI_CFG.provider?" selected":""}>${esc(AI_PROVIDERS[k].label)}</option>`).join("");
   const m = ccModal("🤖 AI players", `
     <div class="mrow">Provider: <select id="mprov">${provOpts}</select>
-      <span id="mmodelrow">&nbsp; Model: <input id="mmodel" style="width:14em" value="${esc(aiModel())}"></span></div>
-    <div class="mrow" id="mkeyrow">API key:
+      &nbsp; Model: <input id="mmodel" style="width:14em" value="${esc(aiModel())}"></div>
+    <div class="mrow">API key:
       <input id="mkey" type="password" style="width:16em" value="${esc(aiKey())}" placeholder="${esc(AI_PROVIDERS[AI_CFG.provider].keyHint)}">
       <button id="mkeysave">Save</button> <span id="mkeynote" class="small"></span></div>
-    <div class="mrow" id="mnanorow" style="display:none"><span id="mnanostate"></span>
-      <button id="mnanodl" style="display:none">Download model</button></div>
-    <div class="small mrow" id="mkeyhelp">The key stays in this browser's storage and goes only to the
+    <div class="small mrow">The key stays in this browser's storage and goes only to the
       provider you chose — never to other players. Calls are made from whoever added the
       AI player, so only you need a key. The model box is prefilled with the provider's
       current small model; edit it to use any model your key can access.</div>
     <hr>${list}
     <div class="mrow">Add: <select id="mchar">${chars}</select>
+      <label><input type="checkbox" id="mchatty"> chatty (replies even when not addressed)</label>
       <button id="madd"><b>Add AI player</b></button></div>
-    <div class="small">Any character you address by name already answers for themselves —
-      an AI player goes further and joins in even when nobody addressed them.
-      Their replies use your key and appear to everyone in the room.</div>
-    <div class="mrow"><label><input type="checkbox" id="mauto"${AI_CFG.autoCast===false?"":" checked"}>
-      Unclaimed characters answer for themselves when addressed</label>
-      <span class="small">(in a room, the host's AI does the talking)</span></div>`);
-  m.el.querySelector("#mauto").onchange = ()=>{
-    AI_CFG.autoCast = m.el.querySelector("#mauto").checked;
-    aiPersistCfg();
-  };
+    <div class="small">An AI player answers when someone mentions its character's name.
+      Its replies use your key and appear to everyone in the room.</div>`);
   const readFields = ()=>{
-    if(AI_CFG.provider !== "nano"){
-      AI_CFG.models[AI_CFG.provider] = m.el.querySelector("#mmodel").value.trim();
-      AI_CFG.keys[AI_CFG.provider] = m.el.querySelector("#mkey").value.trim();
-    }
+    AI_CFG.models[AI_CFG.provider] = m.el.querySelector("#mmodel").value.trim();
+    AI_CFG.keys[AI_CFG.provider] = m.el.querySelector("#mkey").value.trim();
     aiPersistCfg();
   };
-  const refreshProviderRows = ()=>{
-    const isNano = AI_CFG.provider === "nano";
-    m.el.querySelector("#mmodelrow").style.display = isNano ? "none" : "";
-    m.el.querySelector("#mkeyrow").style.display = isNano ? "none" : "";
-    m.el.querySelector("#mkeyhelp").style.display = isNano ? "none" : "";
-    m.el.querySelector("#mnanorow").style.display = isNano ? "" : "none";
-    if(isNano){
-      const st = m.el.querySelector("#mnanostate");
-      const dl = m.el.querySelector("#mnanodl");
-      if(NANO.state === "available"){
-        st.textContent = "✅ Ready — runs on this machine inside Chrome, no key and no cost.";
-        dl.style.display = "none";
-      } else {
-        st.textContent = "The on-device model isn't downloaded yet (a few GB, one time).";
-        dl.style.display = "";
-        dl.onclick = async ()=>{
-          dl.disabled = true;
-          try{
-            await nanoDownload(pct=>{ st.textContent = "Downloading… " + pct + "%"; });
-            refreshProviderRows();
-          }catch(e){
-            st.textContent = "Download failed: " + String(e.message||e).slice(0,80);
-            dl.disabled = false;
-          }
-        };
-      }
-    }
-  };
-  refreshProviderRows();
   m.el.querySelector("#mprov").onchange = ()=>{
     readFields();
     AI_CFG.provider = m.el.querySelector("#mprov").value;
-    AI_CFG.chosen = true;                      // an explicit choice sticks
     aiPersistCfg();
-    if(AI_CFG.provider !== "nano"){
-      m.el.querySelector("#mmodel").value = aiModel();
-      m.el.querySelector("#mkey").value = aiKey();
-      m.el.querySelector("#mkey").placeholder = AI_PROVIDERS[AI_CFG.provider].keyHint;
-    }
+    m.el.querySelector("#mmodel").value = aiModel();
+    m.el.querySelector("#mkey").value = aiKey();
+    m.el.querySelector("#mkey").placeholder = AI_PROVIDERS[AI_CFG.provider].keyHint;
     m.el.querySelector("#mkeynote").textContent = "";
-    refreshProviderRows();
   };
   m.el.querySelector("#mkeysave").onclick = ()=>{
     readFields();
@@ -1154,16 +869,10 @@ function openAiModal(){
   });
   m.el.querySelector("#madd").onclick = ()=>{
     readFields();
-    if(!aiAvailable()){
-      const note = AI_CFG.provider === "nano"
-        ? "download the on-device model first"
-        : "an API key is needed first";
-      (AI_CFG.provider === "nano" ? m.el.querySelector("#mnanostate")
-                                  : m.el.querySelector("#mkeynote")).textContent = note;
-      return;
-    }
+    if(!aiKey()){ m.el.querySelector("#mkeynote").textContent = "an API key is needed first"; return; }
     const charId = m.el.querySelector("#mchar").value;
-    players.push({name: getArt(charId).name + " (AI)", charId, chatty:true, busy:false});
+    players.push({name: getArt(charId).name + " (AI)", charId,
+                  chatty: m.el.querySelector("#mchatty").checked, busy:false});
     aiPersistPlayers();
     if(typeof netAnnounceAI === "function" && netActive()) netAnnounceAI();
     m.close(); openAiModal();
