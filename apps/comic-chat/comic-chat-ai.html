@@ -35,7 +35,10 @@
           border:2px solid; border-color:var(--lt) var(--dk) var(--dk) var(--lt); }
   .porta.sel{ background:#cfe3ff; border-color:#000080; }
   .porta svg,.porta img{ display:block; width:100%; height:42px; background:#fff; border:1px solid #999; object-fit:contain; }
-  .wheelbox{ text-align:center; font-size:11px; }
+  .wheelbox{ display:flex; gap:6px; align-items:flex-start; text-align:center; font-size:11px; }
+  #bodycam{ display:block; background:#fff;
+        border:2px solid; border-color:var(--dk) var(--lt) var(--lt) var(--dk); }
+  #camname{ font-size:10px; color:#222; }
   #wheel{ cursor:crosshair; touch-action:none; }
   .inputcol{ flex:1; display:flex; flex-direction:column; gap:5px; min-width:250px; }
   .typerow{ display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
@@ -97,8 +100,8 @@
       <button id="rostermore" hidden></button>
     </div>
     <div class="wheelbox">
-      <svg id="wheel" width="132" height="132"></svg>
-      <div id="wheellabel">neutral</div>
+      <div><svg id="bodycam" width="118" height="132"></svg><div id="camname"></div></div>
+      <div><svg id="wheel" width="132" height="132"></svg><div id="wheellabel">neutral</div></div>
     </div>
     <div class="inputcol">
       <div class="typerow">
@@ -1448,7 +1451,43 @@ function renderWheel(){
   const key = emotionKeyFromAngle(w.emotion, w.intensity);
   document.getElementById("wheellabel").textContent =
     w.intensity === 0 ? "neutral" : `${key} ${Math.round(w.intensity*100)}%`;
+  renderBodyCam();
 }
+/* ---- BodyCam: live preview of the pose that will actually be sent ----
+   The original packs this into the same widget as the wheel (CBodyCam::
+   GetBodyRect = client rect minus the wheel's square), drawn on white with
+   drawNimbus FALSE and sized so the character keeps a fixed HEIGHT and is
+   clipped to width. Here it sits beside the wheel to keep the composer bar
+   short, but the sizing rule is the original's. */
+function renderBodyCam(){
+  const el = document.getElementById("bodycam");
+  if(!el) return;
+  ensureCast();
+  const art = getArt(curChar);
+  const w = wheelState[curChar] || {emotion:EM.HAPPY, intensity:0, touched:false};
+  const inp = document.getElementById("msg");
+  const raw = inp ? inp.value : "";
+  // wheel wins for one message; otherwise the text rules decide (send() logic)
+  let pose;
+  if(w.touched){
+    pose = bodyFromEmotion(art, w.emotion, w.intensity, -1);
+  } else {
+    const opts = raw ? getEmotionsFromString(raw) : [];
+    pose = opts.length ? bodyFromOpts(art, opts, -1)
+                       : bodyFromEmotion(art, EM.HAPPY, 0, -1);
+  }
+  const dm = art.dim ? art.dim(pose.face, pose.torso) : art.nat;
+  const bw = +el.getAttribute("width"), bh = +el.getAttribute("height");
+  const vbH = dm.h * 1.06;                       // a little headroom
+  const vbW = vbH * (bw / bh);                   // fixed height, clipped to width
+  const cx = dm.x + dm.w/2;
+  el.setAttribute("viewBox",
+    `${(cx - vbW/2).toFixed(1)} ${(dm.y - dm.h*0.03).toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}`);
+  el.innerHTML = art.draw(pose.face, pose.torso);
+  const nm = document.getElementById("camname");
+  if(nm) nm.textContent = art.name;
+}
+
 function wheelPick(ev){
   const svg = document.getElementById("wheel");
   const r = svg.getBoundingClientRect();
@@ -1482,6 +1521,7 @@ function updatePlaceholder(){
 
 /* live preview of what the message will become */
 function updateRuleHint(){
+  renderBodyCam();
   const raw = document.getElementById("msg").value;
   // Action becomes a narration caption: the text is appended to the name
   let mode = curMode, tt = raw;

@@ -389,7 +389,43 @@ function renderWheel(){
   const key = emotionKeyFromAngle(w.emotion, w.intensity);
   document.getElementById("wheellabel").textContent =
     w.intensity === 0 ? "neutral" : `${key} ${Math.round(w.intensity*100)}%`;
+  renderBodyCam();
 }
+/* ---- BodyCam: live preview of the pose that will actually be sent ----
+   The original packs this into the same widget as the wheel (CBodyCam::
+   GetBodyRect = client rect minus the wheel's square), drawn on white with
+   drawNimbus FALSE and sized so the character keeps a fixed HEIGHT and is
+   clipped to width. Here it sits beside the wheel to keep the composer bar
+   short, but the sizing rule is the original's. */
+function renderBodyCam(){
+  const el = document.getElementById("bodycam");
+  if(!el) return;
+  ensureCast();
+  const art = getArt(curChar);
+  const w = wheelState[curChar] || {emotion:EM.HAPPY, intensity:0, touched:false};
+  const inp = document.getElementById("msg");
+  const raw = inp ? inp.value : "";
+  // wheel wins for one message; otherwise the text rules decide (send() logic)
+  let pose;
+  if(w.touched){
+    pose = bodyFromEmotion(art, w.emotion, w.intensity, -1);
+  } else {
+    const opts = raw ? getEmotionsFromString(raw) : [];
+    pose = opts.length ? bodyFromOpts(art, opts, -1)
+                       : bodyFromEmotion(art, EM.HAPPY, 0, -1);
+  }
+  const dm = art.dim ? art.dim(pose.face, pose.torso) : art.nat;
+  const bw = +el.getAttribute("width"), bh = +el.getAttribute("height");
+  const vbH = dm.h * 1.06;                       // a little headroom
+  const vbW = vbH * (bw / bh);                   // fixed height, clipped to width
+  const cx = dm.x + dm.w/2;
+  el.setAttribute("viewBox",
+    `${(cx - vbW/2).toFixed(1)} ${(dm.y - dm.h*0.03).toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}`);
+  el.innerHTML = art.draw(pose.face, pose.torso);
+  const nm = document.getElementById("camname");
+  if(nm) nm.textContent = art.name;
+}
+
 function wheelPick(ev){
   const svg = document.getElementById("wheel");
   const r = svg.getBoundingClientRect();
@@ -423,6 +459,7 @@ function updatePlaceholder(){
 
 /* live preview of what the message will become */
 function updateRuleHint(){
+  renderBodyCam();
   const raw = document.getElementById("msg").value;
   // Action becomes a narration caption: the text is appended to the name
   let mode = curMode, tt = raw;
