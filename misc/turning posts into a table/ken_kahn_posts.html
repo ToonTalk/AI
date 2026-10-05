@@ -108,6 +108,7 @@
             ai: { title: "Recent research by Ken Kahn: web apps that use AI", icon: "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22%23ff8c00%22/%3E%3Cpath%20fill%3D%22%23fff%22%20d%3D%22M27%2012c2%2011%206%2015%2017%2017-11%202-15%206-17%2017-2-11-6-15-17-17%2011-2%2015-6%2017-17z%22/%3E%3Cpath%20fill%3D%22%23fff%22%20d%3D%22M47%2036c1%206%203%208%209%209-6%201-8%203-9%209-1-6-3-8-9-9%206-1%208-3%209-9z%22/%3E%3C/svg%3E" },
         };
         let aiOnly = false;
+        const START_AI = false;   // which view this page opens in
 
         function esc(text) {
             return String(text).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -168,7 +169,11 @@
             document.getElementById('statVideos').textContent = links('videos').size;
         }
 
-        // The AI-apps view has its own address (#ai-apps), so it can be linked to and survives a reload
+        // The view that isn't this page's own has an address (#ai-apps or #all-posts), so it can be linked to
+        // and survives a reload
+        function viewFromAddress() {
+            return location.hash === '#ai-apps' ? true : location.hash === '#all-posts' ? false : START_AI;
+        }
         function setView(ai, updateAddress) {
             aiOnly = ai;
             const view = ai ? VIEWS.ai : VIEWS.all;
@@ -178,13 +183,14 @@
             document.getElementById('showAI').setAttribute('aria-pressed', String(ai));
             renderPosts();
             if (updateAddress) {
-                try { history.replaceState(null, '', ai ? '#ai-apps' : location.pathname + location.search); }
+                const address = ai === START_AI ? location.pathname + location.search : (ai ? '#ai-apps' : '#all-posts');
+                try { history.replaceState(null, '', address); }
                 catch (e) { /* some previews don't allow changing the address */ }
             }
         }
         document.getElementById('showAll').onclick = () => setView(false, true);
         document.getElementById('showAI').onclick = () => setView(true, true);
-        window.addEventListener('hashchange', () => setView(location.hash === '#ai-apps', false));
+        window.addEventListener('hashchange', () => setView(viewFromAddress(), false));
 
         const modal = document.getElementById('modal');
         const closeBtn = document.querySelector('.close');
@@ -228,7 +234,7 @@
         closeBtn.onclick = function() { modal.style.display = 'none'; }
         window.onclick = function(event) { if (event.target == modal) modal.style.display = 'none'; }
 
-        setView(location.hash === '#ai-apps', false);
+        setView(viewFromAddress(), false);
     </script>
 </body>
 </html>
