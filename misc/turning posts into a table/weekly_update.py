@@ -11,8 +11,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TABLE_FILES = ['ken_kahn_posts.json', 'ken_kahn_posts.html', 'apps_with_AI.json', 'apps_with_AI.html',
-               'broken_links_report.html']
+TABLE_FILES = ['ken_kahn_posts.json', 'ken_kahn_posts.html', 'apps_with_AI.html', 'broken_links_report.html']
 
 
 def git(*args):
